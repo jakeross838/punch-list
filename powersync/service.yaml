@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/cli-schemas@latest/json-schema/service-config.json
+#
+# The PowerSync Cloud instance. Filled in at setup (docs/setup.md); secrets come from the environment.
+
+_type: cloud
+name: punch-list
+region: us
+
+replication:
+  connections:
+    - type: postgresql
+      # The Supabase database, reached as the powersync_role made at setup.
+      uri: !env POWERSYNC_DATABASE_URI
+      password:
+        secret: !env POWERSYNC_DATABASE_PASSWORD
+      sslmode: verify-full
+
+client_auth:
+  # Supabase signs sign-in tokens with its own keys; PowerSync checks them against this key set.
+  jwks_uri: !env POWERSYNC_SUPABASE_JWKS_URI
+  additional_audiences:
+    - authenticated

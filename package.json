@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:extension": "node apps/extension/build.mjs",
     "test:extension": "node apps/extension/build.mjs && tsx tools/extension-e2e.ts",
-    "phase0": "tsx tools/phase0.ts"
+    "phase0": "tsx tools/phase0.ts",
+    "test:db": "bash tools/db-test.sh"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",
