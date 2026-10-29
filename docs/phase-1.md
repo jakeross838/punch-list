@@ -8,10 +8,16 @@
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| Phone app | `apps/mobile` | Expo (SDK 57), TypeScript, Expo Router. Sign in, jobs, rooms in floor order with open counts, a room's items, item detail and edit, mark complete, job setup. |
+| Phone app | `apps/mobile` | Expo SDK 58, TypeScript, Expo Router. Sign in, jobs, rooms in floor order with open counts, a room's items, item detail and edit, mark complete, job setup. |
 | Core rules | `packages/core` | The data types and the rules the app enforces: not ready needs Waiting On, one company and one trade per item, only Ross Built completes, removing never deletes, room labels and floor order from a pasted list. Shared by the app, the server and the tests. |
 | Database | `supabase/` | Migrations for the schema and access rules, plus a seed for a test job of 600 generated items. |
 | Sync | `powersync/` | The PowerSync service config and sync streams: every signed-in Ross Built user gets every job. |
+
+## How Jake sees it
+
+- **Preview link:** [Punch List Preview](https://claude.ai/artifact/JeNrTrbh3PNZE7YeNTcYmV), the app's screens on sample data in the iPhone's browser. Rebuilt with `npm run preview:build`, walked with `npm run test:preview`, then republished after each step.
+- **TestFlight:** the real app, once the Apple Developer account is active. Checks C3 and C4 run there.
+- Not Expo Go: it cannot load the app's offline database, and the App Store version is a release behind SDK 58.
 
 ## Data model, Phase 1 slice
 
@@ -49,8 +55,14 @@ A one-time code sent to the person's email. Anyone can request a code, but an ac
 
 1. Supabase: a new project, `punch-list`. Its URL, anon key, and database connection string with password.
 2. PowerSync: an account and an access token.
-3. Expo: an account and an access token. Expo Go on the iPhone, signed in with the same account.
+3. Expo: an account and an access token, for the TestFlight build and the updates after it.
 4. Apple Developer account, for the TestFlight build (checks C3 and C4).
 5. Fish's room list: the plan callouts with their numbers, in floor order.
 
 Secrets live only in `local/` in the build workspace, which git ignores.
+
+## Status (29 October 2026)
+
+- Built: the core rules, the schema and access rules (`npm run test:db` passes), the sync config, the data layer with a sample-data backend, and the first screens: jobs, the Completion List by room, trade or company with the filters, the item form with the rules, complete, reopen, remove and restore, and job setup (paste rooms, companies, Waiting On choices).
+- Checked: 32 unit tests, both type checks, and a 9-step walk-through at iPhone size under the preview page's rules with no errors.
+- Next: the phone's real backend (PowerSync and Supabase) once the accounts exist, then sign-in and checks C3 to C5 on the TestFlight build.

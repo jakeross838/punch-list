@@ -12,7 +12,9 @@
     "build:extension": "node apps/extension/build.mjs",
     "test:extension": "node apps/extension/build.mjs && tsx tools/extension-e2e.ts",
     "phase0": "tsx tools/phase0.ts",
-    "test:db": "bash tools/db-test.sh"
+    "test:db": "bash tools/db-test.sh",
+    "preview:build": "cd apps/mobile && npx expo export --platform web && cd ../.. && node tools/build-preview.mjs",
+    "test:preview": "tsx tools/preview-e2e.ts"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

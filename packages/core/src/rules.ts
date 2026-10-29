@@ -1,7 +1,7 @@
 // The rules the app enforces on every item, wherever it is written from. Buildertrend could not
 // enforce these; the app can, so it does.
 
-import type { Item, ItemKind, Person } from './types.js';
+import type { Item, ItemKind, Person } from './types';
 
 export const TITLE_MAX = 80;
 

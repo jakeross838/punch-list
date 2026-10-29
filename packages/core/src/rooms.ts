@@ -7,7 +7,7 @@
 //
 // The shared areas are added after the rooms on every job.
 
-import type { LocationKind } from './types.js';
+import type { LocationKind } from './types';
 
 export const SHARED_AREAS = [
   'North Elevation',

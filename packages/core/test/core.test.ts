@@ -13,7 +13,7 @@ import {
   waitingOnChoices,
   type ItemFields,
   type Person,
-} from '../src/index.js';
+} from '../src/index';
 
 const jake: Person = { id: 'p1', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true };
 const former: Person = { id: 'p2', email: 'former@rossbuilt.com', name: 'Former', active: false };

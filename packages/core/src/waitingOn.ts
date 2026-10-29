@@ -1,7 +1,7 @@
 // The Waiting On choices for a job: the job's own extras first (Ross Built, Owner, the design team
 // by name), then every company on the job, each name once.
 
-import type { Company, JobCompany } from './types.js';
+import type { Company, JobCompany } from './types';
 
 export const DEFAULT_WAITING_ON_EXTRAS = ['Ross Built', 'Owner'] as const;
 
