@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Ross Built Punch List Bridge",
+  "version": "0.0.1",
+  "description": "Connects the Ross Built punch list app to Buildertrend through your own logged-in session. Phase 0: connection checks.",
+  "action": {
+    "default_title": "Punch List Bridge"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://buildertrend.net/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": ["https://buildertrend.net/*"]
+}
