@@ -2,7 +2,7 @@
 
 Ross Built's punch list app: walk the job, take marked-up photos, and the Completion List builds and keeps itself current, with Buildertrend kept in step.
 
-Plan: [Punch List App: Version 1 Plan](https://claude.ai/artifact/8aKXo8iiTrKoH78Q1Mce7a). Current phase: [Phase 0, the Buildertrend connection](docs/phase-0.md).
+Plan: [Punch List App: Version 1 Plan](https://claude.ai/artifact/8aKXo8iiTrKoH78Q1Mce7a). Current phase: [Phase 1, app foundation and job setup](docs/phase-1.md). The Buildertrend connection ([Phase 0](docs/phase-0.md)) is built and parked; it is not part of version 1.
 
 ## Layout
 

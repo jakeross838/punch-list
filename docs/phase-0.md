@@ -1,5 +1,7 @@
 # Phase 0: Prove the Buildertrend connection
 
+> **Parked, 29 October 2026.** Jake took Buildertrend out of version 1; the connection may come back later as an option (a one-time import of an existing list, then sync). Everything below is built and tested against the stand-in. Finishing it needs one live session.
+
 **Goal:** a Chrome extension that, inside a logged-in Buildertrend tab, reads the whole Fish completion list and writes to the sandbox job, using the recipes verified in the Buildertrend skill. No app yet.
 
 **Plan:** [Punch List App: Version 1 Plan](https://claude.ai/artifact/8aKXo8iiTrKoH78Q1Mce7a), section 5.
