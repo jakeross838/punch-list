@@ -86,15 +86,14 @@ function safeName(text: string): string {
 function shapeSvg(s: MarkShape): string {
   switch (s.type) {
     case 'path':
-      return `<path d="${s.d}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+      return `<path d="${s.d}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" fill="${s.fill ?? 'none'}" stroke-linecap="round" stroke-linejoin="round"/>`;
     case 'ellipse':
       return `<ellipse cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" fill="${s.fill ?? 'none'}"/>`;
     case 'rect':
-      return `<rect x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" stroke="${s.stroke}" stroke-width="${s.strokeWidth}" fill="none" stroke-linejoin="round"/>`;
+      return `<rect x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}"${s.rx ? ` rx="${s.rx}"` : ''} stroke="${s.stroke}" stroke-width="${s.strokeWidth}" fill="${s.fill ?? 'none'}" stroke-linejoin="round"/>`;
     case 'text': {
       const anchor = s.anchor ? ` text-anchor="${s.anchor}"` : '';
-      const outline = s.stroke ? ` stroke="${s.stroke}" stroke-width="${s.strokeWidth ?? 1}" stroke-linejoin="round"` : '';
-      return `<text x="${s.x}" y="${s.y}" fill="${s.fill}" font-size="${s.fontSize}" font-weight="700"${anchor}${outline}>${esc(s.text)}</text>`;
+      return `<text x="${s.x}" y="${s.y}" fill="${s.fill}" font-size="${s.fontSize}" font-weight="600"${anchor}>${esc(s.text)}</text>`;
     }
   }
 }

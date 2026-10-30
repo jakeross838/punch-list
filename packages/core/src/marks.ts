@@ -1,8 +1,11 @@
 // Markup on a photo, made for the job site: pen lines, arrows, circles, boxes, measurements with
 // their size written out, numbered spots and short notes. Marks are stored as points on the photo
 // (fractions of its width and height), drawn over it at any size, and never burned into the
-// picture, so the original is always kept and a mark can be undone later. Notes, sizes and numbers
-// carry an outline in the opposite color, so they read on a white wall or a dark floor alike.
+// picture, so the original is always kept and a mark can be undone later.
+//
+// The look is a professional one: fine lines with a soft edge under them so they show on a white
+// wall or a dark floor, solid arrowheads, notes and sizes set in label tags, measurements drawn like
+// a dimension on the plans, and numbered spots as pins.
 
 import { tidyTitle } from './titles';
 import type { Mark, MarkColor, MarkPoint } from './types';
@@ -16,8 +19,16 @@ export const MARK_COLORS: Record<MarkColor, string> = {
 
 export const MARK_COLOR_NAMES: Record<MarkColor, string> = { red: 'Red', yellow: 'Yellow', white: 'White', black: 'Black' };
 
-/** The outline drawn around words and numbers in each color, so they stand out from the photo. */
-export const MARK_OUTLINES: Record<MarkColor, string> = { red: '#FFFFFF', yellow: '#000000', white: '#000000', black: '#FFFFFF' };
+/** The words on a tag or a pin in each color. */
+export const MARK_INK: Record<MarkColor, string> = { red: '#FFFFFF', yellow: '#1C1C1E', white: '#1C1C1E', black: '#FFFFFF' };
+
+/** The soft edge under each mark, so it stands out from the photo: dark under light colors, light under black. */
+const EDGE: Record<MarkColor, string> = {
+  red: 'rgba(0, 0, 0, 0.3)',
+  yellow: 'rgba(0, 0, 0, 0.42)',
+  white: 'rgba(0, 0, 0, 0.42)',
+  black: 'rgba(255, 255, 255, 0.6)',
+};
 
 /**
  * The standard words for a note, one tap each, so the same thing is called the same on every
@@ -26,23 +37,26 @@ export const MARK_OUTLINES: Record<MarkColor, string> = { red: '#FFFFFF', yellow
 export const QUICK_NOTES = ['Touch up', 'Caulk', 'Patch', 'Clean', 'Scratch', 'Chip', 'Crack', 'Gap', 'Dent', 'Loose', 'Missing', 'Install here'] as const;
 
 /**
- * Line weight and note size as fractions of the photo's shorter side, so marks look the same at any
- * size: a thumbnail is the photo in small, with lines kept just thick enough to see.
+ * Sizes as fractions of the photo's shorter side, so marks look the same at any size: a thumbnail
+ * is the photo in small, with lines kept just thick enough to see.
  */
-export const STROKE = 0.013;
-export const TEXT_SIZE = 0.056;
-const ARROW_HEAD = 0.05;
+export const STROKE = 0.0085;
+export const TEXT_SIZE = 0.04;
+/** How much wider the soft edge is than the line on it. */
+const EDGE_WIDTH = 0.0065;
+const ARROW_LENGTH = 0.046;
+const ARROW_WIDTH = 0.036;
 /** Half the length of the bar across each end of a measurement. */
-const END_BAR = 0.03;
+const END_BAR = 0.024;
 /** The radius of a numbered spot. */
-const SPOT = 0.045;
+const SPOT = 0.032;
 /** A drag shorter than this (a fraction of the shorter side) was a tap, not a mark. */
 const SMALLEST = 0.012;
 
 export type MarkShape =
-  | { type: 'path'; d: string; stroke: string; strokeWidth: number }
+  | { type: 'path'; d: string; stroke: string; strokeWidth: number; fill?: string }
   | { type: 'ellipse'; cx: number; cy: number; rx: number; ry: number; stroke: string; strokeWidth: number; fill?: string }
-  | { type: 'rect'; x: number; y: number; width: number; height: number; stroke: string; strokeWidth: number }
+  | { type: 'rect'; x: number; y: number; width: number; height: number; stroke: string; strokeWidth: number; rx?: number; fill?: string }
   | {
       type: 'text';
       x: number;
@@ -52,9 +66,6 @@ export type MarkShape =
       fontSize: number;
       /** middle: centered on x. Left out: starts at x. */
       anchor?: 'middle';
-      /** An outline around the letters, drawn under the text of the same words. */
-      stroke?: string;
-      strokeWidth?: number;
     };
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -62,49 +73,92 @@ export const clampPoint = ([x, y]: MarkPoint): MarkPoint => [clamp01(x), clamp01
 
 const round = (v: number) => Math.round(v * 10) / 10;
 
-/** Words in the mark's color over an outline in the opposite color. */
-function words(x: number, y: number, text: string, color: MarkColor, fontSize: number, anchor?: 'middle'): MarkShape[] {
-  const outline = MARK_OUTLINES[color];
-  const base = { type: 'text' as const, x, y, text, fontSize, ...(anchor ? { anchor } : {}) };
+/** Where the baseline goes so the words sit centered on y: capitals and numbers are about 0.7 of the size tall. */
+const centered = (y: number, fontSize: number) => round(y + fontSize * 0.35);
+
+/** About how wide a line of words sets, for a semibold sans like the app's: enough to size a tag around it. */
+export function textWidth(text: string, fontSize: number): number {
+  let em = 0;
+  for (const ch of text) {
+    if (ch === ' ') em += 0.26;
+    else if ('ijl.,:;!|\'"'.includes(ch)) em += 0.28;
+    else if ('frt()/-'.includes(ch)) em += 0.38;
+    else if ('mwMW'.includes(ch)) em += 0.86;
+    else if (ch >= '0' && ch <= '9') em += 0.6;
+    else if (ch >= 'A' && ch <= 'Z') em += 0.68;
+    else em += 0.56;
+  }
+  return em * fontSize;
+}
+
+/** A line with its soft edge under it. */
+function lined(shape: Extract<MarkShape, { type: 'path' | 'ellipse' | 'rect' }>, color: MarkColor, edge: number): MarkShape[] {
+  return [{ ...shape, stroke: EDGE[color], strokeWidth: round(shape.strokeWidth + edge) }, shape];
+}
+
+/** A solid arrowhead with its tip at x, y, pointing along ux, uy. */
+function arrowhead(x: number, y: number, ux: number, uy: number, length: number, width: number): string {
+  const [bx, by] = [x - ux * length, y - uy * length];
+  const [nx, ny] = [-uy * (width / 2), ux * (width / 2)];
+  return `M${round(x)} ${round(y)}L${round(bx + nx)} ${round(by + ny)}L${round(bx - nx)} ${round(by - ny)}Z`;
+}
+
+/** A solid shape in the mark's color with its soft edge, like an arrowhead. */
+function solid(d: string, color: MarkColor, edge: number): MarkShape[] {
+  const fill = MARK_COLORS[color];
   return [
-    { ...base, fill: outline, stroke: outline, strokeWidth: round(Math.max(0.5, fontSize * 0.2)) },
-    { ...base, fill: MARK_COLORS[color] },
+    { type: 'path', d, stroke: EDGE[color], strokeWidth: round(edge), fill: EDGE[color] },
+    { type: 'path', d, stroke: fill, strokeWidth: round(edge * 0.25), fill },
   ];
 }
 
-/** Where the baseline goes so the words sit centered on y: capitals and numbers are about 0.7 of the size tall. */
-const centered = (y: number, fontSize: number) => round(y + fontSize * 0.36);
+/** Words set in a tag in the mark's color, centered on x, y. */
+function tag(x: number, y: number, text: string, color: MarkColor, fontSize: number, edge: number): MarkShape[] {
+  const height = round(fontSize * 1.7);
+  const width = round(textWidth(text, fontSize) + fontSize * 1.25);
+  const left = round(x - width / 2);
+  const top = round(y - height / 2);
+  const e = round(edge / 2);
+  return [
+    { type: 'rect', x: left - e, y: top - e, width: width + 2 * e, height: height + 2 * e, rx: round(height / 2 + e), stroke: 'none', strokeWidth: 0, fill: EDGE[color] },
+    { type: 'rect', x: left, y: top, width, height, rx: round(height / 2), stroke: 'none', strokeWidth: 0, fill: MARK_COLORS[color] },
+    { type: 'text', x: round(x), y: centered(y, fontSize), text, fill: MARK_INK[color], fontSize, anchor: 'middle' },
+  ];
+}
 
 /** The pixels to draw one mark on a photo shown at width by height. */
 export function markShapes(mark: Mark, width: number, height: number): MarkShape[] {
   const short = Math.min(width, height);
   const stroke = MARK_COLORS[mark.color];
-  const strokeWidth = Math.max(1.5, STROKE * short);
+  const strokeWidth = round(Math.max(1.25, STROKE * short));
+  const edge = EDGE_WIDTH * short;
+  const fontSize = round(Math.max(2, TEXT_SIZE * short));
   const px = ([x, y]: MarkPoint): [number, number] => [round(x * width), round(y * height)];
 
   switch (mark.tool) {
     case 'pen': {
       const pts = mark.points.map(px);
       if (pts.length === 0) return [];
-      return [{ type: 'path', d: smoothPath(pts), stroke, strokeWidth }];
+      return lined({ type: 'path', d: smoothPath(pts), stroke, strokeWidth }, mark.color, edge);
     }
     case 'arrow': {
+      // The shaft stops inside the head, so the head's point stays sharp.
       const [x1, y1] = px(mark.from);
       const [x2, y2] = px(mark.to);
       const len = Math.hypot(x2 - x1, y2 - y1) || 1;
-      const head = Math.min(ARROW_HEAD * short + strokeWidth, len * 0.6);
-      const [ux, uy] = [(x1 - x2) / len, (y1 - y2) / len];
-      const spin = (deg: number) => {
-        const a = (deg * Math.PI) / 180;
-        return [round(x2 + head * (ux * Math.cos(a) - uy * Math.sin(a))), round(y2 + head * (ux * Math.sin(a) + uy * Math.cos(a)))];
-      };
-      const [l, r] = [spin(28), spin(-28)];
-      return [{ type: 'path', d: `M${x1} ${y1}L${x2} ${y2}M${l[0]} ${l[1]}L${x2} ${y2}L${r[0]} ${r[1]}`, stroke, strokeWidth }];
+      const [ux, uy] = [(x2 - x1) / len, (y2 - y1) / len];
+      const head = Math.min(ARROW_LENGTH * short + strokeWidth, len * 0.5);
+      const wide = head * (ARROW_WIDTH / ARROW_LENGTH);
+      const [sx, sy] = [round(x2 - ux * head * 0.6), round(y2 - uy * head * 0.6)];
+      return [
+        ...lined({ type: 'path', d: `M${x1} ${y1}L${sx} ${sy}`, stroke, strokeWidth }, mark.color, edge),
+        ...solid(arrowhead(x2, y2, ux, uy, head, wide), mark.color, edge),
+      ];
     }
     case 'circle': {
       const [x1, y1] = px(mark.from);
       const [x2, y2] = px(mark.to);
-      return [
+      return lined(
         {
           type: 'ellipse',
           cx: round((x1 + x2) / 2),
@@ -114,45 +168,53 @@ export function markShapes(mark: Mark, width: number, height: number): MarkShape
           stroke,
           strokeWidth,
         },
-      ];
+        mark.color,
+        edge,
+      );
     }
     case 'box': {
       const [x1, y1] = px(mark.from);
       const [x2, y2] = px(mark.to);
-      return [
-        { type: 'rect', x: Math.min(x1, x2), y: Math.min(y1, y2), width: round(Math.abs(x2 - x1)), height: round(Math.abs(y2 - y1)), stroke, strokeWidth },
-      ];
+      const rect = { type: 'rect' as const, x: Math.min(x1, x2), y: Math.min(y1, y2), width: round(Math.abs(x2 - x1)), height: round(Math.abs(y2 - y1)) };
+      return lined({ ...rect, rx: round(short * 0.01), stroke, strokeWidth }, mark.color, edge);
     }
     case 'measure': {
-      // The line, a bar across each end, and the size in the middle over the line.
+      // Drawn like a dimension on the plans: a bar across each end, an arrowhead into each bar,
+      // and the size in a tag in the middle of the line.
       const [x1, y1] = px(mark.from);
       const [x2, y2] = px(mark.to);
       const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+      const [ux, uy] = [(x2 - x1) / len, (y2 - y1) / len];
       const bar = END_BAR * short;
-      const [nx, ny] = [(-(y2 - y1) / len) * bar, ((x2 - x1) / len) * bar];
+      const [nx, ny] = [-uy * bar, ux * bar];
       const end = (x: number, y: number) => `M${round(x + nx)} ${round(y + ny)}L${round(x - nx)} ${round(y - ny)}`;
-      const shapes: MarkShape[] = [{ type: 'path', d: `M${x1} ${y1}L${x2} ${y2}${end(x1, y1)}${end(x2, y2)}`, stroke, strokeWidth }];
+      const head = Math.min(ARROW_LENGTH * 0.8 * short, len * 0.3);
+      const wide = head * (ARROW_WIDTH / ARROW_LENGTH);
+      const shapes: MarkShape[] = [
+        ...lined({ type: 'path', d: `M${x1} ${y1}L${x2} ${y2}${end(x1, y1)}${end(x2, y2)}`, stroke, strokeWidth }, mark.color, edge),
+        ...solid(arrowhead(x1, y1, -ux, -uy, head, wide), mark.color, edge),
+        ...solid(arrowhead(x2, y2, ux, uy, head, wide), mark.color, edge),
+      ];
       const text = mark.text.trim();
-      if (text) {
-        const fontSize = round(Math.max(3, TEXT_SIZE * 0.85 * short));
-        shapes.push(...words(round((x1 + x2) / 2), centered((y1 + y2) / 2, fontSize), text, mark.color, fontSize, 'middle'));
-      }
+      if (text) shapes.push(...tag(round((x1 + x2) / 2), round((y1 + y2) / 2), text, mark.color, round(fontSize * 0.92), edge));
       return shapes;
     }
     case 'number': {
-      // A dot in the mark's color with the number in the opposite color.
+      // A pin: a dot in the mark's color with a white ring, and its number in the middle.
       const [cx, cy] = px(mark.at);
-      const r = round(Math.max(2.5, SPOT * short));
-      const fontSize = round(r * 1.2);
-      const outline = MARK_OUTLINES[mark.color];
+      const r = round(Math.max(2, SPOT * short));
+      const ring = round(Math.max(0.5, r * 0.16));
+      const size = round(r * 1.05);
       return [
-        { type: 'ellipse', cx, cy, rx: r, ry: r, stroke: outline, strokeWidth: round(Math.max(1, strokeWidth * 0.5)), fill: stroke },
-        { type: 'text', x: cx, y: centered(cy, fontSize), text: String(mark.n), fill: outline, fontSize, anchor: 'middle' },
+        { type: 'ellipse', cx, cy, rx: round(r + edge / 2), ry: round(r + edge / 2), stroke: 'none', strokeWidth: 0, fill: EDGE[mark.color] },
+        { type: 'ellipse', cx, cy, rx: round(r - ring / 2), ry: round(r - ring / 2), stroke: '#FFFFFF', strokeWidth: ring, fill: stroke },
+        { type: 'text', x: cx, y: centered(cy, size), text: String(mark.n), fill: MARK_INK[mark.color], fontSize: size, anchor: 'middle' },
       ];
     }
     case 'text': {
+      // A note is a tag centered where it was placed.
       const [x, y] = px(mark.at);
-      return words(x, y, mark.text, mark.color, round(Math.max(3, TEXT_SIZE * short)));
+      return tag(x, y, mark.text, mark.color, fontSize, edge);
     }
     default:
       // A kind of mark from a newer version of the app: left off rather than drawn wrong.

@@ -25,6 +25,7 @@ import {
   suggestTitles,
   tidyExtra,
   tidyItem,
+  textWidth,
   tidyTitle,
   tradeForCompany,
   tradeForTitle,
@@ -90,33 +91,50 @@ describe('titles', () => {
 });
 
 describe('marks', () => {
-  it('draws marks at any size from points on the photo', () => {
-    const [box] = markShapes({ tool: 'box', color: 'red', from: [0.5, 0.5], to: [0.25, 0.25] }, 400, 300);
-    expect(box).toMatchObject({ type: 'rect', x: 100, y: 75, width: 100, height: 75, stroke: '#D70015' });
-    const [circle] = markShapes({ tool: 'circle', color: 'white', from: [0, 0], to: [1, 1] }, 200, 100);
-    expect(circle).toMatchObject({ type: 'ellipse', cx: 100, cy: 50, rx: 100, ry: 50 });
-    const [arrow] = markShapes({ tool: 'arrow', color: 'yellow', from: [0, 0], to: [0.5, 0.5] }, 100, 100);
-    expect(arrow?.type).toBe('path');
-    const [outline, text] = markShapes({ tool: 'text', color: 'black', at: [0.5, 0.5], text: 'Rubs the hood' }, 390, 520);
-    expect(outline).toMatchObject({ type: 'text', x: 195, y: 260, text: 'Rubs the hood', fill: '#FFFFFF', stroke: '#FFFFFF' });
-    expect(text).toMatchObject({ type: 'text', x: 195, y: 260, text: 'Rubs the hood', fill: '#000000' });
-    expect(text).not.toHaveProperty('stroke');
+  it('draws marks at any size, each line with a soft edge under it so it shows on any wall', () => {
+    const [boxEdge, box] = markShapes({ tool: 'box', color: 'red', from: [0.5, 0.5], to: [0.25, 0.25] }, 400, 300);
+    expect(box).toMatchObject({ type: 'rect', x: 100, y: 75, width: 100, height: 75, rx: 3, stroke: '#D70015' });
+    expect(boxEdge).toMatchObject({ type: 'rect', x: 100, y: 75, stroke: 'rgba(0, 0, 0, 0.3)' });
+    expect((boxEdge as { strokeWidth: number }).strokeWidth).toBeGreaterThan((box as { strokeWidth: number }).strokeWidth);
+    const [circleEdge, circle] = markShapes({ tool: 'circle', color: 'white', from: [0, 0], to: [1, 1] }, 200, 100);
+    expect(circle).toMatchObject({ type: 'ellipse', cx: 100, cy: 50, rx: 100, ry: 50, stroke: '#FFFFFF' });
+    expect(circleEdge).toMatchObject({ type: 'ellipse', stroke: 'rgba(0, 0, 0, 0.42)' });
+    // An arrow: the shaft, then a solid head with its point on the spot.
+    const arrow = markShapes({ tool: 'arrow', color: 'yellow', from: [0, 0], to: [0.5, 0.5] }, 100, 100);
+    expect(arrow.map((a) => a.type)).toEqual(['path', 'path', 'path', 'path']);
+    expect(arrow[3]).toMatchObject({ fill: '#FFD60A' });
+    expect((arrow[3] as { d: string }).d).toMatch(/^M50 50L.*Z$/);
   });
 
-  it('draws a measurement with a bar across each end and its size centered on the line', () => {
+  it('sets a note in a tag centered where it was placed', () => {
+    const [edge, pill, words] = markShapes({ tool: 'text', color: 'black', at: [0.5, 0.5], text: 'Rubs the hood' }, 390, 520);
+    expect(edge).toMatchObject({ type: 'rect', fill: 'rgba(255, 255, 255, 0.6)' });
+    expect(pill).toMatchObject({ type: 'rect', fill: '#000000', stroke: 'none' });
+    const { x, width } = pill as { x: number; width: number };
+    expect(x + width / 2).toBeCloseTo(195, 0);
+    expect(width).toBeGreaterThan(textWidth('Rubs the hood', 15.6));
+    expect(words).toMatchObject({ type: 'text', x: 195, text: 'Rubs the hood', fill: '#FFFFFF', anchor: 'middle' });
+  });
+
+  it('draws a measurement like a dimension on the plans: a bar and an arrowhead at each end, and the size in a tag', () => {
     const shapes = markShapes({ tool: 'measure', color: 'red', from: [0.1, 0.5], to: [0.9, 0.5], text: '24 inches' }, 400, 300);
-    expect(shapes.map((s) => s.type)).toEqual(['path', 'text', 'text']);
-    expect(shapes[0]).toMatchObject({ d: 'M40 150L360 150M40 159L40 141M360 159L360 141', stroke: '#D70015' });
-    expect(shapes[1]).toMatchObject({ text: '24 inches', anchor: 'middle', x: 200, fill: '#FFFFFF', stroke: '#FFFFFF' });
-    expect(shapes[2]).toMatchObject({ text: '24 inches', anchor: 'middle', x: 200, y: 155.1, fill: '#D70015' });
-    // With no size typed, just the line and its ends.
-    expect(markShapes({ tool: 'measure', color: 'red', from: [0.1, 0.5], to: [0.9, 0.5], text: ' ' }, 400, 300)).toHaveLength(1);
+    expect(shapes.map((s) => s.type)).toEqual(['path', 'path', 'path', 'path', 'path', 'path', 'rect', 'rect', 'text']);
+    expect(shapes[1]).toMatchObject({ d: 'M40 150L360 150M40 157.2L40 142.8M360 157.2L360 142.8', stroke: '#D70015' });
+    expect(shapes[3]).toMatchObject({ fill: '#D70015' });
+    expect((shapes[3] as { d: string }).d).toMatch(/^M40 150L/);
+    expect((shapes[5] as { d: string }).d).toMatch(/^M360 150L/);
+    expect(shapes[7]).toMatchObject({ type: 'rect', fill: '#D70015' });
+    expect(shapes[8]).toMatchObject({ text: '24 inches', anchor: 'middle', x: 200, fill: '#FFFFFF' });
+    // With no size typed, just the line, its ends and its arrowheads.
+    expect(markShapes({ tool: 'measure', color: 'red', from: [0.1, 0.5], to: [0.9, 0.5], text: ' ' }, 400, 300)).toHaveLength(6);
   });
 
-  it('draws a numbered spot as a dot with its number in the middle', () => {
-    const [dot, number] = markShapes({ tool: 'number', color: 'yellow', at: [0.5, 0.5], n: 3 }, 400, 300);
-    expect(dot).toMatchObject({ type: 'ellipse', cx: 200, cy: 150, rx: 13.5, ry: 13.5, fill: '#FFD60A', stroke: '#000000' });
-    expect(number).toMatchObject({ type: 'text', x: 200, text: '3', anchor: 'middle', fill: '#000000' });
+  it('draws a numbered spot as a pin with its number in the middle', () => {
+    const [edge, dot, number] = markShapes({ tool: 'number', color: 'yellow', at: [0.5, 0.5], n: 3 }, 400, 300);
+    expect(dot).toMatchObject({ type: 'ellipse', cx: 200, cy: 150, fill: '#FFD60A', stroke: '#FFFFFF' });
+    expect(edge).toMatchObject({ type: 'ellipse', cx: 200, cy: 150, fill: 'rgba(0, 0, 0, 0.42)' });
+    expect((edge as { rx: number }).rx).toBeGreaterThan((dot as { rx: number }).rx);
+    expect(number).toMatchObject({ type: 'text', x: 200, text: '3', anchor: 'middle', fill: '#1C1C1E' });
     const spots: Mark[] = [
       { tool: 'number', color: 'red', at: [0.1, 0.1], n: 1 },
       { tool: 'arrow', color: 'red', from: [0, 0], to: [0.5, 0.5] },
@@ -346,10 +364,11 @@ describe('the lists that go to the subs', () => {
     expect(page.body).toContain('<img src="data:image/jpeg;base64,AAAA"');
     expect(page.body).toContain('viewBox="0 0 1000 1333" preserveAspectRatio="xMidYMid slice"');
     expect(page.body).toMatch(/<ellipse [^>]*stroke="#D70015"/);
-    // A numbered spot is a filled dot with its number centered; a size has an outline to read on any wall.
+    // A numbered spot is a pin with its number centered; a size is set in a tag.
     expect(page.body).toMatch(/<ellipse [^>]*stroke="#FFFFFF"[^>]*fill="#D70015"\/>/);
     expect(page.body).toMatch(/<text [^>]*text-anchor="middle">1<\/text>/);
-    expect(page.body).toMatch(/<text [^>]*text-anchor="middle" stroke="#FFFFFF"[^>]*>24 inches<\/text>/);
+    expect(page.body).toMatch(/<rect [^>]*rx="[\d.]+" stroke="none" stroke-width="0" fill="#D70015"/);
+    expect(page.body).toMatch(/<text [^>]*fill="#FFFFFF"[^>]*text-anchor="middle">24 inches<\/text>/);
     // A tall photo stops at the most the line allows.
     expect(page.body).toContain('style="height:1.45in"');
     // The lines to add more have no photo column.
