@@ -217,6 +217,18 @@ const GLYPHS: Record<IconName, Draw> = {
   'arrow.up.right': (c, w) => line('M5.5 18.5L18.5 5.5M9.5 5.5h9v9', c, w * 1.9),
   circle: (c, w) => <ellipse cx={12} cy={12} rx={8.5} ry={7} stroke={c} strokeWidth={w * 1.8} fill="none" />,
   square: (c, w) => <rect x={4.5} y={6} width={15} height={12} rx={1.5} stroke={c} strokeWidth={w * 1.8} fill="none" />,
+  ruler: (c, w) => (
+    <>
+      <rect x={2.5} y={7.5} width={19} height={9} rx={1.5} stroke={c} strokeWidth={w * 1.7} fill="none" />
+      {line('M6.5 7.5v3.2M10 7.5v4.6M13.5 7.5v3.2M17 7.5v4.6', c, w * 1.5)}
+    </>
+  ),
+  '1.circle': (c, w) => (
+    <>
+      {ring(12, 12, 9.4, c, w * 1.7)}
+      {line('M10 9.3l2.4-1.8v9', c, w * 1.9)}
+    </>
+  ),
   textformat: (c, w) => line('M5.5 6.5h13M12 6.5v12', c, w * 1.9),
   rooms: (c, w) => (
     <>

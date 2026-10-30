@@ -15,8 +15,12 @@ import {
   formShows,
   groupItems,
   isTooSmall,
+  markBounds,
   markShapes,
+  measureText,
   neighborRooms,
+  nextNumber,
+  QUICK_NOTES,
   setFieldShown,
   suggestTitles,
   tidyExtra,
@@ -26,6 +30,7 @@ import {
   tradeForTitle,
   type CustomField,
   type Item,
+  type Mark,
   type JobCompany,
   type Location,
   type StandardTitle,
@@ -92,14 +97,74 @@ describe('marks', () => {
     expect(circle).toMatchObject({ type: 'ellipse', cx: 100, cy: 50, rx: 100, ry: 50 });
     const [arrow] = markShapes({ tool: 'arrow', color: 'yellow', from: [0, 0], to: [0.5, 0.5] }, 100, 100);
     expect(arrow?.type).toBe('path');
-    const [text] = markShapes({ tool: 'text', color: 'black', at: [0.5, 0.5], text: 'Rubs the hood' }, 390, 520);
+    const [outline, text] = markShapes({ tool: 'text', color: 'black', at: [0.5, 0.5], text: 'Rubs the hood' }, 390, 520);
+    expect(outline).toMatchObject({ type: 'text', x: 195, y: 260, text: 'Rubs the hood', fill: '#FFFFFF', stroke: '#FFFFFF' });
     expect(text).toMatchObject({ type: 'text', x: 195, y: 260, text: 'Rubs the hood', fill: '#000000' });
+    expect(text).not.toHaveProperty('stroke');
+  });
+
+  it('draws a measurement with a bar across each end and its size centered on the line', () => {
+    const shapes = markShapes({ tool: 'measure', color: 'red', from: [0.1, 0.5], to: [0.9, 0.5], text: '24 inches' }, 400, 300);
+    expect(shapes.map((s) => s.type)).toEqual(['path', 'text', 'text']);
+    expect(shapes[0]).toMatchObject({ d: 'M40 150L360 150M40 159L40 141M360 159L360 141', stroke: '#D70015' });
+    expect(shapes[1]).toMatchObject({ text: '24 inches', anchor: 'middle', x: 200, fill: '#FFFFFF', stroke: '#FFFFFF' });
+    expect(shapes[2]).toMatchObject({ text: '24 inches', anchor: 'middle', x: 200, y: 155.1, fill: '#D70015' });
+    // With no size typed, just the line and its ends.
+    expect(markShapes({ tool: 'measure', color: 'red', from: [0.1, 0.5], to: [0.9, 0.5], text: ' ' }, 400, 300)).toHaveLength(1);
+  });
+
+  it('draws a numbered spot as a dot with its number in the middle', () => {
+    const [dot, number] = markShapes({ tool: 'number', color: 'yellow', at: [0.5, 0.5], n: 3 }, 400, 300);
+    expect(dot).toMatchObject({ type: 'ellipse', cx: 200, cy: 150, rx: 13.5, ry: 13.5, fill: '#FFD60A', stroke: '#000000' });
+    expect(number).toMatchObject({ type: 'text', x: 200, text: '3', anchor: 'middle', fill: '#000000' });
+    const spots: Mark[] = [
+      { tool: 'number', color: 'red', at: [0.1, 0.1], n: 1 },
+      { tool: 'arrow', color: 'red', from: [0, 0], to: [0.5, 0.5] },
+      { tool: 'number', color: 'red', at: [0.3, 0.3], n: 2 },
+    ];
+    expect(nextNumber([])).toBe(1);
+    expect(nextNumber(spots)).toBe(3);
+  });
+
+  it('writes a measurement out with no abbreviations', () => {
+    expect(measureText('24')).toBe('24 inches');
+    expect(measureText('1')).toBe('1 inch');
+    expect(measureText('1/4"')).toBe('1/4 inch');
+    expect(measureText('3-1/2 in')).toBe('3 1/2 inches');
+    expect(measureText('3 1/2')).toBe('3 1/2 inches');
+    expect(measureText(`2'6"`)).toBe('2 feet 6 inches');
+    expect(measureText(`6' 8`)).toBe('6 feet 8 inches');
+    expect(measureText(`2'0"`)).toBe('2 feet');
+    expect(measureText('1 ft')).toBe('1 foot');
+    expect(measureText('4', 'feet')).toBe('4 feet');
+    expect(measureText('36 Inches')).toBe('36 inches');
+    expect(measureText('24\u201D')).toBe('24 inches');
+    expect(measureText('  out of level ')).toBe('Out of level');
+    expect(measureText('  ')).toBe('');
+  });
+
+  it('knows the part of the photo the marks are on, so a cropped photo can keep them in view', () => {
+    expect(markBounds([])).toBeNull();
+    expect(
+      markBounds([
+        { tool: 'circle', color: 'red', from: [0.2, 0.15], to: [0.6, 0.4] },
+        { tool: 'number', color: 'red', at: [0.3, 0.85], n: 1 },
+        { tool: 'pen', color: 'red', points: [[0.1, 0.5], [0.15, 0.55]] },
+      ]),
+    ).toEqual([0.1, 0.15, 0.6, 0.85]);
+  });
+
+  it('offers the standard note words, written the way titles are', () => {
+    expect(QUICK_NOTES).toContain('Touch up');
+    expect(QUICK_NOTES.every((w) => tidyTitle(w) === w)).toBe(true);
   });
 
   it('treats a tap as no mark, and keeps a pen line light', () => {
     expect(isTooSmall({ tool: 'arrow', color: 'red', from: [0.5, 0.5], to: [0.502, 0.501] })).toBe(true);
     expect(isTooSmall({ tool: 'box', color: 'red', from: [0.1, 0.1], to: [0.4, 0.4] })).toBe(false);
     expect(isTooSmall({ tool: 'text', color: 'red', at: [0.1, 0.1], text: '  ' })).toBe(true);
+    expect(isTooSmall({ tool: 'measure', color: 'red', from: [0.5, 0.5], to: [0.501, 0.5], text: '' })).toBe(true);
+    expect(isTooSmall({ tool: 'number', color: 'red', at: [0.5, 0.5], n: 1 })).toBe(false);
     const pts = addPenPoint(addPenPoint([[0.1, 0.1]], [0.1005, 0.1]), [0.2, 0.2]);
     expect(pts).toEqual([[0.1, 0.1], [0.2, 0.2]]);
     expect(addPenPoint([], [1.4, -0.2])).toEqual([[1, 0]]);
@@ -266,7 +331,11 @@ describe('the lists that go to the subs', () => {
 
   it('prints each photo with its marks, cropped the same way, and keeps text safe', () => {
     const odd = item({ locationId: 'k', number: 8, title: 'Fix <trim> & caulk', description: 'Left "returns"' });
-    const marks = [{ tool: 'circle' as const, color: 'red' as const, from: [0.2, 0.2] as [number, number], to: [0.6, 0.5] as [number, number] }];
+    const marks: Mark[] = [
+      { tool: 'circle', color: 'red', from: [0.2, 0.2], to: [0.6, 0.5] },
+      { tool: 'number', color: 'red', at: [0.3, 0.7], n: 1 },
+      { tool: 'measure', color: 'red', from: [0.1, 0.9], to: [0.9, 0.9], text: '24 inches' },
+    ];
     const page = companyPrintout(companyList('c-sms', [...items, odd], lookups), {
       ...settings,
       photo: (id) => (id === odd.id ? { src: 'data:image/jpeg;base64,AAAA', width: 3000, height: 4000, marks } : undefined),
@@ -277,6 +346,10 @@ describe('the lists that go to the subs', () => {
     expect(page.body).toContain('<img src="data:image/jpeg;base64,AAAA"');
     expect(page.body).toContain('viewBox="0 0 1000 1333" preserveAspectRatio="xMidYMid slice"');
     expect(page.body).toMatch(/<ellipse [^>]*stroke="#D70015"/);
+    // A numbered spot is a filled dot with its number centered; a size has an outline to read on any wall.
+    expect(page.body).toMatch(/<ellipse [^>]*stroke="#FFFFFF"[^>]*fill="#D70015"\/>/);
+    expect(page.body).toMatch(/<text [^>]*text-anchor="middle">1<\/text>/);
+    expect(page.body).toMatch(/<text [^>]*text-anchor="middle" stroke="#FFFFFF"[^>]*>24 inches<\/text>/);
     // A tall photo stops at the most the line allows.
     expect(page.body).toContain('style="height:1.45in"');
     // The lines to add more have no photo column.

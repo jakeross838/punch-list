@@ -237,6 +237,28 @@ describe('filling in from the photo', () => {
     expect(prompt).toContain('- Adjust cabinet door (Carpentry)');
     expect(prompt).toContain('- Triple H Painting (Painting)');
     expect(prompt).toContain('Reply with only JSON');
+    expect(prompt).not.toContain('numbered spots');
+  });
+
+  it('tells Claude the sizes and the numbered spots marked on the photo', () => {
+    const marked = {
+      ...ctx,
+      marks: [
+        { tool: 'measure', color: 'red', from: [0.1, 0.5], to: [0.4, 0.5], text: '24 inches' },
+        { tool: 'number', color: 'yellow', at: [0.2, 0.3], n: 1 },
+        { tool: 'number', color: 'yellow', at: [0.6, 0.35], n: 2 },
+        { tool: 'number', color: 'yellow', at: [0.7, 0.8], n: 3 },
+      ],
+    } satisfies typeof ctx;
+    expect(describeMarks(marked.marks)).toEqual([
+      'A red measurement from 10% across and 50% down to 40% across and 50% down, marked "24 inches".',
+      'Spot 1, a yellow numbered dot at 20% across and 30% down.',
+      'Spot 2, a yellow numbered dot at 60% across and 35% down.',
+      'Spot 3, a yellow numbered dot at 70% across and 80% down.',
+    ]);
+    const prompt = suggestPrompt(marked);
+    expect(prompt).toContain('The 3 numbered spots are places with the same work: the description says so, like "Three spots, numbered on the photo."');
+    expect(prompt).toContain('A size marked on the photo goes in the description as it is written');
   });
 
   it('reads the answer back: standard titles word for word, only trades and companies on the job', () => {

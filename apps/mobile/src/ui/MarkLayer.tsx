@@ -15,12 +15,23 @@ export const MarkLayer = memo(function MarkLayer({ marks, width, height }: { mar
             case 'path':
               return <Path key={key} d={s.d} stroke={s.stroke} strokeWidth={s.strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />;
             case 'ellipse':
-              return <Ellipse key={key} cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} stroke={s.stroke} strokeWidth={s.strokeWidth} fill="none" />;
+              return <Ellipse key={key} cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} stroke={s.stroke} strokeWidth={s.strokeWidth} fill={s.fill ?? 'none'} />;
             case 'rect':
               return <Rect key={key} x={s.x} y={s.y} width={s.width} height={s.height} stroke={s.stroke} strokeWidth={s.strokeWidth} strokeLinejoin="round" fill="none" />;
             case 'text':
               return (
-                <SvgText key={key} x={s.x} y={s.y} fill={s.fill} fontSize={s.fontSize} fontWeight="700">
+                <SvgText
+                  key={key}
+                  x={s.x}
+                  y={s.y}
+                  fill={s.fill}
+                  fontSize={s.fontSize}
+                  fontWeight="700"
+                  textAnchor={s.anchor ?? 'start'}
+                  stroke={s.stroke}
+                  strokeWidth={s.strokeWidth}
+                  strokeLinejoin="round"
+                >
                   {s.text}
                 </SvgText>
               );

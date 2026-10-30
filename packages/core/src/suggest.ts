@@ -30,30 +30,44 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 
 /** The marks in words, so Claude knows where to look. */
 export function describeMarks(marks: Mark[]): string[] {
-  return marks.map((m) => {
+  return marks.flatMap((m) => {
     switch (m.tool) {
       case 'circle':
       case 'box': {
         const [x1, y1] = m.from;
         const [x2, y2] = m.to;
         const shape = m.tool === 'circle' ? 'circle' : 'box';
-        return `A ${COLOR[m.color]} ${shape} around the area from ${pct(Math.min(x1, x2))} to ${pct(Math.max(x1, x2))} across and ${pct(Math.min(y1, y2))} to ${pct(Math.max(y1, y2))} down.`;
+        return [`A ${COLOR[m.color]} ${shape} around the area from ${pct(Math.min(x1, x2))} to ${pct(Math.max(x1, x2))} across and ${pct(Math.min(y1, y2))} to ${pct(Math.max(y1, y2))} down.`];
       }
       case 'arrow':
-        return `A ${COLOR[m.color]} arrow pointing at the spot ${pct(m.to[0])} across and ${pct(m.to[1])} down.`;
+        return [`A ${COLOR[m.color]} arrow pointing at the spot ${pct(m.to[0])} across and ${pct(m.to[1])} down.`];
       case 'pen': {
         const xs = m.points.map((p) => p[0]);
         const ys = m.points.map((p) => p[1]);
-        return `A ${COLOR[m.color]} line drawn over the area from ${pct(Math.min(...xs))} to ${pct(Math.max(...xs))} across and ${pct(Math.min(...ys))} to ${pct(Math.max(...ys))} down.`;
+        return [`A ${COLOR[m.color]} line drawn over the area from ${pct(Math.min(...xs))} to ${pct(Math.max(...xs))} across and ${pct(Math.min(...ys))} to ${pct(Math.max(...ys))} down.`];
       }
+      case 'measure': {
+        const size = m.text.trim();
+        return [
+          `A ${COLOR[m.color]} measurement from ${pct(m.from[0])} across and ${pct(m.from[1])} down to ${pct(m.to[0])} across and ${pct(m.to[1])} down${size ? `, marked "${size}"` : ''}.`,
+        ];
+      }
+      case 'number':
+        return [`Spot ${m.n}, a ${COLOR[m.color]} numbered dot at ${pct(m.at[0])} across and ${pct(m.at[1])} down.`];
       case 'text':
-        return `A note reading "${m.text}" at ${pct(m.at[0])} across and ${pct(m.at[1])} down.`;
+        return [`A note reading "${m.text}" at ${pct(m.at[0])} across and ${pct(m.at[1])} down.`];
+      default:
+        return [];
     }
   });
 }
 
+const COUNT_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
+
 export function suggestPrompt(ctx: SuggestContext): string {
   const marks = describeMarks(ctx.marks);
+  const spots = ctx.marks.filter((m) => m.tool === 'number').length;
+  const sized = ctx.marks.some((m) => m.tool === 'measure' && m.text.trim() !== '');
   return [
     'You are filling in one item on the running list of work that still needs to be done on a Ross Built Custom Homes job site, from one photo.',
     `The photo was taken in ${ctx.room}.`,
@@ -64,6 +78,10 @@ export function suggestPrompt(ctx: SuggestContext): string {
     'Write the item the way Ross Built writes them:',
     '- title: a verb and the thing, as short as possible, like "Install toilet" or "Touch up paint". No room, no trade, no sizes, no brands. When one of the standard titles below fits, use it word for word.',
     '- description: where exactly and what is involved, in one short sentence with proper capitalization, or an empty string when the title says it all. Do not name the room.',
+    ...(spots > 1
+      ? [`- The ${spots} numbered spots are places with the same work: the description says so, like "${COUNT_WORDS[spots] ?? spots} spots, numbered on the photo."`]
+      : []),
+    ...(sized ? ['- A size marked on the photo goes in the description as it is written, like "24 inches left of the vanity."'] : []),
     '- trade: one of the trades below, or null when unsure.',
     '- company: the company on this job for that trade, from the list below, or null when unsure.',
     '',

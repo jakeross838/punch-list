@@ -49,6 +49,8 @@ export const SF_SYMBOLS = {
   'arrow.up.right': 'arrow.up.right',
   circle: 'circle',
   square: 'square',
+  ruler: 'ruler',
+  '1.circle': '1.circle',
   textformat: 'textformat',
   rooms: 'square.split.2x2',
   filter: 'line.3.horizontal.decrease',

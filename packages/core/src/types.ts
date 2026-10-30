@@ -135,11 +135,15 @@ export interface ListSend {
 /** A point on a photo as fractions of its width and height (0 to 1), so marks fit any size. */
 export type MarkPoint = [x: number, y: number];
 export type MarkColor = 'red' | 'yellow' | 'white' | 'black';
-export type MarkTool = 'pen' | 'arrow' | 'circle' | 'box' | 'text';
+export type MarkTool = 'pen' | 'arrow' | 'circle' | 'box' | 'measure' | 'number' | 'text';
 
 export type Mark =
   | { tool: 'pen'; color: MarkColor; points: MarkPoint[] }
   | { tool: 'arrow' | 'circle' | 'box'; color: MarkColor; from: MarkPoint; to: MarkPoint }
+  /** A measurement: a line from one end to the other with end bars, and its size written out ("24 inches"). */
+  | { tool: 'measure'; color: MarkColor; from: MarkPoint; to: MarkPoint; text: string }
+  /** A numbered spot: one of several places with the same work, numbered in the order they were tapped. */
+  | { tool: 'number'; color: MarkColor; at: MarkPoint; n: number }
   | { tool: 'text'; color: MarkColor; at: MarkPoint; text: string };
 
 export interface Photo {

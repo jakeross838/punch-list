@@ -37,7 +37,7 @@ import { useRelease } from '@/components/useItemActions';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
-import { dayOf, EmptyState, haptic, Icon, ListRow, ListSection, Page, PhotoView, PhotoViewer, shortDate, Text, Touchable, useFeedback, type IconName } from '@/ui';
+import { croppedHeight, dayOf, EmptyState, haptic, Icon, ListRow, ListSection, Page, PhotoView, PhotoViewer, shortDate, Text, Touchable, useFeedback, type IconName } from '@/ui';
 
 export default function ItemScreen() {
   const { jobId, itemId, from } = useLocalSearchParams<{ jobId: string; itemId: string; from?: string }>();
@@ -139,8 +139,9 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
 
   const photo: Photo | undefined = photos[Math.min(shown, photos.length - 1)];
   const photoWidth = Math.min(screenWidth, 600) - layout.margin * 2;
-  // Tall photos are cropped here to keep the item readable; tap for the whole photo.
-  const photoHeight = photo ? Math.min(Math.round((photoWidth * photo.height) / (photo.width || 1)), 300) : 0;
+  // Tall photos are cropped here to keep the item readable, but not so much that their marks are
+  // cut off; tap for the whole photo.
+  const photoHeight = photo ? croppedHeight(photo, photoWidth, 300, 420) : 0;
 
   // Filling in after a walk: the drafts in number order, and the next one after this.
   const unfinished = sortItems(items.filter((i) => i.unfinished && i.status === 'open' && i.id !== item.id));

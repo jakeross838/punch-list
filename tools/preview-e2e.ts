@@ -240,22 +240,45 @@ async function main(): Promise<void> {
       await settle(700);
       await shot('10-camera');
     });
-    await step('take a photo and mark it up', async () => {
+    await step('take a photo and mark it up: a circle, a measurement, numbered spots and a quick note', async () => {
       await takePhoto();
       await shot('11-markup');
       await app.getByTestId('tool-circle').click();
-      await drag([0.2, 0.15], [0.8, 0.5]);
-      await app.getByTestId('tool-arrow').click();
-      await drag([0.85, 0.85], [0.6, 0.55]);
+      await drag([0.2, 0.12], [0.8, 0.45]);
       await app.getByTestId('tool-pen').click();
       await drag([0.1, 0.7], [0.35, 0.8]);
       await app.getByTestId('markup-undo').click();
-      await app.getByTestId('tool-text').click();
-      await drag([0.25, 0.62], [0.25, 0.62]);
-      await app.getByTestId('markup-note').fill('loose');
-      await app.getByTestId('markup-note-add').click();
+      // A measurement: the size is written out on the photo as it is typed.
+      await app.getByTestId('tool-measure').click();
+      await app.getByText('Drag from one end to the other, then type the size.').waitFor();
+      await drag([0.12, 0.58], [0.88, 0.58]);
+      await app.getByTestId('markup-size').fill('24');
+      await app.getByText('24 inches').first().waitFor();
+      await app.getByTestId('unit-feet').click();
+      await app.getByText('24 feet').first().waitFor();
+      await app.getByTestId('markup-size').fill(`2'6"`);
+      await app.getByText('2 feet 6 inches').first().waitFor();
+      await app.getByTestId('markup-size').fill('30');
+      await app.getByTestId('unit-inches').click();
+      await app.getByText('30 inches').first().waitFor();
       await settle(300);
-      await shot('12-marked-up');
+      await shot('12-measure');
+      await app.getByTestId('markup-size-add').click();
+      // Numbered spots: one tap each.
+      await app.getByTestId('tool-number').click();
+      await app.getByText('Tap each spot to number it.').waitFor();
+      for (const x of [0.28, 0.5, 0.72]) await drag([x, 0.8], [x, 0.8]);
+      await app.getByTestId('markup').getByText('3', { exact: true }).first().waitFor();
+      // A note from the standard words.
+      await app.getByTestId('tool-text').click();
+      await drag([0.62, 0.3], [0.62, 0.3]);
+      await app.getByTestId('quick-touch-up').waitFor();
+      await settle(300);
+      await shot('12b-quick-notes');
+      await app.getByTestId('quick-gap').click();
+      await app.getByTestId('markup').getByText('Gap', { exact: true }).first().waitFor();
+      await settle(300);
+      await shot('12c-marked-up');
     });
     await step('the form fills in from the title', async () => {
       await app.getByTestId('markup-next').click();
