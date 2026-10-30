@@ -7,7 +7,7 @@ Plan: [Punch List App: Version 1 Plan](https://claude.ai/artifact/8aKXo8iiTrKoH7
 ## Layout
 
 ```
-apps/mobile             The phone app: Expo SDK 58, TypeScript, Expo Router
+apps/mobile             The phone app: Expo SDK 58, TypeScript, Expo Router. Its iOS design parts are in src/ui
 packages/core           The data types and the rules every item follows, shared by the app, the server and the tests
 supabase                Database migrations, access rules, the test job seed and the database checks
 powersync               The offline sync service config
@@ -23,6 +23,7 @@ local                   Sessions, exports, previews and reports. Ignored by git,
 ```
 npm test                  unit tests for the shared packages
 npm run typecheck         TypeScript, strict (the phone app: cd apps/mobile && npx tsc --noEmit)
+cd apps/mobile && npx expo lint   lint for the phone app
 npm run test:db           migrations, access rules and item history on a fresh local Postgres
 npm run preview:build     exports the app for the web and builds the one-page preview in local/preview
 npm run test:preview      walks the preview at iPhone size in Chromium, under the preview page's rules

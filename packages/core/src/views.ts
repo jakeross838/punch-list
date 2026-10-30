@@ -1,5 +1,6 @@
 // How the lists are cut: by room (floor order), by trade or by company, with the filters from the
 // plan. Removed items never show. Every room shows, even an empty one, so items can be added to it.
+// Show Completed (as in Reminders) adds completed items that fit the filter, after the open ones.
 
 import type { Company, Item, Location, Trade } from './types';
 
@@ -30,6 +31,25 @@ export function matchesFilter(item: Item, filter: ItemFilter): boolean {
   }
 }
 
+/** With Show Completed on, a completed item joins the open filters on everything but its status. */
+export function matchesView(item: Item, filter: ItemFilter, showCompleted = false): boolean {
+  if (item.status !== 'complete' || filter === 'all' || !showCompleted) return matchesFilter(item, filter);
+  switch (filter) {
+    case 'open':
+      return true;
+    case 'ready':
+      return item.ready;
+    case 'not_ready':
+      return !item.ready;
+    case 'added_scope':
+      return item.kind === 'added_scope';
+  }
+}
+
+export interface ViewOptions {
+  showCompleted?: boolean;
+}
+
 export interface ItemGroup {
   key: string;
   label: string;
@@ -45,7 +65,7 @@ export interface Lookups {
   companies: Company[];
 }
 
-export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, lookups: Lookups): ItemGroup[] {
+export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, lookups: Lookups, options: ViewOptions = {}): ItemGroup[] {
   const live = items.filter((i) => i.status !== 'removed');
   const keyOf = (i: Item) => (by === 'room' ? i.locationId : by === 'trade' ? i.tradeId : i.companyId) ?? 'none';
   const groups = new Map<string, Item[]>();
@@ -74,7 +94,7 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
     return {
       key,
       label,
-      items: sortItems(all.filter((i) => matchesFilter(i, filter))),
+      items: arrange(all.filter((i) => matchesView(i, filter, options.showCompleted)), filter, options),
       open: all.filter((i) => i.status === 'open').length,
       ready: all.filter((i) => i.status === 'open' && i.ready).length,
     };
@@ -89,6 +109,13 @@ export function sortItems(items: Item[]): Item[] {
     if (b.number !== null) return 1;
     return a.createdAt.localeCompare(b.createdAt);
   });
+}
+
+/** Number order. With Show Completed on, the open items come first and the completed ones after. */
+function arrange(items: Item[], filter: ItemFilter, options: ViewOptions): Item[] {
+  const sorted = sortItems(items);
+  if (!options.showCompleted || filter === 'all') return sorted;
+  return [...sorted.filter((i) => i.status !== 'complete'), ...sorted.filter((i) => i.status === 'complete')];
 }
 
 export function itemNumberLabel(item: Pick<Item, 'number'>): string {

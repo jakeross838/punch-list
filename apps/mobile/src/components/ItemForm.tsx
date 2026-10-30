@@ -1,34 +1,112 @@
-// One form for a new item and for editing one. Every rule comes from @punch/core, so the form,
-// the server and the tests agree on what can be saved.
+// One form for a new item and for editing one, laid out like an iOS details sheet. Every rule
+// comes from @punch/core, so the form, the server and the tests agree on what can be saved.
+// Problems show under the section they belong to, after the first try to save.
 
-import { checkItem, kindDefaults, tidyItem, waitingOnChoices, type ItemFields, type ItemKind } from '@punch/core';
+import {
+  checkItem,
+  kindDefaults,
+  tidyItem,
+  TITLE_MAX,
+  waitingOnChoices,
+  type Item,
+  type ItemFields,
+  type ItemKind,
+} from '@punch/core';
 import { useMemo, useState, type ReactNode } from 'react';
-import { View } from 'react-native';
-import { Button, Field, Note, Picker, Section, Segmented, Toggle } from '@/components/ui';
-import { space } from '@/constants/theme';
+import { StyleSheet, View } from 'react-native';
+import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
+import {
+  DateField,
+  ListLabeledField,
+  ListRow,
+  ListSection,
+  ListSwitchRow,
+  ListTextField,
+  OptionPicker,
+  Segmented,
+  type Option,
+} from '@/ui';
 
 export interface ItemDraft extends ItemFields {
   locationId: string;
 }
 
-type Option = { value: string; label: string; hint?: string };
-
-function option(value: string, label: string, hint?: string | null): Option {
-  return hint ? { value, label, hint } : { value, label };
+export function fieldsOf(item: Item): ItemFields {
+  const { title, description, tradeId, companyId, kind, ready, waitingOn, readyBy, boughtOut, poOrCo, status, completedBy, completedAt } = item;
+  return { title, description, tradeId, companyId, kind, ready, waitingOn, readyBy, boughtOut, poOrCo, status, completedBy, completedAt };
 }
 
-export function ItemForm({
+export function blankDraft(locationId: string): ItemDraft {
+  return {
+    locationId,
+    title: '',
+    description: '',
+    tradeId: null,
+    companyId: null,
+    kind: 'deficiency',
+    ready: true,
+    waitingOn: null,
+    readyBy: null,
+    boughtOut: true,
+    poOrCo: null,
+    status: 'open',
+    completedBy: null,
+    completedAt: null,
+  };
+}
+
+export interface ItemFormState {
+  value: ItemDraft;
+  set: (patch: Partial<ItemDraft>) => void;
+  dirty: boolean;
+  tried: boolean;
+  /** Marks the form tried and returns the tidied draft when it can save, or null. */
+  submit: () => ItemDraft | null;
+  problem: (field: keyof ItemDraft) => string | undefined;
+}
+
+/** The fields the form edits. Status changes go through Mark Complete and the like instead. */
+const EDITABLE: (keyof ItemDraft)[] = ['locationId', 'title', 'description', 'tradeId', 'companyId', 'kind', 'ready', 'waitingOn', 'readyBy', 'boughtOut', 'poOrCo'];
+
+export function useItemForm(initial: ItemDraft): ItemFormState {
+  const [value, setValue] = useState<ItemDraft>(initial);
+  const [tried, setTried] = useState(false);
+  const tidy = useMemo(() => tidyItem(value), [value]);
+  const problems = useMemo(() => {
+    const list = checkItem(tidy).map((p) => ({ field: p.field as keyof ItemDraft, message: p.message }));
+    if (value.locationId === '') list.unshift({ field: 'locationId', message: 'Pick the room or area' });
+    return list;
+  }, [tidy, value.locationId]);
+  const dirty = EDITABLE.some((k) => value[k] !== initial[k]);
+
+  return {
+    value,
+    set: (patch) => setValue((v) => ({ ...v, ...patch })),
+    dirty,
+    tried,
+    submit: () => {
+      setTried(true);
+      return problems.length === 0 ? { ...tidy, locationId: value.locationId } : null;
+    },
+    problem: (field) => (tried ? problems.find((p) => p.field === field)?.message : undefined),
+  };
+}
+
+type PickerName = 'room' | 'company' | 'trade' | 'waitingOn';
+
+const sentence = (text: string | undefined) => (text ? `${text}.` : undefined);
+
+export function ItemFormBody({
   jobId,
-  initial,
-  saveLabel,
-  onSave,
+  form,
+  focusTitle,
   children,
 }: {
   jobId: string;
-  initial: ItemDraft;
-  saveLabel: string;
-  onSave: (value: ItemDraft) => Promise<void>;
+  form: ItemFormState;
+  /** Opens the keyboard on the title, for a new item on the iPhone. */
+  focusTitle?: boolean;
   children?: ReactNode;
 }) {
   const data = useData();
@@ -37,41 +115,37 @@ export function ItemForm({
   const trades = data.useTrades();
   const jobCompanies = data.useJobCompanies(jobId);
   const extras = data.useWaitingOnExtras(jobId);
-  const [value, setValue] = useState<ItemDraft>(initial);
-  const [tried, setTried] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [picker, setPicker] = useState<PickerName | null>(null);
+  const { value, set, problem } = form;
 
-  const tidy = useMemo(() => tidyItem(value), [value]);
-  const problems = useMemo(() => checkItem(tidy), [tidy]);
-  const roomMissing = value.locationId === '';
-  const error = (field: keyof ItemFields) => (tried ? problems.find((p) => p.field === field)?.message : undefined);
-  const set = (patch: Partial<ItemDraft>) => setValue((v) => ({ ...v, ...patch }));
-
-  const roomOptions = useMemo(
+  const roomOptions = useMemo<Option[]>(
     () =>
       [...locations]
         .filter((l) => l.active || l.id === value.locationId)
         .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((l) => option(l.id, l.label, l.kind === 'shared' ? 'Shared area' : l.floor)),
+        .map((l) => ({ value: l.id, label: l.label, group: l.kind === 'shared' ? 'Shared Areas' : (l.floor ?? 'Rooms') })),
     [locations, value.locationId],
   );
-  const tradeName = (id: string | null) => trades.find((t) => t.id === id)?.name ?? null;
-  const companyOptions = useMemo(() => {
+  const companyOptions = useMemo<Option[]>(() => {
     const seen = new Set<string>();
     return jobCompanies
       .filter((jc) => (seen.has(jc.companyId) ? false : (seen.add(jc.companyId), true)))
-      .map((jc) => {
-        const company = companies.find((c) => c.id === jc.companyId);
-        return option(jc.companyId, company?.name ?? 'Unknown company', tradeName(jc.tradeId));
-      })
+      .map((jc) => ({
+        value: jc.companyId,
+        label: companies.find((c) => c.id === jc.companyId)?.name ?? 'Unknown company',
+        hint: trades.find((t) => t.id === jc.tradeId)?.name ?? null,
+      }))
       .sort((a, b) => a.label.localeCompare(b.label));
-    // tradeName reads trades, which is in the dependency list
   }, [jobCompanies, companies, trades]);
-  const tradeOptions = useMemo(() => trades.map((t) => option(t.id, t.name)), [trades]);
-  const waitingOptions = useMemo(
-    () => waitingOnChoices(jobCompanies, companies, extras.length > 0 ? extras : undefined).map((name) => option(name, name)),
+  const tradeOptions = useMemo<Option[]>(() => trades.map((t) => ({ value: t.id, label: t.name })), [trades]);
+  const waitingOptions = useMemo<Option[]>(
+    () => waitingOnChoices(jobCompanies, companies, extras.length > 0 ? extras : undefined).map((name) => ({ value: name, label: name })),
     [jobCompanies, companies, extras],
   );
+
+  const roomLabel = locations.find((l) => l.id === value.locationId)?.label;
+  const companyName = companies.find((c) => c.id === value.companyId)?.name;
+  const tradeName = trades.find((t) => t.id === value.tradeId)?.name;
 
   function chooseCompany(companyId: string) {
     const onJob = jobCompanies.find((jc) => jc.companyId === companyId);
@@ -79,82 +153,190 @@ export function ItemForm({
     set({ companyId, tradeId: onJob?.tradeId ?? company?.defaultTradeId ?? value.tradeId });
   }
 
-  async function save() {
-    setTried(true);
-    if (problems.length > 0 || roomMissing) return;
-    setSaving(true);
-    try {
-      await onSave({ ...tidy, locationId: value.locationId });
-    } finally {
-      setSaving(false);
-    }
-  }
+  const titleProblem = problem('title');
+  const whereProblem = problem('locationId') ?? problem('companyId') ?? problem('tradeId');
+  const readyProblem = problem('waitingOn') ?? problem('readyBy');
+  const poProblem = problem('poOrCo');
 
   return (
-    <View style={{ gap: space(2) }}>
-      <Section>
-        <View style={{ padding: space(2), gap: space(2) }}>
-          <Picker
-            label="Room or area"
-            value={value.locationId || null}
-            options={roomOptions}
-            onChange={(locationId) => set({ locationId })}
-            error={tried && roomMissing ? 'Pick the room or area' : undefined}
-          />
-          <Field
-            label="Title"
-            placeholder="Install toilet"
-            value={value.title}
-            onChangeText={(title) => set({ title })}
-            error={error('title')}
-          />
-          <Note>A verb and the thing. No room, trade, size or brand.</Note>
-          <Field
-            label="Description"
-            placeholder="Where exactly, and what is involved"
-            value={value.description}
-            onChangeText={(description) => set({ description })}
-            multiline
-          />
-          <Picker label="Company" value={value.companyId} options={companyOptions} onChange={chooseCompany} error={error('companyId')} />
-          {companyOptions.length === 0 ? <Note tone="warn">Add companies to this job in Job setup first.</Note> : null}
-          <Picker label="Trade" value={value.tradeId} options={tradeOptions} onChange={(tradeId) => set({ tradeId })} error={error('tradeId')} />
-        </View>
-      </Section>
+    <>
+      <ListSection
+        footer={sentence(titleProblem) ?? 'A verb and the thing, like Install toilet. No room, trade, size or brand.'}
+        footerTone={titleProblem ? 'danger' : 'default'}
+      >
+        <ListTextField
+          placeholder="Title"
+          value={value.title}
+          onChangeText={(title) => set({ title })}
+          autoCapitalize="sentences"
+          maxLength={TITLE_MAX + 20}
+          autoFocus={focusTitle}
+          invalid={!!titleProblem}
+          accessibilityLabel="Title"
+          testID="field-title"
+        />
+        <ListTextField
+          placeholder="Where exactly, and what is involved"
+          value={value.description}
+          onChangeText={(description) => set({ description })}
+          multiline
+          minLines={2}
+          autoCapitalize="sentences"
+          accessibilityLabel="Description"
+          testID="field-description"
+        />
+      </ListSection>
 
-      <Section title="Readiness">
-        <View style={{ padding: space(2), gap: space(2) }}>
-          <Segmented<ItemKind>
-            options={[
-              ['deficiency', 'Deficiency'],
-              ['added_scope', 'Added scope'],
-            ]}
-            value={value.kind}
-            onChange={(kind) => set(kindDefaults(kind, value))}
-          />
-          <Toggle label="Ready" hint="It can be done now" value={value.ready} onChange={(ready) => set({ ready })} />
-          {!value.ready ? (
-            <>
-              <Picker label="Waiting On" value={value.waitingOn} options={waitingOptions} onChange={(waitingOn) => set({ waitingOn })} error={error('waitingOn')} />
-              <Field
-                label="Ready By"
-                placeholder="2026-11-02"
-                value={value.readyBy ?? ''}
-                onChangeText={(readyBy) => set({ readyBy: readyBy === '' ? null : readyBy })}
-                error={error('readyBy')}
-                keyboardType="numbers-and-punctuation"
-              />
-              <Note>Year, month and day, for example 2026-11-02.</Note>
-            </>
-          ) : null}
-          <Toggle label="Bought Out" value={value.boughtOut} onChange={(boughtOut) => set({ boughtOut })} />
-          <Field label="PO or CO" placeholder="PO-0090" value={value.poOrCo ?? ''} onChangeText={(poOrCo) => set({ poOrCo })} error={error('poOrCo')} autoCapitalize="characters" />
-        </View>
-      </Section>
+      <ListSection
+        footer={
+          sentence(whereProblem) ?? (companyOptions.length === 0 ? 'Add companies to this job in Job Setup first.' : undefined)
+        }
+        footerTone={whereProblem ? 'danger' : 'default'}
+      >
+        <ListRow
+          icon="door"
+          iconColor={colors.blue}
+          title="Room"
+          value={roomLabel ?? 'Choose'}
+          valueColor={roomLabel ? colors.secondary : colors.tint}
+          accessory="chevron"
+          onPress={() => setPicker('room')}
+          testID="pick-room"
+        />
+        <ListRow
+          icon="person.2.fill"
+          iconColor={colors.indigo}
+          title="Company"
+          value={companyName ?? 'Choose'}
+          valueColor={companyName ? colors.secondary : colors.tint}
+          accessory="chevron"
+          onPress={() => setPicker('company')}
+          testID="pick-company"
+        />
+        <ListRow
+          icon="wrench"
+          iconColor={colors.gray}
+          title="Trade"
+          value={tradeName ?? 'Choose'}
+          valueColor={tradeName ? colors.secondary : colors.tint}
+          accessory="chevron"
+          onPress={() => setPicker('trade')}
+          testID="pick-trade"
+        />
+      </ListSection>
 
-      {tried && (problems.length > 0 || roomMissing) ? <Note tone="danger">Fix the fields marked in red, then save.</Note> : null}
-      <Button label={saving ? 'Saving…' : saveLabel} onPress={save} disabled={saving} />
+      <View style={styles.kind}>
+        <Segmented<ItemKind>
+          options={[
+            ['deficiency', 'Deficiency'],
+            ['added_scope', 'Added Scope'],
+          ]}
+          value={value.kind}
+          onChange={(kind) => set(kindDefaults(kind, value))}
+          testID="kind"
+        />
+      </View>
+
+      <ListSection footer={sentence(readyProblem)} footerTone="danger">
+        <ListSwitchRow
+          icon="checkmark"
+          iconColor={colors.green}
+          title="Ready"
+          subtitle={value.ready ? 'It can be done now' : 'It is waiting on something'}
+          value={value.ready}
+          onValueChange={(ready) => set({ ready })}
+          testID="switch-ready"
+        />
+        {!value.ready ? (
+          <ListRow
+            icon="hourglass"
+            iconColor={colors.orange}
+            title="Waiting On"
+            value={value.waitingOn ?? 'Choose'}
+            valueColor={value.waitingOn ? colors.secondary : colors.tint}
+            accessory="chevron"
+            onPress={() => setPicker('waitingOn')}
+            testID="pick-waiting-on"
+          />
+        ) : null}
+        {!value.ready ? (
+          <ListRow
+            icon="calendar"
+            iconColor={colors.red}
+            title="Ready By"
+            titleLines={1}
+            right={<DateField value={value.readyBy} onChange={(readyBy) => set({ readyBy })} label="Ready By" testID="ready-by" />}
+          />
+        ) : null}
+      </ListSection>
+
+      {value.kind === 'added_scope' ? (
+        <ListSection
+          footer={sentence(poProblem) ?? 'Added scope is Bought Out once a PO or CO covers it.'}
+          footerTone={poProblem ? 'danger' : 'default'}
+        >
+          <ListSwitchRow
+            icon="cart"
+            iconColor={colors.teal}
+            title="Bought Out"
+            value={value.boughtOut}
+            onValueChange={(boughtOut) => set({ boughtOut })}
+            testID="switch-bought-out"
+          />
+          <ListLabeledField
+            icon="number"
+            iconColor={colors.gray}
+            label="PO or CO"
+            placeholder="Number"
+            value={value.poOrCo ?? ''}
+            onChangeText={(poOrCo) => set({ poOrCo: poOrCo === '' ? null : poOrCo })}
+            autoCapitalize="characters"
+            invalid={!!poProblem}
+            testID="field-po"
+          />
+        </ListSection>
+      ) : null}
+
       {children}
-    </View>
+
+      <OptionPicker
+        visible={picker === 'room'}
+        title="Room or Area"
+        options={roomOptions}
+        value={value.locationId || null}
+        onSelect={(locationId) => set({ locationId })}
+        onClose={() => setPicker(null)}
+      />
+      <OptionPicker
+        visible={picker === 'company'}
+        title="Company"
+        options={companyOptions}
+        value={value.companyId}
+        onSelect={chooseCompany}
+        onClose={() => setPicker(null)}
+        footer="Companies on this job. Add more in Job Setup."
+      />
+      <OptionPicker
+        visible={picker === 'trade'}
+        title="Trade"
+        options={tradeOptions}
+        value={value.tradeId}
+        onSelect={(tradeId) => set({ tradeId })}
+        onClose={() => setPicker(null)}
+      />
+      <OptionPicker
+        visible={picker === 'waitingOn'}
+        title="Waiting On"
+        options={waitingOptions}
+        value={value.waitingOn}
+        onSelect={(waitingOn) => set({ waitingOn })}
+        onClose={() => setPicker(null)}
+        footer="Every company on this job, and the extra choices from Job Setup."
+      />
+    </>
   );
 }
+
+const styles = StyleSheet.create({
+  kind: { marginHorizontal: layout.margin, marginBottom: 28 },
+});

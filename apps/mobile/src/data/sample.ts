@@ -17,13 +17,13 @@ export interface SampleState {
 
 export function sampleState(): SampleState {
   const me: Person = { id: 'person-jake', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true };
-  const job: Job = { id: 'job-preview', name: 'Preview job (sample data)', address: 'Not the real Fish list' };
+  const job: Job = { id: 'job-preview', name: 'Sample Job', address: 'Sample data, not the real Fish list' };
 
   const tradeNames = ['Plumbing', 'Electrical', 'Painting', 'Tile', 'Carpentry', 'Stone', 'Air Conditioning', 'Ross Built Crew'];
   const trades: Trade[] = tradeNames.map((name, i) => ({ id: `trade-${i}`, name, sortOrder: i + 1 }));
   const t = (name: string) => trades.find((x) => x.name === name)!.id;
 
-  const companyList: Array<[string, string]> = [
+  const companyList: [string, string][] = [
     ['Gator Plumbing', 'Plumbing'],
     ['Metro Electric', 'Electrical'],
     ['Triple H Painting', 'Painting'],
@@ -106,6 +106,9 @@ export function sampleState(): SampleState {
     item('Master Bathroom 207', 'Paint pocket doors', 'Both doors, after the hardware.', 'Triple H Painting', { ready: false, waitingOn: 'SMS Carpentry' }),
     item('Master Bathroom 207', 'Set vanity tops', 'Double vanity, east wall.', 'Volcano Stone', { ready: false, waitingOn: 'Owner', readyBy: '2026-11-09' }),
     item('Whole House', 'Mount thermostats', 'All zones, at the end of the job.', 'Climatic', { ready: false, waitingOn: 'Ross Built' }),
+    item('Foyer 115', 'Hang front door', 'Pivot door at the entry. Set the hardware after paint.', 'SMS Carpentry', { ready: false, waitingOn: 'Owner', readyBy: '2026-10-26' }),
+    item('Master Bedroom 206', 'Install closet system', 'Walk in closet, both long walls.', 'SMS Carpentry', { kind: 'added_scope', boughtOut: true, poOrCo: 'CO-14' }),
+    item('Living 107', 'Patch drywall', 'Behind the television mount, two screw holes.', 'Triple H Painting'),
   ];
 
   return {

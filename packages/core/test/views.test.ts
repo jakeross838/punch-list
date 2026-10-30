@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupItems, itemNumberLabel, matchesFilter, type Item, type Location } from '../src/index';
+import { groupItems, itemNumberLabel, matchesFilter, matchesView, type Item, type Location } from '../src/index';
 
 const rooms: Location[] = [
   { id: 'l2', jobId: 'j', name: 'Bathroom', number: '116', label: 'Bathroom 116', floor: null, kind: 'room', sortOrder: 2, active: true },
@@ -37,6 +37,17 @@ const lookups = {
 };
 
 describe('list views', () => {
+  it('Show Completed adds completed items after the open ones, under the same filter', () => {
+    const kitchen = groupItems(items, 'room', 'open', lookups, { showCompleted: true })[0]!;
+    expect(kitchen.items.map(itemNumberLabel)).toEqual(['3', 'New', '1']);
+    const done = items.find((i) => i.status === 'complete')!;
+    expect(matchesView(done, 'ready', true)).toBe(true);
+    expect(matchesView(done, 'not_ready', true)).toBe(false);
+    expect(matchesView(done, 'ready', false)).toBe(false);
+    const removed = items.find((i) => i.status === 'removed')!;
+    expect(matchesView(removed, 'open', true)).toBe(false);
+  });
+
   it('shows every room in floor order, empty ones too, with open and ready counts', () => {
     const groups = groupItems(items, 'room', 'open', lookups);
     expect(groups.map((g) => [g.label, g.items.length, g.open, g.ready])).toEqual([

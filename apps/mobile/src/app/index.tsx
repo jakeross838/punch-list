@@ -1,40 +1,51 @@
+// Jobs: the first screen. Each job shows its open count, like a list in Reminders.
+
+import type { Job } from '@punch/core';
 import { router } from 'expo-router';
-import { View } from 'react-native';
-import { Button, Note, PreviewBanner, Row, Screen, Section } from '@/components/ui';
-import { space } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { useData } from '@/data/api';
+import { Banner, EmptyState, ListRow, ListSection, Page } from '@/ui';
 
 export default function JobsScreen() {
   const data = useData();
   const jobs = data.useJobs();
+  const me = data.useMe();
   return (
-    <Screen>
-      <PreviewBanner />
-      <Section title="Jobs">
-        {jobs.length === 0 ? <Row title="No jobs yet" subtitle="Set up the first job below." muted /> : null}
-        {jobs.map((job, index) => (
-          <JobRow key={job.id} jobId={job.id} name={job.name} address={job.address} stripe={index % 2 === 1} />
-        ))}
-      </Section>
-      <View style={{ gap: space(1) }}>
-        <Button label="Set up a new job" kind="secondary" onPress={() => router.push('/jobs/new')} />
-        <Note>Signed in as {data.useMe()?.name ?? 'nobody'}.</Note>
-      </View>
-    </Screen>
+    <Page
+      title="Jobs"
+      large
+      back={false}
+      right={[{ kind: 'button', label: 'New Job', icon: 'plus', iconOnly: true, onPress: () => router.push('/jobs/new'), testID: 'new-job' }]}
+    >
+      {data.mode === 'preview' ? <Banner>Preview with sample data. Changes reset when you reload the page.</Banner> : null}
+      {jobs.length === 0 ? (
+        <EmptyState icon="house.fill" title="No Jobs Yet" message="Set up the first job with the plus button." />
+      ) : (
+        <ListSection footer={me ? `Signed in as ${me.name}.` : undefined}>
+          {jobs.map((job) => (
+            <JobRow key={job.id} job={job} />
+          ))}
+        </ListSection>
+      )}
+    </Page>
   );
 }
 
-function JobRow({ jobId, name, address, stripe }: { jobId: string; name: string; address: string; stripe: boolean }) {
-  const items = useData().useItems(jobId);
-  const open = items.filter((i) => i.status === 'open');
-  const ready = open.filter((i) => i.ready).length;
+function JobRow({ job }: { job: Job }) {
+  const open = useData()
+    .useItems(job.id)
+    .filter((i) => i.status === 'open').length;
   return (
-    <Row
-      title={name}
-      subtitle={`${address}\n${open.length} open, ${ready} ready`}
-      right="Open"
-      stripe={stripe}
-      onPress={() => router.push({ pathname: '/jobs/[jobId]', params: { jobId } })}
+    <ListRow
+      icon="house.fill"
+      iconColor={colors.tint}
+      title={job.name}
+      subtitle={job.address || undefined}
+      value={String(open)}
+      accessory="chevron"
+      accessibilityLabel={`${job.name}, ${open} open`}
+      onPress={() => router.push({ pathname: '/jobs/[jobId]', params: { jobId: job.id } })}
+      testID={`job-${job.id}`}
     />
   );
 }

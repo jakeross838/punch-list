@@ -83,8 +83,8 @@ const ITEM_COLUMNS: Record<keyof ItemPatch, string> = {
 };
 
 /** An item patch as column and value pairs for the phone database (booleans as 0 or 1). */
-export function itemPatchColumns(patch: ItemPatch): Array<[string, unknown]> {
-  return (Object.keys(patch) as Array<keyof ItemPatch>)
+export function itemPatchColumns(patch: ItemPatch): [string, unknown][] {
+  return (Object.keys(patch) as (keyof ItemPatch)[])
     .filter((k) => k in ITEM_COLUMNS && patch[k] !== undefined)
     .map((k) => {
       const v = patch[k];
@@ -92,7 +92,7 @@ export function itemPatchColumns(patch: ItemPatch): Array<[string, unknown]> {
     });
 }
 
-export function itemFieldsColumns(fields: ItemFields): Array<[string, unknown]> {
+export function itemFieldsColumns(fields: ItemFields): [string, unknown][] {
   return itemPatchColumns(fields);
 }
 

@@ -70,67 +70,180 @@ async function main(): Promise<void> {
     steps.push(name);
   };
 
+  // Lets a slide or a sheet finish before a screenshot.
+  const settle = (ms = 650) => tab.waitForTimeout(ms);
+  const menu = async (testId: string) => {
+    await app.getByTestId('more').last().click();
+    await app.getByTestId(testId).waitFor();
+    await settle(350);
+    await app.getByTestId(testId).click();
+    await settle(300);
+  };
+
   try {
     await tab.goto('http://localhost:4319/host.html');
     await step('jobs list opens', async () => {
-      await app.getByText('Preview job (sample data)').waitFor({ timeout: 20_000 });
+      await app.getByText('Sample Job').waitFor({ timeout: 20_000 });
+      await settle();
       await shot('01-jobs');
     });
-    await step('completion list by room', async () => {
-      await app.getByText('Preview job (sample data)').click();
-      await app.getByText('By room').waitFor();
+    await step('completion list by room, with count tiles', async () => {
+      await app.getByTestId('job-job-preview').click();
       await app.getByText('Kitchen 109').first().waitFor();
+      await settle();
       await shot('02-list-by-room');
     });
-    await step('switch to by trade', async () => {
-      await app.getByText('By trade').click();
-      await app.getByText('Plumbing', { exact: true }).first().waitFor();
-      await shot('03-list-by-trade');
-      await app.getByText('By room').click();
+    await step('a tile filters the list', async () => {
+      await app.getByTestId('tile-not_ready').click();
+      await app.getByText('Hang front door').first().waitFor();
+      await settle(400);
+      await shot('03-not-ready');
+      await app.getByTestId('tile-open').click();
     });
-    await step('open an item', async () => {
-      await app.getByText(/Install toilet/).first().click();
-      await app.getByText('Mark complete').waitFor();
-      await shot('04-item');
+    await step('group by trade from the menu', async () => {
+      await app.getByTestId('more').last().click();
+      await app.getByTestId('group-trade').waitFor();
+      await settle(400);
+      await shot('04-menu');
+      await app.getByTestId('group-trade').click();
+      await app.getByText('Air Conditioning', { exact: true }).first().waitFor();
+      await settle(400);
+      await shot('05-by-trade');
+      await menu('group-room');
     });
-    await step('mark it complete', async () => {
-      await app.getByText('Mark complete').click();
-      await app.getByText(/Completed by Jake Ross/).waitFor();
-      await shot('05-complete');
+    await step('search narrows the list', async () => {
+      await app.getByTestId('search').last().fill('toilet');
+      await app.getByText('Install toilet').first().waitFor();
+      await settle(300);
+      await shot('06-search');
+      await app.getByTestId('search').last().fill('');
     });
-    await step('back to the list', async () => {
-      await app.locator('[aria-label="Go back"]:visible').first().click();
-      await app.getByText('Add an item').waitFor();
+    await step('the circle checks an item off', async () => {
+      await app.getByTestId('check-item-6').click();
+      await settle(200);
+      await shot('07-checking');
+      await app.getByTestId('item-item-6').waitFor({ state: 'detached', timeout: 5_000 });
+      await menu('toggle-completed');
+      await app.getByText(/Completed .* by Jake Ross/).first().waitFor();
+      await settle(300);
+      await shot('08-show-completed');
+      await menu('toggle-completed');
     });
-    await step('paste rooms in job setup', async () => {
-      await app.getByText('Setup', { exact: true }).click();
-      await app.getByText('Paste the room list from the plans, in floor order').waitFor();
-      await app.getByPlaceholder(/Level 1:/).fill('Level 3:\nRoof Deck 301\nOffice 302');
-      await app.getByText('Add 2 rooms').click();
-      await app.getByText(/2 added/).waitFor();
-      await shot('06-setup');
-      await app.locator('[aria-label="Go back"]:visible').first().click();
+    await step('swipe a row for Remove, then Undo', async () => {
+      await app.getByTestId('item-item-3').scrollIntoViewIfNeeded();
+      await app.getByTestId('item-item-3').evaluate((el) => {
+        const row = el.closest('.pl-swipe');
+        if (row) row.scrollTo({ left: 400, behavior: 'smooth' });
+      });
+      await settle(400);
+      await shot('09-swipe-actions');
+      await app.getByTestId('remove-item-3').click();
+      await app.getByText('Removed Touch up paint').waitFor();
+      await settle(400);
+      await shot('10-removed-toast');
+      await app.getByRole('button', { name: 'Undo' }).click();
+      await app.getByTestId('item-item-3').waitFor();
+    });
+    await step('open an item in its sheet', async () => {
+      await app.getByTestId('item-item-1').click();
+      await app.getByTestId('mark-complete').waitFor();
+      await settle(700);
+      await shot('11-item-sheet');
+    });
+    await step('mark it complete from the sheet', async () => {
+      await app.getByTestId('mark-complete').click();
+      await app.getByText(/Completed by Jake Ross on/).waitFor();
+      await settle(300);
+      await shot('12-item-complete');
+      await app.getByTestId('save').click();
+      await app.getByTestId('item-item-1').waitFor({ state: 'detached' });
+      await settle();
     });
     await step('add an item', async () => {
-      await app.getByText('Add an item').click();
-      await app.getByPlaceholder('Install toilet').fill('Install towel bar');
-      await app.getByPlaceholder('Where exactly, and what is involved').fill('Master bathroom, right of the vanity.');
-      await app.getByText('Company', { exact: true }).locator('xpath=..').getByText('Choose').click();
-      await app.getByText('Gator Plumbing').last().click();
-      await shot('07-new-item');
-      await app.getByText('Add to the list').click();
-      await app.getByText(/Install towel bar/).first().waitFor();
-      await shot('08-list-with-new-item');
+      await app.getByTestId('new-item').click();
+      await app.getByTestId('field-title').waitFor();
+      await settle(700);
+      await app.getByTestId('field-title').fill('Install towel bar');
+      await app.getByTestId('field-description').fill('Master bathroom, right of the vanity.');
+      await app.getByTestId('pick-company').click();
+      await app.getByRole('button', { name: 'Gator Plumbing' }).waitFor();
+      await settle(600);
+      await shot('13-company-picker');
+      await app.getByRole('button', { name: 'Gator Plumbing' }).click();
+      await settle(500);
+      await shot('14-new-item');
+      await app.getByTestId('save').click();
+      await app.getByText('Install towel bar').first().waitFor();
+      await settle();
+      await shot('15-list-with-new-item');
     });
     await step('a not ready item needs Waiting On', async () => {
-      await app.getByText('Add an item').click();
-      await app.getByPlaceholder('Install toilet').fill('Set mirror');
-      await app.getByText('Company', { exact: true }).locator('xpath=..').getByText('Choose').click();
-      await app.getByText('Triple H Painting').last().click();
+      await app.getByTestId('new-item').click();
+      await app.getByTestId('field-title').waitFor();
+      await settle(700);
+      await app.getByTestId('field-title').fill('Set mirror');
+      await app.getByTestId('pick-company').click();
+      await app.getByRole('button', { name: 'Triple H Painting' }).click();
+      await settle(400);
       await app.getByRole('switch', { name: 'Ready' }).click();
-      await app.getByText('Add to the list').click();
-      await app.getByText('Not ready: say what it is waiting on').waitFor();
-      await shot('09-rule-blocks-save');
+      await app.getByTestId('save').click();
+      await app.getByText('Not ready: say what it is waiting on.').waitFor();
+      await settle(300);
+      await shot('16-rule-blocks-save');
+      await app.getByTestId('pick-waiting-on').click();
+      await app.getByRole('button', { name: 'Owner', exact: true }).click();
+      await settle(400);
+      await app.locator('input[type="date"]').fill('2026-11-05');
+      await settle(300);
+      await shot('17-waiting-on');
+      await app.getByTestId('save').click();
+      await app.getByText('Waiting on Owner · Ready by November 5').first().waitFor();
+    });
+    await step('Cancel asks before throwing away changes', async () => {
+      await app.getByTestId('new-item').click();
+      await app.getByTestId('field-title').waitFor();
+      await settle(700);
+      await app.getByTestId('field-title').fill('Caulk window');
+      await app.getByTestId('cancel').click();
+      await app.getByRole('button', { name: 'Discard Changes' }).waitFor();
+      await settle(500);
+      await shot('18-discard');
+      await app.getByRole('button', { name: 'Discard Changes' }).click();
+      await app.getByTestId('field-title').waitFor({ state: 'detached' });
+      await settle();
+    });
+    await step('paste rooms in Job Setup', async () => {
+      await menu('job-setup');
+      await app.getByTestId('paste-rooms').waitFor();
+      await settle();
+      await shot('19-setup');
+      await app.getByTestId('paste-rooms').click();
+      await app.getByTestId('field-rooms').waitFor();
+      await settle(600);
+      await app.getByTestId('field-rooms').fill('Level 3:\nRoof Deck 301\nOffice 302');
+      await app.getByText('2 New').waitFor();
+      await settle(300);
+      await shot('20-paste-rooms');
+      await app.getByTestId('paste-add').click();
+      await app.getByText('2 rooms added').waitFor();
+      await app.getByText('Roof Deck 301').first().waitFor();
+      await settle(400);
+      await shot('21-rooms-added');
+    });
+    await step('add a company to the job', async () => {
+      await app.getByRole('tab', { name: 'Companies' }).click();
+      await app.getByTestId('add-company').click();
+      await app.getByTestId('field-new-company').waitFor();
+      await settle(600);
+      await app.getByTestId('field-new-company').fill('Bayshore Glass');
+      await app.getByTestId('pick-company-trade').click();
+      await app.getByRole('button', { name: 'Carpentry', exact: true }).click();
+      await settle(400);
+      await shot('22-add-company');
+      await app.getByTestId('company-add').click();
+      await app.getByText('Bayshore Glass added to the job').waitFor();
+      await settle(400);
+      await shot('23-companies');
     });
   } catch (e) {
     await shot('zz-failure');

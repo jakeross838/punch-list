@@ -1,47 +1,81 @@
-import { router, Stack, useCanGoBack } from 'expo-router';
+// The app shell. On the iPhone, screens use the native stack: system push and swipe back, and real
+// page sheets for New Job, New Item and an item's details. The preview page uses the JavaScript
+// stack with the same iOS motion: screens slide in from the right, and sheets rise from the bottom
+// while the screen behind shrinks back.
+
+import '@/ui/web-setup';
+import { Stack } from 'expo-router';
+import JSStack, { TransitionPresets } from 'expo-router/js-stack';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, Pressable, Text } from 'react-native';
+import { Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
 import { DataProvider } from '@/data/backend';
+import { FeedbackProvider } from '@/ui';
+import { forSheetIOS } from '@/ui/sheetTransition';
 
-/**
- * On the web preview the default back control is a link, and the preview page may open links
- * outside itself. This one is a plain button. The phone keeps the native back button.
- */
-function WebBackButton() {
-  const canGoBack = useCanGoBack();
-  if (!canGoBack) return null;
+const SCREENS = ['index', 'jobs/[jobId]/index', 'jobs/[jobId]/setup'] as const;
+const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/items/[itemId]'] as const;
+
+function NativeStack() {
   return (
-    <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back" hitSlop={12} style={{ paddingRight: 12 }}>
-      <Text style={{ color: colors.blue, fontSize: 17, fontWeight: '600' }}>‹ Back</Text>
-    </Pressable>
+    <Stack screenOptions={{ headerTintColor: colors.tint, contentStyle: { backgroundColor: colors.grouped } }}>
+      {SCREENS.map((name) => (
+        <Stack.Screen key={name} name={name} />
+      ))}
+      {SHEETS.map((name) => (
+        <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
+      ))}
+    </Stack>
+  );
+}
+
+function WebStack() {
+  return (
+    <JSStack
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+        gestureEnabled: false,
+        // flex: 1 keeps each screen to the height of the page, so lists scroll inside it and the
+        // bars stay put (the web stack otherwise lets a screen grow with its content).
+        cardStyle: { flex: 1, backgroundColor: colors.grouped },
+      }}
+    >
+      {SCREENS.map((name) => (
+        <JSStack.Screen key={name} name={name} />
+      ))}
+      {SHEETS.map((name) => (
+        <JSStack.Screen
+          key={name}
+          name={name}
+          options={{
+            presentation: 'modal',
+            animation: 'default',
+            ...TransitionPresets.ModalPresentationIOS,
+            cardStyleInterpolator: forSheetIOS,
+            detachPreviousScreen: false,
+            gestureEnabled: false,
+            cardStyle: { flex: 1, backgroundColor: colors.grouped },
+          }}
+        />
+      ))}
+    </JSStack>
   );
 }
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <DataProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerStyle: { backgroundColor: colors.white },
-            headerTintColor: colors.ink,
-            headerTitleStyle: { fontWeight: '700' },
-            headerBackTitle: 'Back',
-            contentStyle: { backgroundColor: colors.page },
-            ...(Platform.OS === 'web' ? { headerLeft: () => <WebBackButton /> } : {}),
-          }}
-        >
-          <Stack.Screen name="index" options={{ title: 'Jobs' }} />
-          <Stack.Screen name="jobs/new" options={{ title: 'New job' }} />
-          <Stack.Screen name="jobs/[jobId]/index" options={{ title: 'Completion List' }} />
-          <Stack.Screen name="jobs/[jobId]/setup" options={{ title: 'Job setup' }} />
-          <Stack.Screen name="jobs/[jobId]/items/new" options={{ title: 'New item' }} />
-          <Stack.Screen name="jobs/[jobId]/items/[itemId]" options={{ title: 'Item' }} />
-        </Stack>
-      </DataProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <DataProvider>
+          <FeedbackProvider>
+            <StatusBar style="dark" />
+            {Platform.OS === 'web' ? <WebStack /> : <NativeStack />}
+          </FeedbackProvider>
+        </DataProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

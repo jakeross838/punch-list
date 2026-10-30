@@ -8,10 +8,22 @@
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| Phone app | `apps/mobile` | Expo SDK 58, TypeScript, Expo Router. Sign in, jobs, rooms in floor order with open counts, a room's items, item detail and edit, mark complete, job setup. |
+| Phone app | `apps/mobile` | Expo SDK 58, TypeScript, Expo Router. Sign in, jobs, rooms in floor order with open counts, a room's items, item detail and edit, mark complete, job setup. Built to look and work like Apple's own apps (see Look and feel). |
 | Core rules | `packages/core` | The data types and the rules the app enforces: not ready needs Waiting On, one company and one trade per item, only Ross Built completes, removing never deletes, room labels and floor order from a pasted list. Shared by the app, the server and the tests. |
 | Database | `supabase/` | Migrations for the schema and access rules, plus a seed for a test job of 600 generated items. |
 | Sync | `powersync/` | The PowerSync service config and sync streams: every signed-in Ross Built user gets every job. |
+
+## Look and feel
+
+The app follows Apple's design for iPhone, modeled on Reminders and Settings. The parts live in `apps/mobile/src/ui`; every screen is built from them.
+
+- **Type and color:** Apple's text styles (34 point large titles, 17 point body), the iOS system grays and fills, Ross Built blue as the one accent. Status text uses Apple's increased contrast colors so it reads outdoors.
+- **Navigation:** large titles that shrink into the bar as you scroll, glass bar buttons, a "…" menu for Group By, Show Completed and Job Setup, and New Item in a floating bottom toolbar.
+- **The list:** count tiles (Open, Ready, Not Ready, Added Scope) that filter, search, rooms as rounded sections under sticky headers, a circle to check an item off, swipe left for Ready and Remove, and Undo after a removal.
+- **Sheets:** New Job, New Item and an item's details slide up as sheets with Cancel and Done, the screen behind shrinking back. Pickers are searchable lists with a checkmark. Cancel asks before throwing away changes.
+- **Motion and touch:** rows light up the instant they are touched and fade back; buttons and tiles press in; one decelerating curve for nearly everything, Apple's sheet curve for sheets.
+
+On the iPhone these are the system's own: the native navigation bar and large titles, SF Symbols, native menus and action sheets, page sheets that close with a swipe down, the system switch and date picker, swipe back, and haptic taps. The preview page draws the same design in the browser, so the look and the motion can be judged there; haptics, swipe back and the native menus can only be judged on the TestFlight build.
 
 ## How Jake sees it
 
@@ -63,6 +75,7 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 
 ## Status (29 October 2026)
 
-- Built: the core rules, the schema and access rules (`npm run test:db` passes), the sync config, the data layer with a sample-data backend, and the first screens: jobs, the Completion List by room, trade or company with the filters, the item form with the rules, complete, reopen, remove and restore, and job setup (paste rooms, companies, Waiting On choices).
-- Checked: 32 unit tests, both type checks, and a 9-step walk-through at iPhone size under the preview page's rules with no errors.
-- Next: the phone's real backend (PowerSync and Supabase) once the accounts exist, then sign-in and checks C3 to C5 on the TestFlight build.
+- Built: the core rules, the schema and access rules (`npm run test:db` passes), the sync config, the data layer with a sample-data backend, and the screens: jobs, the Completion List by room, trade or company with the filters, the item form with the rules, complete, reopen, remove and restore, and job setup (paste rooms, companies, Waiting On choices).
+- Redesigned the same day to Apple's design (Look and feel above), after Jake's review of the first screens. Show Completed added to the core list views.
+- Checked: 33 unit tests, both type checks, lint, the database checks, and a 14-step walk-through at iPhone size under the preview page's rules with no errors.
+- Next: the phone's real backend (PowerSync and Supabase) once the accounts exist, then sign-in and checks C3 to C5 on the TestFlight build. The app icon and launch screen are still the Expo defaults.
