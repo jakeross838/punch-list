@@ -167,18 +167,42 @@ async function main(): Promise<void> {
       await app.getByTestId('item-item-16').waitFor();
       await settle();
     });
-    await step('open an item: photo, Mark Ready, Mark Complete', async () => {
+    await step('an item edits in place: Ready is a checkbox, Not Ready asks what it waits on', async () => {
       await app.getByTestId('item-item-1').click();
       await app.getByTestId('mark-complete').waitFor();
       await settle();
       await shot('08-item');
-      await app.getByTestId('mark-ready').click();
+      await app.getByTestId('ready-check').click();
       await app.getByText('It can be done now.').waitFor();
+      await app.getByTestId('ready-check').click();
+      await app.getByTestId('not-ready-box').waitFor();
+      await settle(400);
+      if ((await app.getByTestId('not-ready-done').getAttribute('aria-disabled')) !== 'true') throw new Error('Done should wait for a choice');
+      await app.getByTestId('waiting-Owner').click();
+      await app.getByTestId('waiting-Volcano Stone').click();
+      await app.getByTestId('not-ready-by').fill('2026-11-05');
+      await settle(300);
+      await shot('09-not-ready-box');
+      await app.getByTestId('not-ready-done').click();
+      await app.getByText('Waiting on Owner and Volcano Stone, ready by November 5').waitFor();
+      await app.getByTestId('field-description').fill('Range wall, both sides of the hood, after the stone is set.');
+      await app.getByTestId('field-description').blur();
+      await settle(300);
+      await shot('09b-item-edited');
+      // Leave and come back: the changes were saved as they were made.
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('item-item-16').waitFor();
+      await settle();
+      await app.getByTestId('item-item-1').click();
+      await app.getByText('Waiting on Owner and Volcano Stone, ready by November 5').waitFor();
+      if ((await app.getByTestId('field-description').inputValue()) !== 'Range wall, both sides of the hood, after the stone is set.') {
+        throw new Error('The description did not save');
+      }
       await app.getByTestId('mark-complete').click();
       await app.getByTestId('reopen').waitFor();
       await app.getByText(/By Jake Ross on/).waitFor();
       await settle(300);
-      await shot('09-item-complete');
+      await shot('09c-item-complete');
       await app.getByTestId('back').last().click();
       await app.getByTestId('item-item-16').waitFor();
       await settle();
@@ -229,7 +253,7 @@ async function main(): Promise<void> {
       await settle(700);
       await shot('16-saved-next');
     });
-    await step('a not ready item needs Waiting On', async () => {
+    await step('a new item that is not ready says what it waits on', async () => {
       await app.getByTestId('no-photo').click();
       await app.getByTestId('field-title').waitFor();
       await settle(800);
@@ -238,17 +262,20 @@ async function main(): Promise<void> {
       await app.getByTestId('pick-company').click();
       await app.getByRole('button', { name: 'Triple H Painting' }).click();
       await settle(400);
-      await app.getByRole('switch', { name: 'Ready' }).click();
-      await app.getByTestId('save').click();
-      await app.getByText('Not ready: say what it is waiting on.').waitFor();
-      await settle(300);
-      await shot('17-rule-blocks-save');
-      await app.getByTestId('pick-waiting-on').click();
-      await app.getByRole('button', { name: 'Owner', exact: true }).click();
+      await app.getByTestId('ready-check').click();
+      await app.getByTestId('not-ready-box').waitFor();
       await settle(400);
-      await app.locator('input[type="date"]').fill('2026-11-05');
+      await shot('17-not-ready-box');
+      await app.getByTestId('waiting-other').click();
+      await app.getByTestId('waiting-new').fill('mirror delivery');
+      await app.getByTestId('waiting-add').click();
+      await app.getByTestId('waiting-Owner').click();
+      await app.getByTestId('not-ready-by').fill('2026-11-05');
       await settle(300);
       await shot('18-waiting-on');
+      await app.getByTestId('not-ready-done').click();
+      await app.getByText('Waiting on Mirror delivery and Owner, ready by November 5').waitFor();
+      await settle(300);
       await app.getByTestId('save').click();
       await app.getByTestId('item-item-16').waitFor();
       await app.getByText('Set mirror').first().waitFor();
@@ -303,16 +330,65 @@ async function main(): Promise<void> {
       await app.getByTestId('search-cancel').click();
       await app.getByTestId('group-room-1').waitFor();
     });
+    await step('group by what items wait on', async () => {
+      await app.getByTestId('filter').click();
+      await app.getByTestId('view-done').waitFor();
+      await settle(600);
+      await app.getByRole('tab', { name: 'Waiting' }).click();
+      await settle(300);
+      await app.getByTestId('view-done').click();
+      await app.getByTestId('group-ready').waitFor();
+      await app.getByTestId('group-waiting:owner').waitFor();
+      await settle(600);
+      await shot('24-by-waiting');
+      await app.getByTestId('group-waiting:owner').click();
+      await app.getByText('Waiting on Owner').first().waitFor();
+      await settle();
+      await shot('25-waiting-on-owner');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-ready').waitFor();
+      await settle();
+      await app.getByTestId('filter').click();
+      await app.getByTestId('view-standard').click();
+      await app.getByTestId('view-done').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
+    await step('Send Lists: a company list and the whole job, ready to send', async () => {
+      await app.getByTestId('send').last().click();
+      await app.getByTestId('send-done').waitFor();
+      await settle(700);
+      await shot('26-send-lists');
+      await app.getByTestId('send-company-4').click();
+      const doc = app.getByTestId('doc-preview');
+      await doc.getByText('Ready Now', { exact: true }).waitFor();
+      await doc.getByText('Waiting on Owner, ready by October 26').waitFor();
+      await settle(800);
+      await shot('27-company-list');
+      await app.getByTestId('preview-done').click();
+      await app.getByTestId('list-preview').waitFor({ state: 'detached' });
+      await settle(300);
+      await app.getByTestId('send-job').click();
+      await doc.getByText('Whole Job', { exact: true }).waitFor();
+      await doc.getByText('Set mirror').waitFor();
+      await settle(800);
+      await shot('28-whole-job-list');
+      await app.getByTestId('preview-done').click();
+      await app.getByTestId('list-preview').waitFor({ state: 'detached' });
+      await app.getByTestId('send-done').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
     await step('Item Form: fields, an added field and a standard title', async () => {
       await menu('item-form');
       await app.getByTestId('form-poOrCo').waitFor();
       await settle(700);
-      await shot('24-item-form');
+      await shot('29-item-form');
       await app.getByTestId('add-field').click();
       await app.getByTestId('field-label').fill('Punch Walk');
       await app.getByTestId('field-choices').fill('Owner Walk\nArchitect Walk\nRoss Built Walk');
       await settle(300);
-      await shot('25-new-field');
+      await shot('30-new-field');
       await app.getByTestId('field-save').click();
       await app.getByText('Punch Walk').waitFor();
       await app.getByTestId('standard-titles').click();
@@ -323,7 +399,7 @@ async function main(): Promise<void> {
       await app.getByTestId('title-add').click();
       await app.getByText('Adjust cabinet hinge').waitFor();
       await settle(300);
-      await shot('26-standard-titles');
+      await shot('31-standard-titles');
       await app.getByTestId('titles-done').click();
       await settle(400);
       await app.getByTestId('form-done').click();
@@ -334,7 +410,7 @@ async function main(): Promise<void> {
       await menu('job-setup');
       await app.getByTestId('paste-rooms').waitFor();
       await settle();
-      await shot('27-setup');
+      await shot('32-setup');
       await app.getByTestId('paste-rooms').click();
       await app.getByTestId('field-rooms').waitFor();
       await settle(600);
@@ -357,7 +433,7 @@ async function main(): Promise<void> {
       await app.getByTestId('company-add').click();
       await app.getByText('Bayshore Glass added to the job').waitFor();
       await settle(400);
-      await shot('28-companies');
+      await shot('33-companies');
     });
   } catch (e) {
     await shot('zz-failure');

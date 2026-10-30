@@ -231,6 +231,18 @@ const GLYPHS: Record<IconName, Draw> = {
       {line('M3.5 6.6l1.4 1.4 2.4-2.8M3.5 12.1l1.4 1.4 2.4-2.8M3.5 17.6l1.4 1.4 2.4-2.8', c, w * 1.6)}
     </>
   ),
+  share: (c, w) => (
+    <>
+      {line('M12 3.5v11M8 7.2l4-3.9 4 3.9', c, w * 1.8)}
+      {line('M8.5 10.5H6.8a1.8 1.8 0 0 0-1.8 1.8v6.4a1.8 1.8 0 0 0 1.8 1.8h10.4a1.8 1.8 0 0 0 1.8-1.8v-6.4a1.8 1.8 0 0 0-1.8-1.8h-1.7', c, w * 1.8)}
+    </>
+  ),
+  doc: (c, w) => (
+    <>
+      {line('M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z', c, w * 1.7)}
+      {line('M14 3.5V8h4.5M8.8 12.5h6.4M8.8 16h6.4', c, w * 1.7)}
+    </>
+  ),
 };
 
 export function Icon({ name, size = 20, color = colors.label, weight = 'regular', style }: IconProps) {

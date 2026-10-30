@@ -1,5 +1,5 @@
 // The app shell. On the iPhone, screens use the native stack: system push and swipe back, real
-// page sheets for New Job, New Item, Edit Item and Item Form, and the camera over everything. The
+// page sheets for New Job, New Item, Send Lists and Item Form, and the camera over everything. The
 // preview page uses the JavaScript stack with the same iOS motion: screens slide in from the right,
 // sheets rise from the bottom while the screen behind shrinks back, and the camera rises full screen.
 
@@ -16,7 +16,7 @@ import { FeedbackProvider } from '@/ui';
 import { forSheetIOS } from '@/ui/sheetTransition';
 
 const SCREENS = ['index', 'jobs/[jobId]/index', 'jobs/[jobId]/setup', 'jobs/[jobId]/list/[by]/[key]', 'jobs/[jobId]/items/[itemId]/index'] as const;
-const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/items/[itemId]/edit', 'settings/item-form'] as const;
+const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/send', 'settings/item-form'] as const;
 const CAMERA = 'jobs/[jobId]/capture';
 
 function NativeStack() {

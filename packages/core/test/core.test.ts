@@ -26,7 +26,7 @@ function item(over: Partial<ItemFields> = {}): ItemFields {
     companyId: 'c-gator',
     kind: 'deficiency',
     ready: true,
-    waitingOn: null,
+    waitingOn: [],
     readyBy: null,
     boughtOut: true,
     poOrCo: null,
@@ -82,7 +82,7 @@ describe('item rules', () => {
 
   it('needs Waiting On when the item is not ready', () => {
     expect(checkItem(item({ ready: false })).map((p) => p.field)).toEqual(['waitingOn']);
-    expect(checkItem(item({ ready: false, waitingOn: 'Volcano Stone' }))).toEqual([]);
+    expect(checkItem(item({ ready: false, waitingOn: ['Volcano Stone'] }))).toEqual([]);
   });
 
   it('keeps added scope from being Bought Out without a PO or CO', () => {
@@ -91,8 +91,8 @@ describe('item rules', () => {
   });
 
   it('drops Waiting On and Ready By once an item is ready', () => {
-    const tidied = tidyItem(item({ ready: true, waitingOn: 'Owner', readyBy: '2026-11-02', title: '  Install   toilet ' }));
-    expect(tidied).toMatchObject({ waitingOn: null, readyBy: null, title: 'Install toilet' });
+    const tidied = tidyItem(item({ ready: true, waitingOn: ['Owner'], readyBy: '2026-11-02', title: '  Install   toilet ' }));
+    expect(tidied).toMatchObject({ waitingOn: [], readyBy: null, title: 'Install toilet' });
   });
 
   it('pre-fills from Deficiency or Added Scope', () => {

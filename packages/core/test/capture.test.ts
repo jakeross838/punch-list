@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   addPenPoint,
   byFloor,
+  companiesWithWork,
   companyForTrade,
+  companyList,
+  companyPrintout,
+  jobList,
+  jobPrintout,
+  printPage,
+  tidyWaitingOn,
+  waitingOnText,
   DEFAULT_FORM,
   formShows,
   groupItems,
@@ -43,7 +51,7 @@ function item(over: Partial<Item>): Item {
   n += 1;
   return {
     id: `i${n}`, jobId: 'j', locationId: 'k', number: n, title: `Item ${n}`, description: '', tradeId: 't-carp',
-    companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: null, readyBy: null, boughtOut: true, poOrCo: null,
+    companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], readyBy: null, boughtOut: true, poOrCo: null,
     status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, btExternalId: null, createdBy: 'p1',
     createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
   };
@@ -134,17 +142,146 @@ describe('walking the job', () => {
     expect(neighborRooms(rooms, 'a').previous).toBeNull();
   });
 
-  it('groups by status, and filters by trade and company', () => {
+  it('groups by what items wait on: ready now, then the biggest holdup first', () => {
     const items = [
-      item({ ready: false, waitingOn: 'Owner' }),
+      item({ ready: false, waitingOn: ['Owner'] }),
+      item({ ready: false, waitingOn: ['Volcano Stone', 'owner'] }),
+      item({ ready: false, waitingOn: ['Volcano Stone'] }),
+      item({ ready: false, waitingOn: ['Volcano Stone'] }),
       item({}),
       item({ status: 'complete', completedBy: 'p1', completedAt: '2026-10-29T12:00:00Z' }),
       item({ tradeId: 't-paint', companyId: 'c-hhh' }),
     ];
     const lookups = { locations: rooms, trades: [], companies: [] };
-    const groups = groupItems(items, 'status', 'open', lookups, { showCompleted: true });
-    expect(groups.map((g) => [g.label, g.items.length])).toEqual([['Not Ready', 1], ['Ready', 2], ['Completed', 1]]);
+    const groups = groupItems(items, 'waiting', 'open', lookups, { showCompleted: true });
+    expect(groups.map((g) => [g.label, g.items.length])).toEqual([
+      ['Ready Now', 2],
+      ['Volcano Stone', 3],
+      ['Owner', 2],
+      ['Completed', 1],
+    ]);
     const painting = groupItems(items, 'room', 'open', lookups, { tradeId: 't-paint' });
     expect(painting.flatMap((g) => g.items).map((i) => i.tradeId)).toEqual(['t-paint']);
+  });
+
+  it('reads a Waiting On list as a sentence, and tidies it', () => {
+    expect(waitingOnText(['Owner'])).toBe('Owner');
+    expect(waitingOnText(['Owner', 'Volcano Stone'])).toBe('Owner and Volcano Stone');
+    expect(waitingOnText(['Owner', 'Ross Built', 'Volcano Stone'])).toBe('Owner, Ross Built and Volcano Stone');
+    expect(tidyWaitingOn([' Owner ', 'owner', '', 'Volcano  Stone'])).toEqual(['Owner', 'Volcano Stone']);
+  });
+});
+
+describe('the lists that go to the subs', () => {
+  const rooms: Location[] = [
+    { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true },
+    { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true },
+  ];
+  const lookups = {
+    locations: rooms,
+    trades: [{ id: 't-carp', name: 'Carpentry', sortOrder: 1 }, { id: 't-paint', name: 'Painting', sortOrder: 2 }],
+    companies: [
+      { id: 'c-sms', name: 'SMS Carpentry', defaultTradeId: 't-carp', phone: null, email: null, active: true },
+      { id: 'c-hhh', name: 'Triple H Painting', defaultTradeId: 't-paint', phone: null, email: null, active: true },
+    ],
+  };
+  const items = [
+    item({ locationId: 'k', number: 1 }),
+    item({ locationId: 'a', number: 2 }),
+    item({ locationId: 'k', number: 3, ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09' }),
+    item({ locationId: 'a', number: 4, ready: false, waitingOn: ['Volcano Stone', 'Owner'], readyBy: '2026-11-02' }),
+    item({ locationId: 'a', number: 5, ready: false, waitingOn: ['Owner'] }),
+    item({ locationId: 'k', number: 6, status: 'complete', completedBy: 'p1', completedAt: '2026-10-29T12:00:00Z' }),
+    item({ locationId: 'k', number: 7, tradeId: 't-paint', companyId: 'c-hhh' }),
+  ];
+
+  it('gives each company what is ready now in floor order, then what waits, soonest first', () => {
+    const list = companyList('c-sms', items, lookups);
+    expect(list.open).toBe(5);
+    expect(list.ready.map((l) => [l.room, l.item.number])).toEqual([['Living 107', 2], ['Kitchen 109', 1]]);
+    expect(list.waiting.map((g) => [g.on, g.readyBy, g.lines.map((l) => l.item.number)])).toEqual([
+      ['Volcano Stone and Owner', '2026-11-02', [4]],
+      ['Owner', '2026-11-09', [5, 3]],
+    ]);
+  });
+
+  it('lists the companies with open work, and the whole job by room then trade', () => {
+    expect(companiesWithWork(items, lookups)).toEqual([
+      { companyId: 'c-sms', name: 'SMS Carpentry', open: 5, ready: 2 },
+      { companyId: 'c-hhh', name: 'Triple H Painting', open: 1, ready: 1 },
+    ]);
+    expect(jobList(items, lookups).map((l) => [l.room, l.trade, l.item.number])).toEqual([
+      ['Living 107', 'Carpentry', 2],
+      ['Living 107', 'Carpentry', 4],
+      ['Living 107', 'Carpentry', 5],
+      ['Kitchen 109', 'Carpentry', 1],
+      ['Kitchen 109', 'Carpentry', 3],
+      ['Kitchen 109', 'Painting', 7],
+    ]);
+  });
+
+  const settings = { job: { name: 'Fish', address: '715 North Shore Drive' }, date: new Date(2026, 9, 30) };
+  const dataRows = (html: string) => html.match(/<tr class="rb-row[^"]*">.*?<\/tr>/g) ?? [];
+
+  it('prints a company list: ready now, then waiting by what it waits on, a Days column and lines to add more', () => {
+    const page = companyPrintout(companyList('c-sms', items, lookups), settings);
+    expect(page.title).toBe('SMS Carpentry');
+    expect(page.fileName).toBe('Fish Completion List for SMS Carpentry, October 30 2026.pdf');
+    expect(page.body).toContain('Fish, 715 North Shore Drive');
+    expect(page.body).toContain('Carpentry. 5 open items: 2 ready now and 3 waiting.');
+    const sections = [...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1]);
+    expect(sections).toEqual(['Ready Now', 'Waiting', 'Anything Missing']);
+    expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November 2');
+    expect(page.body).toContain('Waiting on Owner, ready by November 9');
+    // The room on every line, never only on the first line of a group.
+    const lines = dataRows(page.body);
+    expect(lines).toHaveLength(5);
+    for (const line of lines) expect(line).toMatch(/Living 107|Kitchen 109/);
+    expect(page.body).toContain('<th>Days</th>');
+    expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(6);
+    expect(page.body).not.toContain('<th>Photo</th>');
+  });
+
+  it('prints each photo with its marks, cropped the same way, and keeps text safe', () => {
+    const odd = item({ locationId: 'k', number: 8, title: 'Fix <trim> & caulk', description: 'Left "returns"' });
+    const marks = [{ tool: 'circle' as const, color: 'red' as const, from: [0.2, 0.2] as [number, number], to: [0.6, 0.5] as [number, number] }];
+    const page = companyPrintout(companyList('c-sms', [...items, odd], lookups), {
+      ...settings,
+      photo: (id) => (id === odd.id ? { src: 'data:image/jpeg;base64,AAAA', width: 3000, height: 4000, marks } : undefined),
+    });
+    expect(page.body).toContain('Fix &lt;trim&gt; &amp; caulk');
+    expect(page.body).toContain('Left &quot;returns&quot;');
+    expect(page.body).toContain('<th>Photo</th>');
+    expect(page.body).toContain('<img src="data:image/jpeg;base64,AAAA"');
+    expect(page.body).toContain('viewBox="0 0 1000 1333" preserveAspectRatio="xMidYMid slice"');
+    expect(page.body).toMatch(/<ellipse [^>]*stroke="#D70015"/);
+    // A tall photo stops at the most the line allows.
+    expect(page.body).toContain('style="height:1.45in"');
+    // The lines to add more have no photo column.
+    expect(page.body).toMatch(/<h2 class="rb-section">Anything Missing<\/h2>.*?<colgroup>(<col[^>]*>){4}<\/colgroup>/);
+  });
+
+  it('notes added scope that is not priced yet', () => {
+    const extra = item({ locationId: 'a', number: 9, kind: 'added_scope', boughtOut: false });
+    const priced = item({ locationId: 'a', number: 10, kind: 'added_scope', boughtOut: true, poOrCo: 'CO 12' });
+    const page = companyPrintout(companyList('c-sms', [extra, priced], lookups), settings);
+    expect(page.body).toContain('Added scope, not priced yet');
+    expect(page.body).toContain('Added scope, CO 12');
+    expect(page.body).toContain('2 open items, all ready now.');
+  });
+
+  it('prints the whole job floor by floor and room by room, with the trade and company on every line', () => {
+    const page = jobPrintout(jobList(items, lookups), settings);
+    expect(page.fileName).toBe('Fish Completion List, October 30 2026.pdf');
+    expect(page.body).toContain('6 open items in 2 rooms: 3 ready now and 3 waiting.');
+    expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Level 1']);
+    expect([...page.body.matchAll(/<tr class="rb-band"><td colspan="5">(.*?)<\/td>/g)].map((m) => m[1])).toEqual(['Living 107', 'Kitchen 109']);
+    const lines = dataRows(page.body);
+    expect(lines).toHaveLength(6);
+    for (const line of lines) expect(line).toMatch(/<td class="rb-small">(Carpentry|Painting)<\/td><td class="rb-small">(SMS Carpentry|Triple H Painting)<\/td>/);
+    expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November 2');
+    expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(2);
+    expect(printPage(page)).toMatch(/^<!DOCTYPE html>.*<div class="rb-doc">.*<\/div><\/body><\/html>$/s);
+    expect(printPage(page, { pageMargins: false })).toContain('@page{size:letter;margin:0}');
   });
 });

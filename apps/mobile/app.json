@@ -57,7 +57,8 @@
           "cameraPermission": "Punch List uses the camera to take photos of items on the job.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

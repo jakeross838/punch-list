@@ -25,7 +25,7 @@ interface Section {
 export default function GroupScreen() {
   const params = useLocalSearchParams<{ jobId: string; by: string; key: string }>();
   const { jobId, key } = params;
-  const by: GroupBy = params.by === 'trade' || params.by === 'company' || params.by === 'status' ? params.by : 'room';
+  const by: GroupBy = params.by === 'trade' || params.by === 'company' || params.by === 'waiting' ? params.by : 'room';
   const data = useData();
   const job = data.useJobs().find((j) => j.id === jobId);
   const items = data.useItems(jobId);
@@ -61,7 +61,9 @@ export default function GroupScreen() {
 
   const room = by === 'room' ? locations.find((l) => l.id === key) : undefined;
   const { previous, next } = room ? neighborRooms(locations, room.id) : { previous: null, next: null };
-  const title = room?.label ?? group?.label ?? GROUP_LABELS[by];
+  const title =
+    room?.label ??
+    (by === 'waiting' && group && key.startsWith('waiting:') ? `Waiting on ${group.label}` : (group?.label ?? GROUP_LABELS[by]));
   const subtitle = `${open.length} ${SHOW_WORDS[view.filter]}`;
 
   const goRoom = (id: string) => router.replace({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'room', key: id } });

@@ -6,3 +6,5 @@ export * from './views';
 export * from './marks';
 export * from './titles';
 export * from './forms';
+export * from './lists';
+export * from './printout';

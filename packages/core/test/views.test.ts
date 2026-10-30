@@ -12,7 +12,7 @@ function item(over: Partial<Item>): Item {
   n += 1;
   return {
     id: `i${n}`, jobId: 'j', locationId: 'l1', number: n, title: `Item ${n}`, description: '',
-    tradeId: 't1', companyId: 'c1', kind: 'deficiency', ready: true, waitingOn: null, readyBy: null,
+    tradeId: 't1', companyId: 'c1', kind: 'deficiency', ready: true, waitingOn: [], readyBy: null,
     boughtOut: true, poOrCo: null, status: 'open', completedBy: null, completedAt: null, source: 'typed',
     extra: {}, btExternalId: null, createdBy: 'p1', createdAt: `2026-10-29T10:00:0${n % 10}Z`, updatedAt: '2026-10-29T10:00:00Z',
     ...over,
@@ -21,7 +21,7 @@ function item(over: Partial<Item>): Item {
 
 const items = [
   item({ locationId: 'l2', number: 5 }),
-  item({ locationId: 'l1', number: 3, ready: false, waitingOn: 'Owner' }),
+  item({ locationId: 'l1', number: 3, ready: false, waitingOn: ['Owner'] }),
   item({ locationId: 'l1', number: null, createdAt: '2026-10-29T11:00:00Z' }),
   item({ locationId: 'l1', number: 1, status: 'complete', completedBy: 'p1', completedAt: '2026-10-29T12:00:00Z' }),
   item({ locationId: 'l2', number: 2, status: 'removed' }),

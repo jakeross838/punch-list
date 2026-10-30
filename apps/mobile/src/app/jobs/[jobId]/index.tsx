@@ -1,6 +1,7 @@
 // A job: its levels and rooms with how many items are open in each, calm and quick to scan. Tap a
-// room for its items. View and Filter switches to trades, companies or status and narrows what
-// counts; the camera in the bottom bar starts a walk.
+// room for its items. View and Filter switches to trades, companies, what items wait on or status
+// and narrows what counts; the camera in the bottom bar starts a walk; Send Lists makes each
+// company's list to send.
 
 import {
   byFloor,
@@ -25,7 +26,7 @@ import { capture } from '@/data/capture';
 import { useJobView } from '@/data/view';
 import { Button, EmptyState, Icon, Page, Text, Touchable, type BarMenu, type IconName } from '@/ui';
 
-const GROUP_ICONS: Record<GroupBy, IconName> = { room: 'rooms', trade: 'wrench', company: 'person.2.fill', status: 'checklist' };
+const GROUP_ICONS: Record<GroupBy, IconName> = { room: 'rooms', trade: 'wrench', company: 'person.2.fill', waiting: 'hourglass' };
 
 interface Row {
   group: ItemGroup;
@@ -40,7 +41,7 @@ interface Section {
 }
 
 function matchesQuery(item: Item, q: string, name: (id: string | null) => string): boolean {
-  const hay = [item.title, item.description, item.waitingOn ?? '', item.poOrCo ?? '', String(item.number ?? ''), name(item.companyId), name(item.tradeId), name(item.locationId)]
+  const hay = [item.title, item.description, item.waitingOn.join(' '), item.poOrCo ?? '', String(item.number ?? ''), name(item.companyId), name(item.tradeId), name(item.locationId)]
     .join(' ')
     .toLowerCase();
   return q
@@ -88,7 +89,8 @@ export default function JobScreen() {
   const rows: Row[] = groups
     .map((group) => ({ group, count: group.items.filter((i) => i.status !== 'complete').length }))
     .filter((r) => r.count > 0 || (view.groupBy === 'room' && !narrowed));
-  const total = rows.reduce((n, r) => n + r.count, 0);
+  // An item waiting on two things shows under both, but counts once.
+  const total = new Set(rows.flatMap((r) => r.group.items.filter((i) => i.status !== 'complete').map((i) => i.id))).size;
 
   const sections = useMemo<Section[]>(() => {
     if (view.groupBy !== 'room') return [{ key: 'all', title: null, data: rows }];
@@ -112,6 +114,7 @@ export default function JobScreen() {
   const openGroup = (key: string) =>
     router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: view.groupBy, key } });
   const openSetup = () => router.push({ pathname: '/jobs/[jobId]/setup', params: { jobId } });
+  const openSend = () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId } });
   const openCamera = () => {
     capture.start({ jobId, roomId: null });
     router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
@@ -151,7 +154,7 @@ export default function JobScreen() {
         subtitle={subtitle}
         backLabel="Jobs"
         background="plain"
-        right={[menu]}
+        right={[{ kind: 'button', label: 'Send Lists', icon: 'share', iconOnly: true, onPress: openSend, testID: 'send' }, menu]}
         search={{ value: query, onChange: setQuery, placeholder: 'Search Items', collapsed: true }}
         footerHeight={CAMERA_BAR_HEIGHT}
         footer={

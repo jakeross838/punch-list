@@ -33,7 +33,7 @@ npm run test:extension    parked: runs the extension in Chromium against the sta
 
 ## Rules the code enforces
 
-- Not ready means Waiting On is filled in. One company and one trade per item.
+- Not ready means it says what it waits on: one thing or several. One company and one trade per item.
 - Only an active Ross Built user marks an item complete.
 - Removing an item marks it Removed. Nothing is ever deleted, photos included.
 - Marks are kept apart from the photo, as points on it, so the original photo is never changed.

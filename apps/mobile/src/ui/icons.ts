@@ -53,6 +53,8 @@ export const SF_SYMBOLS = {
   rooms: 'square.split.2x2',
   filter: 'line.3.horizontal.decrease',
   checklist: 'checklist',
+  share: 'square.and.arrow.up',
+  doc: 'doc.text',
 } as const satisfies Record<string, SFSymbolName>;
 
 export type IconName = keyof typeof SF_SYMBOLS;

@@ -28,16 +28,21 @@ begin
   insert into public.items (job_id, location_id, title, trade_id, company_id, ready, bought_out)
     values (j, loc, 'Install toilet', t, c, true, true) returning id, number into a, na;
   insert into public.items (job_id, location_id, title, trade_id, company_id, ready, waiting_on, ready_by, bought_out)
-    values (j, loc, 'Set vanity top', t, c, false, 'Volcano Stone', '2026-11-02', true) returning id, number into b, nb;
+    values (j, loc, 'Set vanity top', t, c, false, array['Volcano Stone', 'Owner'], '2026-11-02', true) returning id, number into b, nb;
   if na <> 1 or nb <> 2 then raise exception 'FAIL: item numbers should be 1 and 2, got % and %', na, nb; end if;
   if (select created_by from public.items where id = a) is distinct from jake then
     raise exception 'FAIL: created_by is not the signed-in person';
   end if;
 
-  -- Not ready needs Waiting On.
+  -- Not ready needs Waiting On: one thing or several, none of them blank.
   begin
     insert into public.items (job_id, location_id, title, trade_id, company_id, ready) values (j, loc, 'Hang door', t, c, false);
     raise exception 'FAIL: a not ready item with no Waiting On was accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.items (job_id, location_id, title, trade_id, company_id, ready, waiting_on) values (j, loc, 'Hang door', t, c, false, array['']);
+    raise exception 'FAIL: a not ready item waiting on a blank was accepted';
   exception when check_violation then null;
   end;
 
@@ -52,7 +57,7 @@ begin
   -- A ready item drops Waiting On and Ready By.
   update public.items set ready = true where id = b;
   select waiting_on, ready_by into rec from public.items where id = b;
-  if rec.waiting_on is not null or rec.ready_by is not null then raise exception 'FAIL: ready item kept Waiting On or Ready By'; end if;
+  if cardinality(rec.waiting_on) > 0 or rec.ready_by is not null then raise exception 'FAIL: ready item kept Waiting On or Ready By'; end if;
 
   -- Completion is stamped with the signed-in person, and a client cannot rewrite it.
   update public.items set status = 'complete' where id = a;

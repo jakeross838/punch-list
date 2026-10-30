@@ -43,7 +43,7 @@ begin
       company_ids[1 + (i % 12)],
       'deficiency',
       i % 3 <> 0,
-      case when i % 3 = 0 then 'Ross Built' end,
+      case when i % 3 = 0 then array['Ross Built'] else '{}'::text[] end,
       true,
       'typed'
     );

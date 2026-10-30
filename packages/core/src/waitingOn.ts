@@ -25,3 +25,9 @@ export function waitingOnChoices(
   }
   return out;
 }
+
+/** Waiting On as it reads in a sentence: "Owner", "Owner and Volcano Stone", "Owner, Ross Built and Volcano Stone". */
+export function waitingOnText(list: string[]): string {
+  if (list.length <= 1) return list[0] ?? '';
+  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+}

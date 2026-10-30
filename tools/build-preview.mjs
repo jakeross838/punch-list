@@ -23,11 +23,20 @@ for (const [tag, src] of scripts) {
 }
 html = html.replace(/<link rel="icon"[^>]*>/, '').replace('<title>Punch List</title>', '<title>Punch List Preview</title>');
 
-// Images the bundle loads by absolute path (the header back arrow and the like) become data URIs:
-// the page may only show data: and blob: images.
-const TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp' };
+// Images and fonts the bundle loads by absolute path (the header back arrow, the house font for the
+// printed lists) become data URIs: the page may only load data: and blob: images and fonts.
+const TYPES = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  webp: 'image/webp',
+  ttf: 'font/ttf',
+  otf: 'font/otf',
+};
 let inlinedImages = 0;
-html = html.replace(/(["'`])(\/assets\/[^"'`]+\.(png|jpe?g|gif|svg|webp))\1/g, (match, quote, path, ext) => {
+html = html.replace(/(["'`])(\/assets\/[^"'`]+\.(png|jpe?g|gif|svg|webp|ttf|otf))\1/g, (match, quote, path, ext) => {
   try {
     const data = readFileSync(join(dist, path)).toString('base64');
     inlinedImages += 1;
@@ -48,4 +57,4 @@ if (chunkRefs.length > 0) throw new Error(`Bundle still references split chunks:
 
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, html);
-console.log(`Preview page: ${out} (${(html.length / 1024 / 1024).toFixed(2)} MB, ${inlinedImages} images inlined)`);
+console.log(`Preview page: ${out} (${(html.length / 1024 / 1024).toFixed(2)} MB, ${inlinedImages} images and fonts inlined)`);

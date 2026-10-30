@@ -1,10 +1,13 @@
-// How the lists are cut: by room (floor order), by trade, by company or by status, with the filters
-// from the plan. Removed items never show. Every room shows, even an empty one, so items can be added
-// to it. Show Completed (as in Reminders) adds completed items that fit the filter, after the open ones.
+// How the lists are cut: by room (floor order), by trade, by company or by what items wait on, with
+// the filters from the plan. Removed items never show. Every room shows, even an empty one, so items
+// can be added to it. Show Completed (as in Reminders) adds completed items that fit the filter, after
+// the open ones. By Waiting On shows what is ready now, then each thing holding work up with the
+// items it holds up (an item waiting on two things is under both), biggest first: the order to
+// clear them in.
 
 import type { Company, Item, Location, Trade } from './types';
 
-export type GroupBy = 'room' | 'trade' | 'company' | 'status';
+export type GroupBy = 'room' | 'trade' | 'company' | 'waiting';
 export type ItemFilter = 'open' | 'ready' | 'not_ready' | 'added_scope' | 'all';
 export type ShowFilter = Exclude<ItemFilter, 'all'>;
 
@@ -21,13 +24,10 @@ export interface ViewSettings {
 
 export const DEFAULT_VIEW: ViewSettings = { groupBy: 'room', filter: 'open', showCompleted: false, tradeId: null, companyId: null };
 
-export const GROUP_LABELS: Record<GroupBy, string> = { room: 'Room', trade: 'Trade', company: 'Company', status: 'Status' };
+export const GROUP_LABELS: Record<GroupBy, string> = { room: 'Room', trade: 'Trade', company: 'Company', waiting: 'Waiting On' };
 
-const STATUS_GROUPS = [
-  { key: 'not_ready', label: 'Not Ready' },
-  { key: 'ready', label: 'Ready' },
-  { key: 'complete', label: 'Completed' },
-] as const;
+/** The group key for one thing an item waits on. */
+export const waitingKey = (label: string) => `waiting:${label.trim().toLowerCase()}`;
 
 export const FILTER_LABELS: Record<ItemFilter, string> = {
   open: 'Open',
@@ -98,24 +98,28 @@ export interface Lookups {
 
 export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, lookups: Lookups, options: ViewOptions = {}): ItemGroup[] {
   const live = items.filter((i) => i.status !== 'removed' && matchesScope(i, options));
-  const keyOf = (i: Item) =>
-    (by === 'room'
-      ? i.locationId
-      : by === 'trade'
-        ? i.tradeId
-        : by === 'company'
-          ? i.companyId
-          : i.status === 'complete'
-            ? 'complete'
-            : i.ready
-              ? 'ready'
-              : 'not_ready') ?? 'none';
+  const keysOf = (i: Item): string[] => {
+    switch (by) {
+      case 'room':
+        return [i.locationId];
+      case 'trade':
+        return [i.tradeId ?? 'none'];
+      case 'company':
+        return [i.companyId ?? 'none'];
+      case 'waiting':
+        if (i.status === 'complete') return ['complete'];
+        return i.ready || i.waitingOn.length === 0 ? ['ready'] : i.waitingOn.map(waitingKey);
+    }
+  };
   const groups = new Map<string, Item[]>();
+  const waitingLabels = new Map<string, string>();
   for (const item of live) {
-    const k = keyOf(item);
-    const list = groups.get(k) ?? [];
-    list.push(item);
-    groups.set(k, list);
+    for (const k of keysOf(item)) {
+      const list = groups.get(k) ?? [];
+      list.push(item);
+      groups.set(k, list);
+    }
+    if (by === 'waiting') for (const w of item.waitingOn) if (!waitingLabels.has(waitingKey(w))) waitingLabels.set(waitingKey(w), w.trim());
   }
 
   let order: Array<{ key: string; label: string }>;
@@ -124,8 +128,11 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
       .filter((l) => l.active || groups.has(l.id))
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((l) => ({ key: l.id, label: l.label }));
-  } else if (by === 'status') {
-    order = STATUS_GROUPS.map((g) => ({ key: g.key, label: g.label }));
+  } else if (by === 'waiting') {
+    const holding = [...waitingLabels]
+      .map(([key, label]) => ({ key, label, n: (groups.get(key) ?? []).filter((i) => i.status === 'open').length }))
+      .sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+    order = [{ key: 'ready', label: 'Ready Now' }, ...holding.map(({ key, label }) => ({ key, label })), { key: 'complete', label: 'Completed' }];
   } else {
     const names = new Map((by === 'trade' ? lookups.trades : lookups.companies).map((x) => [x.id, x.name]));
     order = [...groups.keys()]

@@ -67,7 +67,8 @@ export interface Item {
   companyId: string | null;
   kind: ItemKind;
   ready: boolean;
-  waitingOn: string | null;
+  /** Everything it is waiting on, one or several: a company on the job, Ross Built, the owner, the design team. */
+  waitingOn: string[];
   readyBy: string | null;
   boughtOut: boolean;
   poOrCo: string | null;

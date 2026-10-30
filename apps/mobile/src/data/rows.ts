@@ -10,6 +10,13 @@ const textOrNull = (v: unknown): string | null => (v === null || v === undefined
 const bool = (v: unknown): boolean => v === true || v === 1 || v === '1' || v === 'true';
 const num = (v: unknown): number => Number(v ?? 0);
 const numOrNull = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
+/** Waiting On arrives as a JSON list on the phone; a plain word from before it was a list still reads. */
+function waitingList(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v === 'string' && v.trim().startsWith('[')) return json<string[]>(v, []);
+  return typeof v === 'string' && v.trim() !== '' ? [v.trim()] : [];
+}
+
 /** JSON columns arrive as text on the phone and as values from the server. */
 function json<T>(v: unknown, fallback: T): T {
   if (v === null || v === undefined || v === '') return fallback;
@@ -61,7 +68,7 @@ export const rowToItem = (r: Row): Item => ({
   companyId: textOrNull(r.company_id),
   kind: r.kind === 'added_scope' ? 'added_scope' : 'deficiency',
   ready: bool(r.ready),
-  waitingOn: textOrNull(r.waiting_on),
+  waitingOn: waitingList(r.waiting_on),
   readyBy: textOrNull(r.ready_by),
   boughtOut: bool(r.bought_out),
   poOrCo: textOrNull(r.po_or_co),
@@ -155,7 +162,7 @@ export const BOOLEAN_COLUMNS: Record<string, string[]> = {
 
 /** Columns the server keeps as JSON; the phone stores them as text. */
 export const JSON_COLUMNS: Record<string, string[]> = {
-  items: ['extra'],
+  items: ['extra', 'waiting_on'],
   custom_fields: ['options'],
   photos: ['marks'],
   person_settings: ['item_form', 'job_view'],

@@ -36,7 +36,7 @@ export function checkItem(item: ItemFields): Problem[] {
   if (title.length > TITLE_MAX) problems.push({ field: 'title', message: `Keep the title under ${TITLE_MAX} characters` });
   if (!item.companyId) problems.push({ field: 'companyId', message: 'Pick the company doing the work' });
   if (!item.tradeId) problems.push({ field: 'tradeId', message: 'Pick the trade' });
-  if (!item.ready && !item.waitingOn?.trim()) {
+  if (!item.ready && item.waitingOn.every((w) => w.trim() === '')) {
     problems.push({ field: 'waitingOn', message: 'Not ready: say what it is waiting on' });
   }
   if (item.readyBy !== null && !/^\d{4}-\d{2}-\d{2}$/.test(item.readyBy)) {
@@ -51,6 +51,16 @@ export function checkItem(item: ItemFields): Problem[] {
   return problems;
 }
 
+/** A Waiting On list tidied: trimmed, each one once, nothing empty. */
+export function tidyWaitingOn(list: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of list) {
+    const w = raw.trim().replace(/\s+/g, ' ');
+    if (w !== '' && !out.some((o) => o.toLowerCase() === w.toLowerCase())) out.push(w);
+  }
+  return out;
+}
+
 /**
  * Tidies an item before it saves: trims text, and a ready item drops its Waiting On and Ready By,
  * which only mean something while it is not ready.
@@ -63,13 +73,13 @@ export function tidyItem<T extends ItemFields>(item: T): T {
     ...item,
     title: item.title.trim().replace(/\s+/g, ' '),
     description: item.description.trim(),
-    waitingOn: text(item.waitingOn),
+    waitingOn: tidyWaitingOn(item.waitingOn),
     readyBy: text(item.readyBy),
     poOrCo: text(item.poOrCo),
     extra,
   };
   if (out.ready) {
-    out.waitingOn = null;
+    out.waitingOn = [];
     out.readyBy = null;
   }
   return out;
