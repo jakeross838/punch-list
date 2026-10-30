@@ -6,6 +6,8 @@ import {
   kindDefaults,
   parseRoomList,
   remove,
+  renamedHoldups,
+  renameLocation,
   reopen,
   restore,
   RuleError,
@@ -71,6 +73,38 @@ describe('room list from the plans', () => {
   it('does not add a shared area twice when the plans already list it', () => {
     const { locations } = parseRoomList('Pool\nKitchen 109');
     expect(locations.filter((l) => l.label === 'Pool')).toHaveLength(1);
+  });
+});
+
+describe('fixing a location or a company in Job Setup', () => {
+  const rooms = [
+    { id: 'r1', label: 'Kitchen 109', active: true },
+    { id: 'r2', label: 'Office 302', active: true },
+    { id: 'r3', label: 'Study 303', active: false },
+  ];
+
+  it('reads a new location name like a line of the pasted list', () => {
+    expect(renameLocation(' 302  home office ', 'r2', rooms)).toEqual({ name: 'Home Office', number: '302', label: 'Home Office 302' });
+    expect(renameLocation('Office 302', 'r2', rooms)).toEqual({ name: 'Office', number: '302', label: 'Office 302' });
+  });
+
+  it('says why a location name cannot be used', () => {
+    expect(renameLocation('  ', 'r2', rooms)).toEqual({ problem: 'Type a name, like Kitchen 109.' });
+    expect(renameLocation('kitchen 109', 'r2', rooms)).toEqual({ problem: 'Kitchen 109 is already a location on this job.' });
+    expect(renameLocation('Study 303', 'r2', rooms)).toEqual({ problem: 'Study 303 was removed from this job. Add it again with Paste Locations.' });
+  });
+
+  it('keeps items waiting on a company that is renamed', () => {
+    const items = [
+      { id: 'a', waitingOn: ['Owner', 'sms carpentry'] },
+      { id: 'b', waitingOn: ['Owner'] },
+      { id: 'c', waitingOn: ['SMS Carpentry', 'SMS Carpentry and Trim'] },
+    ];
+    expect(renamedHoldups(items, 'SMS Carpentry', 'SMS Carpentry and Trim')).toEqual([
+      { id: 'a', waitingOn: ['Owner', 'SMS Carpentry and Trim'] },
+      { id: 'c', waitingOn: ['SMS Carpentry and Trim'] },
+    ]);
+    expect(renamedHoldups(items, 'SMS Carpentry', 'sms carpentry')).toEqual([]);
   });
 });
 

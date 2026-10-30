@@ -19,7 +19,9 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
+import { useCanSuggest } from '@/ai/suggest';
 import { BarTool, CAMERA_BAR_HEIGHT, CameraBar } from '@/components/CameraBar';
+import { draftFill } from '@/components/draftFill';
 import { ItemRow } from '@/components/ItemRow';
 import { useItemActions } from '@/components/useItemActions';
 import { SHOW_WORDS, ViewSheet } from '@/components/ViewSheet';
@@ -65,6 +67,8 @@ export default function JobScreen() {
   const companies = data.useCompanies();
   const jobCompanies = data.useJobCompanies(jobId);
   const visits = data.useVisits(jobId);
+  const titles = data.useTitles();
+  const canFill = useCanSuggest();
   const saved = data.useViewSettings();
   const today = dayOfDate(new Date());
   const [view, setView] = useJobView(jobId, saved);
@@ -91,7 +95,8 @@ export default function JobScreen() {
     () => groupItems(items, view.groupBy, view.filter, { locations, trades, companies }, { tradeId: view.tradeId, companyId: view.companyId, today }),
     [items, view.groupBy, view.filter, view.tradeId, view.companyId, locations, trades, companies, today],
   );
-  const drafts = items.filter((i) => i.unfinished && i.status === 'open').length;
+  const draftItems = items.filter((i) => i.unfinished && i.status === 'open');
+  const drafts = draftItems.length;
   const late = useMemo(() => pastDue(items, visits, today).length, [items, visits, today]);
   const rows: Row[] = groups
     .map((group) => ({ group, count: group.items.filter((i) => i.status !== 'complete').length }))
@@ -123,7 +128,17 @@ export default function JobScreen() {
   const openSetup = () => router.push({ pathname: '/jobs/[jobId]/setup', params: { jobId } });
   const openSend = () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId } });
   const openSchedule = () => router.push({ pathname: '/jobs/[jobId]/schedule', params: { jobId } });
-  const openDrafts = () => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'drafts', key: 'all' } });
+  const openDrafts = () => {
+    // Any draft the walk could not fill in (no signal, say) gets filled in now.
+    if (canFill) {
+      const tasks = draftItems.flatMap((item) => {
+        const photo = firstPhoto.get(item.id);
+        return photo ? [{ item, photo }] : [];
+      });
+      draftFill.add(tasks, { data, titles, trades, companies, jobCompanies, locations });
+    }
+    router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'drafts', key: 'all' } });
+  };
   const draftsRow =
     drafts > 0 ? (
       <Touchable

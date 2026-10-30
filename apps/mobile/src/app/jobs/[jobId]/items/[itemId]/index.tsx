@@ -1,8 +1,9 @@
 // One item, everything about it in one calm place, and every part of it changes right where it is:
 // tap the title to retype it, tick Ready, pick another location, mark up a photo. Each change saves
 // as it is made. Mark Complete is the big button; only Ross Built marks items complete, and removing
-// never deletes. A draft says what it still needs, offers Fill In From Photo, and steps to
-// the next one, for filling them in sitting down after a walk.
+// never deletes. A draft says what it still needs (or that Claude is filling it in from the photo)
+// and steps to the next one, for checking them sitting down after a walk: Next puts a draft that has
+// everything it needs on the lists.
 
 import {
   checkItem,
@@ -27,6 +28,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { draftFill, isFilling, useDraftFill } from '@/components/draftFill';
 import { ItemEditor, type EditorSet } from '@/components/ItemEditor';
 import { EDITABLE, fieldsOf, sameValue, type ItemDraft } from '@/components/ItemForm';
 import { MarkupEditor } from '@/components/MarkupEditor';
@@ -77,6 +79,8 @@ function useLiveItem(item: Item) {
   const problems = checkItem(tidyItem(committed));
 
   const set: EditorSet = (patch, typing) => {
+    // Someone is filling in this draft themselves: Claude leaves it to them.
+    if (item.unfinished && Object.keys(patch).length > 0) draftFill.touch(item.id);
     if (typing) {
       setTyped((t) => ({ ...t, ...patch }));
       return;
@@ -127,6 +131,8 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   const live = useLiveItem(item);
   const release = useRelease(jobId);
   const filler = useFillIn(jobId);
+  const fill = useDraftFill();
+  const filling = item.unfinished && isFilling(fill, item.id);
   const [shown, setShown] = useState(0);
   const [viewing, setViewing] = useState<Photo | null>(null);
   const [marking, setMarking] = useState<Photo | null>(null);
@@ -188,7 +194,8 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   }
 
   function goNext() {
-    live.flush();
+    // Checked over: saving tidies the draft, which puts it on the lists once it has everything.
+    live.set({});
     if (nextUnfinished) router.replace({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: nextUnfinished.id, from: 'unfinished' } });
     else router.back();
   }
@@ -198,13 +205,19 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   };
 
   const who = me && item.completedBy === me.id ? me.name : 'Ross Built';
+  function draftDetail() {
+    if (filling) return 'Claude is filling it in from the photo.';
+    const missing = missingText(live.value);
+    if (missing) return `${missing.replace(/^Needs/, 'Add')} to put it on the lists.`;
+    return `Check it over, then tap ${nextUnfinished ? 'Next' : 'Done'} to put it on the lists.`;
+  }
   const status: { icon: IconName; color: string; line: string; detail?: string } | null =
     item.status === 'complete'
       ? { icon: 'checkmark.circle.fill', color: colors.tint, line: 'Complete', detail: item.completedAt ? `By ${who} on ${dayOf(item.completedAt)}` : undefined }
       : item.status === 'removed'
         ? { icon: 'trash', color: colors.quiet, line: 'Removed from the list', detail: 'It stays in the history.' }
         : item.unfinished
-          ? { icon: 'pencil.tip', color: colors.tint, line: 'Draft', detail: `${missingText(live.value).replace(/^Needs/, 'Add')} to put it on the lists.` }
+          ? { icon: 'pencil.tip', color: colors.tint, line: 'Draft', detail: draftDetail() }
           : null;
 
   const stepping = item.unfinished || fromUnfinished;
@@ -304,7 +317,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
           set={live.set}
           problem={live.problem}
           showReady={item.status === 'open'}
-          fillIn={filler.can && photo ? { busy: filler.busy, onPress: () => void filler.fillIn(photo, live.value, (patch) => live.set(patch)) } : undefined}
+          fillIn={filler.can && photo && !filling ? { busy: filler.busy, onPress: () => void filler.fillIn(photo, live.value, (patch) => live.set(patch)) } : undefined}
         >
           {item.status === 'open' && !item.unfinished && company ? (
             <ListSection>

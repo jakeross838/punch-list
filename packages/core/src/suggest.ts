@@ -4,7 +4,7 @@
 
 import { TITLE_MAX } from './rules';
 import { tidyTitle } from './titles';
-import type { Mark, MarkColor } from './types';
+import type { Company, Item, JobCompany, Mark, MarkColor, StandardTitle, Trade } from './types';
 
 export interface SuggestContext {
   room: string;
@@ -105,4 +105,47 @@ export function readSuggestion(raw: unknown, ctx: SuggestContext): ItemSuggestio
     trade = ctx.companies.find((c) => c.name === company)?.trade ?? trade;
   }
   return { title, description, trade, company };
+}
+
+/** What Claude is told about the job for one photo: the location, the standard titles, the companies on the job and the marks. */
+export function suggestContext(input: {
+  location: string | null;
+  titles: StandardTitle[];
+  trades: Trade[];
+  companies: Company[];
+  jobCompanies: JobCompany[];
+  marks: Mark[];
+}): SuggestContext {
+  const tradeName = (id: string | null) => input.trades.find((t) => t.id === id)?.name ?? null;
+  return {
+    room: input.location ?? 'the job',
+    titles: [...input.titles]
+      .filter((t) => t.approved)
+      .sort((a, b) => b.uses - a.uses)
+      .map((t) => ({ title: t.title, trade: tradeName(t.tradeId) })),
+    companies: input.jobCompanies
+      .map((jc) => ({ name: input.companies.find((c) => c.id === jc.companyId)?.name ?? '', trade: tradeName(jc.tradeId) ?? '' }))
+      .filter((c) => c.name && c.trade),
+    trades: input.trades.map((t) => t.name),
+    marks: input.marks,
+  };
+}
+
+/** What a suggestion fills in: only what is still blank, never what was typed. Empty when there is nothing to fill. */
+export function suggestionPatch(
+  s: ItemSuggestion,
+  value: Pick<Item, 'title' | 'description' | 'companyId' | 'tradeId'>,
+  trades: Trade[],
+  companies: Company[],
+): Partial<Pick<Item, 'title' | 'description' | 'companyId' | 'tradeId'>> {
+  const tradeId = trades.find((t) => t.name === s.trade)?.id ?? null;
+  const companyId = companies.find((c) => c.name === s.company)?.id ?? null;
+  const patch: Partial<Pick<Item, 'title' | 'description' | 'companyId' | 'tradeId'>> = {};
+  if (!value.title.trim()) patch.title = s.title;
+  if (!value.description.trim() && s.description) patch.description = s.description;
+  if (!value.companyId && !value.tradeId && companyId && tradeId) {
+    patch.companyId = companyId;
+    patch.tradeId = tradeId;
+  } else if (!value.tradeId && tradeId) patch.tradeId = tradeId;
+  return patch;
 }

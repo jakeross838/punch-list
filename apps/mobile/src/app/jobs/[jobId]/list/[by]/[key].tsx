@@ -1,8 +1,8 @@
 // One location's items (or one trade's, company's or what they wait on), kept calm: the circle,
 // the title, an hourglass when it is not ready, and the photo. Completed items wait under their own
 // heading. In a location, the bottom bar steps to the one before or after, with the camera between.
-// Past Due lists everything late, the latest first, with the days. Drafts lists what was saved to fill
-// in later. A Waiting On list can stop the wait for all its items at once, or move their Ready By
+// Past Due lists everything late, the latest first, with the days. Drafts lists what was saved to
+// finish later, filling in from the photos while it shows. A Waiting On list can stop the wait for all its items at once, or move their Ready By
 // together.
 
 import {
@@ -23,6 +23,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
 import { CAMERA_BAR_HEIGHT, CameraBar, RoomStep } from '@/components/CameraBar';
+import { isFilling, useDraftFill } from '@/components/draftFill';
 import { ItemRow } from '@/components/ItemRow';
 import { useItemActions } from '@/components/useItemActions';
 import { SHOW_WORDS } from '@/components/ViewSheet';
@@ -57,6 +58,7 @@ export default function GroupScreen() {
   const [view] = useJobView(jobId, data.useViewSettings());
   const [showDone, setShowDone] = useState(false);
   const actions = useItemActions(jobId);
+  const fill = useDraftFill();
 
   const group = useMemo(
     () =>
@@ -94,9 +96,14 @@ export default function GroupScreen() {
   const subtitle = due
     ? `${open.length} open`
     : drafts
-      ? `${open.length} ${open.length === 1 ? 'draft' : 'drafts'}. Tap one to fill it in.`
+      ? `${open.length} ${open.length === 1 ? 'draft' : 'drafts'}. ${open.some((i) => isFilling(fill, i.id)) ? 'Filling in from the photos.' : 'Tap one to finish it.'}`
       : `${open.length} ${SHOW_WORDS[view.filter]}`;
-  const contextFor = (item: Item) => (by === 'room' && !due && !drafts ? undefined : roomName.get(item.locationId));
+  const contextFor = (item: Item) => {
+    if (by === 'room' && !due && !drafts) return undefined;
+    const where = roomName.get(item.locationId);
+    if (drafts && isFilling(fill, item.id)) return where ? `${where}, filling in from the photo` : 'Filling in from the photo';
+    return where;
+  };
   const lateFor = (item: Item) => {
     const p = lateBy.get(item.id);
     if (!p) return undefined;

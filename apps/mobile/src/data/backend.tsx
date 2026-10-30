@@ -1,9 +1,9 @@
 // Preview backend: sample data in memory, for the preview link. Nothing leaves the browser tab and
-// a reload starts over. The phone uses backend.native.tsx instead.
+// a reload starts over.
 
 import { randomUUID } from 'expo-crypto';
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
-import type { Item, Photo } from '@punch/core';
+import { renamedHoldups, type Item, type Photo } from '@punch/core';
 import { DataContext, type DataApi, type ItemPatch, type NewItem } from './api';
 import { keepPhoto } from './photoFiles';
 import { sampleState, type SampleState } from './sample';
@@ -71,15 +71,26 @@ const api: DataApi = {
     setState({ ...state, jobs: [...state.jobs, { id, name, address }], counters: { ...state.counters, [id]: 0 } });
     return id;
   },
+  async updateJob(id, patch) {
+    setState({ ...state, jobs: state.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)) });
+  },
   async addLocations(jobId, parsed) {
     const existing = state.locations.filter((l) => l.jobId === jobId);
-    const labels = new Set(existing.map((l) => l.label.toLowerCase()));
+    const byLabel = new Map(existing.map((l) => [l.label.toLowerCase(), l]));
+    // One removed before comes back where it was.
+    const back = new Set(parsed.flatMap((p) => {
+      const was = byLabel.get(p.label.toLowerCase());
+      return was && !was.active ? [was.id] : [];
+    }));
     let order = existing.reduce((m, l) => Math.max(m, l.sortOrder), 0);
     const added = parsed
-      .filter((p) => !labels.has(p.label.toLowerCase()))
+      .filter((p) => !byLabel.has(p.label.toLowerCase()))
       .map((p) => ({ ...p, id: randomUUID(), jobId, active: true, sortOrder: ++order }));
-    setState({ ...state, locations: [...state.locations, ...added] });
-    return added.length;
+    setState({ ...state, locations: [...state.locations.map((l) => (back.has(l.id) ? { ...l, active: true } : l)), ...added] });
+    return added.length + back.size;
+  },
+  async updateLocation(id, patch) {
+    setState({ ...state, locations: state.locations.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
   },
   async createItem(input: NewItem) {
     const id = randomUUID();
@@ -186,6 +197,34 @@ const api: DataApi = {
   async addCompanyToJob(jobId, companyId, tradeId) {
     if (state.jobCompanies.some((jc) => jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) return;
     setState({ ...state, jobCompanies: [...state.jobCompanies, { jobId, companyId, tradeId }] });
+  },
+  async updateCompany(id, patch) {
+    const was = state.companies.find((c) => c.id === id);
+    const holdups = was && patch.name ? new Map(renamedHoldups(state.items, was.name, patch.name).map((h) => [h.id, h.waitingOn])) : new Map<string, string[]>();
+    setState({
+      ...state,
+      companies: state.companies.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      items: holdups.size > 0 ? state.items.map((i) => (holdups.has(i.id) ? { ...i, waitingOn: holdups.get(i.id)!, updatedAt: now() } : i)) : state.items,
+    });
+  },
+  async setJobCompanyTrade(jobId, companyId, fromTradeId, toTradeId) {
+    if (fromTradeId === toTradeId) return;
+    const pair = (tradeId: string) => (jc: { jobId: string; companyId: string; tradeId: string }) =>
+      jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId;
+    // On the job for the new trade already: the two become one.
+    const jobCompanies = state.jobCompanies.some(pair(toTradeId))
+      ? state.jobCompanies.filter((jc) => !pair(fromTradeId)(jc))
+      : state.jobCompanies.map((jc) => (pair(fromTradeId)(jc) ? { ...jc, tradeId: toTradeId } : jc));
+    setState({
+      ...state,
+      jobCompanies,
+      items: state.items.map((i) =>
+        i.jobId === jobId && i.companyId === companyId && i.tradeId === fromTradeId ? { ...i, tradeId: toTradeId, updatedAt: now() } : i,
+      ),
+    });
+  },
+  async removeCompanyFromJob(jobId, companyId, tradeId) {
+    setState({ ...state, jobCompanies: state.jobCompanies.filter((jc) => !(jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) });
   },
   async setWaitingOnExtras(jobId, labels) {
     setState({ ...state, waitingOn: { ...state.waitingOn, [jobId]: labels } });

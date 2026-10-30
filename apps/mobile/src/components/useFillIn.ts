@@ -2,7 +2,7 @@
 // the companies on the job, and fills in what is still blank: the title, where exactly, the trade
 // and the company. It never overwrites what was already typed. The person checks it over.
 
-import { type ItemSuggestion, type Mark, type SuggestContext } from '@punch/core';
+import { suggestContext, suggestionPatch, type ItemSuggestion, type Mark } from '@punch/core';
 import { useState } from 'react';
 import { suggestFromPhoto, useCanSuggest } from '@/ai/suggest';
 import { useData } from '@/data/api';
@@ -20,22 +20,10 @@ export function useFillIn(jobId: string) {
   const locations = data.useLocations(jobId);
   const [busy, setBusy] = useState(false);
 
-  const tradeName = (id: string | null) => trades.find((t) => t.id === id)?.name ?? null;
-
   async function fillIn(photo: { uri: string; marks: Mark[] }, value: ItemDraft, apply: (patch: Partial<ItemDraft>) => void) {
     if (busy) return;
-    const ctx: SuggestContext = {
-      room: locations.find((l) => l.id === value.locationId)?.label ?? 'the job',
-      titles: [...titles]
-        .filter((t) => t.approved)
-        .sort((a, b) => b.uses - a.uses)
-        .map((t) => ({ title: t.title, trade: tradeName(t.tradeId) })),
-      companies: jobCompanies
-        .map((jc) => ({ name: companies.find((c) => c.id === jc.companyId)?.name ?? '', trade: tradeName(jc.tradeId) ?? '' }))
-        .filter((c) => c.name && c.trade),
-      trades: trades.map((t) => t.name),
-      marks: photo.marks,
-    };
+    const location = locations.find((l) => l.id === value.locationId)?.label ?? null;
+    const ctx = suggestContext({ location, titles, trades, companies, jobCompanies, marks: photo.marks });
     setBusy(true);
     haptic.tap();
     try {
@@ -44,15 +32,7 @@ export function useFillIn(jobId: string) {
         feedback.toast({ message: 'No suggestion came back. Fill it in by hand.' });
         return;
       }
-      const tradeId = trades.find((t) => t.name === s.trade)?.id ?? null;
-      const companyId = companies.find((c) => c.name === s.company)?.id ?? null;
-      const patch: Partial<ItemDraft> = {};
-      if (!value.title.trim()) patch.title = s.title;
-      if (!value.description.trim() && s.description) patch.description = s.description;
-      if (!value.companyId && !value.tradeId && companyId && tradeId) {
-        patch.companyId = companyId;
-        patch.tradeId = tradeId;
-      } else if (!value.tradeId && tradeId) patch.tradeId = tradeId;
+      const patch: Partial<ItemDraft> = suggestionPatch(s, value, trades, companies);
       if (Object.keys(patch).length === 0) {
         feedback.toast({ message: 'Everything is already filled in.' });
         return;

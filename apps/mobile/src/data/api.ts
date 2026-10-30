@@ -1,6 +1,5 @@
-// The one interface the screens use. Two backends implement it:
-//   backend.ts         sample data in memory, for the preview link (web)
-//   backend.native.ts  PowerSync on the phone, synced with Supabase
+// The one interface the screens use. backend.tsx implements it with sample data in memory, for the
+// preview link; the phone's, on PowerSync synced with Supabase, implements the same interface.
 // Every read is a hook that updates when the data changes; every write goes through the core rules.
 
 import { createContext, useContext } from 'react';
@@ -85,8 +84,14 @@ export interface DataApi {
   /** The lists that went out on the job, not counting any undone. */
   useSends(jobId: string): ListSend[];
   createJob(input: { name: string; address: string }): Promise<string>;
-  /** Adds rooms after the job's existing ones, keeping floor order. Returns how many were added. */
+  updateJob(id: string, patch: Partial<Pick<Job, 'name' | 'address'>>): Promise<void>;
+  /**
+   * Adds locations after the job's existing ones, keeping floor order; one removed before comes
+   * back where it was. Returns how many were added.
+   */
   addLocations(jobId: string, locations: ParsedLocation[]): Promise<number>;
+  /** Renames a location, or removes it from the job (active false), which keeps it in the history. */
+  updateLocation(id: string, patch: Partial<Pick<Location, 'name' | 'number' | 'label' | 'active'>>): Promise<void>;
   createItem(item: NewItem): Promise<string>;
   updateItem(id: string, patch: ItemPatch): Promise<void>;
   /** Several items at once, as one change: clearing a holdup, moving a Ready By. */
@@ -97,6 +102,12 @@ export interface DataApi {
   addTrade(name: string): Promise<string>;
   addCompany(input: { name: string; defaultTradeId: string | null }): Promise<string>;
   addCompanyToJob(jobId: string, companyId: string, tradeId: string): Promise<void>;
+  /** Renames a company on every job; items waiting on it by the old name keep waiting on it. */
+  updateCompany(id: string, patch: Partial<Pick<Company, 'name'>>): Promise<void>;
+  /** The trade a company does on the job; its items on the job with the old trade move to the new one. */
+  setJobCompanyTrade(jobId: string, companyId: string, fromTradeId: string, toTradeId: string): Promise<void>;
+  /** Takes a company off the job for that trade. Its items stay as they are. */
+  removeCompanyFromJob(jobId: string, companyId: string, tradeId: string): Promise<void>;
   setWaitingOnExtras(jobId: string, labels: string[]): Promise<void>;
   addTitle(input: { title: string; tradeId: string | null }): Promise<string>;
   updateTitle(id: string, patch: Partial<Pick<StandardTitle, 'title' | 'tradeId' | 'approved'>>): Promise<void>;

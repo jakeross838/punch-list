@@ -70,13 +70,17 @@ async function main(): Promise<void> {
       'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1',
   });
   // The preview link can ask Claude about a photo (on the viewer's own account); here a stand-in
-  // answers, so Fill In From Photo can be walked without spending anything.
+  // answers, a little slowly like the real thing, so drafts filling themselves in can be walked
+  // without spending anything.
   // Passed as text, so the browser gets it exactly as written.
   await context.addInitScript(`
     (() => {
       const sample = Object.assign(async () => ({ text: '' }), {
         limits: async () => ({ maxPromptBytes: 262144, images: { maxCount: 4, maxInputBytes: 20000000, mediaTypes: ['image/jpeg'] } }),
-        json: async () => ({ title: 'install towel bar', description: 'Left of the vanity, 24 inches.', trade: 'Carpentry', company: 'SMS Carpentry' }),
+        json: async () => {
+          await new Promise((done) => setTimeout(done, 2000));
+          return { title: 'install towel bar', description: 'Left of the vanity, 24 inches.', trade: 'Carpentry', company: 'SMS Carpentry' };
+        },
       });
       window.claude = { use: async (name) => (name === 'sample' ? sample : null) };
     })();
@@ -256,6 +260,7 @@ async function main(): Promise<void> {
     await step('the form fills in from the title', async () => {
       await app.getByTestId('markup-next').click();
       await app.getByTestId('field-title').waitFor();
+      await app.getByTestId('fill-in').waitFor();
       await settle(800);
       await shot('13-new-item');
       await app.getByTestId('field-title').fill('adj');
@@ -322,12 +327,13 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('Draft saves each photo as a draft', async () => {
+    await step('Draft saves each photo as a draft, and Claude fills it in', async () => {
       await app.getByTestId('group-room-4').click();
       await settle();
       await app.getByTestId('camera').last().click();
       await app.getByTestId('shutter').waitFor();
       await app.getByTestId('mode-quick').click();
+      await app.getByText('Each photo saves as a draft. Claude fills it in.').waitFor();
       await settle(400);
       for (let i = 0; i < 2; i += 1) {
         const chooser = tab.waitForEvent('filechooser');
@@ -345,21 +351,23 @@ async function main(): Promise<void> {
       await settle();
       await shot('22-job-unfinished');
     });
-    await step('fill them in sitting down: Fill In From Photo, Mark Up, Next', async () => {
+    await step('check them sitting down: each is filled in, Mark Up, then Next puts it on the lists', async () => {
       await app.getByTestId('open-unfinished').click();
-      await app.getByText('3 drafts. Tap one to fill it in.').waitFor();
+      await app.getByText('3 drafts. Filling in from the photos.').waitFor();
+      await app.getByText(/, filling in from the photo$/).first().waitFor();
+      await settle(300);
+      await shot('23-drafts-filling');
+      await app.getByText('3 drafts. Tap one to finish it.').waitFor({ timeout: 20000 });
+      if ((await app.getByText('No title yet').count()) !== 0) throw new Error('A draft did not fill in');
       await settle();
-      await shot('23-unfinished-list');
-      await app.getByText('No title yet').first().click();
-      await app.getByTestId('next-unfinished').waitFor();
-      await settle();
-      await shot('24-unfinished-item');
-      await app.getByTestId('fill-in').click();
-      await app.getByText('Filled in from the photo. Check it over.').waitFor();
-      if ((await app.getByTestId('field-title').inputValue()) !== 'Install towel bar') throw new Error('Fill In did not set the title');
+      await shot('23b-drafts-filled');
+      await app.getByText('Install towel bar').first().click();
+      await app.getByText('Check it over, then tap Next to put it on the lists.').waitFor();
+      if ((await app.getByTestId('field-title').inputValue()) !== 'Install towel bar') throw new Error('The draft did not fill in its title');
       await app.getByText('SMS Carpentry').first().waitFor();
+      if ((await app.getByTestId('fill-in').count()) !== 0) throw new Error('Fill In shows with nothing left to fill');
       await settle(400);
-      await shot('25-filled-in-from-photo');
+      await shot('24-draft-filled-in');
       await app.getByTestId('mark-up').click();
       await app.getByTestId('markup-canvas').waitFor();
       await settle(500);
@@ -374,8 +382,15 @@ async function main(): Promise<void> {
       await app.getByText('Draft', { exact: true }).last().waitFor();
       await settle();
       await app.getByTestId('back').last().click();
-      await app.getByText('2 drafts. Tap one to fill it in.').waitFor();
+      await app.getByText('2 drafts. Tap one to finish it.').waitFor();
       await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      // The one checked over is on the lists now; the two still drafts are not.
+      await app.getByTestId('open-search').click();
+      await app.getByTestId('search').last().fill('towel');
+      await app.getByText('Install towel bar').first().waitFor();
+      if ((await app.getByText('Install towel bar').count()) !== 1) throw new Error('Next did not put the draft on the lists');
+      await app.getByTestId('search-cancel').click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
@@ -579,6 +594,38 @@ async function main(): Promise<void> {
       await app.getByText('Roof Deck 301').first().waitFor();
       await settle(400);
     });
+    await step('fix a location in Job Setup: a new name, then remove it and Undo', async () => {
+      const row = (name: string) => app.getByTestId(/^setup-location-/).filter({ hasText: name });
+      await row('Office 302').click();
+      await app.getByTestId('field-location').waitFor();
+      await settle(600);
+      await app.getByTestId('field-location').fill('kitchen 109');
+      await app.getByText('Kitchen 109 is already a location on this job.').waitFor();
+      await app.getByTestId('field-location').fill('302 home office');
+      await app.getByText('The new name shows on every item and list.').waitFor();
+      await settle(300);
+      await shot('47-location');
+      await app.getByTestId('location-save').click();
+      await app.getByText('Saved Home Office 302').waitFor();
+      await row('Home Office 302').waitFor();
+      await settle(500);
+      await row('Home Office 302').click();
+      await app.getByTestId('location-remove').waitFor();
+      await settle(600);
+      await app.getByTestId('location-remove').click();
+      await app.getByText('Removed Home Office 302 from the job').waitFor();
+      await row('Home Office 302').waitFor({ state: 'detached' });
+      await settle(300);
+      await app.getByRole('button', { name: 'Undo' }).click();
+      await row('Home Office 302').waitFor();
+      // A location with open items stays until they are done or moved.
+      await app.getByTestId('setup-location-room-1').click();
+      await app.getByText(/^It has \d+ open items\. Finish them or move them to another location first\.$/).waitFor();
+      await settle(600);
+      await shot('48-location-has-items');
+      await app.getByTestId('location-cancel').click();
+      await settle(500);
+    });
     await step('add a company to the job', async () => {
       await app.getByRole('tab', { name: 'Companies' }).click();
       await app.getByTestId('add-company').click();
@@ -592,6 +639,54 @@ async function main(): Promise<void> {
       await app.getByText('Bayshore Glass added to the job').waitFor();
       await settle(400);
       await shot('46-companies');
+    });
+    await step('fix a company in Job Setup: a new name and trade, then remove it and Undo', async () => {
+      const row = (name: string) => app.getByTestId(/^setup-company-/).filter({ hasText: name });
+      await row('Bayshore Glass').click();
+      await app.getByTestId('field-company-name').waitFor();
+      await settle(600);
+      await app.getByTestId('field-company-name').fill('sms carpentry');
+      await app.getByText('Another company is already named sms carpentry.').waitFor();
+      await app.getByTestId('field-company-name').fill('Bayshore Glass and Mirror');
+      await app.getByTestId('pick-edit-trade').click();
+      await app.getByRole('button', { name: 'Ross Built Crew', exact: true }).click();
+      await app.getByText('Its items on this job move to the new trade.').waitFor();
+      await settle(400);
+      await shot('49-company');
+      await app.getByTestId('company-save').click();
+      await app.getByText('Saved Bayshore Glass and Mirror').waitFor();
+      await row('Bayshore Glass and Mirror').getByText('Ross Built Crew').waitFor();
+      await settle(500);
+      await row('Bayshore Glass and Mirror').click();
+      await app.getByTestId('company-remove').waitFor();
+      await settle(600);
+      await app.getByTestId('company-remove').click();
+      await app.getByText('Removed Bayshore Glass and Mirror from the job').waitFor();
+      await row('Bayshore Glass and Mirror').waitFor({ state: 'detached' });
+      await app.getByRole('button', { name: 'Undo' }).click();
+      await row('Bayshore Glass and Mirror').waitFor();
+      // A company with open items stays on the job until they are done or given to another company.
+      await row('SMS Carpentry').click();
+      await app.getByText(/^It has \d+ open items on this job\. Finish them or pick another company for them first\.$/).waitFor();
+      await settle(600);
+      await shot('50-company-has-items');
+      await app.getByTestId('company-edit-cancel').click();
+      await settle(500);
+    });
+    await step('the job name and address change right where they are', async () => {
+      await app.getByTestId('field-job-name').fill('Sample Job North');
+      // Leaving a field saves it.
+      await app.getByTestId('field-job-address').click();
+      await app.getByTestId('field-job-address').fill('715 North Shore Drive');
+      await app.getByTestId('field-job-name').click();
+      await settle(400);
+      await shot('51-job-fields');
+      await app.getByTestId('back').last().click();
+      await app.getByText('Sample Job North', { exact: true }).first().waitFor();
+      await app.getByTestId('back').last().click();
+      await app.getByText('715 North Shore Drive', { exact: true }).first().waitFor();
+      await settle(500);
+      await shot('52-jobs-renamed');
     });
   } catch (e) {
     await shot('zz-failure');

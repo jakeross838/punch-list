@@ -7,7 +7,7 @@
 //
 // The shared areas are added after the rooms on every job.
 
-import type { LocationKind } from './types';
+import type { Location, LocationKind } from './types';
 
 export const SHARED_AREAS = [
   'North Elevation',
@@ -89,6 +89,24 @@ export function parseRoomList(text: string, options: { includeShared?: boolean }
     }
   }
   return { locations, problems };
+}
+
+/**
+ * A location's new name, typed like a line of the pasted list ("Kitchen 109" or "109 Kitchen"), or
+ * why it cannot be used. The level and the order stay as they are.
+ */
+export function renameLocation(
+  text: string,
+  id: string,
+  locations: Pick<Location, 'id' | 'label' | 'active'>[],
+): { name: string; number: string | null; label: string } | { problem: string } {
+  const line = text.replace(/\s+/g, ' ').trim().replace(/:$/, '');
+  const parsed = parseRoomList(line, { includeShared: false }).locations[0];
+  if (!parsed) return { problem: 'Type a name, like Kitchen 109.' };
+  const taken = locations.find((l) => l.id !== id && l.label.toLowerCase() === parsed.label.toLowerCase());
+  if (taken?.active) return { problem: `${parsed.label} is already a location on this job.` };
+  if (taken) return { problem: `${parsed.label} was removed from this job. Add it again with Paste Locations.` };
+  return { name: parsed.name, number: parsed.number, label: parsed.label };
 }
 
 function cleanLine(raw: string): string {

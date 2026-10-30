@@ -25,6 +25,8 @@ import {
   readSuggestion,
   RuleError,
   startAfter,
+  suggestContext,
+  suggestionPatch,
   suggestPrompt,
   tidyItem,
   visitEnd,
@@ -252,6 +254,37 @@ describe('filling in from the photo', () => {
     });
     expect(readSuggestion({ title: 'Touch up paint', trade: 'painting' }, ctx)?.company).toBe('Triple H Painting');
     expect(readSuggestion({ nope: true }, ctx)).toBeNull();
+  });
+
+  it('builds the context from the job, and fills only what is blank', () => {
+    const trades = [
+      { id: 't1', name: 'Carpentry', sortOrder: 1 },
+      { id: 't2', name: 'Painting', sortOrder: 2 },
+    ];
+    const companies = [
+      { id: 'c1', name: 'SMS Carpentry', defaultTradeId: 't1', phone: null, email: null, active: true },
+      { id: 'c2', name: 'Triple H Painting', defaultTradeId: 't2', phone: null, email: null, active: true },
+    ];
+    const built = suggestContext({
+      location: 'Kitchen 109',
+      titles: [
+        { id: 'a', title: 'Touch up paint', tradeId: 't2', uses: 1, approved: true },
+        { id: 'b', title: 'Adjust cabinet door', tradeId: 't1', uses: 5, approved: true },
+        { id: 'c', title: 'Not approved', tradeId: null, uses: 9, approved: false },
+      ],
+      trades,
+      companies,
+      jobCompanies: [{ jobId: 'j', companyId: 'c1', tradeId: 't1' }],
+      marks: [],
+    });
+    expect(built.room).toBe('Kitchen 109');
+    expect(built.titles.map((t) => t.title)).toEqual(['Adjust cabinet door', 'Touch up paint']);
+    expect(built.companies).toEqual([{ name: 'SMS Carpentry', trade: 'Carpentry' }]);
+    const s = { title: 'Adjust cabinet door', description: 'Upper left door rubs.', trade: 'Carpentry', company: 'SMS Carpentry' };
+    const blank = { title: '', description: '', companyId: null, tradeId: null };
+    expect(suggestionPatch(s, blank, trades, companies)).toEqual({ title: 'Adjust cabinet door', description: 'Upper left door rubs.', companyId: 'c1', tradeId: 't1' });
+    // What was typed stays.
+    expect(suggestionPatch(s, { ...blank, title: 'Fix door', companyId: 'c2', tradeId: 't2' }, trades, companies)).toEqual({ description: 'Upper left door rubs.' });
   });
 });
 

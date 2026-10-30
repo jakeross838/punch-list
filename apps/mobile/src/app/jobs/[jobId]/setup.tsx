@@ -1,11 +1,14 @@
-// Job Setup, laid out like Settings: Locations, Companies and Waiting On, one at a time. Locations
-// come from pasting the plan's room list; companies are added with the trade they do on this job.
+// Job Setup, laid out like Settings: the job's name and address at the top, changed in place, then
+// Locations, Companies and Waiting On, one at a time. Locations come from pasting the plan's room
+// list; companies are added with the trade they do on this job. Tap a location or a company to fix
+// it or take it off the job.
 
 import { floorOf, parseRoomList, SHARED_GROUP, type Location } from '@punch/core';
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { colors, layout, type as typeScale } from '@/constants/theme';
+import { CompanySheet, JobFields, LocationSheet, type Pairing } from '@/components/SetupSheets';
 import { useData } from '@/data/api';
 import {
   Button,
@@ -35,15 +38,13 @@ export default function SetupScreen() {
   const job = data.useJobs().find((j) => j.id === jobId);
   const [tab, setTab] = useState<Tab>('rooms');
   const [sheet, setSheet] = useState<'rooms' | 'company' | null>(null);
+  // The one being fixed stays set while its sheet slides away.
+  const [location, setLocation] = useState<{ id: string; open: boolean } | null>(null);
+  const [company, setCompany] = useState<(Pairing & { open: boolean }) | null>(null);
 
   return (
-    <Page
-      title="Job Setup"
-      large
-      subtitle={job ? [job.name, job.address].filter(Boolean).join(', ') : undefined}
-      backLabel={job?.name}
-      background="plain"
-    >
+    <Page title="Job Setup" large backLabel={job?.name} background="plain">
+      {job ? <JobFields key={job.id} job={job} /> : null}
       <View style={styles.tabs}>
         <Segmented<Tab>
           track={colors.trackOnWhite}
@@ -57,11 +58,20 @@ export default function SetupScreen() {
           testID="setup-tabs"
         />
       </View>
-      {tab === 'rooms' ? <RoomsTab jobId={jobId} onPaste={() => setSheet('rooms')} /> : null}
-      {tab === 'companies' ? <CompaniesTab jobId={jobId} onAdd={() => setSheet('company')} /> : null}
+      {tab === 'rooms' ? <RoomsTab jobId={jobId} onPaste={() => setSheet('rooms')} onOpen={(id) => setLocation({ id, open: true })} /> : null}
+      {tab === 'companies' ? (
+        <CompaniesTab jobId={jobId} onAdd={() => setSheet('company')} onOpen={(pairing) => setCompany({ ...pairing, open: true })} />
+      ) : null}
       {tab === 'waiting' ? <WaitingTab jobId={jobId} /> : null}
       <PasteRoomsSheet jobId={jobId} visible={sheet === 'rooms'} onClose={() => setSheet(null)} />
       <AddCompanySheet jobId={jobId} visible={sheet === 'company'} onClose={() => setSheet(null)} />
+      <LocationSheet
+        jobId={jobId}
+        locationId={location?.id ?? null}
+        visible={!!location?.open}
+        onClose={() => setLocation((l) => (l ? { ...l, open: false } : l))}
+      />
+      <CompanySheet jobId={jobId} pairing={company} visible={!!company?.open} onClose={() => setCompany((c) => (c ? { ...c, open: false } : c))} />
     </Page>
   );
 }
@@ -82,9 +92,9 @@ function floorsOf(locations: Location[]): { name: string; rooms: Location[] }[] 
   return out;
 }
 
-function RoomsTab({ jobId, onPaste }: { jobId: string; onPaste: () => void }) {
+function RoomsTab({ jobId, onPaste, onOpen }: { jobId: string; onPaste: () => void; onOpen: (id: string) => void }) {
   const locations = useData().useLocations(jobId);
-  const floors = useMemo(() => floorsOf(locations), [locations]);
+  const floors = useMemo(() => floorsOf(locations.filter((l) => l.active)), [locations]);
   return (
     <>
       <View style={styles.action}>
@@ -106,7 +116,7 @@ function RoomsTab({ jobId, onPaste }: { jobId: string; onPaste: () => void }) {
           }
         >
           {floor.rooms.map((room) => (
-            <ListRow key={room.id} title={room.label} />
+            <ListRow key={room.id} title={room.label} accessory="chevron" onPress={() => onOpen(room.id)} testID={`setup-location-${room.id}`} />
           ))}
         </ListSection>
       ))}
@@ -114,7 +124,7 @@ function RoomsTab({ jobId, onPaste }: { jobId: string; onPaste: () => void }) {
   );
 }
 
-function CompaniesTab({ jobId, onAdd }: { jobId: string; onAdd: () => void }) {
+function CompaniesTab({ jobId, onAdd, onOpen }: { jobId: string; onAdd: () => void; onOpen: (pairing: Pairing) => void }) {
   const data = useData();
   const jobCompanies = data.useJobCompanies(jobId);
   const companies = data.useCompanies();
@@ -122,6 +132,7 @@ function CompaniesTab({ jobId, onAdd }: { jobId: string; onAdd: () => void }) {
   const rows = [...jobCompanies]
     .map((jc) => ({
       key: `${jc.companyId}-${jc.tradeId}`,
+      pairing: { companyId: jc.companyId, tradeId: jc.tradeId },
       name: companies.find((c) => c.id === jc.companyId)?.name ?? 'Unknown company',
       trade: trades.find((t) => t.id === jc.tradeId)?.name ?? 'No trade',
     }))
@@ -147,7 +158,7 @@ function CompaniesTab({ jobId, onAdd }: { jobId: string; onAdd: () => void }) {
           }
         >
           {rows.map((r) => (
-            <ListRow key={r.key} title={r.name} subtitle={r.trade} />
+            <ListRow key={r.key} title={r.name} subtitle={r.trade} accessory="chevron" onPress={() => onOpen(r.pairing)} testID={`setup-company-${r.key}`} />
           ))}
         </ListSection>
       )}
@@ -230,7 +241,8 @@ function PasteRoomsSheet({ jobId, visible, onClose }: { jobId: string; visible: 
     () => parseRoomList(paste, { includeShared: !locations.some((l) => l.kind === 'shared') }),
     [paste, locations],
   );
-  const existing = new Set(locations.map((l) => l.label.toLowerCase()));
+  // A location removed from the job counts as new: pasting it brings it back.
+  const existing = new Set(locations.filter((l) => l.active).map((l) => l.label.toLowerCase()));
   const fresh = parsed.locations.filter((p) => !existing.has(p.label.toLowerCase()));
 
   function close() {
@@ -382,7 +394,7 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
 }
 
 const styles = StyleSheet.create({
-  tabs: { marginHorizontal: layout.inset, marginBottom: 20 },
+  tabs: { marginHorizontal: layout.inset, marginTop: 18, marginBottom: 20 },
   action: { marginHorizontal: layout.inset, gap: 8, marginBottom: 6 },
   actionNote: { paddingHorizontal: 4 },
   sheetContent: { paddingTop: 4, paddingBottom: 48 },

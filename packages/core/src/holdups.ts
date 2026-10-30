@@ -1,7 +1,7 @@
 // Keeping the list current with less work: a holdup is cleared once for every item it holds up,
 // finished work frees what was waiting on it in that room, and the same item is not written twice.
 
-import type { ItemFields as Fields } from './rules';
+import { tidyWaitingOn, type ItemFields as Fields } from './rules';
 import { tidyTitle } from './titles';
 import type { Item } from './types';
 
@@ -30,6 +30,17 @@ export function freedBy(done: Item, items: Item[], companyName: string | undefin
   return items.filter(
     (i) => i.id !== done.id && i.locationId === done.locationId && i.status === 'open' && !i.ready && i.waitingOn.some((w) => same(w, companyName)),
   );
+}
+
+/**
+ * A company renamed: the items that wait on it by its old name, with the new name in its place, so
+ * they still wait on it.
+ */
+export function renamedHoldups(items: Pick<Item, 'id' | 'waitingOn'>[], from: string, to: string): { id: string; waitingOn: string[] }[] {
+  if (same(from, to)) return [];
+  return items
+    .filter((i) => i.waitingOn.some((w) => same(w, from)))
+    .map((i) => ({ id: i.id, waitingOn: tidyWaitingOn(i.waitingOn.map((w) => (same(w, from) ? to : w))) }));
 }
 
 /** Open items already in the room with the same title. */

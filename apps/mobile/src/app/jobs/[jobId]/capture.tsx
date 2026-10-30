@@ -3,7 +3,8 @@
 // and Next comes straight back here for the next one. Skip Photo makes an item without one.
 //
 // Draft is for going around fast: each photo saves as it is taken, as a draft in the location at
-// the top, to mark up and fill in later sitting down (Drafts on the job).
+// the top, and Claude starts filling it in from the photo straight away; sitting down, check each
+// one and tap Next (Drafts on the job).
 
 import { floorOf } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,7 +13,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCanSuggest } from '@/ai/suggest';
 import { leaveOrConfirm } from '@/components/discard';
+import { draftFill } from '@/components/draftFill';
 import { startDraft } from '@/components/ItemForm';
 import { MarkupEditor, type MarkupShot } from '@/components/MarkupEditor';
 import { Viewfinder, type ViewfinderHandle } from '@/components/Viewfinder';
@@ -29,6 +32,11 @@ export default function CaptureScreen() {
   const walk = useCapture();
   const locations = data.useLocations(jobId);
   const formSettings = data.useFormSettings();
+  const canFill = useCanSuggest();
+  const titles = data.useTitles();
+  const trades = data.useTrades();
+  const companies = data.useCompanies();
+  const jobCompanies = data.useJobCompanies(jobId);
   const finder = useRef<ViewfinderHandle>(null);
   const [shot, setShot] = useState<MarkupShot | null>(null);
   const [flash, setFlash] = useState(false);
@@ -77,13 +85,24 @@ export default function CaptureScreen() {
     }
   }
 
-  /** Draft: the photo becomes a draft in the location, to fill in later. */
+  /** Draft: the photo becomes a draft in the location, and Claude starts filling it in. */
   async function saveQuick(photo: { uri: string; width: number; height: number }) {
     if (!walk.roomId) return;
     const { locationId, ...fields } = startDraft(walk.roomId, formSettings);
     const id = await data.createItem({ ...fields, unfinished: true, jobId, locationId, source: 'walk' });
     await data.addPhotos([{ jobId, itemId: id, uri: photo.uri, width: photo.width, height: photo.height, marks: [] }]);
     haptic.success();
+    // Claude starts on it now, so it is filled in by the time the walk is done.
+    if (canFill) {
+      draftFill.add([{ item: { ...fields, id, locationId, unfinished: true }, photo: { uri: photo.uri, marks: [] } }], {
+        data,
+        titles,
+        trades,
+        companies,
+        jobCompanies,
+        locations,
+      });
+    }
     capture.itemSaved('', room?.label ?? null);
   }
 
@@ -219,7 +238,11 @@ export default function CaptureScreen() {
       )}
       {quick ? (
         <Text variant="footnote" color={colors.onDarkQuiet} align="center" style={styles.modeHint}>
-          {walk.saved > 0 ? `${walk.saved} ${walk.saved === 1 ? 'draft' : 'drafts'} saved.` : 'Each photo saves as a draft.'}
+          {walk.saved > 0
+            ? `${walk.saved} ${walk.saved === 1 ? 'draft' : 'drafts'} saved.`
+            : canFill
+              ? 'Each photo saves as a draft. Claude fills it in.'
+              : 'Each photo saves as a draft.'}
         </Text>
       ) : null}
 
