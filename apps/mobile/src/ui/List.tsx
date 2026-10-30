@@ -252,12 +252,14 @@ export function ListTextField({
   );
 }
 
-/** A label on the left and a short text field on the right, like "PO or CO". */
+/** A label on the left and a short text field on the right, like "Order Number". */
 export function ListLabeledField({ label, invalid, ...props }: TextInputProps & { label: string; invalid?: boolean }) {
   const { separator, rowStyle } = useRow(false);
   return (
     <View style={[styles.row, rowStyle, invalid ? styles.invalid : null]}>
-      <Text>{label}</Text>
+      <Text numberOfLines={1} style={styles.label}>
+        {label}
+      </Text>
       <TextInput
         placeholderTextColor={colors.placeholder}
         selectionColor={colors.tint}
@@ -360,7 +362,9 @@ const styles = StyleSheet.create({
   invalid: { backgroundColor: 'rgba(215, 0, 21, 0.05)' },
   input: { ...typeScale.body, color: colors.label, minHeight: layout.rowMinHeight, paddingVertical: 0, outlineWidth: 0 },
   titleInput: { fontSize: 22, lineHeight: 28, fontWeight: '600', letterSpacing: -0.2, minHeight: 54 },
-  labeledInput: { flex: 1, textAlign: 'right' },
+  label: { flexShrink: 0 },
+  // minWidth 0 lets the field shrink beside its label (a web input otherwise keeps its own width).
+  labeledInput: { flex: 1, minWidth: 0, textAlign: 'right' },
   button: { height: 46, borderRadius: 23, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 22 },
   buttonFilled: { backgroundColor: colors.tint },
   buttonTinted: { backgroundColor: colors.surface },

@@ -1,8 +1,8 @@
 // One item, everything about it in one calm place, and every part of it changes right where it is:
-// tap the title to retype it, tick Ready, pick another room, mark up a photo. Each change saves as
-// it is made. Mark Complete is the big button; only Ross Built marks items complete, and removing
-// never deletes. An unfinished item says what it still needs, offers Fill In From Photo, and steps
-// to the next unfinished one, for filling them in sitting down after a walk.
+// tap the title to retype it, tick Ready, pick another location, mark up a photo. Each change saves
+// as it is made. Mark Complete is the big button; only Ross Built marks items complete, and removing
+// never deletes. An item to fill in says what it still needs, offers Fill In From Photo, and steps to
+// the next one, for filling them in sitting down after a walk.
 
 import {
   checkItem,
@@ -136,7 +136,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   // Tall photos are cropped here to keep the item readable; tap for the whole photo.
   const photoHeight = photo ? Math.min(Math.round((photoWidth * photo.height) / (photo.width || 1)), 300) : 0;
 
-  // Filling in after a walk: the unfinished items in number order, and the next one after this.
+  // Filling in after a walk: the items to fill in, in number order, and the next one after this.
   const unfinished = sortItems(items.filter((i) => i.unfinished && i.status === 'open' && i.id !== item.id));
   const nextUnfinished = unfinished.find((i) => (i.number ?? 0) > (item.number ?? 0)) ?? unfinished[0];
 
@@ -204,13 +204,13 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
       : item.status === 'removed'
         ? { icon: 'trash', color: colors.quiet, line: 'Removed from the list', detail: 'It stays in the history.' }
         : item.unfinished
-          ? { icon: 'pencil.tip', color: colors.tint, line: 'Unfinished', detail: `${missingText(live.value)}. It stays off the lists until it has them.` }
+          ? { icon: 'pencil.tip', color: colors.tint, line: 'To Fill In', detail: `${missingText(live.value).replace(/^Needs/, 'Add')} to put it on the lists.` }
           : null;
 
   const stepping = item.unfinished || fromUnfinished;
   const primary = stepping
     ? nextUnfinished
-      ? { label: `Next Unfinished (${unfinished.length} left)`, icon: 'chevron.right' as IconName, onPress: goNext, testID: 'next-unfinished', quiet: false }
+      ? { label: `Next (${unfinished.length} more)`, icon: 'chevron.right' as IconName, onPress: goNext, testID: 'next-unfinished', quiet: false }
       : { label: 'Done', icon: 'checkmark' as IconName, onPress: goNext, testID: 'done-unfinished', quiet: false }
     : item.status === 'open'
       ? { label: 'Mark Complete', icon: 'checkmark' as IconName, onPress: () => void markComplete(), testID: 'mark-complete', quiet: false }
@@ -221,7 +221,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   const today = dayOfDate(new Date());
   const visitText = visit
     ? `${shortDate(visit.start)}${visit.days > 1 ? ` to ${shortDate(visitEnd(visit))}` : ''}, ${visit.confirmed ? 'confirmed' : 'best guess'}${visitEnd(visit) < today && item.status === 'open' ? ', past due' : ''}`
-    : 'Not booked';
+    : 'Not scheduled';
 
   return (
     <Page

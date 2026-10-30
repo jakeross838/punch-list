@@ -1,6 +1,6 @@
 // The job's schedule, built from the list: what is past due first, then each company's visits this
 // week, next week and later (confirmed, or our best guess), then the companies with work that is
-// not booked yet. Tap a company for its plan.
+// not scheduled yet. Tap a company for its plan.
 
 import { dayOfDate, notBooked, pastDue, visitEnd, weekSection, WEEK_LABELS, type Visit, type WeekSection } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -47,12 +47,17 @@ export default function ScheduleScreen() {
   const booked = ORDER.reduce((n, s) => n + (sections.get(s)?.length ?? 0), 0);
 
   return (
-    <Page title="Schedule" large subtitle={`${plural(booked, 'visit')}, ${plural(late.length, 'item')} past due`} backLabel={job?.name}>
+    <Page
+      title="Schedule"
+      large
+      subtitle={[plural(booked, 'visit'), late.length > 0 ? `${plural(late.length, 'item')} past due` : ''].filter(Boolean).join(', ')}
+      backLabel={job?.name}
+    >
       {late.length > 0 ? (
         <ListSection>
           <ListRow
             title="Past Due"
-            subtitle={`The latest is ${plural(late[0]!.days, 'day')} late`}
+            subtitle={late.length === 1 ? `${plural(late[0]!.days, 'day')} past due` : `The oldest is ${plural(late[0]!.days, 'day')} past due`}
             value={String(late.length)}
             valueColor={colors.destructive}
             accessory="chevron"
@@ -69,7 +74,7 @@ export default function ScheduleScreen() {
           <ListSection key={section} header={section === 'past' ? 'Ended With Work Open' : WEEK_LABELS[section]}>
             {rows.map(({ visit, open }) => {
               const end = visitEnd(visit);
-              const when = visit.days > 1 ? `${weekdayDate(visit.start)} to ${shortDate(end)}` : weekdayDate(visit.start);
+              const when = visit.days > 1 ? `${weekdayDate(visit.start)} to ${weekdayDate(end)}` : weekdayDate(visit.start);
               return (
                 <Touchable
                   key={visit.id}
@@ -82,9 +87,13 @@ export default function ScheduleScreen() {
                 >
                   <View style={{ flex: 1 }}>
                     <Text numberOfLines={1}>{name(visit.companyId)}</Text>
-                    <Text variant="subheadline" color={section === 'past' ? colors.destructive : colors.secondary} numberOfLines={2}>
-                      {when}, {plural(visit.days, 'day')}, {plural(open, 'item')}
-                      {section === 'past' ? ' still open' : ''}
+                    <Text variant="subheadline" color={section === 'past' ? colors.destructive : colors.secondary}>
+                      {when}
+                    </Text>
+                    <Text variant="subheadline" color={section === 'past' ? colors.destructive : colors.secondary}>
+                      {[visit.days > 1 ? plural(visit.days, 'day') : '', `${plural(open, 'item')}${section === 'past' ? ' still open' : ''}`]
+                        .filter(Boolean)
+                        .join(', ')}
                     </Text>
                   </View>
                   <VisitStatus confirmed={visit.confirmed} />
@@ -97,14 +106,14 @@ export default function ScheduleScreen() {
       })}
 
       {loose.length > 0 ? (
-        <ListSection header="Not Booked" footer="Work that is not on a visit yet. Tap a company to book it.">
+        <ListSection header="Not Scheduled" footer="Tap a company to schedule its work.">
           {loose.map((r) => (
             <ListRow
               key={r.companyId}
               title={r.company}
               subtitle={[
                 r.readyNow > 0 ? `${r.readyNow} ready now` : '',
-                r.comingFree > 0 && r.nextFree ? `${r.comingFree} more by ${shortDate(r.nextFree)}` : '',
+                r.comingFree > 0 && r.nextFree ? `${r.comingFree} ${r.readyNow > 0 ? 'more' : 'ready'} by ${shortDate(r.nextFree)}` : '',
                 r.needsPrice > 0 ? `${r.needsPrice} ${r.needsPrice === 1 ? 'needs' : 'need'} a price` : '',
               ]
                 .filter(Boolean)
@@ -118,7 +127,7 @@ export default function ScheduleScreen() {
       ) : null}
 
       {booked === 0 && loose.length === 0 && late.length === 0 ? (
-        <EmptyState icon="calendar" title="Nothing to Schedule" message="Open work shows here by company, ready to book." />
+        <EmptyState icon="calendar" title="Nothing to Schedule" message="Open work shows here by company." />
       ) : null}
     </Page>
   );

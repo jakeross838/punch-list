@@ -107,11 +107,13 @@ describe('marks', () => {
 });
 
 describe('the form and added fields', () => {
-  it('turns fields on and off, and keeps title and room on', () => {
-    expect(formShows(DEFAULT_FORM, 'poOrCo')).toBe(false);
-    const s = setFieldShown(setFieldShown(DEFAULT_FORM, 'poOrCo', true), 'readyBy', false);
-    expect(formShows(s, 'poOrCo')).toBe(true);
+  it('turns fields on and off, and starts new items as completion work', () => {
+    expect(formShows(DEFAULT_FORM, 'kind')).toBe(true);
+    expect(DEFAULT_FORM.startKind).toBe('completion');
+    const s = setFieldShown(setFieldShown(DEFAULT_FORM, 'kind', false), 'readyBy', false);
+    expect(formShows(s, 'kind')).toBe(false);
     expect(formShows(s, 'readyBy')).toBe(false);
+    expect(formShows(setFieldShown(s, 'kind', true), 'kind')).toBe(true);
   });
 
   it('tidies added field answers by their kind', () => {
@@ -134,7 +136,7 @@ describe('walking the job', () => {
   ];
 
   it('lists rooms under their floor and the shared areas last', () => {
-    expect(byFloor(rooms, (r) => r).map((f) => [f.floor, f.rows.length])).toEqual([['Level 1', 2], ['Level 2', 1], ['Shared Areas', 1]]);
+    expect(byFloor(rooms, (r) => r).map((f) => [f.floor, f.rows.length])).toEqual([['Level 1', 2], ['Level 2', 1], ['Outside and Whole House', 1]]);
   });
 
   it('knows the room before and after, in floor order', () => {
@@ -158,8 +160,8 @@ describe('walking the job', () => {
     const lookups = { locations: rooms, trades: [], companies: [] };
     const groups = groupItems(items, 'waiting', 'open', lookups, { showCompleted: true });
     expect(groups.map((g) => [g.label, g.items.length])).toEqual([
-      ['Unfinished', 1],
-      ['Ready Now', 2],
+      ['To Fill In', 1],
+      ['Ready', 2],
       ['Needs a Price', 2],
       ['Owner', 3],
       ['Volcano Stone', 3],
@@ -241,19 +243,20 @@ describe('the lists that go to the subs', () => {
     expect(page.title).toBe('SMS Carpentry');
     expect(page.fileName).toBe('Fish Completion List for SMS Carpentry, October 30 2026.pdf');
     expect(page.body).toContain('Fish, 715 North Shore Drive');
-    expect(page.body).toContain('Carpentry. 5 open items: 2 ready now and 3 waiting.');
+    expect(page.body).toContain('Carpentry: 5 open items, 2 ready now and 3 waiting.');
     const sections = [...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1]);
-    expect(sections).toEqual(['Ready Now', 'Waiting', 'Anything Missing']);
-    expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November 2');
-    expect(page.body).toContain('Waiting on Owner, ready by November 9');
+    expect(sections).toEqual(['Ready', 'Waiting', 'Anything Missing']);
+    // The month and day never break apart on the page.
+    expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November\u00a02');
+    expect(page.body).toContain('Waiting on Owner, ready by November\u00a09');
     // The room on every line, never only on the first line of a group.
     const lines = dataRows(page.body);
     expect(lines).toHaveLength(5);
     for (const line of lines) expect(line).toMatch(/Living 107|Kitchen 109/);
     // One line for the days of each batch: the ready items, then each waiting group.
     expect(page.body.match(/<tr class="rb-days">/g)).toHaveLength(3);
-    expect(page.body).toContain('Days for these 2 items');
-    expect(page.body).toContain('Days for this item');
+    expect(page.body).toContain('How many days for these 2 items?');
+    expect(page.body).toContain('How many days for this item?');
     expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(6);
     expect(page.body).not.toContain('<th>Photo</th>');
   });
@@ -284,22 +287,22 @@ describe('the lists that go to the subs', () => {
     expect(list.ready.map((l) => l.item.number)).toEqual([10]);
     expect(list.needsPrice.map((l) => l.item.number)).toEqual([9]);
     const page = companyPrintout(list, settings);
-    expect(page.body).toContain('Added scope, not priced yet');
-    expect(page.body).toContain('Added scope, CO 12');
-    expect(page.body).toContain('2 open items: 1 ready now and 1 that needs a price.');
-    expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Ready Now', 'Needs a Price', 'Anything Missing']);
+    expect(page.body).toContain('Additional, needs a price');
+    expect(page.body).toContain('Additional, CO 12');
+    expect(page.body).toContain('2 open items, 1 ready now and 1 that needs a price.');
+    expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Ready', 'Needs a Price', 'Anything Missing']);
   });
 
   it('prints the whole job floor by floor and room by room, with the trade and company on every line', () => {
     const page = jobPrintout(jobList(items, lookups), settings);
     expect(page.fileName).toBe('Fish Completion List, October 30 2026.pdf');
-    expect(page.body).toContain('6 open items in 2 rooms: 3 ready now and 3 waiting.');
+    expect(page.body).toContain('6 open items in 2 locations: 3 ready now and 3 waiting.');
     expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Level 1']);
     expect([...page.body.matchAll(/<tr class="rb-band"><td colspan="5">(.*?)<\/td>/g)].map((m) => m[1])).toEqual(['Living 107', 'Kitchen 109']);
     const lines = dataRows(page.body);
     expect(lines).toHaveLength(6);
     for (const line of lines) expect(line).toMatch(/<td class="rb-small">(Carpentry|Painting)<\/td><td class="rb-small">(SMS Carpentry|Triple H Painting)<\/td>/);
-    expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November 2');
+    expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November\u00a02');
     expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(2);
     expect(printPage(page)).toMatch(/^<!DOCTYPE html>.*<div class="rb-doc">.*<\/div><\/body><\/html>$/s);
     expect(printPage(page, { pageMargins: false })).toContain('@page{size:letter;margin:0}');

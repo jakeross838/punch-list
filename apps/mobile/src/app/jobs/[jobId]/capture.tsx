@@ -1,10 +1,11 @@
-// The camera, for walking the job. The room the photos go to sits at the top; tap it to change
-// rooms. Take the photo, mark it up or leave it as is, then fill in the item. Save and Next comes
-// straight back here for the next one. No Photo makes an item without one.
+// The camera, for walking the job. The location the photos go to sits at the top; tap it to
+// change it. Fill In Now: take the photo, mark it up or leave it as is, then fill in the item. Save
+// and Next comes straight back here for the next one. Skip Photo makes an item without one.
 //
-// Quick Snap is for going around fast: each photo is saved as it is taken, as an unfinished item
-// in the room at the top, to mark up and fill in later sitting down (Unfinished on the job).
+// Fill In Later is for going around fast: each photo saves as it is taken, as an item in the
+// location at the top, to mark up and fill in later sitting down (To Fill In on the job).
 
+import { floorOf } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -12,7 +13,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { leaveOrConfirm } from '@/components/discard';
-import { blankDraft } from '@/components/ItemForm';
+import { startDraft } from '@/components/ItemForm';
 import { MarkupEditor, type MarkupShot } from '@/components/MarkupEditor';
 import { Viewfinder, type ViewfinderHandle } from '@/components/Viewfinder';
 import { colors } from '@/constants/theme';
@@ -27,6 +28,7 @@ export default function CaptureScreen() {
   const insets = useSafeAreaInsets();
   const walk = useCapture();
   const locations = data.useLocations(jobId);
+  const formSettings = data.useFormSettings();
   const finder = useRef<ViewfinderHandle>(null);
   const [shot, setShot] = useState<MarkupShot | null>(null);
   const [flash, setFlash] = useState(false);
@@ -38,7 +40,7 @@ export default function CaptureScreen() {
       [...locations]
         .filter((l) => l.active)
         .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((l) => ({ value: l.id, label: l.label, group: l.kind === 'shared' ? 'Shared Areas' : (l.floor ?? 'Rooms') })),
+        .map((l) => ({ value: l.id, label: l.label, group: floorOf(l) })),
     [locations],
   );
   const room = locations.find((l) => l.id === walk.roomId);
@@ -58,7 +60,7 @@ export default function CaptureScreen() {
   async function grab(how: 'take' | 'pick') {
     if (busy) return;
     if (quick && !walk.roomId) {
-      // Quick Snap needs to know where the photos go before the first one.
+      // Fill In Later needs to know where the photos go before the first one.
       setPicker(true);
       return;
     }
@@ -75,14 +77,14 @@ export default function CaptureScreen() {
     }
   }
 
-  /** Quick Snap: the photo becomes an unfinished item in the room, ready to fill in later. */
+  /** Fill In Later: the photo becomes an item in the location, to fill in later. */
   async function saveQuick(photo: { uri: string; width: number; height: number }) {
     if (!walk.roomId) return;
-    const { locationId, ...fields } = blankDraft(walk.roomId);
+    const { locationId, ...fields } = startDraft(walk.roomId, formSettings);
     const id = await data.createItem({ ...fields, unfinished: true, jobId, locationId, source: 'walk' });
     await data.addPhotos([{ jobId, itemId: id, uri: photo.uri, width: photo.width, height: photo.height, marks: [] }]);
     haptic.success();
-    capture.itemSaved('photo to finish later', room?.label ?? null);
+    capture.itemSaved('', room?.label ?? null);
   }
 
   function openForm() {
@@ -155,12 +157,12 @@ export default function CaptureScreen() {
           feedback="scale"
           onPress={() => setPicker(true)}
           accessibilityRole="button"
-          accessibilityLabel={room ? `Room, ${room.label}. Change the room` : 'Choose the room'}
+          accessibilityLabel={room ? `Location, ${room.label}. Change the location` : 'Choose the location'}
           testID="camera-room"
           style={styles.room}
         >
           <Text variant="subheadline" weight="600" color={colors.onDark} numberOfLines={1}>
-            {room?.label ?? 'Choose Room'}
+            {room?.label ?? 'Choose Location'}
           </Text>
           <Icon name="chevron.down" size={12} color={colors.onDark} weight="bold" />
         </Touchable>
@@ -182,7 +184,7 @@ export default function CaptureScreen() {
           <Animated.View key={saved.at} entering={FadeIn.duration(220)} exiting={FadeOut.duration(260)} style={styles.saved} pointerEvents="none">
             <Icon name="checkmark" size={16} color={colors.white} weight="bold" />
             <Text variant="subheadline" weight="600" color={colors.white} numberOfLines={1} style={{ flexShrink: 1 }}>
-              Saved {saved.title}
+              {saved.title ? `Saved ${saved.title}` : 'Saved'}
             </Text>
           </Animated.View>
         ) : null}
@@ -192,8 +194,8 @@ export default function CaptureScreen() {
         <View style={styles.modes} accessibilityRole="tablist">
           {(
             [
-              [false, 'Item'],
-              [true, 'Quick Snap'],
+              [false, 'Fill In Now'],
+              [true, 'Fill In Later'],
             ] as const
           ).map(([on, label]) => (
             <Touchable
@@ -217,7 +219,7 @@ export default function CaptureScreen() {
       )}
       {quick ? (
         <Text variant="footnote" color={colors.onDarkQuiet} align="center" style={styles.modeHint}>
-          {walk.saved > 0 ? `${walk.saved} saved on this walk. ` : ''}Each photo saves as it is taken, to fill in later.
+          {walk.saved > 0 ? `${walk.saved} saved to fill in later.` : 'Each photo saves to fill in later.'}
         </Text>
       ) : null}
 
@@ -234,7 +236,7 @@ export default function CaptureScreen() {
           {addingTo || quick ? null : (
             <Touchable feedback="opacity" onPress={openForm} accessibilityRole="button" testID="no-photo" style={styles.noPhoto}>
               <Text variant="subheadline" weight="600" color={colors.onDark}>
-                No Photo
+                Skip Photo
               </Text>
             </Touchable>
           )}
@@ -243,12 +245,12 @@ export default function CaptureScreen() {
 
       <OptionPicker
         visible={picker}
-        title="Room or Area"
+        title="Location"
         options={roomOptions}
         value={walk.roomId}
         onSelect={(id) => capture.setRoom(id)}
         onClose={() => setPicker(false)}
-        footer="New photos and items go to this room until you change it."
+        footer="New photos go here until you change it."
       />
     </View>
   );

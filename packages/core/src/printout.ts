@@ -2,11 +2,12 @@
 // the five house colors, and tables that carry the content (dark slate header rows, light blue
 // group bands, white and cream rows).
 //
-// A company's list: each visit already planned with the items on it, then what is ready now and not
-// booked, then what is waiting, grouped by what it waits on, each group with a line for the days it
-// takes (one duration per batch, as the schedule bars carry), then added scope that needs a price,
-// then blank lines to add anything missing. Items new since the last list say so. The owner's list says what Ross Built needs from
-// them and by when. The whole job list goes room by room with the trade and company on every line.
+// A company's list: each scheduled visit with the items on it, then what is ready now and not
+// scheduled, then what is waiting, grouped by what it waits on, each group with a line for the days
+// it takes (one duration per batch, as the schedule bars carry), then additional work that needs a
+// price, then blank lines to add anything missing. Items new since the last list say so. The owner's
+// list says what Ross Built needs from them and by when. The whole job list goes location by
+// location with the trade and company on every line.
 // Plain HTML, so the phone turns it into a PDF and the preview page shows the very same thing.
 
 import { dayOfDate, daysBetween, isDay } from './dates';
@@ -33,7 +34,7 @@ export interface PrintSettings {
   photo?: (itemId: string) => PrintPhoto | undefined;
   /** Items that were not on the last list sent. */
   isNew?: (itemId: string) => boolean;
-  /** The company's planned visits; their items print under them instead of under Ready Now. */
+  /** The company's scheduled visits; their items print under them instead of under Ready Now. */
   visits?: Visit[];
 }
 
@@ -56,12 +57,12 @@ export function printDate(date: Date): string {
   return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
-/** A day as it reads on a list: "November 2", with the year only when it is not this one. */
+/** A day as it reads on a list: "November 2", with the year only when it is not this one. The month and day never break apart. */
 function dayText(ymd: string, today: Date, weekday = false): string {
   const [y, m, d] = ymd.split('-').map(Number);
   if (!y || !m || !d) return ymd;
   const name = weekday ? `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}, ` : '';
-  return `${name}${MONTHS[m - 1]} ${d}${y === today.getFullYear() ? '' : `, ${y}`}`;
+  return `${name}${MONTHS[m - 1]}\u00a0${d}${y === today.getFullYear() ? '' : `, ${y}`}`;
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -116,13 +117,13 @@ function numberCell(line: ListLine, settings: PrintSettings): string {
   return `${esc(itemNumberLabel(line.item))}${isNew}`;
 }
 
-/** The title, then where exactly, then for added scope whether it is priced. */
+/** The title, then where exactly, then for additional work its order number or that it needs a price. */
 function workCell(line: ListLine): string {
   const { item } = line;
   const parts = [`<div class="rb-work">${esc(item.title)}</div>`];
   if (item.description) parts.push(`<div class="rb-desc">${esc(item.description)}</div>`);
   if (item.kind === 'added_scope') {
-    const note = item.poOrCo ? `Added scope, ${item.poOrCo}` : item.boughtOut ? 'Added scope' : 'Added scope, not priced yet';
+    const note = item.poOrCo ? `Additional, ${item.poOrCo}` : 'Additional, needs a price';
     parts.push(`<div class="rb-note">${esc(note)}</div>`);
   }
   return parts.join('');
@@ -182,7 +183,7 @@ const blanks = (span: number, count: number) =>
 
 /** A line for the sub to write how many days a batch takes: one duration per batch. */
 const daysLine = (span: number, count: number) =>
-  `<tr class="rb-days"><td colspan="${span}">Days for ${count === 1 ? 'this item' : `these ${count} items`}<span class="rb-fill"></span></td></tr>`;
+  `<tr class="rb-days"><td colspan="${span}">How many days for ${count === 1 ? 'this item' : `these ${count} items`}?<span class="rb-fill"></span></td></tr>`;
 
 const photoColumn = (settings: PrintSettings): Column[] =>
   settings.photo ? [{ label: 'Photo', width: `${PHOTO_WIDTH + 0.16}in`, cell: (l: ListLine) => photoCell(settings.photo?.(l.item.id)) }] : [];
@@ -191,13 +192,13 @@ const photoColumn = (settings: PrintSettings): Column[] =>
 export function companyPrintout(list: CompanyList, settings: PrintSettings): Printout {
   const columns: Column[] = [
     { label: 'Item', width: '0.55in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
-    { label: 'Room', width: '1.3in', cell: (l) => esc(l.room) },
+    { label: 'Location', width: '1.3in', cell: (l) => esc(l.room) },
     { label: 'Work', cell: workCell },
     ...photoColumn(settings),
   ];
   const span = columns.length;
 
-  // Items on a planned visit print under the visit, not again under Ready Now or Waiting.
+  // Items on a scheduled visit print under the visit, not again under Ready Now or Waiting.
   const all = [...list.ready, ...list.waiting.flatMap((g) => g.lines), ...list.needsPrice];
   const planned = (settings.visits ?? [])
     .filter((v) => !v.removed)
@@ -213,44 +214,47 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
 
   const waitingCount = waiting.reduce((n, g) => n + g.lines.length, 0);
   const counts = [
-    booked.size > 0 ? `${booked.size} on planned visits` : '',
+    booked.size > 0 ? `${booked.size} scheduled` : '',
     ready.length > 0 ? `${ready.length} ready now` : '',
     waitingCount > 0 ? `${waitingCount} waiting` : '',
     needsPrice.length > 0 ? `${needsPrice.length} ${needsPrice.length === 1 ? 'that needs' : 'that need'} a price` : '',
   ].filter(Boolean);
   const summary =
     list.open === 0
-      ? 'Nothing open right now.'
+      ? 'nothing open right now.'
       : counts.length === 1 && ready.length === list.open
         ? `${plural(list.open, 'open item')}, all ready now.`
-        : `${plural(list.open, 'open item')}: ${andList(counts)}.`;
-  const trades = list.trades.length > 0 ? `${waitingOnText(list.trades)}. ` : '';
-  const parts = [header(settings, 'Completion List', list.company, `${trades}${summary}`)];
+        : `${plural(list.open, 'open item')}, ${andList(counts)}.`;
+  const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+  const trades = list.trades.length > 0 ? `${waitingOnText(list.trades)}: ${summary}` : sentence(summary);
+  const parts = [header(settings, 'Completion List', list.company, trades)];
 
   if (planned.length > 0) {
-    parts.push('<h2 class="rb-section">Planned Visits</h2>');
-    parts.push('<p class="rb-section-note">Tell us if a start or the days need to change.</p>');
+    parts.push('<h2 class="rb-section">Scheduled Visits</h2>');
+    parts.push('<p class="rb-section-note">Tell us if these dates do not work for you.</p>');
     const body = planned
       .map(({ visit, lines }) => {
         const end = visitEnd(visit);
         const when = end === visit.start ? dayText(visit.start, settings.date, true) : `${dayText(visit.start, settings.date, true)} to ${dayText(end, settings.date, true)}`;
-        return band(span, `${when}: ${plural(visit.days, 'day')}, ${visit.confirmed ? 'confirmed' : 'our best guess'}`) + rows(columns, lines);
+        return band(span, `${when}, ${plural(visit.days, 'day')}, ${visit.confirmed ? 'confirmed' : 'our best guess'}`) + rows(columns, lines);
       })
       .join('');
     parts.push(table(columns, body));
   }
 
-  parts.push(`<h2 class="rb-section">${planned.length > 0 ? 'Ready Now, Not Planned Yet' : 'Ready Now'}</h2>`);
-  if (ready.length > 0) {
-    parts.push('<p class="rb-section-note">These can be done any time.</p>');
-    parts.push(table(columns, rows(columns, ready) + daysLine(span, ready.length)));
-  } else {
-    parts.push(`<p class="rb-section-note">${planned.length > 0 ? 'Everything ready is on a planned visit.' : 'Nothing is ready yet.'}</p>`);
+  // With visits scheduled and nothing else ready, the section is left off.
+  if (ready.length > 0 || planned.length === 0) {
+    parts.push(`<h2 class="rb-section">${planned.length > 0 ? 'Ready, Not Scheduled Yet' : 'Ready'}</h2>`);
+    if (ready.length > 0) {
+      parts.push('<p class="rb-section-note">These can be done any time.</p>');
+      parts.push(table(columns, rows(columns, ready) + daysLine(span, ready.length)));
+    } else {
+      parts.push('<p class="rb-section-note">Nothing is ready yet.</p>');
+    }
   }
 
   if (waiting.length > 0) {
     parts.push('<h2 class="rb-section">Waiting</h2>');
-    parts.push('<p class="rb-section-note">Grouped by what each is waiting on, soonest first.</p>');
     const body = waiting
       .map(
         (g) =>
@@ -264,7 +268,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
 
   if (needsPrice.length > 0) {
     parts.push('<h2 class="rb-section">Needs a Price</h2>');
-    parts.push('<p class="rb-section-note">Added scope we need a price for before it is scheduled.</p>');
+    parts.push('<p class="rb-section-note">Additional work we need a price for before it is scheduled.</p>');
     parts.push(table(columns, rows(columns, needsPrice)));
   }
 
@@ -285,7 +289,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
 export function partyPrintout(party: string, lines: ListLine[], settings: PrintSettings): Printout {
   const columns: Column[] = [
     { label: 'Item', width: '0.55in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
-    { label: 'Room', width: '1.3in', cell: (l) => esc(l.room) },
+    { label: 'Location', width: '1.3in', cell: (l) => esc(l.room) },
     { label: 'Work', cell: workCell },
     { label: 'Needed By', width: '1.05in', cell: (l) => esc(isDay(l.item.readyBy) ? dayText(l.item.readyBy, settings.date) : 'When you can') },
     ...photoColumn(settings),
@@ -293,11 +297,11 @@ export function partyPrintout(party: string, lines: ListLine[], settings: PrintS
   const summary =
     lines.length === 0
       ? 'Nothing is waiting on you right now.'
-      : `${plural(lines.length, 'item')} ${lines.length === 1 ? 'is' : 'are'} ready to move as soon as we have your answer.`;
+      : `${lines.length === 1 ? 'This item is' : `These ${lines.length} items are`} waiting on your answer.`;
   const parts = [header(settings, 'Decisions Needed', party, summary)];
   if (lines.length > 0) {
     parts.push('<h2 class="rb-section">Decisions Needed</h2>');
-    parts.push('<p class="rb-section-note">The date is when an answer keeps the work on schedule.</p>');
+    parts.push('<p class="rb-section-note">An answer by the date shown keeps the work on schedule.</p>');
     parts.push(table(columns, rows(columns, lines)));
   }
   return {
@@ -308,25 +312,25 @@ export function partyPrintout(party: string, lines: ListLine[], settings: PrintS
   };
 }
 
-/** The whole job, for Ross Built: floor by floor, room by room, the trade and company on every line. */
+/** The whole job, for Ross Built: level by level, location by location, the trade and company on every line. */
 export function jobPrintout(lines: ListLine[], settings: PrintSettings): Printout {
   const columns: Column[] = [
     { label: 'Item', width: '0.5in', cell: (l) => esc(itemNumberLabel(l.item)), className: 'rb-num' },
     { label: 'Work', cell: workCell },
-    { label: 'Trade', width: '1.05in', cell: (l) => esc(l.trade), className: 'rb-small' },
+    { label: 'Trade', width: '1.2in', cell: (l) => esc(l.trade), className: 'rb-small' },
     { label: 'Company', width: '1.1in', cell: (l) => esc(l.company), className: 'rb-small' },
-    { label: 'Ready', width: '1.3in', cell: (l) => readyCell(l, settings.date), className: 'rb-small' },
+    { label: 'Ready', width: '1.6in', cell: (l) => readyCell(l, settings.date), className: 'rb-small' },
     ...photoColumn(settings),
   ];
   const ready = lines.filter((l) => l.item.ready).length;
-  const rooms = new Set(lines.map((l) => l.item.locationId)).size;
+  const places = new Set(lines.map((l) => l.item.locationId)).size;
   const summary =
     lines.length === 0
       ? 'Nothing open right now.'
-      : `${plural(lines.length, 'open item')} in ${plural(rooms, 'room')}: ${ready} ready now and ${lines.length - ready} waiting.`;
+      : `${plural(lines.length, 'open item')} in ${plural(places, 'location')}: ${ready} ready now and ${lines.length - ready} waiting.`;
   const parts = [header(settings, 'Completion List', 'Whole Job', summary)];
 
-  // Floors in the order they come, each with its rooms in order and a blank line in each room.
+  // Levels in the order they come, each with its locations in order and a blank line in each.
   const floors: { floor: string; rooms: { room: string; lines: ListLine[] }[] }[] = [];
   for (const line of lines) {
     let floor = floors.find((f) => f.floor === line.floor);

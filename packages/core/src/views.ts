@@ -1,7 +1,7 @@
-// How the lists are cut: by room (floor order), by trade, by company or by what items wait on, with
-// the filters from the plan. Removed items never show. Every room shows, even an empty one, so items
+// How the lists are cut: by location (floor order), by trade, by company or by what items wait on, with
+// the filters from the plan. Removed items never show. Every location shows, even an empty one, so items
 // can be added to it. Show Completed (as in Reminders) adds completed items that fit the filter, after
-// the open ones. By Waiting On shows unfinished items, what is ready now and what needs a price,
+// the open ones. By Waiting On shows the items to fill in, what is ready now and what needs a price,
 // then each thing holding work up with the items it holds up (an item waiting on two things is
 // under both): the late ones first, then the biggest. That is the order to clear them in.
 
@@ -26,7 +26,7 @@ export interface ViewSettings {
 
 export const DEFAULT_VIEW: ViewSettings = { groupBy: 'room', filter: 'open', showCompleted: false, tradeId: null, companyId: null };
 
-export const GROUP_LABELS: Record<GroupBy, string> = { room: 'Room', trade: 'Trade', company: 'Company', waiting: 'Waiting On' };
+export const GROUP_LABELS: Record<GroupBy, string> = { room: 'Location', trade: 'Trade', company: 'Company', waiting: 'Waiting On' };
 
 /** The group key for one thing an item waits on. */
 export const waitingKey = (label: string) => `waiting:${label.trim().toLowerCase()}`;
@@ -34,8 +34,8 @@ export const waitingKey = (label: string) => `waiting:${label.trim().toLowerCase
 export const FILTER_LABELS: Record<ItemFilter, string> = {
   open: 'Open',
   ready: 'Ready',
-  not_ready: 'Not ready',
-  added_scope: 'Added scope',
+  not_ready: 'Not Ready',
+  added_scope: 'Additional',
   all: 'All',
 };
 
@@ -148,8 +148,8 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
       })
       .sort((a, b) => b.late - a.late || b.n - a.n || a.label.localeCompare(b.label));
     order = [
-      { key: 'unfinished', label: 'Unfinished' },
-      { key: 'ready', label: 'Ready Now' },
+      { key: 'unfinished', label: 'To Fill In' },
+      { key: 'ready', label: 'Ready' },
       { key: 'price', label: 'Needs a Price' },
       ...holding.map(({ key, label }) => ({ key, label })),
       { key: 'complete', label: 'Completed' },
@@ -191,9 +191,14 @@ function arrange(items: Item[], filter: ItemFilter, options: ViewOptions): Item[
   return [...sorted.filter((i) => i.status !== 'complete'), ...sorted.filter((i) => i.status === 'complete')];
 }
 
-/** What a room is listed under on the job: its floor, Shared Areas, or Rooms when it has no floor. */
+/** The group for the elevations, roof, pool, driveway, site and Whole House on every job. */
+export const SHARED_GROUP = 'Outside and Whole House';
+/** The group for locations pasted without a level. */
+export const NO_FLOOR = 'Locations';
+
+/** What a location is listed under on the job: its level, Outside and Whole House, or Locations when it has no level. */
 export function floorOf(location: Pick<Location, 'kind' | 'floor'>): string {
-  return location.kind === 'shared' ? 'Shared Areas' : (location.floor ?? 'Rooms');
+  return location.kind === 'shared' ? SHARED_GROUP : (location.floor ?? NO_FLOOR);
 }
 
 /** Rows gathered under their floor, floors in the order they first appear. */
@@ -201,7 +206,7 @@ export function byFloor<T>(rows: T[], locationOf: (row: T) => Pick<Location, 'ki
   const out = new Map<string, T[]>();
   for (const row of rows) {
     const loc = locationOf(row);
-    const floor = loc ? floorOf(loc) : 'Rooms';
+    const floor = loc ? floorOf(loc) : NO_FLOOR;
     const list = out.get(floor) ?? [];
     list.push(row);
     out.set(floor, list);
@@ -209,7 +214,7 @@ export function byFloor<T>(rows: T[], locationOf: (row: T) => Pick<Location, 'ki
   return [...out].map(([floor, list]) => ({ floor, rows: list }));
 }
 
-/** The rooms around one, in floor order: for Previous and Next while walking. */
+/** The locations around one, in floor order: for Previous and Next while walking. */
 export function neighborRooms(locations: Location[], id: string): { previous: Location | null; next: Location | null } {
   const rooms = [...locations].filter((l) => l.active || l.id === id).sort((a, b) => a.sortOrder - b.sortOrder);
   const i = rooms.findIndex((l) => l.id === id);

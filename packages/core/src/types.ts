@@ -2,7 +2,8 @@
 // names in snake_case. Dates are YYYY-MM-DD strings, times are ISO strings.
 
 export type LocationKind = 'room' | 'shared';
-export type ItemKind = 'deficiency' | 'added_scope';
+/** Deficiency: wrong or damaged, to fix. Completion (shown as Incomplete): scope completion, their work not done yet. Added scope (shown as Additional): extra work that needs a price. */
+export type ItemKind = 'deficiency' | 'completion' | 'added_scope';
 export type ItemStatus = 'open' | 'complete' | 'removed';
 export type ItemSource = 'walk' | 'typed' | 'import';
 
@@ -70,7 +71,9 @@ export interface Item {
   /** Everything it is waiting on, one or several: a company on the job, Ross Built, the owner, the design team. */
   waitingOn: string[];
   readyBy: string | null;
+  /** Follows the type and the order number: additional work is Bought Out once it has one. Kept for Buildertrend. */
   boughtOut: boolean;
+  /** The purchase order or change order number for additional work. */
   poOrCo: string | null;
   status: ItemStatus;
   completedBy: string | null;
@@ -184,7 +187,7 @@ export interface CustomField {
 export type ExtraValue = string | boolean | null;
 
 /** The fields Item Form setup can turn off. Title and room are always on the form. */
-export type FormField = 'description' | 'company' | 'trade' | 'kind' | 'ready' | 'waitingOn' | 'readyBy' | 'boughtOut' | 'poOrCo';
+export type FormField = 'description' | 'company' | 'trade' | 'kind' | 'ready' | 'waitingOn' | 'readyBy';
 
 export interface FormSettings {
   hidden: FormField[];

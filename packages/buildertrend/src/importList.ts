@@ -7,6 +7,8 @@
 
 import {
   DEFAULT_WAITING_ON_EXTRAS,
+  isPriced,
+  KIND_LABELS,
   parseRoomList,
   SHARED_AREAS,
   tidyTitle,
@@ -156,6 +158,7 @@ interface Tally {
   readyByNotDate: number;
   addedScope: number;
   addedScopeBoughtOutNoPo: number;
+  completion: number;
   completeNoDate: number;
 }
 
@@ -308,11 +311,12 @@ function toItem(p: Placement, known: string[], task: BtTask | undefined, tally: 
     if (readyByText !== null && readyBy === null) tally.readyByNotDate += 1;
   }
 
-  const kind: ItemKind = isAddedScope(poOrCo, title, item.description) ? 'added_scope' : 'deficiency';
+  // Buildertrend does not say which work is a deficiency, so work in scope comes in as Incomplete.
+  const kind: ItemKind = isAddedScope(poOrCo, title, item.description) ? 'added_scope' : 'completion';
   if (kind === 'added_scope') {
     tally.addedScope += 1;
     if (boughtOut && poOrCo === null) tally.addedScopeBoughtOutNoPo += 1;
-  }
+  } else tally.completion += 1;
   const completedAt = complete ? completedAtOf(task) : null;
   if (complete && completedAt === null) tally.completeNoDate += 1;
 
@@ -326,7 +330,8 @@ function toItem(p: Placement, known: string[], task: BtTask | undefined, tally: 
     ready,
     waitingOn,
     readyBy,
-    boughtOut,
+    // As in the app, Bought Out follows the type and the order number.
+    boughtOut: isPriced({ kind, poOrCo }),
     poOrCo,
     kind,
     status: complete ? 'complete' : 'open',
@@ -561,6 +566,7 @@ function newTally(): Tally {
     readyByNotDate: 0,
     addedScope: 0,
     addedScopeBoughtOutNoPo: 0,
+    completion: 0,
     completeNoDate: 0,
   };
 }
@@ -663,11 +669,12 @@ function problemSentences(t: Tally): string[] {
   );
 
   // Kind
-  say(t.addedScope, () => `${count(t.addedScope, 'item')} ${one(t.addedScope) ? 'was' : 'were'} set to added scope because the PO / CO field holds a change order number or the item says added scope; check that ${one(t.addedScope) ? 'it is' : 'these are'} right.`);
+  say(t.addedScope, () => `${count(t.addedScope, 'item')} ${one(t.addedScope) ? 'was' : 'were'} set to ${KIND_LABELS.added_scope} because the PO / CO field holds a change order number or the item says added scope; check that ${one(t.addedScope) ? 'it is' : 'these are'} right.`);
   say(t.addedScopeBoughtOutNoPo, () => {
     const n = t.addedScopeBoughtOutNoPo;
-    return `${count(n, 'added scope item')} ${one(n) ? 'is' : 'are'} Bought Out with no PO or CO; the app saves added scope as Bought Out only once it has a PO or CO.`;
+    return `${count(n, 'item')} marked ${KIND_LABELS.added_scope} ${one(n) ? 'is' : 'are'} Bought Out in Buildertrend with no order number; the app shows ${one(n) ? 'it' : 'them'} under Needs a Price until ${one(n) ? 'it has' : 'they have'} one.`;
   });
+  say(t.completion, () => `${count(t.completion, 'item')} came in as ${KIND_LABELS.completion}, since Buildertrend does not say which are deficiencies; change any that are.`);
 
   // Completion
   say(t.completeNoDate, () => {

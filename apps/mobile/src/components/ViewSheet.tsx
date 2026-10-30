@@ -1,5 +1,5 @@
 // View and Filter: how the job's list is grouped and what it shows. Changes apply as you make
-// them; Save as My Default makes every job open this way.
+// them; Open Every Job This Way saves it as the person's default.
 
 import { DEFAULT_VIEW, GROUP_LABELS, type Company, type GroupBy, type ShowFilter, type Trade, type ViewSettings } from '@punch/core';
 import { useState } from 'react';
@@ -8,9 +8,9 @@ import { colors, layout } from '@/constants/theme';
 import { sameView } from '@/data/view';
 import { haptic, ListRow, ListSection, ListSwitchRow, OptionPicker, Segmented, Sheet, Text, type Option } from '@/ui';
 
-export const SHOW_NAMES: Record<ShowFilter, string> = { open: 'All Open', ready: 'Ready', not_ready: 'Not Ready', added_scope: 'Added Scope' };
+export const SHOW_NAMES: Record<ShowFilter, string> = { open: 'All Open', ready: 'Ready', not_ready: 'Not Ready', added_scope: 'Additional' };
 /** How a count reads under the job's name: "14 open", "8 ready". */
-export const SHOW_WORDS: Record<ShowFilter, string> = { open: 'open', ready: 'ready', not_ready: 'not ready', added_scope: 'added scope' };
+export const SHOW_WORDS: Record<ShowFilter, string> = { open: 'open', ready: 'ready', not_ready: 'not ready', added_scope: 'additional' };
 
 const ALL = '__all__';
 
@@ -56,6 +56,7 @@ export function ViewSheet({
         </Text>
         <View style={styles.segment}>
           <Segmented<GroupBy>
+            // Four across: Waiting On is cut to Waiting to fit.
             options={(['room', 'trade', 'company', 'waiting'] as GroupBy[]).map((g) => [g, g === 'waiting' ? 'Waiting' : GROUP_LABELS[g]])}
             value={view.groupBy}
             onChange={(groupBy) => set({ groupBy })}
@@ -93,9 +94,9 @@ export function ViewSheet({
             testID="filter-company"
           />
         </ListSection>
-        <ListSection footer={isDefault ? 'Every job opens this way.' : 'Makes every job open this way.'}>
+        <ListSection>
           <ListRow
-            title={isDefault ? 'Saved as My Default' : 'Save as My Default'}
+            title={isDefault ? 'Every Job Opens This Way' : 'Open Every Job This Way'}
             tone={isDefault ? 'default' : 'tint'}
             accessory={isDefault ? 'checkmark' : 'none'}
             disabled={isDefault}

@@ -39,22 +39,19 @@ export function checkItem(item: ItemFields): Problem[] {
   const title = item.title.trim();
   if (title === '' && !item.unfinished) problems.push({ field: 'title', message: 'Give it a title' });
   if (title.length > TITLE_MAX) problems.push({ field: 'title', message: `Keep the title under ${TITLE_MAX} characters` });
-  if (!item.companyId && !item.unfinished) problems.push({ field: 'companyId', message: 'Pick the company doing the work' });
+  if (!item.companyId && !item.unfinished) problems.push({ field: 'companyId', message: 'Pick the company' });
   if (!item.tradeId && !item.unfinished) problems.push({ field: 'tradeId', message: 'Pick the trade' });
   if (!item.ready && item.waitingOn.every((w) => w.trim() === '')) {
-    problems.push({ field: 'waitingOn', message: 'Not ready: say what it is waiting on' });
+    problems.push({ field: 'waitingOn', message: 'Pick what it is waiting on' });
   }
   if (item.readyBy !== null && !/^\d{4}-\d{2}-\d{2}$/.test(item.readyBy)) {
     problems.push({ field: 'readyBy', message: 'Ready By must be a date' });
-  }
-  if (item.kind === 'added_scope' && item.boughtOut && !item.poOrCo?.trim()) {
-    problems.push({ field: 'poOrCo', message: 'Added scope is Bought Out only once it has a PO or CO' });
   }
   if (item.status === 'complete' && (!item.completedBy || !item.completedAt)) {
     problems.push({ field: 'status', message: 'A complete item records who completed it and when' });
   }
   if (item.status === 'complete' && item.unfinished) {
-    problems.push({ field: 'status', message: 'Finish the item before it is completed' });
+    problems.push({ field: 'status', message: 'Fill it in before you mark it complete' });
   }
   return problems;
 }
@@ -68,21 +65,24 @@ export function missingDetails(item: Pick<ItemFields, 'title' | 'companyId' | 't
   return out;
 }
 
-/** "Needs a title and a company." */
+/** "Needs a title, company and trade." */
 export function missingText(item: Pick<ItemFields, 'title' | 'companyId' | 'tradeId'>): string {
-  const words = missingDetails(item).map((m) => `a ${m}`);
+  const words = missingDetails(item);
   if (words.length === 0) return '';
   const list = words.length === 1 ? words[0]! : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
-  return `Needs ${list}`;
+  return `Needs a ${list}`;
 }
 
-/** Deficiencies are the company's own work; added scope is ready to schedule only once it is priced. */
-export function isPriced(item: Pick<ItemFields, 'kind' | 'boughtOut'>): boolean {
-  return item.kind === 'deficiency' || item.boughtOut;
+/**
+ * Deficiencies and completion work are in the company's scope already; additional work is priced,
+ * and ready to schedule, once it has its purchase order or change order number.
+ */
+export function isPriced(item: Pick<ItemFields, 'kind' | 'poOrCo'>): boolean {
+  return item.kind !== 'added_scope' || Boolean(item.poOrCo?.trim());
 }
 
 /** Open, finished, ready and priced: work a company can be booked for now. */
-export function readyToSchedule(item: Pick<Item, 'status' | 'unfinished' | 'ready' | 'kind' | 'boughtOut'>): boolean {
+export function readyToSchedule(item: Pick<Item, 'status' | 'unfinished' | 'ready' | 'kind' | 'poOrCo'>): boolean {
   return item.status === 'open' && !item.unfinished && item.ready && isPriced(item);
 }
 
@@ -117,18 +117,16 @@ export function tidyItem<T extends ItemFields>(item: T): T {
     out.waitingOn = [];
     out.readyBy = null;
   }
+  // Bought Out is not asked for: it follows the type and the order number.
+  out.boughtOut = isPriced(out);
   // An unfinished item is finished the moment it has everything a finished item needs.
   if (out.unfinished && checkItem({ ...out, unfinished: false }).length === 0) out.unfinished = false;
   return out;
 }
 
-/**
- * What choosing Deficiency or Added Scope pre-fills. A deficiency is the company's own work, so it
- * is Bought Out with no PO or CO. Added scope stays not Bought Out until a PO or CO is entered.
- */
+/** What choosing a type sets: Bought Out follows the type and any order number already there. */
 export function kindDefaults(kind: ItemKind, current: Pick<Item, 'poOrCo'>): Pick<Item, 'kind' | 'boughtOut' | 'poOrCo'> {
-  if (kind === 'deficiency') return { kind, boughtOut: true, poOrCo: null };
-  return { kind, boughtOut: Boolean(current.poOrCo?.trim()), poOrCo: current.poOrCo };
+  return { kind, boughtOut: isPriced({ kind, poOrCo: current.poOrCo }), poOrCo: current.poOrCo };
 }
 
 export class RuleError extends Error {
@@ -140,14 +138,14 @@ export class RuleError extends Error {
 
 /** Only an active Ross Built person marks an item complete. */
 export function complete<T extends ItemFields>(item: T, by: Person, at: Date = new Date()): T {
-  if (!by.active) throw new RuleError('Only an active Ross Built user can mark an item complete');
-  if (item.status === 'removed') throw new RuleError('A removed item cannot be completed; restore it first');
-  if (item.unfinished) throw new RuleError('Finish the item before it is completed');
+  if (!by.active) throw new RuleError('Only Ross Built can mark items complete');
+  if (item.status === 'removed') throw new RuleError('Restore it to the list first');
+  if (item.unfinished) throw new RuleError('Fill it in before you mark it complete');
   return { ...item, status: 'complete', completedBy: by.id, completedAt: at.toISOString() };
 }
 
 export function reopen<T extends ItemFields>(item: T): T {
-  if (item.status === 'removed') throw new RuleError('A removed item is restored, not reopened');
+  if (item.status === 'removed') throw new RuleError('Restore it to the list instead');
   return { ...item, status: 'open', completedBy: null, completedAt: null };
 }
 

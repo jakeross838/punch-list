@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkItem,
   complete,
+  isPriced,
   kindDefaults,
   parseRoomList,
   remove,
@@ -64,7 +65,7 @@ describe('room list from the plans', () => {
   it('flags a room listed twice and a line with no name', () => {
     const { locations, problems } = parseRoomList('Kitchen 109\nKitchen 109\n117', { includeShared: false });
     expect(locations).toHaveLength(1);
-    expect(problems).toEqual(['Line 2: "Kitchen 109" is already on line 1', 'Line 3: "117" has no room name']);
+    expect(problems).toEqual(['Line 2: "Kitchen 109" is already on line 1', 'Line 3: "117" has no name']);
   });
 
   it('does not add a shared area twice when the plans already list it', () => {
@@ -87,9 +88,17 @@ describe('item rules', () => {
     expect(checkItem(item({ ready: false, waitingOn: ['Volcano Stone'] }))).toEqual([]);
   });
 
-  it('keeps added scope from being Bought Out without a PO or CO', () => {
-    expect(checkItem(item({ kind: 'added_scope', boughtOut: true })).map((p) => p.field)).toEqual(['poOrCo']);
-    expect(checkItem(item({ kind: 'added_scope', boughtOut: true, poOrCo: 'PO-0090' }))).toEqual([]);
+  it('counts additional work as priced only once it has an order number', () => {
+    expect(isPriced(item({ kind: 'deficiency' }))).toBe(true);
+    expect(isPriced(item({ kind: 'completion' }))).toBe(true);
+    expect(isPriced(item({ kind: 'added_scope', poOrCo: null }))).toBe(false);
+    expect(isPriced(item({ kind: 'added_scope', poOrCo: '  ' }))).toBe(false);
+    expect(isPriced(item({ kind: 'added_scope', poOrCo: 'CO-14' }))).toBe(true);
+    // Bought Out is not asked for: it follows the type and the number when the item is tidied.
+    expect(tidyItem(item({ kind: 'added_scope', boughtOut: true, poOrCo: null })).boughtOut).toBe(false);
+    expect(tidyItem(item({ kind: 'added_scope', boughtOut: false, poOrCo: 'CO-14' })).boughtOut).toBe(true);
+    expect(tidyItem(item({ kind: 'completion', boughtOut: false })).boughtOut).toBe(true);
+    expect(checkItem(item({ kind: 'added_scope', boughtOut: true }))).toEqual([]);
   });
 
   it('drops Waiting On and Ready By once an item is ready', () => {
@@ -97,8 +106,9 @@ describe('item rules', () => {
     expect(tidied).toMatchObject({ waitingOn: [], readyBy: null, title: 'Install toilet' });
   });
 
-  it('pre-fills from Deficiency or Added Scope', () => {
-    expect(kindDefaults('deficiency', { poOrCo: 'CO-2' })).toEqual({ kind: 'deficiency', boughtOut: true, poOrCo: null });
+  it('sets Bought Out from the type picked', () => {
+    expect(kindDefaults('deficiency', { poOrCo: null })).toEqual({ kind: 'deficiency', boughtOut: true, poOrCo: null });
+    expect(kindDefaults('completion', { poOrCo: null })).toEqual({ kind: 'completion', boughtOut: true, poOrCo: null });
     expect(kindDefaults('added_scope', { poOrCo: null })).toEqual({ kind: 'added_scope', boughtOut: false, poOrCo: null });
     expect(kindDefaults('added_scope', { poOrCo: 'CO-2' })).toEqual({ kind: 'added_scope', boughtOut: true, poOrCo: 'CO-2' });
   });

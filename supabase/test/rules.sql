@@ -46,11 +46,23 @@ begin
   exception when check_violation then null;
   end;
 
-  -- Added scope is not Bought Out without a PO or CO.
+  -- Three types. Bought Out follows the type and the order number, whatever the client sends.
+  declare
+    x uuid;
   begin
     insert into public.items (job_id, location_id, title, trade_id, company_id, kind, ready, bought_out)
-      values (j, loc, 'Add outlet', t, c, 'added_scope', true, true);
-    raise exception 'FAIL: added scope was Bought Out with no PO or CO';
+      values (j, loc, 'Add outlet', t, c, 'added_scope', true, true) returning id into x;
+    if (select bought_out from public.items where id = x) then raise exception 'FAIL: additional work with no order number was Bought Out'; end if;
+    update public.items set po_or_co = 'CO-14' where id = x;
+    if not (select bought_out from public.items where id = x) then raise exception 'FAIL: additional work with an order number was not Bought Out'; end if;
+    update public.items set kind = 'completion', po_or_co = null, bought_out = false where id = x;
+    if not (select bought_out from public.items where id = x) then raise exception 'FAIL: completion work was not Bought Out'; end if;
+    update public.items set status = 'removed' where id = x;
+  end;
+  begin
+    insert into public.items (job_id, location_id, title, trade_id, company_id, kind, ready)
+      values (j, loc, 'Add outlet', t, c, 'extra', true);
+    raise exception 'FAIL: an unknown type was accepted';
   exception when check_violation then null;
   end;
 

@@ -135,13 +135,13 @@ async function main(): Promise<void> {
       await settle();
       await shot('01-jobs');
     });
-    await step('the job opens to its levels and rooms', async () => {
+    await step('the job opens to its levels and locations', async () => {
       await app.getByTestId('job-job-preview').click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
       await shot('02-job-rooms');
     });
-    await step('a room shows its items, calm', async () => {
+    await step('a location shows its items, calm', async () => {
       await app.getByTestId('group-room-1').click();
       await app.getByTestId('item-item-16').waitFor();
       await settle();
@@ -170,7 +170,7 @@ async function main(): Promise<void> {
       await app.getByRole('button', { name: 'Undo' }).click();
       await app.getByTestId('item-item-2').waitFor();
     });
-    await step('walk to the next room and back', async () => {
+    await step('walk to the next location and back', async () => {
       await app.getByTestId('room-next').click();
       await app.getByText('Guest Bedroom 114').first().waitFor();
       await settle();
@@ -201,6 +201,14 @@ async function main(): Promise<void> {
       await app.getByTestId('field-description').blur();
       await settle(300);
       await shot('09b-item-edited');
+      // The type: Additional brings up the order number; back to Incomplete.
+      await app.getByRole('tab', { name: 'Additional' }).click();
+      await app.getByTestId('field-po').waitFor();
+      await app.getByText('Extra work. Add the purchase order or change order number once it is priced.').waitFor();
+      await settle(300);
+      await shot('09d-additional');
+      await app.getByRole('tab', { name: 'Incomplete' }).click();
+      await app.getByTestId('field-po').waitFor({ state: 'detached' });
       // Leave and come back: the changes were saved as they were made.
       await app.getByTestId('back').last().click();
       await app.getByTestId('item-item-16').waitFor();
@@ -219,7 +227,7 @@ async function main(): Promise<void> {
       await app.getByTestId('item-item-16').waitFor();
       await settle();
     });
-    await step('the camera opens on the room', async () => {
+    await step('the camera opens on the location', async () => {
       await app.getByTestId('camera').last().click();
       await app.getByTestId('shutter').waitFor();
       await app.getByText('Kitchen 109').last().waitFor();
@@ -312,7 +320,7 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('Quick Snap saves each photo to finish later', async () => {
+    await step('Fill In Later saves each photo on its own', async () => {
       await app.getByTestId('group-room-4').click();
       await settle();
       await app.getByTestId('camera').last().click();
@@ -323,7 +331,7 @@ async function main(): Promise<void> {
         const chooser = tab.waitForEvent('filechooser');
         await app.getByTestId('shutter').click();
         await (await chooser).setFiles(photoPath);
-        await app.getByText('Saved photo to finish later').first().waitFor();
+        await app.getByText(`${i + 1} saved to fill in later.`).waitFor();
         await settle(500);
       }
       await shot('21-quick-snap');
@@ -335,12 +343,12 @@ async function main(): Promise<void> {
       await settle();
       await shot('22-job-unfinished');
     });
-    await step('fill in the unfinished ones sitting down: Fill In From Photo, Mark Up, Next', async () => {
+    await step('fill them in sitting down: Fill In From Photo, Mark Up, Next', async () => {
       await app.getByTestId('open-unfinished').click();
-      await app.getByText('3 to mark up and fill in').waitFor();
+      await app.getByText('3 items. Tap one to fill it in.').waitFor();
       await settle();
       await shot('23-unfinished-list');
-      await app.getByText('Untitled').first().click();
+      await app.getByText('No title yet').first().click();
       await app.getByTestId('next-unfinished').waitFor();
       await settle();
       await shot('24-unfinished-item');
@@ -361,18 +369,18 @@ async function main(): Promise<void> {
       await shot('26-marked-after');
       await app.getByTestId('next-unfinished').click();
       await settle();
-      await app.getByText('Unfinished', { exact: true }).last().waitFor();
+      await app.getByText('To Fill In', { exact: true }).last().waitFor();
       await settle();
       await app.getByTestId('back').last().click();
-      await app.getByText('2 to mark up and fill in').waitFor();
+      await app.getByText('2 items. Tap one to fill it in.').waitFor();
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('finishing a company in a room offers to free what waited on it', async () => {
+    await step('finishing a company in a location offers to free what waited on it', async () => {
       await app.getByTestId('group-room-7').click();
       await app.getByTestId('check-item-18').click();
-      await app.getByText('1 item in Master Bathroom 207 was waiting on Gator Plumbing').waitFor();
+      await app.getByText('Set vanity tops was waiting on Gator Plumbing. Ready now?').waitFor();
       await settle(300);
       await shot('27-release');
       await app.getByRole('button', { name: 'Mark Ready' }).click();
@@ -385,7 +393,7 @@ async function main(): Promise<void> {
       await app.getByTestId('open-past-due').click();
       await app.getByText('Hang front door').waitFor();
       await app.getByText(/Foyer 115, \d+ days? past due/).waitFor();
-      await app.getByText(/Bathroom 116, \d+ days? past due, after its visit/).waitFor();
+      await app.getByText(/Bathroom 116, visit ended \d+ days? ago/).waitFor();
       await settle();
       await shot('28-past-due');
       await app.getByTestId('back').last().click();
@@ -401,7 +409,7 @@ async function main(): Promise<void> {
       await app.getByTestId('show-not_ready').click();
       await settle(300);
       await app.getByTestId('save-default').click();
-      await app.getByText('Saved as My Default').waitFor();
+      await app.getByText('Every Job Opens This Way').waitFor();
       await app.getByTestId('view-done').click();
       await app.getByText('Carpentry', { exact: true }).first().waitFor();
       await settle(600);
@@ -451,9 +459,9 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('the schedule: book a visit from the plan, then confirm it', async () => {
+    await step('the schedule: schedule a visit from the plan, then confirm it', async () => {
       await app.getByTestId('schedule').click();
-      await app.getByText('Not Booked').waitFor();
+      await app.getByText('Not Scheduled').waitFor();
       await settle();
       await shot('33-schedule');
       await app.getByTestId('schedule-company-company-4').click();
@@ -495,15 +503,15 @@ async function main(): Promise<void> {
       await shot('38-send-lists');
       await app.getByTestId('send-company-4').click();
       const doc = app.getByTestId('doc-preview');
-      await doc.getByText('Planned Visits', { exact: true }).waitFor();
-      await doc.getByText(/^Ready Now/).first().waitFor();
+      await doc.getByText('Scheduled Visits', { exact: true }).waitFor();
+      await doc.getByText('Waiting', { exact: true }).first().waitFor();
       await doc.getByText('New', { exact: true }).first().waitFor();
-      await doc.getByText(/^Days for (this item|these \d+ items)$/).first().waitFor();
+      await doc.getByText(/^How many days for (this item|these \d+ items)\?$/).first().waitFor();
       await settle(800);
       await shot('39-company-list');
       await app.getByTestId('mark-sent').click();
       await app.getByText('Marked as sent to SMS Carpentry').waitFor();
-      await app.getByText(/Sent [A-Z][a-z]+ \d+\./).first().waitFor();
+      await app.getByText(/Sent [A-Z][a-z]+\s\d+\./).first().waitFor();
       await settle(400);
       await app.getByTestId('send-party-owner').click();
       await doc.getByText('Decisions Needed', { exact: true }).first().waitFor();
@@ -525,16 +533,16 @@ async function main(): Promise<void> {
     });
     await step('Item Form: fields, an added field and a standard title', async () => {
       await menu('item-form');
-      await app.getByTestId('form-poOrCo').waitFor();
+      await app.getByTestId('form-kind').waitFor();
       await settle(700);
       await shot('42-item-form');
       await app.getByTestId('add-field').click();
-      await app.getByTestId('field-label').fill('Punch Walk');
+      await app.getByTestId('field-label').fill('Walk');
       await app.getByTestId('field-choices').fill('Owner Walk\nArchitect Walk\nRoss Built Walk');
       await settle(300);
       await shot('43-new-field');
       await app.getByTestId('field-save').click();
-      await app.getByText('Punch Walk').waitFor();
+      await app.getByText('Walk', { exact: true }).waitFor();
       await app.getByTestId('standard-titles').click();
       await app.getByTestId('title-new').fill('Adjust cabinet hinge');
       await app.getByTestId('title-trade').click();
@@ -550,7 +558,7 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('paste rooms in Job Setup', async () => {
+    await step('paste locations in Job Setup', async () => {
       await menu('job-setup');
       await app.getByTestId('paste-rooms').waitFor();
       await settle();
@@ -561,7 +569,7 @@ async function main(): Promise<void> {
       await app.getByTestId('field-rooms').fill('Level 3:\nRoof Deck 301\nOffice 302');
       await app.getByText('2 New').waitFor();
       await app.getByTestId('paste-add').click();
-      await app.getByText('2 rooms added').waitFor();
+      await app.getByText('2 locations added').waitFor();
       await app.getByText('Roof Deck 301').first().waitFor();
       await settle(400);
     });

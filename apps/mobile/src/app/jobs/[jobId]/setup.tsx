@@ -1,7 +1,7 @@
-// Job Setup, laid out like Settings: Rooms, Companies and Waiting On, one at a time. Rooms come
-// from pasting the plan's room list; companies are added with the trade they do on this job.
+// Job Setup, laid out like Settings: Locations, Companies and Waiting On, one at a time. Locations
+// come from pasting the plan's room list; companies are added with the trade they do on this job.
 
-import { parseRoomList, type Location } from '@punch/core';
+import { floorOf, parseRoomList, SHARED_GROUP, type Location } from '@punch/core';
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
@@ -48,7 +48,7 @@ export default function SetupScreen() {
         <Segmented<Tab>
           track={colors.trackOnWhite}
           options={[
-            ['rooms', 'Rooms'],
+            ['rooms', 'Locations'],
             ['companies', 'Companies'],
             ['waiting', 'Waiting On'],
           ]}
@@ -74,7 +74,7 @@ function countOf(n: number, noun: string): string {
 function floorsOf(locations: Location[]): { name: string; rooms: Location[] }[] {
   const out: { name: string; rooms: Location[] }[] = [];
   for (const l of [...locations].sort((a, b) => a.sortOrder - b.sortOrder)) {
-    const name = l.kind === 'shared' ? 'Shared Areas' : (l.floor ?? 'Rooms');
+    const name = floorOf(l);
     const group = out.find((g) => g.name === name);
     if (group) group.rooms.push(l);
     else out.push({ name, rooms: [l] });
@@ -88,12 +88,12 @@ function RoomsTab({ jobId, onPaste }: { jobId: string; onPaste: () => void }) {
   return (
     <>
       <View style={styles.action}>
-        <Button variant="tinted" icon="plus" label="Paste Room List" onPress={onPaste} testID="paste-rooms" />
+        <Button variant="tinted" icon="plus" label="Paste Locations" onPress={onPaste} testID="paste-rooms" />
         <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
-          From the plans, in floor order. New rooms go after the ones already here.
+          From the plans, one on each line.
         </Text>
       </View>
-      {floors.length === 0 ? <EmptyState icon="door" title="No Rooms Yet" message="Paste the room list to start." /> : null}
+      {floors.length === 0 ? <EmptyState icon="door" title="No Locations Yet" message="Paste them from the plans to start." /> : null}
       {floors.map((floor) => (
         <ListSection
           key={floor.name}
@@ -101,7 +101,7 @@ function RoomsTab({ jobId, onPaste }: { jobId: string; onPaste: () => void }) {
           header={floor.name}
           headerRight={
             <Text variant="subheadline" color={colors.secondary} tabular>
-              {countOf(floor.rooms.length, floor.name === 'Shared Areas' ? 'area' : 'room')}
+              {countOf(floor.rooms.length, 'location')}
             </Text>
           }
         >
@@ -131,7 +131,7 @@ function CompaniesTab({ jobId, onAdd }: { jobId: string; onAdd: () => void }) {
       <View style={styles.action}>
         <Button variant="tinted" icon="plus" label="Add Company" onPress={onAdd} testID="add-company" />
         <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
-          Each company is on the job with the trade it does here.
+          Each company and the trade it does on this job.
         </Text>
       </View>
       {rows.length === 0 ? (
@@ -181,7 +181,7 @@ function WaitingTab({ jobId }: { jobId: string }) {
     <ListSection
       variant="plain"
       header="Extra Choices"
-      footer="Every company on this job is a Waiting On choice already. Add anyone else work can wait on."
+      footer="Companies on this job are already choices. Add anyone else work can wait on."
     >
       {extras.map((x) => (
         <ListRow
@@ -242,7 +242,7 @@ function PasteRoomsSheet({ jobId, visible, onClose }: { jobId: string; visible: 
     if (fresh.length === 0) return;
     const added = await data.addLocations(jobId, fresh);
     haptic.success();
-    feedback.toast({ message: `${added} ${added === 1 ? 'room' : 'rooms'} added` });
+    feedback.toast({ message: `${added} ${added === 1 ? 'location' : 'locations'} added` });
     close();
   }
 
@@ -250,12 +250,12 @@ function PasteRoomsSheet({ jobId, visible, onClose }: { jobId: string; visible: 
     <Sheet
       visible={visible}
       onClose={close}
-      title="Paste Room List"
+      title="Paste Locations"
       left={{ label: 'Cancel', onPress: close, testID: 'paste-cancel' }}
       right={{ label: fresh.length > 0 ? `Add ${fresh.length}` : 'Add', variant: 'prominent', onPress: add, disabled: fresh.length === 0, testID: 'paste-add' }}
     >
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
-        <ListSection footer="A line ending in a colon names the floor for the rooms under it. The number can come first or last.">
+        <ListSection footer="End a line with a colon to name a level, like Level 1: for the lines under it.">
           <ListTextField
             multiline
             minLines={6}
@@ -264,7 +264,7 @@ function PasteRoomsSheet({ jobId, visible, onClose }: { jobId: string; visible: 
             onChangeText={setPaste}
             autoCapitalize="words"
             autoCorrect={false}
-            accessibilityLabel="Room list"
+            accessibilityLabel="Location list"
             testID="field-rooms"
           />
         </ListSection>
@@ -275,7 +275,7 @@ function PasteRoomsSheet({ jobId, visible, onClose }: { jobId: string; visible: 
             footerTone="danger"
           >
             {fresh.map((l) => (
-              <ListRow key={l.label} title={l.label} value={l.kind === 'shared' ? 'Shared area' : (l.floor ?? undefined)} />
+              <ListRow key={l.label} title={l.label} value={l.kind === 'shared' ? SHARED_GROUP : (l.floor ?? undefined)} />
             ))}
           </ListSection>
         ) : null}

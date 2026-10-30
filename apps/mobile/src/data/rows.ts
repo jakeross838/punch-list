@@ -66,7 +66,7 @@ export const rowToItem = (r: Row): Item => ({
   description: text(r.description),
   tradeId: textOrNull(r.trade_id),
   companyId: textOrNull(r.company_id),
-  kind: r.kind === 'added_scope' ? 'added_scope' : 'deficiency',
+  kind: r.kind === 'added_scope' || r.kind === 'completion' ? r.kind : 'deficiency',
   ready: bool(r.ready),
   waitingOn: waitingList(r.waiting_on),
   readyBy: textOrNull(r.ready_by),

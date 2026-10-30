@@ -2,7 +2,7 @@
 // since its last list. Tap one to see its list as a PDF and send it by email or text from there;
 // the share button goes straight to sending, and Send All goes through every company in one pass.
 // Each list sent is recorded (with Undo), so the next one marks what is new. The owner and the
-// design team get what Ross Built needs from them; the whole job, room by room, is for Ross Built.
+// design team get what Ross Built needs from them; the whole job, location by location, is for Ross Built.
 
 import {
   companiesWithWork,
@@ -90,7 +90,7 @@ export default function SendScreen() {
     return jobList(items, lookups);
   }
 
-  /** "2 new since October 23", or when it last went out. */
+  /** "Sent October 23. 2 new since then", or "Sent October 23". */
   function sentLine(target: Target): string {
     const last = lastSend(sends, target.list);
     if (!last) return 'Not sent yet';
@@ -98,8 +98,8 @@ export default function SendScreen() {
       linesOf(target).map((l) => l.item.id),
       last,
     ).size;
-    const day = shortDate(last.sentAt.slice(0, 10));
-    return fresh > 0 ? `${fresh} new since ${day}` : `Sent ${day}`;
+    const day = shortDate(last.sentAt.slice(0, 10)).replace(' ', '\u00a0');
+    return fresh > 0 ? `Sent ${day}. ${fresh}\u00a0new since then` : `Sent ${day}`;
   }
 
   /** Each item's first photo at print size, a few at a time to keep the phone's memory steady. */
@@ -228,10 +228,7 @@ export default function SendScreen() {
         <EmptyState icon="checkmark.circle.fill" title="Nothing to Send" message="Every item on this job is complete." />
       ) : (
         <>
-          <ListSection
-            header="Companies"
-            footer="Tap a company to look over its list. Planned visits come first with their items, then what is ready now, what is waiting by what it waits on (each with a line for the days), and what needs a price. New items since the last list say so."
-          >
+          <ListSection header="Companies" footer="Tap a company to see its list.">
             {rows.map((r) => {
               const target = companyTarget(r);
               const counts = [
@@ -254,15 +251,15 @@ export default function SendScreen() {
           </ListSection>
           {ON_THE_PHONE && rows.length > 1 ? (
             <View style={styles.all}>
-              <Button label={busy === 'all' ? 'Sending' : `Send All ${rows.length}`} icon="share" variant="tinted" onPress={() => void sendAll()} disabled={!!busy} testID="send-all" />
+              <Button label={busy === 'all' ? 'Sending' : `Send All (${rows.length})`} icon="share" variant="tinted" onPress={() => void sendAll()} disabled={!!busy} testID="send-all" />
               <Text variant="footnote" color={colors.secondary} align="center" style={styles.allNote}>
-                One share sheet after another. Cancel one to skip that company.
+                Sends each list in turn. Cancel one to skip it.
               </Text>
             </View>
           ) : null}
 
           {parties.length > 0 ? (
-            <ListSection header="Owner and Design Team" footer="What Ross Built needs from them, and by when, to keep the work moving.">
+            <ListSection header="Owner, Design Team and Others" footer="What we need from them, and when.">
               {parties.map((p) => {
                 const target = partyTarget(p.party);
                 return (
@@ -280,10 +277,10 @@ export default function SendScreen() {
             </ListSection>
           ) : null}
 
-          <ListSection header="Ross Built" footer="Room by room, with the trade, the company and any days past due on every line, and a blank line in each room. No photos, to keep it short.">
+          <ListSection header="Ross Built" footer="Every open item by location, with the trade and company on every line.">
             <ListRow
               title="Whole Job"
-              subtitle={`${plural(open.length, 'item')} in ${plural(rooms, 'room')}, ${open.filter((i) => i.ready).length} ready now`}
+              subtitle={`${plural(open.length, 'item')} in ${plural(rooms, 'location')}, ${open.filter((i) => i.ready).length} ready now`}
               accessory={ON_THE_PHONE ? 'none' : 'chevron'}
               onPress={() => void openList(jobTarget)}
               right={trailing(jobTarget)}
@@ -291,7 +288,7 @@ export default function SendScreen() {
             />
           </ListSection>
           <ListSection
-            footer={`On each company's list, every item's first photo with its markup.${unfinished > 0 ? ` ${plural(unfinished, 'unfinished item')} ${unfinished === 1 ? 'is' : 'are'} not on any list until ${unfinished === 1 ? 'it is' : 'they are'} filled in.` : ''}`}
+            footer={`Adds each item's first photo, with its markup, to the company lists.${unfinished > 0 ? ` ${plural(unfinished, 'item')} to fill in ${unfinished === 1 ? 'is' : 'are'} not on any list yet.` : ''}`}
           >
             <ListSwitchRow title="Include Photos" value={withPhotos} onValueChange={setWithPhotos} testID="switch-photos" />
           </ListSection>
@@ -323,7 +320,7 @@ export default function SendScreen() {
                   testID="mark-sent"
                   style={styles.markSent}
                 >
-                  <Text color={colors.tint}>Mark as Sent</Text>
+                  <Text color={colors.tint}>Mark Sent</Text>
                 </Touchable>
               ) : null}
             </View>

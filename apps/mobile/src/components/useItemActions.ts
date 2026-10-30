@@ -17,16 +17,14 @@ export function useRelease(jobId: string) {
   const feedback = useFeedback();
   const items = data.useItems(jobId);
   const companies = data.useCompanies();
-  const locations = data.useLocations(jobId);
   return useCallback(
     (done: Item) => {
       const company = companies.find((c) => c.id === done.companyId)?.name;
       const freed = freedBy(done, items, company);
       if (!company || freed.length === 0) return;
-      const room = locations.find((l) => l.id === done.locationId)?.label ?? 'this room';
-      const count = freed.length === 1 ? '1 item' : `${freed.length} items`;
+      const what = freed.length === 1 ? freed[0]!.title || '1 item here' : `${freed.length} items here`;
       feedback.toast({
-        message: `${count} in ${room} ${freed.length === 1 ? 'was' : 'were'} waiting on ${company}`,
+        message: `${what} ${freed.length === 1 ? 'was' : 'were'} waiting on ${company}. Ready now?`,
         action: {
           label: 'Mark Ready',
           onPress: () => {
@@ -36,7 +34,7 @@ export function useRelease(jobId: string) {
         },
       });
     },
-    [companies, data, feedback, items, locations],
+    [companies, data, feedback, items],
   );
 }
 

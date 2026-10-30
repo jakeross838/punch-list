@@ -170,7 +170,7 @@ describe('unfinished items', () => {
   it('may wait for a title, company and trade, and finish themselves once they have them', () => {
     const draft = item({ unfinished: true, title: '', companyId: null, tradeId: null });
     expect(checkItem(draft)).toEqual([]);
-    expect(missingText(draft)).toBe('Needs a title, a company and a trade');
+    expect(missingText(draft)).toBe('Needs a title, company and trade');
     expect(tidyItem({ ...draft, title: 'Install toilet' }).unfinished).toBe(true);
     expect(tidyItem({ ...draft, title: 'Install toilet', companyId: 'c-sms', tradeId: 't-carp' }).unfinished).toBe(false);
     expect(() => complete(draft, { id: 'p1', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true })).toThrow(RuleError);
@@ -193,9 +193,9 @@ describe('the owner and design team list', () => {
     expect(lines.map((l) => l.item.id)).toEqual(['o2', 'o1']);
     const page = partyPrintout('Owner', lines, { job: { name: 'Fish', address: '715 North Shore Drive' }, date: new Date(2026, 9, 30) });
     expect(page.fileName).toBe('Fish Decisions Needed for Owner, October 30 2026.pdf');
-    expect(page.body).toContain('2 items are ready to move as soon as we have your answer.');
+    expect(page.body).toContain('These 2 items are waiting on your answer.');
     expect(page.body).toContain('<th>Needed By</th>');
-    expect(page.body).toContain('November 2');
+    expect(page.body).toContain('November\u00a02');
   });
 });
 
@@ -256,7 +256,7 @@ describe('filling in from the photo', () => {
 });
 
 describe('a company list with planned visits', () => {
-  it('prints each visit with its items, and keeps them off Ready Now', () => {
+  it('prints each visit with its items, and keeps them off Ready', () => {
     const items = [
       item({ id: 'b1', number: 1, visitId: 'v1' }),
       item({ id: 'b2', number: 2, visitId: 'v1', locationId: 'a' }),
@@ -269,14 +269,14 @@ describe('a company list with planned visits', () => {
       visits: [visit({ id: 'v1', start: '2026-11-03', days: 2, confirmed: true })],
       isNew: (id) => id === 'r1',
     });
-    expect(page.body).toContain('4 open items: 2 on planned visits, 1 ready now and 1 waiting.');
+    expect(page.body).toContain('4 open items, 2 scheduled, 1 ready now and 1 waiting.');
     expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual([
-      'Planned Visits',
-      'Ready Now, Not Planned Yet',
+      'Scheduled Visits',
+      'Ready, Not Scheduled Yet',
       'Waiting',
       'Anything Missing',
     ]);
-    expect(page.body).toContain('Tuesday, November 3 to Wednesday, November 4: 2 days, confirmed');
+    expect(page.body).toContain('Tuesday, November\u00a03 to Wednesday, November\u00a04, 2 days, confirmed');
     // Each item once: the two on the visit, then the ready one, then the waiting one.
     const numbers = [...page.body.matchAll(/<td class="rb-num">(\d+)/g)].map((m) => m[1]);
     expect(numbers).toEqual(['2', '1', '3', '4']);

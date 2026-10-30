@@ -115,7 +115,7 @@ describe('import of the Fish list from the stand-in', () => {
       readyBy: '2026-11-02',
       boughtOut: true,
       poOrCo: 'PO-0090',
-      kind: 'deficiency',
+      kind: 'completion',
       status: 'open',
       completedAt: null,
     });
@@ -130,6 +130,7 @@ describe('import of the Fish list from the stand-in', () => {
       '1 item has no company assigned; each item needs one.',
       '1 item has no trade tag; each item needs one.',
       '1 open item is not ready but says nothing in Waiting On; say what it is waiting on, or mark it ready.',
+      '3 items came in as Incomplete, since Buildertrend does not say which are deficiencies; change any that are.',
       '1 complete item has no completion date from Buildertrend; the app will date it the day it is loaded.',
     ]);
   });
@@ -210,10 +211,10 @@ describe('import of a fuller list', () => {
   it('reads company, trade, kind and Ready By by the standard', async () => {
     const { imported } = await importFrom(fullList());
     const byId = (id: string) => imported.items.find((i) => i.btExternalId === id);
-    expect(byId('task-11')).toMatchObject({ title: 'Install pendant lights', readyBy: '2026-10-30', kind: 'deficiency' });
+    expect(byId('task-11')).toMatchObject({ title: 'Install pendant lights', readyBy: '2026-10-30', kind: 'completion' });
     expect(byId('task-12')?.locationLabel).toBe('Kitchen 109');
     expect(byId('task-13')).toMatchObject({ kind: 'added_scope', poOrCo: 'CO-14', boughtOut: true });
-    expect(byId('task-51')).toMatchObject({ kind: 'added_scope', poOrCo: null, boughtOut: true });
+    expect(byId('task-51')).toMatchObject({ kind: 'added_scope', poOrCo: null, boughtOut: false });
     expect(byId('task-22')).toMatchObject({ tradeName: 'Painting', readyBy: null });
     expect(byId('task-23')?.companyName).toBe('Ross Built');
     expect(byId('task-24')?.companyName).toBe('Gator Plumbing');
@@ -239,8 +240,9 @@ describe('import of a fuller list', () => {
       '1 complete item had Ready unchecked and nothing in Waiting On; it was imported as ready, since the work is done.',
       '1 open item is marked Ready but also has Waiting On or Ready By filled in; those were left empty, as the app does for ready items.',
       '1 item has a Ready By that is not a date; it was left empty.',
-      '2 items were set to added scope because the PO / CO field holds a change order number or the item says added scope; check that these are right.',
-      '1 added scope item is Bought Out with no PO or CO; the app saves added scope as Bought Out only once it has a PO or CO.',
+      '2 items were set to Additional because the PO / CO field holds a change order number or the item says added scope; check that these are right.',
+      '1 item marked Additional is Bought Out in Buildertrend with no order number; the app shows it under Needs a Price until it has one.',
+      '11 items came in as Incomplete, since Buildertrend does not say which are deficiencies; change any that are.',
       '1 complete item has no completion date from Buildertrend; the app will date it the day it is loaded.',
     ]);
   });
@@ -349,7 +351,7 @@ describe('added scope', () => {
     expect(isAddedScope(null, 'Added-scope wine room racks', '')).toBe(true);
   });
 
-  it('is a deficiency otherwise', () => {
+  it('is in scope otherwise', () => {
     expect(isAddedScope('PO-0090', 'Install toilet', '')).toBe(false);
     expect(isAddedScope('ECO 12', 'Install toilet', '')).toBe(false);
     expect(isAddedScope('COI 2026', 'Install toilet', '')).toBe(false);

@@ -67,7 +67,7 @@ export function parseRoomList(text: string, options: { includeShared?: boolean }
       const rawName = last ? last[1]! : first ? first[2]! : line;
       const number = last ? last[2]!.toUpperCase() : first ? first[1]!.toUpperCase() : null;
       if (!/[A-Za-z]/.test(rawName)) {
-        problems.push(`Line ${lineNo}: "${raw.trim()}" has no room name`);
+        problems.push(`Line ${lineNo}: "${raw.trim()}" has no name`);
         return;
       }
       const name = tidyName(rawName);

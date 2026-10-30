@@ -1,8 +1,8 @@
-// One room's items (or one trade's, company's or holdup's), kept calm: the circle, the title, an
-// hourglass when it is not ready, and the photo. Completed items wait under their own heading. In
-// a room, the bottom bar steps to the room before or after, with the camera between. Past Due
-// lists everything late, the latest first, with the days. A holdup's list can clear the holdup for
-// all its items at once, or move their Ready By together.
+// One location's items (or one trade's, company's or what they wait on), kept calm: the circle,
+// the title, an hourglass when it is not ready, and the photo. Completed items wait under their own
+// heading. In a location, the bottom bar steps to the one before or after, with the camera between.
+// Past Due lists everything late, the latest first, with the days. A Waiting On list can stop the
+// wait for all its items at once, or move their Ready By together.
 
 import {
   clearHoldup,
@@ -12,6 +12,7 @@ import {
   neighborRooms,
   pastDue,
   pastDueText,
+  SHARED_GROUP,
   type GroupBy,
   type Item,
   type Photo,
@@ -84,25 +85,28 @@ export default function GroupScreen() {
   const holdup = by === 'waiting' && group && key.startsWith('waiting:') ? group.label : null;
   const title = due ? 'Past Due' : (room?.label ?? (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
   const subtitle = due
-    ? `${open.length} late`
+    ? `${open.length} open`
     : key === 'unfinished'
-      ? `${open.length} to mark up and fill in`
+      ? `${open.length} ${open.length === 1 ? 'item' : 'items'}. Tap one to fill it in.`
       : `${open.length} ${SHOW_WORDS[view.filter]}`;
-  const contextFor = (item: Item) => {
-    const where = by === 'room' && !due ? undefined : roomName.get(item.locationId);
+  const contextFor = (item: Item) => (by === 'room' && !due ? undefined : roomName.get(item.locationId));
+  const lateFor = (item: Item) => {
     const p = lateBy.get(item.id);
-    if (!p) return where;
-    return [where, `${pastDueText(p.days)}${p.reason === 'visit' ? ', after its visit' : ''}`].filter(Boolean).join(', ');
+    if (!p) return undefined;
+    return p.reason === 'visit' ? `visit ended ${p.days === 1 ? '1 day' : `${p.days} days`} ago` : pastDueText(p.days);
   };
 
-  // A holdup's actions, for every open item it holds up at once.
+  // What it waits on, for every open item it holds up at once.
   const heldUp = holdup ? open.filter((i) => i.status === 'open' && !i.ready) : [];
   function clearAll() {
     if (!holdup || heldUp.length === 0) return;
     const count = heldUp.length === 1 ? '1 item' : `${heldUp.length} items`;
+    const both = heldUp.filter((i) => i.waitingOn.length > 1).length;
     feedback.actionSheet({
-      title: `${holdup} is done`,
-      message: `Mark the ${count} waiting on ${holdup} ready. An item also waiting on something else keeps waiting on that.`,
+      title: `Stop waiting on ${holdup}?`,
+      message: `${heldUp.length === 1 ? 'It' : `All ${heldUp.length}`} will be marked ready.${
+        both === 0 ? '' : ` ${both === 1 ? 'One is' : `${both} are`} also waiting on something else and will keep waiting.`
+      }`,
       actions: [
         {
           label: `Mark ${count} Ready`,
@@ -123,7 +127,7 @@ export default function GroupScreen() {
     void data.updateItems(heldUp.map((i) => ({ id: i.id, patch: { readyBy } })));
   }
   const groupReadyBy = heldUp.find((i) => i.readyBy)?.readyBy ?? null;
-  // Filling in after a walk: each unfinished item steps to the next.
+  // Filling in after a walk: each item steps to the next one to fill in.
   const openUnfinished = (item: Item) =>
     router.push({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: item.id, from: 'unfinished' } });
 
@@ -137,7 +141,7 @@ export default function GroupScreen() {
     <Page
       title={title}
       large
-      eyebrow={room ? (room.kind === 'shared' ? 'Shared Areas' : (room.floor ?? undefined)) : undefined}
+      eyebrow={room ? (room.kind === 'shared' ? SHARED_GROUP : (room.floor ?? undefined)) : undefined}
       subtitle={subtitle}
       backLabel={job?.name}
       background="plain"
@@ -169,7 +173,7 @@ export default function GroupScreen() {
                   <Touchable feedback="highlight" onPress={clearAll} accessibilityRole="button" testID="holdup-clear" style={[styles.holdupRow, styles.holdupRule]}>
                     <Icon name="checkmark.circle.fill" size={20} color={colors.tint} />
                     <Text color={colors.tint} style={{ flex: 1 }}>
-                      {holdup} Is Done: Mark Ready
+                      Stop Waiting on {holdup}
                     </Text>
                   </Touchable>
                 </View>
@@ -210,6 +214,7 @@ export default function GroupScreen() {
               item={item}
               photo={firstPhoto.get(item.id)}
               context={contextFor(item)}
+              lateText={lateFor(item)}
               last={index === section.data.length - 1}
               checking={actions.checking.has(item.id)}
               onOpen={key === 'unfinished' ? openUnfinished : actions.onOpen}

@@ -1,9 +1,9 @@
 // One simple form for an item, the same when making one and when looking at one later: the title
-// (typing offers the standard titles, and picking one fills in the trade and the company), where
-// exactly, the room and the company, Ready as a checkbox, and Deficiency or Added Scope. The rest
-// waits under More Details. On an item that already exists, every change saves as it is made.
-// Fill In From Photo asks Claude for what is still blank; the same title already in the room is
-// pointed out.
+// (typing offers the standard titles, and picking one fills in the trade and the company), the
+// details, the location, company and trade, Ready as a checkbox, and the type: Deficiency,
+// Incomplete or Additional, with the order number only for additional work. Added fields wait
+// under More Details. On an item that already exists, every change saves as it is made. Fill In From Photo
+// asks Claude for what is still blank; the same title already in the location is pointed out.
 
 import {
   companyForTrade,
@@ -11,7 +11,10 @@ import {
   duplicatesOf,
   formShows,
   itemNumberLabel,
+  KIND_HINTS,
+  KIND_LABELS,
   kindDefaults,
+  KINDS,
   suggestTitles,
   tidyTitle,
   TITLE_MAX,
@@ -31,7 +34,6 @@ import {
   ListLabeledField,
   ListRow,
   ListSection,
-  ListSwitchRow,
   OptionPicker,
   PhotoView,
   Segmented,
@@ -109,8 +111,8 @@ export function ItemEditor({
   // A field the rules need always shows, even when Item Form setup turned it off.
   const showCompany = shows('company') || !!problem('companyId');
   const showTrade = shows('trade') || !!problem('tradeId');
-  const showPo = shows('poOrCo') || (value.kind === 'added_scope' && value.boughtOut);
-  const moreCount = [showTrade, shows('boughtOut'), showPo].filter(Boolean).length + customFields.length;
+  // The order number is for additional work; one already there always shows, so nothing is hidden.
+  const showPo = value.kind === 'added_scope' || !!value.poOrCo;
 
   function fillFrom(tradeId: string | null): Partial<ItemDraft> {
     if (!tradeId) return {};
@@ -161,9 +163,8 @@ export function ItemEditor({
               </Touchable>
             )}
             <Touchable feedback="opacity" onPress={onAddPhoto} accessibilityRole="button" accessibilityLabel="Add another photo" testID="add-photo" style={styles.addPhoto}>
-              <Icon name="plus" size={11} color={colors.tint} weight="bold" />
-              <Text variant="footnote" weight="600" color={colors.tint}>
-                Photo
+              <Text variant="footnote" weight="600" color={colors.tint} numberOfLines={1}>
+                Add Photo
               </Text>
             </Touchable>
           </View>
@@ -215,7 +216,7 @@ export function ItemEditor({
         </Text>
       ) : twin ? (
         <Text variant="footnote" color={colors.secondary} style={styles.note} testID="duplicate-note">
-          {roomLabel ?? 'This room'} already has this: item {itemNumberLabel(twin)}.
+          Already on the list{roomLabel ? ` in ${roomLabel}` : ' here'}: item {itemNumberLabel(twin)}.
         </Text>
       ) : null}
       {fillIn && blanks ? (
@@ -265,7 +266,7 @@ export function ItemEditor({
         footerTone={whereProblem ? 'danger' : 'default'}
       >
         <ListRow
-          title="Room"
+          title="Location"
           value={roomLabel ?? 'Choose'}
           valueColor={roomLabel ? colors.secondary : colors.tint}
           accessory="chevron"
@@ -282,6 +283,16 @@ export function ItemEditor({
             testID="pick-company"
           />
         ) : null}
+        {showTrade ? (
+          <ListRow
+            title="Trade"
+            value={tradeName ?? 'Choose'}
+            valueColor={tradeName ? colors.secondary : colors.tint}
+            accessory="chevron"
+            onPress={() => setPicker('trade')}
+            testID="pick-trade"
+          />
+        ) : null}
       </ListSection>
 
       {showReady && (shows('ready') || !value.ready) ? (
@@ -295,44 +306,16 @@ export function ItemEditor({
         </ListSection>
       ) : null}
 
-      {shows('kind') ? (
-        <View style={styles.kind}>
-          <Segmented<ItemKind>
-            options={[
-              ['deficiency', 'Deficiency'],
-              ['added_scope', 'Added Scope'],
-            ]}
-            value={value.kind}
-            onChange={(kind) => set(kindDefaults(kind, value))}
-            testID="kind"
-          />
-        </View>
-      ) : null}
-
-      {moreCount > 0 ? (
-        <ListSection footer={sentence(problem('poOrCo'))} footerTone="danger">
-          <ListRow
-            title="More Details"
-            onPress={() => setMore((m) => !m)}
-            right={<Icon name={more ? 'chevron.down' : 'chevron.right'} size={13} color={colors.chevron} weight="bold" />}
-            testID="more-details"
-          />
-          {more && showTrade ? (
-            <ListRow
-              title="Trade"
-              value={tradeName ?? 'Choose'}
-              valueColor={tradeName ? colors.secondary : colors.tint}
-              accessory="chevron"
-              onPress={() => setPicker('trade')}
-              testID="pick-trade"
-            />
+      {shows('kind') || showPo ? (
+        <ListSection header={shows('kind') ? 'Type' : undefined} footer={KIND_HINTS[value.kind]}>
+          {shows('kind') ? (
+            <View style={styles.kind}>
+              <Segmented<ItemKind> options={KINDS.map((k) => [k, KIND_LABELS[k]])} value={value.kind} onChange={(kind) => set(kindDefaults(kind, value))} testID="kind" />
+            </View>
           ) : null}
-          {more && shows('boughtOut') ? (
-            <ListSwitchRow title="Bought Out" value={value.boughtOut} onValueChange={(boughtOut) => set({ boughtOut })} testID="switch-bought-out" />
-          ) : null}
-          {more && showPo ? (
+          {showPo ? (
             <ListLabeledField
-              label="PO or CO"
+              label="Order Number"
               placeholder="Number"
               value={value.poOrCo ?? ''}
               onChangeText={(poOrCo) => set({ poOrCo: poOrCo === '' ? null : poOrCo }, true)}
@@ -342,6 +325,17 @@ export function ItemEditor({
               testID="field-po"
             />
           ) : null}
+        </ListSection>
+      ) : null}
+
+      {customFields.length > 0 ? (
+        <ListSection>
+          <ListRow
+            title="More Details"
+            onPress={() => setMore((m) => !m)}
+            right={<Icon name={more ? 'chevron.down' : 'chevron.right'} size={13} color={colors.chevron} weight="bold" />}
+            testID="more-details"
+          />
           {more ? <ExtraFields fields={customFields} value={value.extra} onChange={(extra, typing) => set({ extra }, typing)} /> : null}
         </ListSection>
       ) : null}
@@ -350,7 +344,7 @@ export function ItemEditor({
 
       <OptionPicker
         visible={picker === 'room'}
-        title="Room or Area"
+        title="Location"
         options={options.roomOptions}
         value={value.locationId || null}
         onSelect={(locationId) => set({ locationId })}
@@ -401,5 +395,5 @@ const styles = StyleSheet.create({
   suggestionRule: { borderTopWidth: 1, borderTopColor: colors.separator },
   section: { marginTop: 20 },
   fillIn: { alignSelf: 'flex-start', height: 40, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6, marginHorizontal: layout.margin + layout.rowPadding },
-  kind: { marginHorizontal: layout.margin, marginBottom: 22 },
+  kind: { padding: 8, backgroundColor: colors.cell },
 });

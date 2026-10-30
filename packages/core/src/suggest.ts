@@ -55,7 +55,7 @@ export function describeMarks(marks: Mark[]): string[] {
 export function suggestPrompt(ctx: SuggestContext): string {
   const marks = describeMarks(ctx.marks);
   return [
-    'You are filling in a punch list item for Ross Built Custom Homes, a custom home builder, from one job site photo.',
+    'You are filling in one item on the running list of work that still needs to be done on a Ross Built Custom Homes job site, from one photo.',
     `The photo was taken in ${ctx.room}.`,
     marks.length > 0
       ? `The superintendent marked the photo to show the problem:\n${marks.map((m) => `- ${m}`).join('\n')}`

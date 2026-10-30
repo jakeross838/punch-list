@@ -1,8 +1,8 @@
 // New Item, as a sheet over the camera. Kept quick: the photo, a title (typing offers the standard
-// titles, and picking one fills in the trade and the company), the room already filled in, Ready as
-// a checkbox, and Deficiency or Added Scope. Everything else waits under More Details. Save and
-// Next goes straight back to the camera; Save goes back to the list. Saving without the company
-// (or the title, with a photo) keeps it as unfinished, to fill in later.
+// titles, and picking one fills in the trade and the company), the location already filled in,
+// Ready as a checkbox, and the type. Added fields wait under More Details. Save and Next goes
+// straight back to the camera; Save goes back to the list. Saving without the company (or the
+// title, with a photo) keeps it to fill in later.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -37,7 +37,7 @@ export default function NewItemScreen() {
 
   function set(patch: Partial<ItemDraft>) {
     form.set(patch);
-    // The camera keeps the room for the next photo.
+    // The camera keeps the location for the next photo.
     if (patch.locationId) capture.setRoom(patch.locationId);
   }
 
@@ -64,7 +64,7 @@ export default function NewItemScreen() {
         await data.addPhotos(shots.map((s) => ({ jobId, itemId: id, uri: s.uri, width: s.width, height: s.height, marks: s.marks })));
       }
       haptic.success();
-      const what = fields.unfinished ? 'to finish later' : fields.title;
+      const what = fields.unfinished ? 'to fill in later' : fields.title;
       capture.itemSaved(what, roomLabel ?? null);
       if (next) {
         // The camera confirms it, over the viewfinder.

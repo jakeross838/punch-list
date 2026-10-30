@@ -5,6 +5,8 @@ import {
   customFieldKindLabel,
   FORM_FIELDS,
   formShows,
+  KIND_LABELS,
+  KINDS as ITEM_KINDS,
   setFieldShown,
   tidyTitle,
   type CustomField,
@@ -49,7 +51,7 @@ export default function ItemFormScreen() {
     <Page title="Item Form" sheet right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: () => router.back(), testID: 'form-done' }]}>
       <ListSection
         header="On the Form"
-        footer="Title and room are always on the form. A field the rules need still shows when it is off, like Waiting On for an item that is not ready."
+        footer="Title and location are always on. A field turned off still shows when an item needs it, like Waiting On for an item that is not ready."
       >
         {FORM_FIELDS.map((f) => (
           <ListSwitchRow
@@ -64,21 +66,18 @@ export default function ItemFormScreen() {
 
       <ListSection header="New Items Start As">
         <ListSwitchRow title="Ready" value={settings.startReady} onValueChange={(startReady) => update({ ...settings, startReady })} testID="start-ready" />
-        <ListRow
-          title="Deficiency"
-          accessory={settings.startKind === 'deficiency' ? 'checkmark' : 'none'}
-          onPress={() => update({ ...settings, startKind: 'deficiency' })}
-          testID="start-deficiency"
-        />
-        <ListRow
-          title="Added Scope"
-          accessory={settings.startKind === 'added_scope' ? 'checkmark' : 'none'}
-          onPress={() => update({ ...settings, startKind: 'added_scope' })}
-          testID="start-added-scope"
-        />
+        {ITEM_KINDS.map((k) => (
+          <ListRow
+            key={k}
+            title={KIND_LABELS[k]}
+            accessory={settings.startKind === k ? 'checkmark' : 'none'}
+            onPress={() => update({ ...settings, startKind: k })}
+            testID={`start-${k}`}
+          />
+        ))}
       </ListSection>
 
-      <ListSection header="Your Fields" footer="Your fields show under More Details on every new item.">
+      <ListSection header="Your Fields" footer="They show under More Details on every item.">
         {fields.map((f) => (
           <ListRow key={f.id} title={f.label} value={customFieldKindLabel(f.kind)} accessory="chevron" onPress={() => setFieldSheet({ field: f })} />
         ))}
@@ -97,7 +96,7 @@ export default function ItemFormScreen() {
 
 const KINDS: [CustomFieldKind, string][] = [
   ['text', 'Text'],
-  ['list', 'List'],
+  ['list', 'Choices'],
   ['yes_no', 'Yes or No'],
   ['date', 'Date'],
 ];
@@ -225,7 +224,7 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
     <Sheet visible={visible} onClose={onClose} title="Standard Titles" right={{ label: 'Done', variant: 'prominent', onPress: onClose, testID: 'titles-done' }}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
         <ListSection
-          footer={exists ? 'That title is on the list already.' : 'A verb and the thing, like Install toilet. No room, trade, size or brand.'}
+          footer={exists ? 'That title is on the list already.' : 'A verb and the thing, like Install toilet. No location, trade, size or brand.'}
           footerTone={exists ? 'danger' : 'default'}
         >
           <ListTextField placeholder="New Title" value={title} onChangeText={setTitle} autoCapitalize="sentences" accessibilityLabel="New title" testID="title-new" />

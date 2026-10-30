@@ -1,5 +1,5 @@
-// Book a company's visit, or change one: the first day, how many working days, whether the company
-// confirmed it (otherwise it is our best guess), and which of its items it covers.
+// Schedule a company's visit, or change one: the first day, how many working days, whether the
+// company confirmed it (otherwise it is our best guess), and which of its items it covers.
 
 import { visitEnd, type ListLine, type Visit } from '@punch/core';
 import { useState } from 'react';
@@ -81,7 +81,7 @@ export function VisitSheet({
     const visit = v?.visit;
     if (!visit) return;
     feedback.actionSheet({
-      message: `The items on it go back to not booked.`,
+      message: 'Its items go back to Not Scheduled.',
       actions: [
         {
           label: 'Remove Visit',
@@ -102,7 +102,7 @@ export function VisitSheet({
       onClose={onClose}
       title={v?.visit ? 'Visit' : 'New Visit'}
       left={{ label: 'Cancel', onPress: onClose, testID: 'visit-cancel' }}
-      right={{ label: v?.visit ? 'Done' : 'Book', variant: 'prominent', onPress: () => void save(), testID: 'visit-save' }}
+      right={{ label: 'Save', variant: 'prominent', onPress: () => void save(), testID: 'visit-save' }}
       testID="visit-sheet"
     >
       {v ? (
@@ -110,7 +110,7 @@ export function VisitSheet({
           <Text variant="subheadline" color={colors.secondary} style={styles.lead}>
             {company}
           </Text>
-          <ListSection footer={end ? `Ends ${weekdayDate(end)}. Working days, Monday to Friday.` : undefined}>
+          <ListSection footer={end ? `Ends ${weekdayDate(end)}. Weekdays only.` : undefined}>
             <ListRow title="Starts" titleLines={1} right={<DateField value={v.start} onChange={(start) => start && set({ start })} label="Starts" testID="visit-start" />} />
             <ListRow
               title="Days"
@@ -145,10 +145,10 @@ export function VisitSheet({
               }
             />
           </ListSection>
-          <ListSection footer={v.confirmed ? 'The company confirmed the start and the days.' : 'Our best guess until the company confirms it.'}>
+          <ListSection footer={v.confirmed ? 'The company said yes to these dates.' : 'Best guess until the company says yes.'}>
             <ListSwitchRow title="Confirmed" value={v.confirmed} onValueChange={(confirmed) => set({ confirmed })} testID="visit-confirmed" />
           </ListSection>
-          <ListSection header={`Items (${picked.size})`}>
+          <ListSection header={`Items (${picked.size} of ${lines.length})`}>
             {lines.map((l, i) => (
               <Touchable
                 key={l.item.id}

@@ -1,7 +1,7 @@
 // A walk with the camera: the room photos are going to, the photos taken for the item being made,
 // and that item's form while the camera takes another photo for it. Kept in memory across the
-// camera, markup and New Item screens; cleared when the walk ends. Quick Snap saves each photo
-// straight away as an unfinished item in the room, to mark up and fill in later.
+// camera, markup and New Item screens; cleared when the walk ends. Fill In Later saves each photo
+// straight away as an item in the location, to mark up and fill in later.
 
 import { randomUUID } from 'expo-crypto';
 import { useSyncExternalStore } from 'react';
@@ -32,7 +32,7 @@ export interface CaptureState {
   saved: number;
   /** The item just saved with Save and Next, for the camera to confirm. */
   lastSaved: { title: string; room: string | null; at: number } | null;
-  /** Quick Snap: every photo is saved as it is taken, to fill in later. Kept from walk to walk. */
+  /** Fill In Later: every photo is saved as it is taken, to fill in later. Kept from walk to walk. */
   quick: boolean;
 }
 

@@ -35,7 +35,7 @@ export default function NewJobScreen() {
       right={[{ kind: 'button', label: 'Create', variant: 'prominent', onPress: create, testID: 'save' }]}
     >
       <ListSection
-        footer={missingName ? 'Give the job a name.' : 'Next you paste the room list from the plans and add the companies.'}
+        footer={missingName ? 'Give the job a name.' : 'Next, paste the locations from the plans and add the companies.'}
         footerTone={missingName ? 'danger' : 'default'}
       >
         <ListTextField

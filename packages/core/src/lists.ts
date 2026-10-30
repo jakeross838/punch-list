@@ -6,7 +6,7 @@
 import { isPriced } from './rules';
 import type { Company, Item, Location, Trade } from './types';
 import { waitingOnText } from './waitingOn';
-import { floorOf, sortItems } from './views';
+import { floorOf, NO_FLOOR, sortItems } from './views';
 
 export interface ListLookups {
   locations: Location[];
@@ -50,7 +50,7 @@ export function lineFor(item: Item, lookups: ListLookups): ListLine {
   return {
     item,
     room: room?.label ?? 'Not set',
-    floor: room ? floorOf(room) : 'Rooms',
+    floor: room ? floorOf(room) : NO_FLOOR,
     trade: lookups.trades.find((t) => t.id === item.tradeId)?.name ?? 'Not set',
     company: lookups.companies.find((c) => c.id === item.companyId)?.name ?? 'Not set',
   };

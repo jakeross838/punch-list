@@ -116,7 +116,7 @@ export function MarkupEditor({
           <Text color={colors.onDark}>{retakeLabel}</Text>
         </Touchable>
         <Text variant="headline" color={colors.onDark} accessibilityRole="header">
-          Markup
+          Mark Up
         </Text>
         <View style={[styles.barSide, styles.barRight]}>
           <Touchable feedback="scale" onPress={() => onDone(marks)} accessibilityRole="button" testID="markup-next" style={styles.next}>

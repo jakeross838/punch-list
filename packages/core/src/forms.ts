@@ -1,21 +1,32 @@
 // The New Item form as each person sets it up in Item Form: which fields show and what a new item
-// starts as. Title and room always show. A hidden field still gets its starting value, so a form
+// starts as. Title and location always show. A hidden field still gets its starting value, so a form
 // without Ready makes ready items, and the rules still hold on every save.
 
-import type { CustomField, ExtraValue, FormField, FormSettings } from './types';
+import type { CustomField, ExtraValue, FormField, FormSettings, ItemKind } from './types';
 
-export const DEFAULT_FORM: FormSettings = { hidden: ['poOrCo'], startReady: true, startKind: 'deficiency' };
+export const DEFAULT_FORM: FormSettings = { hidden: [], startReady: true, startKind: 'completion' };
+
+/** The three types, in the order the form shows them. */
+export const KINDS: ItemKind[] = ['deficiency', 'completion', 'added_scope'];
+
+/** Completion is scope completion: the company's own work, not done yet. */
+export const KIND_LABELS: Record<ItemKind, string> = { deficiency: 'Deficiency', completion: 'Incomplete', added_scope: 'Additional' };
+
+/** One line under the type on the form. */
+export const KIND_HINTS: Record<ItemKind, string> = {
+  deficiency: 'Something wrong or damaged to fix.',
+  completion: "The company's own work, not finished yet.",
+  added_scope: 'Extra work. Add the purchase order or change order number once it is priced.',
+};
 
 export const FORM_FIELDS: { field: FormField; label: string }[] = [
   { field: 'description', label: 'Description' },
   { field: 'company', label: 'Company' },
   { field: 'trade', label: 'Trade' },
-  { field: 'kind', label: 'Deficiency or Added Scope' },
+  { field: 'kind', label: 'Type' },
   { field: 'ready', label: 'Ready' },
   { field: 'waitingOn', label: 'Waiting On' },
   { field: 'readyBy', label: 'Ready By' },
-  { field: 'boughtOut', label: 'Bought Out' },
-  { field: 'poOrCo', label: 'PO or CO' },
 ];
 
 export function formShows(settings: FormSettings, field: FormField): boolean {
@@ -45,5 +56,5 @@ export function tidyExtra(field: CustomField, value: ExtraValue): ExtraValue {
 }
 
 export function customFieldKindLabel(kind: CustomField['kind']): string {
-  return kind === 'yes_no' ? 'Yes or No' : kind === 'list' ? 'List' : kind === 'date' ? 'Date' : 'Text';
+  return kind === 'yes_no' ? 'Yes or No' : kind === 'list' ? 'Choices' : kind === 'date' ? 'Date' : 'Text';
 }

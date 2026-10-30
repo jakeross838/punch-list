@@ -44,7 +44,7 @@ export function BarTool({ icon, label, onPress, testID }: { icon: IconName; labe
   );
 }
 
-/** A room before or after this one: a chevron and the room's name. */
+/** A location before or after this one: a chevron and its name. */
 export function RoomStep({ direction, label, onPress }: { direction: 'previous' | 'next'; label: string; onPress: () => void }) {
   const prev = direction === 'previous';
   return (
@@ -52,12 +52,12 @@ export function RoomStep({ direction, label, onPress }: { direction: 'previous' 
       feedback="opacity"
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${prev ? 'Previous' : 'Next'} room, ${label}`}
+      accessibilityLabel={`${prev ? 'Previous' : 'Next'} location, ${label}`}
       testID={prev ? 'room-previous' : 'room-next'}
       style={[styles.step, prev ? null : styles.stepNext]}
     >
       {prev ? <Icon name="chevron.left" size={16} color={colors.tint} weight="semibold" /> : null}
-      <Text variant="subheadline" color={colors.tint} numberOfLines={1} style={styles.stepLabel}>
+      <Text variant="subheadline" color={colors.tint} numberOfLines={2} style={styles.stepLabel}>
         {label}
       </Text>
       {prev ? null : <Icon name="chevron.right" size={16} color={colors.tint} weight="semibold" />}

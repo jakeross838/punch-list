@@ -1,9 +1,9 @@
 // One item in a list, kept calm: the circle to check it off, the title, a small hourglass when it
-// is not ready (in red with the days when it is past due), and its photo. Everything else is one tap
-// in. Swipe left for Ready and Remove. An unfinished item shows a pencil instead of the circle and
-// what it still needs.
+// is not ready, the days in red under the title when it is past due, and its photo. Everything else
+// is one tap in. Swipe left for Ready and Remove. An item to fill in shows a pencil instead of the
+// circle and what it still needs.
 
-import { dayOfDate, daysBetween, missingText, type Item, type Photo } from '@punch/core';
+import { dayOfDate, daysBetween, missingDetails, pastDueText, type Item, type Photo } from '@punch/core';
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -13,6 +13,7 @@ export const ItemRow = memo(function ItemRow({
   item,
   photo,
   context,
+  lateText,
   last,
   checking,
   onOpen,
@@ -23,8 +24,10 @@ export const ItemRow = memo(function ItemRow({
   item: Item;
   /** The item's first photo, shown small at the end of the row. */
   photo?: Photo;
-  /** A second line where the list does not say it already: the room, in a list by trade. */
+  /** A second line where the list does not say it already: the location, in a list by trade. */
   context?: string;
+  /** Past Due's own words for how late it is, in place of the Ready By days. */
+  lateText?: string;
   last: boolean;
   /** Just checked: shows complete for a moment before it leaves the list. */
   checking: boolean;
@@ -37,8 +40,12 @@ export const ItemRow = memo(function ItemRow({
   const notReady = item.status === 'open' && !item.ready && !item.unfinished;
   const late = notReady && item.readyBy !== null && isBeforeToday(item.readyBy);
   const lateDays = late && item.readyBy ? daysBetween(item.readyBy, dayOfDate(new Date())) : 0;
-  const title = item.title || 'Untitled';
-  const second = item.unfinished ? [missingText(item), context].filter(Boolean).join(', ') : context;
+  const red = lateText ?? (late ? pastDueText(lateDays) : undefined);
+  const title = item.title || 'No title yet';
+  // In a location, what an item to fill in still needs (a missing title already shows as No title
+  // yet); in other lists, where it is.
+  const needs = item.unfinished && !context ? missingDetails(item).filter((m) => m !== 'title') : [];
+  const second = context ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : '');
   const actions: SwipeAction[] =
     item.status === 'open' && !checking
       ? [
@@ -46,7 +53,7 @@ export const ItemRow = memo(function ItemRow({
           { label: 'Remove', icon: 'trash', color: colors.destructive, onPress: () => onRemove(item), testID: `remove-${item.id}` },
         ]
       : [];
-  const said = [title, second, notReady ? (late ? `not ready, ${lateDays} days past due` : 'not ready') : null].filter(Boolean).join(', ');
+  const said = [title, second, notReady ? 'not ready' : null, red].filter(Boolean).join(', ');
 
   return (
     <SwipeRow actions={actions} style={styles.swipe}>
@@ -77,19 +84,19 @@ export const ItemRow = memo(function ItemRow({
             <Text numberOfLines={2} color={done || !item.title ? colors.secondary : colors.label}>
               {title}
             </Text>
-            {second ? (
-              <Text variant="subheadline" color={colors.secondary} numberOfLines={1}>
+            {second || red ? (
+              <Text variant="subheadline" color={colors.secondary} numberOfLines={2}>
                 {second}
+                {second && red ? ', ' : ''}
+                {red ? (
+                  <Text variant="subheadline" weight="600" color={colors.destructive}>
+                    {red}
+                  </Text>
+                ) : null}
               </Text>
             ) : null}
           </View>
-          {late ? (
-            <Text variant="footnote" weight="600" color={colors.destructive} tabular>
-              {lateDays} {lateDays === 1 ? 'day' : 'days'}
-            </Text>
-          ) : notReady ? (
-            <Icon name="hourglass" size={16} color={colors.quiet} weight="semibold" />
-          ) : null}
+          {notReady ? <Icon name="hourglass" size={16} color={colors.quiet} weight="semibold" /> : null}
           {photo ? <PhotoView photo={photo} width={44} height={44} radius={8} /> : null}
         </View>
       </Touchable>

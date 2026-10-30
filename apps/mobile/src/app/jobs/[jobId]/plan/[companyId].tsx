@@ -1,6 +1,7 @@
-// One company's plan: its visits, what is ready now and not booked, what comes free and when, what
-// is waiting with no date yet, and added scope that needs a price. Book a visit for the ready work,
-// or for a batch as soon as its holdup clears (with a day of handoff and fair notice).
+// One company's plan: its visits, what is ready now and not scheduled, what comes free and when,
+// what is waiting with no date yet, and additional work that needs a price. Schedule a visit for the
+// ready work, or for a batch as soon as what it waits on is done (with a day of handoff and fair
+// notice).
 
 import {
   companyPlan,
@@ -51,7 +52,8 @@ export default function PlanScreen() {
   const openHoldup = (label: string) => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'waiting', key: waitingKey(label) } });
 
   const open = plan.visits.reduce((n, v) => n + v.lines.length, 0) + loose.length + plan.needsPrice.length;
-  const subtitle = open === 0 ? 'Nothing open' : `${plural(open, 'open item')}, ${plan.readyNow.length} ready and not booked`;
+  const subtitle =
+    open === 0 ? 'Nothing open' : [plural(open, 'open item'), plan.readyNow.length > 0 ? `${plan.readyNow.length} ready to schedule` : ''].filter(Boolean).join(', ');
 
   const itemRows = (lines: ListLine[], note?: (l: ListLine) => string | undefined) =>
     lines.map((l) => (
@@ -73,8 +75,8 @@ export default function PlanScreen() {
         <ListSection header="Visits">
           {plan.visits.map((p) => {
             const end = visitEnd(p.visit);
-            const when = p.visit.days > 1 ? `${weekdayDate(p.visit.start)} to ${shortDate(end)}` : weekdayDate(p.visit.start);
-            const what = [plural(p.visit.days, 'day'), plural(p.lines.length, 'item'), p.done > 0 ? `${p.done} done` : ''].filter(Boolean).join(', ');
+            const when = p.visit.days > 1 ? `${weekdayDate(p.visit.start)} to ${weekdayDate(end)}` : weekdayDate(p.visit.start);
+            const what = [p.visit.days > 1 ? plural(p.visit.days, 'day') : '', plural(p.lines.length, 'item'), p.done > 0 ? `${p.done} done` : ''].filter(Boolean).join(', ');
             return (
               <Touchable
                 key={p.visit.id}
@@ -100,10 +102,10 @@ export default function PlanScreen() {
       ) : null}
 
       {plan.readyNow.length > 0 ? (
-        <ListSection header={`Ready Now (${plan.readyNow.length})`} footer="Ready, priced and not on a visit yet.">
+        <ListSection header={`Ready (${plan.readyNow.length})`}>
           {itemRows(plan.readyNow)}
           <ListRow
-            title="Book a Visit for These"
+            title={plan.readyNow.length === 1 ? 'Schedule This One' : `Schedule These ${plan.readyNow.length}`}
             tone="tint"
             icon="calendar"
             onPress={() => book(plan.readyNow.map((l) => l.item.id), earliestStart(today))}
@@ -113,10 +115,10 @@ export default function PlanScreen() {
       ) : null}
 
       {plan.comingFree.map((g) => (
-        <ListSection key={`${g.date}-${g.on}`} header={`Ready by ${shortDate(g.date)}, after ${g.on}`}>
+        <ListSection key={`${g.date}-${g.on}`} header={`Waiting on ${g.on}, ready by ${shortDate(g.date)}`}>
           {itemRows(g.lines)}
           <ListRow
-            title={`Book for ${shortDate(startAfter(g.date, today))}`}
+            title={`Schedule for ${shortDate(startAfter(g.date, today))}`}
             tone="tint"
             icon="calendar"
             onPress={() => book(g.lines.map((l) => l.item.id), startAfter(g.date, today))}
@@ -128,12 +130,12 @@ export default function PlanScreen() {
       {plan.noDate.map((g) => (
         <ListSection key={`none-${g.on}`} header={`Waiting on ${g.on}, no date yet`}>
           {itemRows(g.lines)}
-          <ListRow title={`Set a Ready By for ${g.on}`} tone="tint" icon="hourglass" onPress={() => openHoldup(g.lines[0]?.item.waitingOn[0] ?? g.on)} />
+          <ListRow title="Add a Ready By Date" tone="tint" icon="hourglass" onPress={() => openHoldup(g.lines[0]?.item.waitingOn[0] ?? g.on)} />
         </ListSection>
       ))}
 
       {plan.needsPrice.length > 0 ? (
-        <ListSection header={`Needs a Price (${plan.needsPrice.length})`} footer="Added scope. It is booked once it is priced and Bought Out.">
+        <ListSection header={`Needs a Price (${plan.needsPrice.length})`} footer="Additional work. Add its order number once it is priced.">
           {itemRows(plan.needsPrice, (l) => (l.item.ready ? undefined : 'not ready'))}
         </ListSection>
       ) : null}

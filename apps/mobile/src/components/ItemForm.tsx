@@ -4,6 +4,7 @@
 
 import {
   checkItem,
+  floorOf,
   kindDefaults,
   tidyExtra,
   tidyItem,
@@ -37,7 +38,7 @@ export function blankDraft(locationId: string): ItemDraft {
     description: '',
     tradeId: null,
     companyId: null,
-    kind: 'deficiency',
+    kind: 'completion',
     ready: true,
     waitingOn: [],
     readyBy: null,
@@ -52,7 +53,7 @@ export function blankDraft(locationId: string): ItemDraft {
   };
 }
 
-/** A new item as Item Form setup says it starts: ready or not, Deficiency or Added Scope. */
+/** A new item as Item Form setup says it starts: ready or not, and its type. */
 export function startDraft(locationId: string, settings: FormSettings): ItemDraft {
   return { ...blankDraft(locationId), ready: settings.startReady, ...kindDefaults(settings.startKind, { poOrCo: null }) };
 }
@@ -102,7 +103,7 @@ export function useItemForm(initial: ItemDraft): ItemFormState {
   const tidy = useMemo(() => tidyItem(value), [value]);
   const problems = useMemo(() => {
     const list = checkItem(tidy).map((p) => ({ field: p.field as keyof ItemDraft, message: p.message }));
-    if (value.locationId === '') list.unshift({ field: 'locationId', message: 'Pick the room or area' });
+    if (value.locationId === '') list.unshift({ field: 'locationId', message: 'Pick the location' });
     return list;
   }, [tidy, value.locationId]);
   const dirty = EDITABLE.some((k) => !sameValue(value[k], initial[k]));
@@ -142,7 +143,7 @@ export function useFormOptions(jobId: string, locationId: string) {
       [...locations]
         .filter((l) => l.active || l.id === locationId)
         .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((l) => ({ value: l.id, label: l.label, group: l.kind === 'shared' ? 'Shared Areas' : (l.floor ?? 'Rooms') })),
+        .map((l) => ({ value: l.id, label: l.label, group: floorOf(l) })),
     [locations, locationId],
   );
   const companyOptions = useMemo<Option[]>(() => {
