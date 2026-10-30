@@ -20,8 +20,8 @@ export function Switch({ value, onValueChange, accessibilityLabel, disabled, tes
         haptic.selection();
         onValueChange(next);
       }}
-      trackColor={{ true: colors.green, false: colors.fill2 }}
-      ios_backgroundColor={colors.fill2}
+      trackColor={{ true: colors.tint, false: colors.track }}
+      ios_backgroundColor={colors.track}
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       testID={testID}

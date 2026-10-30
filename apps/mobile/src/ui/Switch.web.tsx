@@ -34,7 +34,7 @@ export function Switch({ value, onValueChange, accessibilityLabel, disabled, tes
         style={[
           styles.track,
           {
-            backgroundColor: value ? colors.green : colors.fill2,
+            backgroundColor: value ? colors.tint : colors.track,
             transitionProperty: 'backgroundColor',
             transitionDuration: 220,
             transitionTimingFunction: easeOut,

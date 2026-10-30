@@ -37,6 +37,14 @@ const GLYPHS: Record<IconName, Draw> = {
       {dot(18.5, 12, 1.9, c)}
     </>
   ),
+  'ellipsis.circle': (c, w) => (
+    <>
+      {ring(12, 12, 9.6, c, w * 1.6)}
+      {dot(7.6, 12, 1.35, c)}
+      {dot(12, 12, 1.35, c)}
+      {dot(16.4, 12, 1.35, c)}
+    </>
+  ),
   checkmark: (c, w) => line('M5 12.5l4.6 4.6L19.2 7.4', c, w * 2.3),
   xmark: (c, w) => line('M6.5 6.5l11 11M17.5 6.5l-11 11', c, w * 2.1),
   'xmark.circle.fill': (c, w) => (

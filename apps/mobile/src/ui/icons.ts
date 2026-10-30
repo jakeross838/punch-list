@@ -14,6 +14,7 @@ export const SF_SYMBOLS = {
   plus: 'plus',
   'plus.circle.fill': 'plus.circle.fill',
   ellipsis: 'ellipsis',
+  'ellipsis.circle': 'ellipsis.circle',
   checkmark: 'checkmark',
   xmark: 'xmark',
   'xmark.circle.fill': 'xmark.circle.fill',

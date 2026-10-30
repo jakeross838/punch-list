@@ -74,7 +74,7 @@ export function MenuButton({ menu }: { menu: BarMenu }) {
                         </span>
                         <span className="pl-menu-label">{action.label}</span>
                         {action.icon ? (
-                          <Icon name={action.icon} size={19} color={action.destructive ? colors.red : colors.label} />
+                          <Icon name={action.icon} size={19} color={action.destructive ? colors.destructive : colors.label} />
                         ) : null}
                       </button>
                     ))}

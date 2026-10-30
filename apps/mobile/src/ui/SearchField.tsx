@@ -20,7 +20,7 @@ export function SearchField({
 }) {
   return (
     <View style={styles.field}>
-      <Icon name="magnifyingglass" size={17} color={colors.secondary} weight="medium" />
+      <Icon name="magnifyingglass" size={16} color={colors.secondary} weight="semibold" />
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -38,7 +38,7 @@ export function SearchField({
       />
       {value !== '' ? (
         <Touchable feedback="opacity" onPress={() => onChangeText('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear search">
-          <Icon name="xmark.circle.fill" size={17} color={colors.gray2} />
+          <Icon name="xmark.circle.fill" size={17} color={colors.chevron} />
         </Touchable>
       ) : null}
     </View>
@@ -47,13 +47,13 @@ export function SearchField({
 
 const styles = StyleSheet.create({
   field: {
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.fill3,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
     paddingHorizontal: 12,
   },
-  input: { ...typeScale.body, flex: 1, height: 40, paddingVertical: 0, color: colors.label, outlineWidth: 0 },
+  input: { ...typeScale.body, flex: 1, height: 38, paddingVertical: 0, color: colors.label, outlineWidth: 0 },
 });

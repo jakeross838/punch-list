@@ -10,6 +10,8 @@ export interface BarButton {
   label: string;
   icon?: IconName;
   iconOnly?: boolean;
+  /** Shown in place of the label, like "Jobs" after the back chevron. */
+  text?: string;
   variant?: 'plain' | 'tinted' | 'prominent';
   onPress: () => void;
   disabled?: boolean;
@@ -62,6 +64,10 @@ export interface PageProps {
   /** A large title that shrinks into the bar as you scroll. */
   large?: boolean;
   subtitle?: string;
+  /** A small line above the large title, like "Ross Built" over "Jobs". Preview page only. */
+  eyebrow?: string;
+  /** The previous screen's title, shown after the back chevron: "Jobs". */
+  backLabel?: string;
   background?: 'grouped' | 'plain';
   left?: BarItem[];
   right?: BarItem[];

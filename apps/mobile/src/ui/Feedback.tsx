@@ -93,7 +93,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
                   setToast(null);
                 }}
               >
-                <Text variant="subheadline" weight="700" color="#9CCBDC">
+                <Text variant="subheadline" weight="700" color={colors.white} style={{ textDecorationLine: 'underline' }}>
                   {toast.action.label}
                 </Text>
               </Touchable>
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 24,
-    backgroundColor: 'rgba(28, 28, 30, 0.94)',
-    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.22)',
+    backgroundColor: 'rgba(29, 29, 31, 0.94)',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
   },
 });

@@ -11,18 +11,18 @@ import { Text } from './Text';
 
 // The toolbar reads its children by type, so these return the toolbar elements themselves
 // rather than wrapping them in components of our own.
-function nativeButton(item: BarButton) {
+function nativeButton(item: BarButton, inBottomBar = false) {
   return (
     <Stack.Toolbar.Button
       key={item.label}
       icon={item.icon ? SF_SYMBOLS[item.icon] : undefined}
       onPress={item.onPress}
       disabled={item.disabled}
-      variant={item.variant === 'prominent' ? 'done' : 'plain'}
-      tintColor={item.variant === 'tinted' ? colors.tint : undefined}
+      variant={item.variant === 'prominent' || (inBottomBar && !item.variant) ? (inBottomBar ? 'prominent' : 'done') : 'plain'}
+      tintColor={colors.tint}
       accessibilityLabel={item.label}
     >
-      {item.iconOnly ? undefined : item.label}
+      {item.iconOnly ? undefined : (item.text ?? item.label)}
     </Stack.Toolbar.Button>
   );
 }
@@ -123,7 +123,7 @@ export function Page({
       {/* After the list: the large title follows the first scroll view it finds. */}
       {bottom?.length ? (
         <Stack.Toolbar placement="bottom">
-          {bottom.map(nativeButton)}
+          {bottom.map((item) => nativeButton(item, true))}
           <Stack.Toolbar.Spacer />
         </Stack.Toolbar>
       ) : null}

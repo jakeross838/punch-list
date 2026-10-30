@@ -1,6 +1,7 @@
-// Preview page: the iOS navigation bar drawn to match. The large title scrolls with the content
-// and the small title fades into the bar once it passes under it; a hairline appears when content
-// scrolls under the bar. Glass buttons sit at the ends, and the bottom toolbar floats over a fade.
+// Preview page: the navigation bar drawn to match the iPhone. The large title scrolls with the
+// content and the small title fades into the bar once it passes under it; a hairline appears when
+// content scrolls under the bar. Bar buttons are plain accent text and icons; the main action is
+// a filled pill.
 
 import { router, useCanGoBack } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -18,26 +19,36 @@ function barItem(item: BarItem) {
   return <BarButtonView key={item.label} {...item} />;
 }
 
-const BACK: BarButton = {
-  kind: 'button',
-  label: 'Back',
-  icon: 'chevron.left',
-  iconOnly: true,
-  onPress: () => router.back(),
-  testID: 'back',
-};
-
-export function Page({ title, large, subtitle, background = 'grouped', back = true, left, right, bottom, search, sheet, children, list, testID }: PageProps) {
+export function Page({
+  title,
+  large,
+  subtitle,
+  eyebrow,
+  backLabel,
+  background = 'grouped',
+  back = true,
+  left,
+  right,
+  bottom,
+  search,
+  sheet,
+  children,
+  list,
+  testID,
+}: PageProps) {
   const insets = useSafeAreaInsets();
   const canGoBack = useCanGoBack();
   const [scrollY] = useState(() => new Animated.Value(0));
   const onScroll = useMemo(() => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false }), [scrollY]);
   const bg = background === 'grouped' ? colors.grouped : colors.background;
   const showLarge = !!large && !sheet;
+  const largeTop = eyebrow ? 22 : 0;
 
-  const titleOpacity = showLarge ? scrollY.interpolate({ inputRange: [20, 38], outputRange: [0, 1], extrapolate: 'clamp' }) : 1;
+  const titleOpacity = showLarge
+    ? scrollY.interpolate({ inputRange: [20 + largeTop, 38 + largeTop], outputRange: [0, 1], extrapolate: 'clamp' })
+    : 1;
   const edgeOpacity = scrollY.interpolate({
-    inputRange: showLarge ? [36, 48] : [0, 8],
+    inputRange: showLarge ? [36 + largeTop, 48 + largeTop] : [0, 8],
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
@@ -46,6 +57,11 @@ export function Page({ title, large, subtitle, background = 'grouped', back = tr
     <View>
       {showLarge ? (
         <View style={styles.large}>
+          {eyebrow ? (
+            <Text variant="footnote" weight="600" color={colors.secondary} style={styles.eyebrow}>
+              {eyebrow}
+            </Text>
+          ) : null}
           <Text variant="largeTitle" numberOfLines={2} accessibilityRole="header">
             {title}
           </Text>
@@ -68,13 +84,21 @@ export function Page({ title, large, subtitle, background = 'grouped', back = tr
     </View>
   );
 
-  const bottomInset = (bottom?.length ? 104 : 36) + insets.bottom;
+  const bottomInset = (bottom?.length ? 96 : 36) + insets.bottom;
   const scroll: PageScroll = {
     props: { onScroll, scrollEventThrottle: 16, keyboardShouldPersistTaps: 'handled' },
     header,
     bottomInset,
   };
-  const leftItems = sheet || !back || !canGoBack ? (left ?? []) : [BACK, ...(left ?? [])];
+  const backItem: BarButton = {
+    kind: 'button',
+    label: backLabel ? `Back to ${backLabel}` : 'Back',
+    text: backLabel ?? 'Back',
+    icon: 'chevron.left',
+    onPress: () => router.back(),
+    testID: 'back',
+  };
+  const leftItems = sheet || !back || !canGoBack ? (left ?? []) : [backItem, ...(left ?? [])];
 
   return (
     <View style={[styles.page, { backgroundColor: bg }]} testID={testID}>
@@ -94,64 +118,48 @@ export function Page({ title, large, subtitle, background = 'grouped', back = tr
         {list ? (
           list(scroll)
         ) : (
-          <ScrollView {...scroll.props} style={styles.body} contentContainerStyle={{ paddingTop: sheet ? 8 : 0, paddingBottom: bottomInset }}>
+          <ScrollView {...scroll.props} style={styles.body} contentContainerStyle={{ paddingTop: sheet ? 4 : 0, paddingBottom: bottomInset }}>
             {header}
             {children}
           </ScrollView>
         )}
       </View>
       {bottom?.length ? (
-        <View pointerEvents="box-none" style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 14) + 2 }]}>
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              pointerEvents: 'none',
-              background: `linear-gradient(to bottom, ${fade(bg, 0)}, ${fade(bg, 0.86)} 45%, ${fade(bg, 0.96)})`,
-            }}
-          />
-          <View style={styles.bottomRow} pointerEvents="box-none">
-            {bottom.map((b) => (
-              <BarButtonView key={b.label} {...b} variant={b.variant ?? 'tinted'} size="large" />
-            ))}
-          </View>
+        <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 14) + 8 }]}>
+          {bottom.map((b) => (
+            <BarButtonView key={b.label} {...b} variant={b.variant ?? 'prominent'} size="large" />
+          ))}
         </View>
       ) : null}
     </View>
   );
 }
 
-function fade(hex: string, alpha: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-}
-
 const styles = StyleSheet.create({
   page: { flex: 1, overflow: 'hidden' },
   bar: { zIndex: 10 },
-  barRow: {
-    height: layout.barHeight,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
-  sheetBarRow: { height: 60, paddingHorizontal: 14 },
-  side: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  barRow: { height: layout.barHeight + 4, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 },
+  sheetBarRow: { height: 58, paddingHorizontal: 10 },
+  side: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
   right: { justifyContent: 'flex-end' },
-  barTitle: {
-    position: 'absolute',
-    left: 110,
-    right: 110,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  edge: { height: StyleSheet.hairlineWidth, backgroundColor: colors.separator },
+  barTitle: { position: 'absolute', left: 110, right: 110, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  edge: { height: 1, backgroundColor: colors.rule },
   body: { flex: 1 },
-  large: { paddingHorizontal: layout.margin + 4, paddingTop: 2, paddingBottom: 10, gap: 2 },
-  subtitle: { marginHorizontal: layout.margin + 4, marginBottom: 14 },
-  search: { paddingHorizontal: layout.margin, paddingBottom: 18 },
-  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 26 },
-  bottomRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: layout.margin },
+  large: { paddingHorizontal: layout.inset, paddingTop: 2, paddingBottom: 16, gap: 2 },
+  eyebrow: { marginBottom: 2 },
+  subtitle: { marginHorizontal: layout.inset, marginBottom: 14 },
+  search: { paddingHorizontal: layout.margin, paddingBottom: 14 },
+  bottom: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderTopWidth: 1,
+    borderTopColor: colors.separator,
+  },
 });

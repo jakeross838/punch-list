@@ -1,8 +1,7 @@
-// Bar buttons in the iOS 26 style: a light glass capsule for plain buttons ("Cancel", the back
-// chevron, the "…" menu), a tinted capsule for the main one ("Done", "Add"). Used in the sheet
-// headers on both platforms and in every bar on the preview page.
+// Bar buttons. Plain ones are the accent color with no background ("Cancel", the back chevron,
+// the "…" menu); the main one is a filled accent pill ("Done", "Add", "New Item").
 
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { colors } from '@/constants/theme';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -14,7 +13,9 @@ export interface BarButtonProps {
   icon?: IconName;
   /** Show only the icon; the label is still read out by VoiceOver. */
   iconOnly?: boolean;
-  /** plain: glass, black label. tinted: glass, blue label. prominent: filled blue. */
+  /** Shown beside the icon in place of the label, like "Jobs" after the back chevron. */
+  text?: string;
+  /** plain: accent text or icon. prominent: a filled accent pill. */
   variant?: 'plain' | 'tinted' | 'prominent';
   onPress: () => void;
   disabled?: boolean;
@@ -22,52 +23,55 @@ export interface BarButtonProps {
   size?: 'regular' | 'large';
 }
 
-export function BarButtonView({ label, icon, iconOnly, variant = 'plain', onPress, disabled, testID, size = 'regular' }: BarButtonProps) {
-  const prominent = variant === 'prominent';
-  const fg = prominent ? colors.white : variant === 'tinted' ? colors.tint : colors.label;
-  const h = size === 'large' ? 48 : 40;
+export function BarButtonView({ label, icon, iconOnly, text, variant = 'plain', onPress, disabled, testID, size = 'regular' }: BarButtonProps) {
+  const pill = variant === 'prominent';
+  const fg = pill ? colors.white : colors.tint;
+  const shown = iconOnly ? null : (text ?? label);
+  if (pill) {
+    const h = size === 'large' ? 46 : 34;
+    return (
+      <Touchable
+        feedback="scale"
+        onPress={onPress}
+        disabled={disabled}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        testID={testID}
+        style={[styles.pill, { height: h, borderRadius: h / 2, paddingHorizontal: size === 'large' ? 26 : 16 }]}
+      >
+        {icon ? <Icon name={icon} size={size === 'large' ? 18 : 15} color={fg} weight="bold" /> : null}
+        {shown ? (
+          <Text variant={size === 'large' ? 'headline' : 'subheadline'} weight="600" color={fg} numberOfLines={1}>
+            {shown}
+          </Text>
+        ) : null}
+      </Touchable>
+    );
+  }
   return (
     <Touchable
-      feedback="scale"
+      feedback="opacity"
       onPress={onPress}
       disabled={disabled}
       hitSlop={6}
       accessibilityRole="button"
       accessibilityLabel={label}
       testID={testID}
-      style={[
-        styles.base,
-        { height: h, borderRadius: h / 2 },
-        iconOnly ? { width: h, paddingHorizontal: 0 } : null,
-        prominent ? styles.prominent : styles.glass,
-      ]}
+      style={[styles.plain, iconOnly ? styles.iconOnly : null]}
     >
-      {icon ? <Icon name={icon} size={iconOnly ? 19 : 20} color={fg} weight="semibold" /> : null}
-      {iconOnly ? null : (
-        <Text variant="headline" weight={variant === 'plain' ? '500' : '600'} color={fg} numberOfLines={1}>
-          {label}
+      {icon ? <Icon name={icon} size={iconOnly ? 23 : 21} color={fg} weight={icon === 'chevron.left' ? 'semibold' : 'regular'} /> : null}
+      {shown ? (
+        <Text color={fg} numberOfLines={1}>
+          {shown}
         </Text>
-      )}
+      ) : null}
     </Touchable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: {
-    minWidth: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-  },
-  glass: {
-    backgroundColor: 'rgba(255, 255, 255, 0.78)',
-    boxShadow: '0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 18px -6px rgba(0, 0, 0, 0.14)',
-    ...(Platform.OS === 'web' ? { backdropFilter: 'blur(18px) saturate(180%)' } : null),
-  },
-  prominent: {
-    backgroundColor: colors.tint,
-    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 6px 16px -6px rgba(62, 102, 118, 0.55)',
-  },
+  pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: colors.tint },
+  plain: { height: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6 },
+  iconOnly: { justifyContent: 'center', paddingHorizontal: 0 },
 });

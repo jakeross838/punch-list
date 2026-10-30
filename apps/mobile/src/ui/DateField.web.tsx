@@ -29,7 +29,7 @@ export function DateField({ value, onChange, label, testID }: DateFieldProps) {
       </View>
       {value ? (
         <Touchable feedback="opacity" hitSlop={10} onPress={() => onChange(null)} accessibilityRole="button" accessibilityLabel={`Clear ${label}`}>
-          <Icon name="xmark.circle.fill" size={20} color={colors.gray3} />
+          <Icon name="xmark.circle.fill" size={20} color={colors.chevron} />
         </Touchable>
       ) : null}
     </View>
@@ -43,9 +43,9 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
     paddingHorizontal: 10,
-    borderRadius: 9,
-    backgroundColor: colors.fill3,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
-  pillEmpty: { backgroundColor: colors.tintSoft },
+  pillEmpty: { backgroundColor: colors.surface },
 });

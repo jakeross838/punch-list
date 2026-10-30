@@ -165,6 +165,7 @@ export function ItemFormBody({
         footerTone={titleProblem ? 'danger' : 'default'}
       >
         <ListTextField
+          size="title"
           placeholder="Title"
           value={value.title}
           onChangeText={(title) => set({ title })}
@@ -194,8 +195,6 @@ export function ItemFormBody({
         footerTone={whereProblem ? 'danger' : 'default'}
       >
         <ListRow
-          icon="door"
-          iconColor={colors.blue}
           title="Room"
           value={roomLabel ?? 'Choose'}
           valueColor={roomLabel ? colors.secondary : colors.tint}
@@ -204,8 +203,6 @@ export function ItemFormBody({
           testID="pick-room"
         />
         <ListRow
-          icon="person.2.fill"
-          iconColor={colors.indigo}
           title="Company"
           value={companyName ?? 'Choose'}
           valueColor={companyName ? colors.secondary : colors.tint}
@@ -214,8 +211,6 @@ export function ItemFormBody({
           testID="pick-company"
         />
         <ListRow
-          icon="wrench"
-          iconColor={colors.gray}
           title="Trade"
           value={tradeName ?? 'Choose'}
           valueColor={tradeName ? colors.secondary : colors.tint}
@@ -239,8 +234,6 @@ export function ItemFormBody({
 
       <ListSection footer={sentence(readyProblem)} footerTone="danger">
         <ListSwitchRow
-          icon="checkmark"
-          iconColor={colors.green}
           title="Ready"
           subtitle={value.ready ? 'It can be done now' : 'It is waiting on something'}
           value={value.ready}
@@ -249,8 +242,6 @@ export function ItemFormBody({
         />
         {!value.ready ? (
           <ListRow
-            icon="hourglass"
-            iconColor={colors.orange}
             title="Waiting On"
             value={value.waitingOn ?? 'Choose'}
             valueColor={value.waitingOn ? colors.secondary : colors.tint}
@@ -261,8 +252,6 @@ export function ItemFormBody({
         ) : null}
         {!value.ready ? (
           <ListRow
-            icon="calendar"
-            iconColor={colors.red}
             title="Ready By"
             titleLines={1}
             right={<DateField value={value.readyBy} onChange={(readyBy) => set({ readyBy })} label="Ready By" testID="ready-by" />}
@@ -276,16 +265,12 @@ export function ItemFormBody({
           footerTone={poProblem ? 'danger' : 'default'}
         >
           <ListSwitchRow
-            icon="cart"
-            iconColor={colors.teal}
             title="Bought Out"
             value={value.boughtOut}
             onValueChange={(boughtOut) => set({ boughtOut })}
             testID="switch-bought-out"
           />
           <ListLabeledField
-            icon="number"
-            iconColor={colors.gray}
             label="PO or CO"
             placeholder="Number"
             value={value.poOrCo ?? ''}

@@ -6,7 +6,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { leaveOrConfirm } from '@/components/discard';
 import { fieldsOf, ItemFormBody, useItemForm } from '@/components/ItemForm';
-import { colors } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { dayOf, EmptyState, haptic, ListRow, ListSection, Page, useFeedback } from '@/ui';
 
@@ -104,17 +103,17 @@ function ItemDetail({ jobId, item }: { jobId: string; item: Item }) {
       right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: done, disabled: busy, testID: 'save' }]}
     >
       <ItemFormBody jobId={jobId} form={form}>
-        <ListSection header="Status" footer={statusFooter}>
+        <ListSection footer={statusFooter}>
           {item.status === 'open' ? (
-            <ListRow icon="checkmark" iconColor={colors.green} title="Mark Complete" tone="tint" onPress={markComplete} testID="mark-complete" />
+            <ListRow title="Mark Complete" tone="tint" onPress={markComplete} testID="mark-complete" />
           ) : null}
           {item.status === 'complete' ? (
-            <ListRow icon="undo" iconColor={colors.gray} title="Reopen" tone="tint" onPress={() => void setStatus(reopen)} testID="reopen" />
+            <ListRow title="Reopen" tone="tint" onPress={() => void setStatus(reopen)} testID="reopen" />
           ) : null}
           {item.status !== 'removed' ? (
-            <ListRow icon="trash" iconColor={colors.red} title="Remove from List" tone="destructive" onPress={removeItem} testID="remove" />
+            <ListRow title="Remove from List" tone="destructive" onPress={removeItem} testID="remove" />
           ) : (
-            <ListRow icon="undo" iconColor={colors.gray} title="Restore to List" tone="tint" onPress={() => void setStatus(restore)} testID="restore" />
+            <ListRow title="Restore to List" tone="tint" onPress={() => void setStatus(restore)} testID="restore" />
           )}
         </ListSection>
       </ItemFormBody>

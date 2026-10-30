@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, SectionList, StyleSheet, View } from 'react-native';
 import { ItemRow, type Names } from '@/components/ItemRow';
 import { fieldsOf } from '@/components/ItemForm';
-import { SummaryTiles, TILE_LABELS, type TileCounts, type TileFilter } from '@/components/SummaryTiles';
+import { CountStrip, FILTER_NAMES, type FilterCounts, type ListFilter } from '@/components/CountStrip';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { Button, EmptyState, haptic, Icon, Page, Text, Touchable, useFeedback, type BarMenu } from '@/ui';
@@ -46,7 +46,7 @@ export default function CompletionListScreen() {
   const me = data.useMe();
 
   const [by, setBy] = useState<GroupBy>('room');
-  const [filter, setFilter] = useState<TileFilter>('open');
+  const [filter, setFilter] = useState<ListFilter>('open');
   const [showCompleted, setShowCompleted] = useState(false);
   const [query, setQuery] = useState('');
   const [checking, setChecking] = useState<ReadonlySet<string>>(new Set());
@@ -68,7 +68,7 @@ export default function CompletionListScreen() {
     };
   }, [trades, companies, locations, me]);
 
-  const counts = useMemo<TileCounts>(() => {
+  const counts = useMemo<FilterCounts>(() => {
     const open = items.filter((i) => i.status === 'open');
     return {
       open: open.length,
@@ -164,7 +164,7 @@ export default function CompletionListScreen() {
   const menu: BarMenu = {
     kind: 'menu',
     label: 'More',
-    icon: 'ellipsis',
+    icon: 'ellipsis.circle',
     testID: 'more',
     groups: [
       {
@@ -199,7 +199,7 @@ export default function CompletionListScreen() {
   ) : q ? (
     <EmptyState icon="magnifyingglass" title="No Results" message={`No items match “${q}”.`} />
   ) : (
-    <EmptyState icon="checkmark.circle.fill" title="Nothing Here" message={`No ${TILE_LABELS[filter].toLowerCase()} items right now.`} />
+    <EmptyState icon="checkmark.circle.fill" title="Nothing Here" message={`No ${FILTER_NAMES[filter].toLowerCase()} items right now.`} />
   );
 
   return (
@@ -207,8 +207,10 @@ export default function CompletionListScreen() {
       title={job?.name ?? 'Completion List'}
       large
       subtitle={job?.address}
+      backLabel="Jobs"
+      background="plain"
       right={[menu]}
-      bottom={[{ kind: 'button', label: 'New Item', icon: 'plus.circle.fill', onPress: () => addItem(), testID: 'new-item' }]}
+      bottom={[{ kind: 'button', label: 'New Item', icon: 'plus', variant: 'prominent', onPress: () => addItem(), testID: 'new-item' }]}
       search={{ value: query, onChange: setQuery, placeholder: 'Search Items' }}
       list={(scroll) => (
         <SectionList
@@ -222,7 +224,7 @@ export default function CompletionListScreen() {
           ListHeaderComponent={
             <View>
               {scroll.header}
-              <SummaryTiles counts={counts} value={filter} onChange={setFilter} />
+              <CountStrip counts={counts} value={filter} onChange={setFilter} />
               {showCompleted ? (
                 <Text variant="footnote" color={colors.secondary} style={styles.note}>
                   Showing completed items too.
@@ -240,24 +242,24 @@ export default function CompletionListScreen() {
           }
           renderSectionHeader={({ section }) => (
             <View style={styles.header}>
-              <Text variant="title3" weight="700" numberOfLines={2} color={section.data.length === 0 ? colors.secondary : colors.label} style={{ flex: 1 }}>
+              <Text variant="title2" numberOfLines={2} color={section.data.length === 0 ? colors.secondary : colors.label} style={{ flex: 1 }}>
                 {section.title}
               </Text>
               {section.open > 0 ? (
                 <Text variant="subheadline" color={colors.secondary} tabular>
-                  {section.open} open{section.ready > 0 ? `, ${section.ready} ready` : ''}
+                  {section.open} open
                 </Text>
               ) : null}
               {by === 'room' ? (
                 <Touchable
-                  feedback="scale"
-                  hitSlop={10}
+                  feedback="opacity"
+                  hitSlop={12}
                   onPress={() => addItem(section.key)}
                   accessibilityRole="button"
                   accessibilityLabel={`Add an item to ${section.title}`}
                   style={styles.add}
                 >
-                  <Icon name="plus" size={15} color={colors.tint} weight="bold" />
+                  <Icon name="plus" size={18} color={colors.tint} weight="medium" />
                 </Touchable>
               ) : null}
             </View>
@@ -268,7 +270,6 @@ export default function CompletionListScreen() {
               item={item}
               by={by}
               names={names}
-              first={index === 0}
               last={index === section.data.length - 1}
               checking={checking.has(item.id)}
               onOpen={onOpen}
@@ -286,15 +287,15 @@ export default function CompletionListScreen() {
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: layout.margin + 4,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: 'rgba(242, 242, 247, 0.97)',
+    alignItems: 'baseline',
+    gap: 12,
+    paddingHorizontal: layout.inset,
+    paddingTop: 20,
+    paddingBottom: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
     ...(Platform.OS === 'web' ? { backdropFilter: 'blur(20px) saturate(180%)' } : null),
   },
-  add: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.tintSoft },
-  note: { marginHorizontal: layout.margin + 4, marginTop: 6 },
+  add: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  note: { marginHorizontal: layout.inset, marginTop: 8 },
   footer: { marginTop: 18 },
 });

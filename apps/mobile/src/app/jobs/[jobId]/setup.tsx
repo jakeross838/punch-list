@@ -8,6 +8,7 @@ import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { colors, layout, type as typeScale } from '@/constants/theme';
 import { useData } from '@/data/api';
 import {
+  Button,
   EmptyState,
   haptic,
   Icon,
@@ -36,9 +37,16 @@ export default function SetupScreen() {
   const [sheet, setSheet] = useState<'rooms' | 'company' | null>(null);
 
   return (
-    <Page title="Job Setup" large subtitle={job?.name}>
+    <Page
+      title="Job Setup"
+      large
+      subtitle={job ? [job.name, job.address].filter(Boolean).join(', ') : undefined}
+      backLabel={job?.name}
+      background="plain"
+    >
       <View style={styles.tabs}>
         <Segmented<Tab>
+          track={colors.trackOnWhite}
           options={[
             ['rooms', 'Rooms'],
             ['companies', 'Companies'],
@@ -58,6 +66,11 @@ export default function SetupScreen() {
   );
 }
 
+function countOf(n: number, noun: string): string {
+  const plural = noun === 'company' ? 'companies' : `${noun}s`;
+  return `${n} ${n === 1 ? noun : plural}`;
+}
+
 function floorsOf(locations: Location[]): { name: string; rooms: Location[] }[] {
   const out: { name: string; rooms: Location[] }[] = [];
   for (const l of [...locations].sort((a, b) => a.sortOrder - b.sortOrder)) {
@@ -74,17 +87,21 @@ function RoomsTab({ jobId, onPaste }: { jobId: string; onPaste: () => void }) {
   const floors = useMemo(() => floorsOf(locations), [locations]);
   return (
     <>
-      <ListSection footer="Paste the room list from the plans, in floor order. New rooms go after the ones already here.">
-        <ListRow icon="clipboard" iconColor={colors.tint} title="Paste Room List" tone="tint" onPress={onPaste} testID="paste-rooms" />
-      </ListSection>
+      <View style={styles.action}>
+        <Button variant="tinted" icon="plus" label="Paste Room List" onPress={onPaste} testID="paste-rooms" />
+        <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
+          From the plans, in floor order. New rooms go after the ones already here.
+        </Text>
+      </View>
       {floors.length === 0 ? <EmptyState icon="door" title="No Rooms Yet" message="Paste the room list to start." /> : null}
       {floors.map((floor) => (
         <ListSection
           key={floor.name}
+          variant="plain"
           header={floor.name}
           headerRight={
-            <Text variant="footnote" color={colors.secondary} tabular>
-              {floor.rooms.length}
+            <Text variant="subheadline" color={colors.secondary} tabular>
+              {countOf(floor.rooms.length, floor.name === 'Shared Areas' ? 'area' : 'room')}
             </Text>
           }
         >
@@ -111,13 +128,24 @@ function CompaniesTab({ jobId, onAdd }: { jobId: string; onAdd: () => void }) {
     .sort((a, b) => a.name.localeCompare(b.name));
   return (
     <>
-      <ListSection footer="Each company is on the job with the trade it does here.">
-        <ListRow icon="plus" iconColor={colors.tint} title="Add Company" tone="tint" onPress={onAdd} testID="add-company" />
-      </ListSection>
+      <View style={styles.action}>
+        <Button variant="tinted" icon="plus" label="Add Company" onPress={onAdd} testID="add-company" />
+        <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
+          Each company is on the job with the trade it does here.
+        </Text>
+      </View>
       {rows.length === 0 ? (
         <EmptyState icon="person.2.fill" title="No Companies Yet" message="Add the companies doing the work on this job." />
       ) : (
-        <ListSection header="On This Job" headerRight={<Text variant="footnote" color={colors.secondary} tabular>{rows.length}</Text>}>
+        <ListSection
+          variant="plain"
+          header="On This Job"
+          headerRight={
+            <Text variant="subheadline" color={colors.secondary} tabular>
+              {countOf(rows.length, 'company')}
+            </Text>
+          }
+        >
           {rows.map((r) => (
             <ListRow key={r.key} title={r.name} subtitle={r.trade} />
           ))}
@@ -150,20 +178,24 @@ function WaitingTab({ jobId }: { jobId: string }) {
   }
 
   return (
-    <ListSection header="Extra Choices" footer="Every company on this job is a Waiting On choice already. Add anyone else work can wait on.">
+    <ListSection
+      variant="plain"
+      header="Extra Choices"
+      footer="Every company on this job is a Waiting On choice already. Add anyone else work can wait on."
+    >
       {extras.map((x) => (
         <ListRow
           key={x}
           title={x}
           right={
             <Touchable feedback="opacity" hitSlop={10} onPress={() => removeChoice(x)} accessibilityRole="button" accessibilityLabel={`Remove ${x}`}>
-              <Icon name="minus.circle.fill" size={22} color={colors.red} />
+              <Icon name="minus.circle.fill" size={22} color={colors.destructive} />
             </Touchable>
           }
         />
       ))}
       <View style={styles.addRow}>
-        <Icon name="plus.circle.fill" size={22} color={clean && !duplicate ? colors.green : colors.gray3} />
+        <Icon name="plus.circle.fill" size={22} color={clean && !duplicate ? colors.tint : colors.chevron} />
         <TextInput
           value={text}
           onChangeText={setText}
@@ -299,8 +331,6 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
         <ListSection footer="Pick a company already in the app, or type a new one.">
           <ListRow
-            icon="building"
-            iconColor={colors.indigo}
             title="Company"
             value={companyId ? (name ?? 'Choose') : 'Choose'}
             valueColor={companyId ? colors.secondary : colors.tint}
@@ -325,8 +355,6 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
           footerTone={already ? 'danger' : 'default'}
         >
           <ListRow
-            icon="wrench"
-            iconColor={colors.gray}
             title="Trade"
             value={trades.find((t) => t.id === tradeId)?.name ?? 'Choose'}
             valueColor={tradeId ? colors.secondary : colors.tint}
@@ -354,15 +382,17 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
 }
 
 const styles = StyleSheet.create({
-  tabs: { marginHorizontal: layout.margin, marginBottom: 26 },
+  tabs: { marginHorizontal: layout.inset, marginBottom: 20 },
+  action: { marginHorizontal: layout.inset, gap: 8, marginBottom: 6 },
+  actionNote: { paddingHorizontal: 4 },
   sheetContent: { paddingTop: 4, paddingBottom: 48 },
   addRow: {
     minHeight: layout.rowMinHeight,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: layout.rowPadding,
-    backgroundColor: colors.cell,
+    paddingRight: layout.inset,
+    backgroundColor: colors.background,
   },
   addInput: { ...typeScale.body, flex: 1, minHeight: layout.rowMinHeight, color: colors.label, outlineWidth: 0 },
 });

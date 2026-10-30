@@ -19,10 +19,10 @@ export function SheetHeader({ title, left, right }: { title: string; left?: BarB
 
 const styles = StyleSheet.create({
   header: {
-    height: 64,
+    height: 58,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     backgroundColor: colors.grouped,
   },
   side: { flex: 1, flexDirection: 'row', alignItems: 'center' },

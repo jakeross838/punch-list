@@ -1,24 +1,22 @@
-// One item in the Completion List, Reminders style: the circle to check it off, the title, the
-// description, who does it, and a colored line when it is waiting on something. Swipe left for
-// Ready and Remove.
+// One item in the Completion List: the circle to check it off, the title, where exactly, who does
+// it, and a line with a small hourglass when it is waiting on something. Plain on white with a
+// hairline under the text. Swipe left for Ready and Remove.
 
 import { itemNumberLabel, type GroupBy, type Item } from '@punch/core';
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
-import { CompleteCircle, dayOf, Icon, isBeforeToday, Separator, shortDate, SwipeRow, Text, Touchable, type SwipeAction } from '@/ui';
+import { CompleteCircle, dayOf, Icon, isBeforeToday, shortDate, SwipeRow, Text, Touchable, type SwipeAction } from '@/ui';
 
 export interface Names {
   of: (id: string | null) => string;
   person: (id: string | null) => string;
 }
 
-const CIRCLE_TEXT_START = layout.rowPadding + 24 + 14;
-
-function Tag({ label, color, background }: { label: string; color: string; background: string }) {
+function Tag({ label }: { label: string }) {
   return (
-    <View style={[styles.tag, { backgroundColor: background }]}>
-      <Text variant="caption1" weight="600" color={color}>
+    <View style={styles.tag}>
+      <Text variant="footnote" weight="500">
         {label}
       </Text>
     </View>
@@ -29,7 +27,6 @@ export const ItemRow = memo(function ItemRow({
   item,
   by,
   names,
-  first,
   last,
   checking,
   onOpen,
@@ -40,7 +37,6 @@ export const ItemRow = memo(function ItemRow({
   item: Item;
   by: GroupBy;
   names: Names;
-  first: boolean;
   last: boolean;
   /** Just checked: shows complete for a moment before it leaves the list. */
   checking: boolean;
@@ -58,20 +54,20 @@ export const ItemRow = memo(function ItemRow({
   const late = !item.ready && item.readyBy !== null && isBeforeToday(item.readyBy);
   const waiting =
     item.status === 'open' && !item.ready
-      ? `Waiting on ${item.waitingOn ?? 'something'}${item.readyBy ? ` · Ready by ${shortDate(item.readyBy)}` : ''}`
+      ? `Waiting on ${item.waitingOn ?? 'something'}${item.readyBy ? ` · Ready by ${shortDate(item.readyBy)}` : ''}${late ? ', past due' : ''}`
       : null;
   const completed = item.status === 'complete' && item.completedAt ? `Completed ${dayOf(item.completedAt)} by ${names.person(item.completedBy)}` : null;
   const scope = item.kind === 'added_scope';
   const actions: SwipeAction[] =
     item.status === 'open' && !checking
       ? [
-          ...(item.ready ? [] : [{ label: 'Ready', icon: 'checkmark' as const, color: colors.green, onPress: () => onReady(item), testID: `ready-${item.id}` }]),
-          { label: 'Remove', icon: 'trash', color: colors.red, onPress: () => onRemove(item), testID: `remove-${item.id}` },
+          ...(item.ready ? [] : [{ label: 'Ready', icon: 'checkmark' as const, color: colors.tint, onPress: () => onReady(item), testID: `ready-${item.id}` }]),
+          { label: 'Remove', icon: 'trash', color: colors.destructive, onPress: () => onRemove(item), testID: `remove-${item.id}` },
         ]
       : [];
 
   return (
-    <SwipeRow actions={actions} style={[styles.card, first ? styles.first : null, last ? styles.last : null]}>
+    <SwipeRow actions={actions} style={styles.swipe}>
       <Touchable
         feedback="highlight"
         pressDelay={50}
@@ -88,10 +84,15 @@ export const ItemRow = memo(function ItemRow({
           label={done ? `Reopen ${item.title}` : `Complete ${item.title}`}
           testID={`check-${item.id}`}
         />
-        <View style={styles.text}>
-          <Text numberOfLines={2} color={done ? colors.secondary : colors.label}>
-            {item.title}
-          </Text>
+        <View style={[styles.text, last ? null : styles.divider]}>
+          <View style={styles.titleLine}>
+            <Text numberOfLines={2} color={done ? colors.secondary : colors.label} style={{ flex: 1 }}>
+              {item.title}
+            </Text>
+            <Text variant="footnote" color={colors.secondary} tabular>
+              {itemNumberLabel(item)}
+            </Text>
+          </View>
           {item.description ? (
             <Text variant="subheadline" color={colors.secondary} numberOfLines={2}>
               {item.description}
@@ -107,11 +108,11 @@ export const ItemRow = memo(function ItemRow({
               <Icon
                 name={late ? 'exclamationmark.circle.fill' : 'hourglass'}
                 size={14}
-                color={late ? colors.red : colors.orange}
+                color={late ? colors.destructive : colors.label}
                 weight="semibold"
                 style={styles.statusIcon}
               />
-              <Text variant="subheadline" weight="500" color={late ? colors.redText : colors.orangeText} numberOfLines={2} style={{ flex: 1 }}>
+              <Text variant="subheadline" numberOfLines={2} style={{ flex: 1 }}>
                 {waiting}
               </Text>
             </View>
@@ -123,41 +124,24 @@ export const ItemRow = memo(function ItemRow({
           ) : null}
           {scope ? (
             <View style={styles.tags}>
-              <Tag label="Added Scope" color={colors.indigoText} background="rgba(88, 86, 214, 0.12)" />
-              {item.boughtOut && item.poOrCo ? (
-                <Tag label={item.poOrCo} color={colors.secondary} background={colors.fill4} />
-              ) : (
-                <Tag label="Not Bought Out" color={colors.redText} background="rgba(255, 59, 48, 0.1)" />
-              )}
+              <Tag label="Added Scope" />
+              <Tag label={item.boughtOut && item.poOrCo ? item.poOrCo : 'Not Bought Out'} />
             </View>
           ) : null}
         </View>
-        <Text variant="footnote" color={colors.tertiary} tabular style={styles.number}>
-          {itemNumberLabel(item)}
-        </Text>
-        {last ? null : <Separator inset={CIRCLE_TEXT_START} />}
       </Touchable>
     </SwipeRow>
   );
 });
 
 const styles = StyleSheet.create({
-  card: { marginHorizontal: layout.margin, backgroundColor: colors.cell, overflow: 'hidden' },
-  first: { borderTopLeftRadius: layout.radius, borderTopRightRadius: layout.radius },
-  last: { borderBottomLeftRadius: layout.radius, borderBottomRightRadius: layout.radius },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    paddingLeft: layout.rowPadding,
-    paddingRight: layout.rowPadding - 2,
-    paddingVertical: 13,
-    backgroundColor: colors.cell,
-  },
-  text: { flex: 1, gap: 2 },
-  status: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 2 },
+  swipe: { backgroundColor: colors.background },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, paddingLeft: layout.inset, paddingTop: 12, backgroundColor: colors.background },
+  text: { flex: 1, gap: 2, paddingRight: layout.inset, paddingBottom: 12 },
+  divider: { borderBottomWidth: 1, borderBottomColor: colors.separator },
+  titleLine: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+  status: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 4 },
   statusIcon: { marginTop: 3 },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 5 },
-  tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7 },
-  number: { minWidth: 22, textAlign: 'right', paddingTop: 2 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  tag: { height: 24, paddingHorizontal: 10, borderRadius: 12, justifyContent: 'center', backgroundColor: colors.surface },
 });

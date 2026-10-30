@@ -37,7 +37,7 @@ export function DateField({ value, onChange, label, testID }: DateFieldProps) {
         />
       </Host>
       <Touchable feedback="opacity" hitSlop={10} onPress={() => onChange(null)} accessibilityRole="button" accessibilityLabel={`Clear ${label}`}>
-        <Icon name="xmark.circle.fill" size={20} color={colors.gray3} />
+        <Icon name="xmark.circle.fill" size={20} color={colors.chevron} />
       </Touchable>
     </View>
   );

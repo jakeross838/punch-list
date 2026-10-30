@@ -1,5 +1,5 @@
-// Inset grouped lists, the Settings look: rounded white sections on the gray background, rows
-// with an optional colored icon tile, hairline separators that start at the text.
+// Lists in two styles. Grouped: white rounded sections on the light gray background, for sheets
+// and forms. Plain: rows straight on white with hairlines that start at the text, for screens.
 
 import { Children, createContext, isValidElement, useContext, useState, type ReactNode } from 'react';
 import { Platform, StyleSheet, TextInput, View, type ColorValue, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
@@ -10,11 +10,11 @@ import { Switch } from './Switch';
 import { Text } from './Text';
 import { Touchable } from './Touchable';
 
-const RowPosition = createContext<{ last: boolean }>({ last: true });
+type Variant = 'grouped' | 'plain';
 
-/** Where the separator starts: at the text, after an icon tile when there is one. */
+const RowPosition = createContext<{ last: boolean; variant: Variant }>({ last: true, variant: 'grouped' });
+
 const TILE = 30;
-const TEXT_START_WITH_TILE = layout.rowPadding + TILE + 14;
 
 export function ListSection({
   header,
@@ -24,6 +24,7 @@ export function ListSection({
   children,
   style,
   testID,
+  variant = 'grouped',
 }: {
   header?: ReactNode;
   footer?: ReactNode;
@@ -32,14 +33,21 @@ export function ListSection({
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  variant?: Variant;
 }) {
   const rows = Children.toArray(children).filter(isValidElement);
+  const plain = variant === 'plain';
   return (
-    <View style={[styles.section, style]} testID={testID}>
+    <View style={[plain ? styles.plainSection : styles.section, style]} testID={testID}>
       {header != null || headerRight ? (
-        <View style={styles.headerRow}>
+        <View style={plain ? styles.plainHeader : styles.header}>
           {typeof header === 'string' ? (
-            <Text variant="footnote" weight="500" color={colors.secondary} style={{ flex: 1 }}>
+            <Text
+              variant={plain ? 'subheadline' : 'footnote'}
+              weight={plain ? '600' : '400'}
+              color={colors.secondary}
+              style={{ flex: 1 }}
+            >
               {header}
             </Text>
           ) : (
@@ -49,9 +57,9 @@ export function ListSection({
         </View>
       ) : null}
       {rows.length > 0 ? (
-        <View style={styles.card}>
+        <View style={plain ? styles.plainRows : styles.card}>
           {rows.map((row, i) => (
-            <RowPosition.Provider key={row.key ?? i} value={{ last: i === rows.length - 1 }}>
+            <RowPosition.Provider key={row.key ?? i} value={{ last: i === rows.length - 1, variant }}>
               {row}
             </RowPosition.Provider>
           ))}
@@ -59,11 +67,11 @@ export function ListSection({
       ) : null}
       {footer ? (
         typeof footer === 'string' ? (
-          <Text variant="footnote" color={footerTone === 'danger' ? colors.redText : colors.secondary} style={styles.footer}>
+          <Text variant="footnote" color={footerTone === 'danger' ? colors.destructive : colors.secondary} style={plain ? styles.plainFooter : styles.footer}>
             {footer}
           </Text>
         ) : (
-          <View style={styles.footer}>{footer}</View>
+          <View style={plain ? styles.plainFooter : styles.footer}>{footer}</View>
         )
       ) : null}
     </View>
@@ -74,9 +82,14 @@ export function Separator({ inset = layout.rowPadding }: { inset?: number }) {
   return <View style={[styles.separator, { left: inset }]} />;
 }
 
-function useSeparator(hasTile: boolean): ReactNode {
-  const { last } = useContext(RowPosition);
-  return last ? null : <Separator inset={hasTile ? TEXT_START_WITH_TILE : layout.rowPadding} />;
+function useRow(hasTile: boolean): { separator: ReactNode; rowStyle: StyleProp<ViewStyle> } {
+  const { last, variant } = useContext(RowPosition);
+  const plain = variant === 'plain';
+  const inset = plain ? 0 : hasTile ? layout.rowPadding + TILE + 14 : layout.rowPadding;
+  return {
+    separator: last ? null : <Separator inset={inset} />,
+    rowStyle: plain ? styles.plainRow : null,
+  };
 }
 
 export function IconTile({ name, color, size = TILE }: { name: IconName; color: ColorValue; size?: number }) {
@@ -120,8 +133,8 @@ export function ListRow({
   accessibilityLabel,
   titleLines = 2,
 }: ListRowProps) {
-  const separator = useSeparator(!!icon);
-  const titleColor = tone === 'tint' ? colors.tint : tone === 'destructive' ? colors.red : colors.label;
+  const { separator, rowStyle } = useRow(!!icon);
+  const titleColor = tone === 'tint' ? colors.tint : tone === 'destructive' ? colors.destructive : colors.label;
   const body = (
     <>
       {icon ? <IconTile name={icon} color={iconColor} /> : null}
@@ -141,14 +154,14 @@ export function ListRow({
         </Text>
       ) : null}
       {right}
-      {accessory === 'chevron' ? <Icon name="chevron.right" size={13} color={colors.tertiary} weight="bold" /> : null}
+      {accessory === 'chevron' ? <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" /> : null}
       {accessory === 'checkmark' ? <Icon name="checkmark" size={18} color={colors.tint} weight="semibold" /> : null}
       {separator}
     </>
   );
   if (!onPress) {
     return (
-      <View style={styles.row} testID={testID}>
+      <View style={[styles.row, rowStyle]} testID={testID}>
         {body}
       </View>
     );
@@ -159,7 +172,7 @@ export function ListRow({
       pressDelay={40}
       onPress={onPress}
       disabled={disabled}
-      style={styles.row}
+      style={[styles.row, rowStyle]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
       testID={testID}
@@ -172,24 +185,19 @@ export function ListRow({
 export function ListSwitchRow({
   title,
   subtitle,
-  icon,
-  iconColor,
   value,
   onValueChange,
   testID,
 }: {
   title: string;
   subtitle?: string;
-  icon?: IconName;
-  iconColor?: ColorValue;
   value: boolean;
   onValueChange: (value: boolean) => void;
   testID?: string;
 }) {
-  const separator = useSeparator(!!icon);
+  const { separator, rowStyle } = useRow(false);
   return (
-    <View style={styles.row}>
-      {icon ? <IconTile name={icon} color={iconColor ?? colors.tint} /> : null}
+    <View style={[styles.row, rowStyle]}>
       <View style={styles.rowText}>
         <Text>{title}</Text>
         {subtitle ? (
@@ -204,15 +212,16 @@ export function ListSwitchRow({
   );
 }
 
-/** A row that is a text field. Multiline rows grow with what is typed. */
+/** A row that is a text field. title: the large field at the top of an item. Multiline grows. */
 export function ListTextField({
   multiline,
   minLines = 3,
   invalid,
+  size = 'body',
   ...props
-}: TextInputProps & { minLines?: number; invalid?: boolean }) {
-  const separator = useSeparator(false);
-  const minHeight = multiline ? Math.max(layout.rowMinHeight, minLines * typeScale.body.lineHeight + 22) : layout.rowMinHeight;
+}: TextInputProps & { minLines?: number; invalid?: boolean; size?: 'body' | 'title' }) {
+  const { separator } = useRow(false);
+  const minHeight = multiline ? Math.max(layout.rowMinHeight, minLines * typeScale.body.lineHeight + 24) : size === 'title' ? 54 : layout.rowMinHeight;
   const [height, setHeight] = useState(minHeight);
   return (
     <View style={[styles.fieldRow, invalid ? styles.invalid : null]}>
@@ -227,11 +236,16 @@ export function ListTextField({
             // On the web the measured size already includes the padding and never drops below
             // the field's own height, so the field only grows there.
             if (Platform.OS === 'web') setHeight((h) => (content > h + 1 ? content : h));
-            else setHeight(Math.max(minHeight, content + 22));
+            else setHeight(Math.max(minHeight, content + 24));
           }
           props.onContentSizeChange?.(e);
         }}
-        style={[styles.input, multiline ? { height, paddingTop: 11, paddingBottom: 11, textAlignVertical: 'top' } : null, props.style]}
+        style={[
+          styles.input,
+          size === 'title' ? styles.titleInput : null,
+          multiline ? { height, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' } : null,
+          props.style,
+        ]}
       />
       {separator}
     </View>
@@ -239,17 +253,10 @@ export function ListTextField({
 }
 
 /** A label on the left and a short text field on the right, like "PO or CO". */
-export function ListLabeledField({
-  label,
-  icon,
-  iconColor,
-  invalid,
-  ...props
-}: TextInputProps & { label: string; icon?: IconName; iconColor?: ColorValue; invalid?: boolean }) {
-  const separator = useSeparator(!!icon);
+export function ListLabeledField({ label, invalid, ...props }: TextInputProps & { label: string; invalid?: boolean }) {
+  const { separator, rowStyle } = useRow(false);
   return (
-    <View style={[styles.row, invalid ? styles.invalid : null]}>
-      {icon ? <IconTile name={icon} color={iconColor ?? colors.tint} /> : null}
+    <View style={[styles.row, rowStyle, invalid ? styles.invalid : null]}>
       <Text>{label}</Text>
       <TextInput
         placeholderTextColor={colors.placeholder}
@@ -273,6 +280,7 @@ export function Button({
 }: {
   label: string;
   onPress: () => void;
+  /** filled: the accent pill. tinted: a light gray pill with accent text. */
   variant?: 'filled' | 'tinted' | 'plain';
   icon?: IconName;
   disabled?: boolean;
@@ -289,7 +297,7 @@ export function Button({
       testID={testID}
       style={[styles.button, variant === 'filled' ? styles.buttonFilled : variant === 'tinted' ? styles.buttonTinted : null]}
     >
-      {icon ? <Icon name={icon} size={19} color={fg} weight="semibold" /> : null}
+      {icon ? <Icon name={icon} size={18} color={fg} weight="semibold" /> : null}
       <Text variant="headline" color={fg}>
         {label}
       </Text>
@@ -300,8 +308,8 @@ export function Button({
 export function EmptyState({ icon, title, message, children }: { icon: IconName; title: string; message?: string; children?: ReactNode }) {
   return (
     <View style={styles.empty}>
-      <Icon name={icon} size={44} color={colors.gray2} />
-      <Text variant="title3" weight="700" align="center">
+      <Icon name={icon} size={40} color={colors.chevron} />
+      <Text variant="title3" weight="600" align="center">
         {title}
       </Text>
       {message ? (
@@ -317,8 +325,8 @@ export function EmptyState({ icon, title, message, children }: { icon: IconName;
 export function Banner({ icon = 'info.circle', children }: { icon?: IconName; children: string }) {
   return (
     <View style={styles.banner}>
-      <Icon name={icon} size={19} color={colors.tint} />
-      <Text variant="subheadline" color={colors.secondary} style={{ flex: 1 }}>
+      <Icon name={icon} size={17} color={colors.secondary} />
+      <Text variant="footnote" color={colors.secondary} style={{ flex: 1 }}>
         {children}
       </Text>
     </View>
@@ -326,66 +334,36 @@ export function Banner({ icon = 'info.circle', children }: { icon?: IconName; ch
 }
 
 const styles = StyleSheet.create({
-  section: { marginHorizontal: layout.margin, marginBottom: 28 },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: layout.rowPadding,
-    paddingBottom: 7,
-    minHeight: 18,
-  },
+  section: { marginHorizontal: layout.margin, marginBottom: 22 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: layout.rowPadding, paddingBottom: 7, minHeight: 18 },
   card: { backgroundColor: colors.cell, borderRadius: layout.radius, overflow: 'hidden' },
-  footer: { paddingHorizontal: layout.rowPadding, paddingTop: 7 },
-  separator: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.separator,
-  },
+  footer: { paddingHorizontal: layout.rowPadding, paddingTop: 8 },
+  plainSection: { marginBottom: 6 },
+  plainHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 12, paddingHorizontal: layout.inset, paddingTop: 22, paddingBottom: 4 },
+  plainRows: { marginLeft: layout.inset },
+  plainFooter: { paddingHorizontal: layout.inset, paddingTop: 8 },
+  separator: { position: 'absolute', right: 0, bottom: 0, height: 1, backgroundColor: colors.separator },
   row: {
     minHeight: layout.rowMinHeight,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     paddingHorizontal: layout.rowPadding,
     paddingVertical: 10,
     backgroundColor: colors.cell,
   },
+  plainRow: { paddingLeft: 0, paddingRight: layout.inset, minHeight: 48 },
   rowText: { flex: 1, gap: 1 },
-  value: { maxWidth: '58%', textAlign: 'right' },
+  value: { maxWidth: '60%', textAlign: 'right' },
   tile: { alignItems: 'center', justifyContent: 'center' },
   fieldRow: { paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
-  invalid: { backgroundColor: 'rgba(255, 59, 48, 0.06)' },
-  input: {
-    ...typeScale.body,
-    color: colors.label,
-    minHeight: layout.rowMinHeight,
-    paddingVertical: 0,
-    outlineWidth: 0,
-  },
+  invalid: { backgroundColor: 'rgba(215, 0, 21, 0.05)' },
+  input: { ...typeScale.body, color: colors.label, minHeight: layout.rowMinHeight, paddingVertical: 0, outlineWidth: 0 },
+  titleInput: { fontSize: 22, lineHeight: 28, fontWeight: '600', letterSpacing: -0.2, minHeight: 54 },
   labeledInput: { flex: 1, textAlign: 'right' },
-  button: {
-    height: 50,
-    borderRadius: 25,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 22,
-  },
+  button: { height: 46, borderRadius: 23, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 22 },
   buttonFilled: { backgroundColor: colors.tint },
-  buttonTinted: { backgroundColor: colors.tintSoft },
+  buttonTinted: { backgroundColor: colors.surface },
   empty: { alignItems: 'center', gap: 8, paddingHorizontal: 40, paddingVertical: 48 },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginHorizontal: layout.margin,
-    marginBottom: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: colors.tintSoft,
-  },
+  banner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: layout.inset, marginTop: 20 },
 });

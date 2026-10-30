@@ -47,8 +47,8 @@ body.pl-sheet-open #root {
   display: flex;
   flex-direction: column;
   height: calc(100% - 46px);
-  background: #F2F2F7;
-  border-radius: 22px 22px 0 0;
+  background: #F5F5F7;
+  border-radius: 18px 18px 0 0;
   box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.04), 0 -10px 40px rgba(0, 0, 0, 0.12);
   overflow: hidden;
   transform: translateY(100%);
@@ -62,11 +62,11 @@ body.pl-sheet-open #root {
   position: absolute;
   min-width: 250px;
   max-width: 300px;
-  background: rgba(250, 250, 250, 0.9);
-  -webkit-backdrop-filter: blur(30px) saturate(190%);
-  backdrop-filter: blur(30px) saturate(190%);
-  border-radius: 16px;
-  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 10px 40px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.12);
   overflow: hidden;
   transform-origin: top right;
   transform: scale(0.6);
@@ -74,16 +74,16 @@ body.pl-sheet-open #root {
   transition: transform 320ms ${EASE_OUT}, opacity 200ms ${EASE_OUT};
 }
 .pl-menu-root[data-open="true"] .pl-menu { transform: scale(1); opacity: 1; }
-.pl-menu-group + .pl-menu-group { border-top: 8px solid rgba(0, 0, 0, 0.06); }
-.pl-menu-title { padding: 10px 16px 4px; font: 400 13px ${FONT}; color: rgba(60, 60, 67, 0.6); }
+.pl-menu-group + .pl-menu-group { border-top: 6px solid #F2F2F4; }
+.pl-menu-title { padding: 10px 16px 4px; font: 400 13px ${FONT}; color: #6E6E73; }
 .pl-menu-item {
   display: flex; align-items: center; gap: 10px; width: 100%;
   min-height: 46px; padding: 0 16px; border: 0; background: transparent; text-align: left;
-  font: 400 17px ${FONT}; color: #000; cursor: pointer;
+  font: 400 17px ${FONT}; color: #1D1D1F; cursor: pointer;
 }
-.pl-menu-item + .pl-menu-item { box-shadow: inset 0 0.5px 0 rgba(60, 60, 67, 0.22); }
-.pl-menu-item:active { background: rgba(0, 0, 0, 0.08); }
-.pl-menu-item[data-destructive="true"] { color: #FF3B30; }
+.pl-menu-item + .pl-menu-item { box-shadow: inset 0 1px 0 #EDEDF0; }
+.pl-menu-item:active { background: #ECECEF; }
+.pl-menu-item[data-destructive="true"] { color: #D70015; }
 .pl-menu-check { width: 16px; flex: 0 0 16px; display: flex; }
 .pl-menu-label { flex: 1; }
 
@@ -113,22 +113,22 @@ body.pl-sheet-open #root {
 .pl-action-root[data-open="true"] .pl-action-dim { opacity: 1; }
 .pl-action-root[data-open="true"] .pl-action-panel { transform: translateY(0); transition-duration: 440ms; }
 .pl-action-group {
-  background: rgba(250, 250, 250, 0.86);
-  -webkit-backdrop-filter: blur(30px) saturate(190%);
-  backdrop-filter: blur(30px) saturate(190%);
-  border-radius: 16px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  border-radius: 14px; overflow: hidden;
 }
 .pl-action-head { padding: 14px 16px 12px; text-align: center; }
-.pl-action-title { font: 600 13px ${FONT}; color: rgba(60, 60, 67, 0.6); }
-.pl-action-message { font: 400 13px ${FONT}; color: rgba(60, 60, 67, 0.6); margin-top: 2px; }
+.pl-action-title { font: 600 13px ${FONT}; color: #6E6E73; }
+.pl-action-message { font: 400 13px ${FONT}; color: #6E6E73; margin-top: 2px; }
 .pl-action-button {
   display: block; width: 100%; height: 57px; border: 0; background: transparent;
-  font: 400 20px ${FONT}; color: #4E7A8C; cursor: pointer;
-  box-shadow: inset 0 0.5px 0 rgba(60, 60, 67, 0.25);
+  font: 400 20px ${FONT}; color: #3E5964; cursor: pointer;
+  box-shadow: inset 0 1px 0 #EDEDF0;
 }
-.pl-action-button:active { background: rgba(0, 0, 0, 0.08); }
-.pl-action-button[data-destructive="true"] { color: #FF3B30; }
-.pl-action-cancel { font-weight: 600; box-shadow: none; background: #fff; border-radius: 16px; }
+.pl-action-button:active { background: #ECECEF; }
+.pl-action-button[data-destructive="true"] { color: #D70015; }
+.pl-action-cancel { font-weight: 600; box-shadow: none; background: #fff; border-radius: 14px; }
 
 .pl-date { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; margin: 0; font-size: 16px; cursor: pointer; }
 
