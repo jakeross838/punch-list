@@ -25,5 +25,7 @@ streams:
       - SELECT * FROM title_library WHERE org IN my_org
       - SELECT * FROM custom_fields WHERE org IN my_org
       - SELECT * FROM photos WHERE org IN my_org
+      - SELECT * FROM visits WHERE org IN my_org
+      - SELECT * FROM list_sends WHERE org IN my_org
       # Settings are each person's own: a phone gets only its signed-in person's row.
       - SELECT * FROM person_settings WHERE person_id IN me

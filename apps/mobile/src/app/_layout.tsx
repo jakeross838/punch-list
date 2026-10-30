@@ -15,7 +15,15 @@ import { DataProvider } from '@/data/backend';
 import { FeedbackProvider } from '@/ui';
 import { forSheetIOS } from '@/ui/sheetTransition';
 
-const SCREENS = ['index', 'jobs/[jobId]/index', 'jobs/[jobId]/setup', 'jobs/[jobId]/list/[by]/[key]', 'jobs/[jobId]/items/[itemId]/index'] as const;
+const SCREENS = [
+  'index',
+  'jobs/[jobId]/index',
+  'jobs/[jobId]/setup',
+  'jobs/[jobId]/list/[by]/[key]',
+  'jobs/[jobId]/items/[itemId]/index',
+  'jobs/[jobId]/schedule',
+  'jobs/[jobId]/plan/[companyId]',
+] as const;
 const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/send', 'settings/item-form'] as const;
 const CAMERA = 'jobs/[jobId]/capture';
 

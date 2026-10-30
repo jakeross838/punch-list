@@ -1,7 +1,9 @@
 // One item in a list, kept calm: the circle to check it off, the title, a small hourglass when it
-// is not ready, and its photo. Everything else is one tap in. Swipe left for Ready and Remove.
+// is not ready (in red with the days when it is past due), and its photo. Everything else is one tap
+// in. Swipe left for Ready and Remove. An unfinished item shows a pencil instead of the circle and
+// what it still needs.
 
-import type { Item, Photo } from '@punch/core';
+import { dayOfDate, daysBetween, missingText, type Item, type Photo } from '@punch/core';
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -32,8 +34,11 @@ export const ItemRow = memo(function ItemRow({
   onRemove: (item: Item) => void;
 }) {
   const done = item.status === 'complete' || checking;
-  const notReady = item.status === 'open' && !item.ready;
+  const notReady = item.status === 'open' && !item.ready && !item.unfinished;
   const late = notReady && item.readyBy !== null && isBeforeToday(item.readyBy);
+  const lateDays = late && item.readyBy ? daysBetween(item.readyBy, dayOfDate(new Date())) : 0;
+  const title = item.title || 'Untitled';
+  const second = item.unfinished ? [missingText(item), context].filter(Boolean).join(', ') : context;
   const actions: SwipeAction[] =
     item.status === 'open' && !checking
       ? [
@@ -41,7 +46,7 @@ export const ItemRow = memo(function ItemRow({
           { label: 'Remove', icon: 'trash', color: colors.destructive, onPress: () => onRemove(item), testID: `remove-${item.id}` },
         ]
       : [];
-  const said = [item.title, context, notReady ? (late ? 'not ready, past due' : 'not ready') : null].filter(Boolean).join(', ');
+  const said = [title, second, notReady ? (late ? `not ready, ${lateDays} days past due` : 'not ready') : null].filter(Boolean).join(', ');
 
   return (
     <SwipeRow actions={actions} style={styles.swipe}>
@@ -54,31 +59,36 @@ export const ItemRow = memo(function ItemRow({
         accessibilityLabel={said}
         testID={`item-${item.id}`}
       >
-        <CompleteCircle
-          checked={done}
-          animate={checking}
-          onPress={() => onCheck(item)}
-          label={done ? `Reopen ${item.title}` : `Complete ${item.title}`}
-          testID={`check-${item.id}`}
-        />
+        {item.unfinished ? (
+          <View style={styles.draft}>
+            <Icon name="pencil.tip" size={15} color={colors.tint} weight="semibold" />
+          </View>
+        ) : (
+          <CompleteCircle
+            checked={done}
+            animate={checking}
+            onPress={() => onCheck(item)}
+            label={done ? `Reopen ${item.title}` : `Complete ${item.title}`}
+            testID={`check-${item.id}`}
+          />
+        )}
         <View style={[styles.body, last ? null : styles.divider]}>
           <View style={styles.text}>
-            <Text numberOfLines={2} color={done ? colors.secondary : colors.label}>
-              {item.title}
+            <Text numberOfLines={2} color={done || !item.title ? colors.secondary : colors.label}>
+              {title}
             </Text>
-            {context ? (
+            {second ? (
               <Text variant="subheadline" color={colors.secondary} numberOfLines={1}>
-                {context}
+                {second}
               </Text>
             ) : null}
           </View>
-          {notReady ? (
-            <Icon
-              name={late ? 'exclamationmark.circle.fill' : 'hourglass'}
-              size={16}
-              color={late ? colors.destructive : colors.quiet}
-              weight="semibold"
-            />
+          {late ? (
+            <Text variant="footnote" weight="600" color={colors.destructive} tabular>
+              {lateDays} {lateDays === 1 ? 'day' : 'days'}
+            </Text>
+          ) : notReady ? (
+            <Icon name="hourglass" size={16} color={colors.quiet} weight="semibold" />
           ) : null}
           {photo ? <PhotoView photo={photo} width={44} height={44} radius={8} /> : null}
         </View>
@@ -93,4 +103,5 @@ const styles = StyleSheet.create({
   body: { flex: 1, minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingRight: layout.inset },
   divider: { borderBottomWidth: 1, borderBottomColor: colors.separator },
   text: { flex: 1, gap: 1 },
+  draft: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
 });

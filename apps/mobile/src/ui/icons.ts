@@ -55,6 +55,8 @@ export const SF_SYMBOLS = {
   checklist: 'checklist',
   share: 'square.and.arrow.up',
   doc: 'doc.text',
+  sparkles: 'sparkles',
+  'calendar.badge.clock': 'calendar.badge.clock',
 } as const satisfies Record<string, SFSymbolName>;
 
 export type IconName = keyof typeof SF_SYMBOLS;

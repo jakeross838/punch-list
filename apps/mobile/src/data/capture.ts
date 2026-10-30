@@ -1,6 +1,7 @@
 // A walk with the camera: the room photos are going to, the photos taken for the item being made,
 // and that item's form while the camera takes another photo for it. Kept in memory across the
-// camera, markup and New Item screens; cleared when the walk ends.
+// camera, markup and New Item screens; cleared when the walk ends. Quick Snap saves each photo
+// straight away as an unfinished item in the room, to mark up and fill in later.
 
 import { randomUUID } from 'expo-crypto';
 import { useSyncExternalStore } from 'react';
@@ -31,9 +32,11 @@ export interface CaptureState {
   saved: number;
   /** The item just saved with Save and Next, for the camera to confirm. */
   lastSaved: { title: string; room: string | null; at: number } | null;
+  /** Quick Snap: every photo is saved as it is taken, to fill in later. Kept from walk to walk. */
+  quick: boolean;
 }
 
-const EMPTY: CaptureState = { jobId: null, roomId: null, itemId: null, shots: [], draft: null, editing: null, saved: 0, lastSaved: null };
+const EMPTY: CaptureState = { jobId: null, roomId: null, itemId: null, shots: [], draft: null, editing: null, saved: 0, lastSaved: null, quick: false };
 
 /** The last room photos went to on each job, so the next walk starts there. */
 const lastRooms = new Map<string, string>();
@@ -68,7 +71,10 @@ export const capture = {
       set({ ...state, roomId: roomId ?? state.roomId });
       return;
     }
-    set({ ...EMPTY, jobId: input.jobId, roomId, itemId: input.itemId ?? null });
+    set({ ...EMPTY, jobId: input.jobId, roomId, itemId: input.itemId ?? null, quick: input.itemId ? false : state.quick });
+  },
+  setQuick(quick: boolean): void {
+    set({ ...state, quick });
   },
   setRoom(roomId: string): void {
     if (state.jobId) lastRooms.set(state.jobId, roomId);
@@ -105,6 +111,6 @@ export const capture = {
     set({ ...state, shots: [], draft: null, editing: null });
   },
   end(): void {
-    set(EMPTY);
+    set({ ...EMPTY, quick: state.quick });
   },
 };

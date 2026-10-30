@@ -1,7 +1,8 @@
 // New Item, as a sheet over the camera. Kept quick: the photo, a title (typing offers the standard
 // titles, and picking one fills in the trade and the company), the room already filled in, Ready as
 // a checkbox, and Deficiency or Added Scope. Everything else waits under More Details. Save and
-// Next goes straight back to the camera; Save goes back to the list.
+// Next goes straight back to the camera; Save goes back to the list. Saving without the company
+// (or the title, with a photo) keeps it as unfinished, to fill in later.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -10,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { leaveOrConfirm } from '@/components/discard';
 import { ItemEditor } from '@/components/ItemEditor';
 import { startDraft, useItemForm, type ItemDraft } from '@/components/ItemForm';
+import { useFillIn } from '@/components/useFillIn';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture, useCapture } from '@/data/capture';
@@ -27,6 +29,7 @@ export default function NewItemScreen() {
   const form = useItemForm(initial);
   const { value } = form;
   const [saving, setSaving] = useState(false);
+  const filler = useFillIn(jobId);
 
   const shots = walk.shots;
   const roomLabel = locations.find((l) => l.id === value.locationId)?.label;
@@ -46,7 +49,9 @@ export default function NewItemScreen() {
   }
 
   async function save(next: boolean) {
-    const draft = form.submit();
+    let draft = form.submit();
+    // Save now, finish later: with a photo or a title, a missing company or title does not stop it.
+    if (!draft && (shots.length > 0 || value.title.trim() !== '')) draft = form.submitUnfinished();
     if (!draft) {
       haptic.warning();
       return;
@@ -59,14 +64,15 @@ export default function NewItemScreen() {
         await data.addPhotos(shots.map((s) => ({ jobId, itemId: id, uri: s.uri, width: s.width, height: s.height, marks: s.marks })));
       }
       haptic.success();
-      capture.itemSaved(fields.title, roomLabel ?? null);
+      const what = fields.unfinished ? 'to finish later' : fields.title;
+      capture.itemSaved(what, roomLabel ?? null);
       if (next) {
         // The camera confirms it, over the viewfinder.
         router.back();
       } else {
         capture.end();
         router.dismiss(2);
-        feedback.toast({ message: `Saved ${fields.title}${roomLabel ? ` in ${roomLabel}` : ''}` });
+        feedback.toast({ message: `Saved ${what}${roomLabel ? ` in ${roomLabel}` : ''}` });
       }
     } finally {
       setSaving(false);
@@ -113,6 +119,7 @@ export default function NewItemScreen() {
         onPhotoPress={(key) => toCamera(key)}
         onAddPhoto={() => toCamera()}
         autoFocusTitle={Platform.OS === 'ios' && !initial.title}
+        fillIn={filler.can && shots[0] ? { busy: filler.busy, onPress: () => void filler.fillIn(shots[0]!, value, (patch) => set(patch)) } : undefined}
       />
     </Page>
   );

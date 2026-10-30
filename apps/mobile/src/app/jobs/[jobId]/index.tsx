@@ -1,12 +1,15 @@
 // A job: its levels and rooms with how many items are open in each, calm and quick to scan. Tap a
-// room for its items. View and Filter switches to trades, companies, what items wait on or status
-// and narrows what counts; the camera in the bottom bar starts a walk; Send Lists makes each
-// company's list to send.
+// room for its items. Unfinished items to fill in and anything past due sit at the top when there
+// are any. View and Filter switches to trades, companies, what items wait on or status and
+// narrows what counts; the camera in the bottom bar starts a walk; Schedule is each company's
+// visits; Send Lists makes each company's list to send.
 
 import {
   byFloor,
+  dayOfDate,
   GROUP_LABELS,
   groupItems,
+  pastDue,
   type GroupBy,
   type Item,
   type ItemGroup,
@@ -61,7 +64,9 @@ export default function JobScreen() {
   const trades = data.useTrades();
   const companies = data.useCompanies();
   const jobCompanies = data.useJobCompanies(jobId);
+  const visits = data.useVisits(jobId);
   const saved = data.useViewSettings();
+  const today = dayOfDate(new Date());
   const [view, setView] = useJobView(jobId, saved);
   const [query, setQuery] = useState('');
   const [sheet, setSheet] = useState(false);
@@ -83,9 +88,11 @@ export default function JobScreen() {
 
   const narrowed = view.filter !== 'open' || !!view.tradeId || !!view.companyId;
   const groups = useMemo(
-    () => groupItems(items, view.groupBy, view.filter, { locations, trades, companies }, { tradeId: view.tradeId, companyId: view.companyId }),
-    [items, view.groupBy, view.filter, view.tradeId, view.companyId, locations, trades, companies],
+    () => groupItems(items, view.groupBy, view.filter, { locations, trades, companies }, { tradeId: view.tradeId, companyId: view.companyId, today }),
+    [items, view.groupBy, view.filter, view.tradeId, view.companyId, locations, trades, companies, today],
   );
+  const unfinished = items.filter((i) => i.unfinished && i.status === 'open').length;
+  const late = useMemo(() => pastDue(items, visits, today).length, [items, visits, today]);
   const rows: Row[] = groups
     .map((group) => ({ group, count: group.items.filter((i) => i.status !== 'complete').length }))
     .filter((r) => r.count > 0 || (view.groupBy === 'room' && !narrowed));
@@ -115,6 +122,20 @@ export default function JobScreen() {
     router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: view.groupBy, key } });
   const openSetup = () => router.push({ pathname: '/jobs/[jobId]/setup', params: { jobId } });
   const openSend = () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId } });
+  const openSchedule = () => router.push({ pathname: '/jobs/[jobId]/schedule', params: { jobId } });
+  const openSpecial = (by: 'waiting' | 'due', key: string) => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by, key } });
+  const smartRows =
+    unfinished > 0 || late > 0 ? (
+      <View style={styles.smart}>
+        {unfinished > 0 ? (
+          <SmartRow icon="pencil.tip" label="Unfinished" count={unfinished} note="To mark up and fill in" onPress={() => openSpecial('waiting', 'unfinished')} testID="open-unfinished" />
+        ) : null}
+        {unfinished > 0 && late > 0 ? <View style={styles.smartRule} /> : null}
+        {late > 0 ? (
+          <SmartRow icon="exclamationmark.circle.fill" danger label="Past Due" count={late} note="Late, with the days" onPress={() => openSpecial('due', 'all')} testID="open-past-due" />
+        ) : null}
+      </View>
+    ) : null;
   const openCamera = () => {
     capture.start({ jobId, roomId: null });
     router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
@@ -160,8 +181,15 @@ export default function JobScreen() {
         footer={
           <CameraBar
             onCamera={openCamera}
-            left={<BarTool icon={GROUP_ICONS[view.groupBy]} label={`By ${GROUP_LABELS[view.groupBy]}`} onPress={() => setSheet(true)} testID="group-by" />}
-            right={<BarTool icon="filter" label={narrowed || view.showCompleted ? 'Filtered' : 'Filter'} onPress={() => setSheet(true)} testID="filter" />}
+            left={<BarTool icon="calendar" label="Schedule" onPress={openSchedule} testID="schedule" />}
+            right={
+              <BarTool
+                icon={narrowed || view.showCompleted ? 'filter' : GROUP_ICONS[view.groupBy]}
+                label={`By ${GROUP_LABELS[view.groupBy]}${narrowed || view.showCompleted ? ', Filtered' : ''}`}
+                onPress={() => setSheet(true)}
+                testID="filter"
+              />
+            }
           />
         }
         list={(scroll) =>
@@ -203,7 +231,12 @@ export default function JobScreen() {
               keyExtractor={(row) => row.group.key}
               stickySectionHeadersEnabled={false}
               contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
-              ListHeaderComponent={<View>{scroll.header}</View>}
+              ListHeaderComponent={
+                <View>
+                  {scroll.header}
+                  {smartRows}
+                </View>
+              }
               ListEmptyComponent={empty}
               renderSectionHeader={({ section }) =>
                 section.title ? (
@@ -244,6 +277,41 @@ export default function JobScreen() {
   );
 }
 
+/** A short cut at the top of the job: Unfinished, Past Due. */
+function SmartRow({
+  icon,
+  label,
+  count,
+  note,
+  danger,
+  onPress,
+  testID,
+}: {
+  icon: IconName;
+  label: string;
+  count: number;
+  note: string;
+  danger?: boolean;
+  onPress: () => void;
+  testID: string;
+}) {
+  return (
+    <Touchable feedback="highlight" onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}, ${count}`} testID={testID} style={styles.smartRow}>
+      <Icon name={icon} size={20} color={danger ? colors.destructive : colors.tint} weight="semibold" />
+      <View style={{ flex: 1 }}>
+        <Text weight="600">{label}</Text>
+        <Text variant="footnote" color={colors.secondary}>
+          {note}
+        </Text>
+      </View>
+      <Text color={danger ? colors.destructive : colors.secondary} weight={danger ? '600' : '400'} tabular>
+        {count}
+      </Text>
+      <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" />
+    </Touchable>
+  );
+}
+
 function GroupRow({ row, by, location, last, onPress }: { row: Row; by: GroupBy; location?: Location; last: boolean; onPress: () => void }) {
   const { group, count } = row;
   const nothingOpen = group.open === 0;
@@ -263,6 +331,11 @@ function GroupRow({ row, by, location, last, onPress }: { row: Row; by: GroupBy;
           <Text numberOfLines={1} style={{ flex: 1 }}>
             {label}
           </Text>
+          {group.late > 0 ? (
+            <Text variant="footnote" weight="600" color={colors.destructive} tabular>
+              {group.late} {group.late === 1 ? 'day' : 'days'} late
+            </Text>
+          ) : null}
           {nothingOpen ? (
             <Icon name="checkmark" size={17} color={colors.circle} weight="semibold" />
           ) : count > 0 ? (
@@ -278,6 +351,9 @@ function GroupRow({ row, by, location, last, onPress }: { row: Row; by: GroupBy;
 }
 
 const styles = StyleSheet.create({
+  smart: { marginHorizontal: layout.margin, marginTop: 8, marginBottom: 4, borderRadius: layout.radius, backgroundColor: colors.surface, overflow: 'hidden' },
+  smartRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 8 },
+  smartRule: { height: 1, marginLeft: 46, backgroundColor: colors.rule },
   header: { paddingHorizontal: layout.inset, paddingTop: 18, paddingBottom: 6, backgroundColor: colors.background },
   rowWrap: { backgroundColor: colors.background },
   row: { paddingLeft: layout.inset, backgroundColor: colors.background },

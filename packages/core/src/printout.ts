@@ -1,13 +1,19 @@
 // The lists as printed pages, to the house document standard: US Letter, Nunito Sans at 10 point,
 // the five house colors, and tables that carry the content (dark slate header rows, light blue
-// group bands, white and cream rows). A company's list says what is ready now, then what is
-// waiting, grouped by what it waits on, with a Days column for the sub to fill in and blank lines
-// to add anything missing. The whole job list goes room by room with the trade on every line.
+// group bands, white and cream rows).
+//
+// A company's list: each visit already planned with the items on it, then what is ready now and not
+// booked, then what is waiting, grouped by what it waits on, each group with a line for the days it
+// takes (one duration per batch, as the schedule bars carry), then added scope that needs a price,
+// then blank lines to add anything missing. Items new since the last list say so. The owner's list says what Ross Built needs from
+// them and by when. The whole job list goes room by room with the trade and company on every line.
 // Plain HTML, so the phone turns it into a PDF and the preview page shows the very same thing.
 
+import { dayOfDate, daysBetween, isDay } from './dates';
 import type { CompanyList, ListLine } from './lists';
 import { markShapes, type MarkShape } from './marks';
-import type { Mark } from './types';
+import { visitEnd } from './schedule';
+import type { Mark, Visit } from './types';
 import { itemNumberLabel } from './views';
 import { waitingOnText } from './waitingOn';
 
@@ -25,6 +31,10 @@ export interface PrintSettings {
   date: Date;
   /** An item's photo, when photos are included. */
   photo?: (itemId: string) => PrintPhoto | undefined;
+  /** Items that were not on the last list sent. */
+  isNew?: (itemId: string) => boolean;
+  /** The company's planned visits; their items print under them instead of under Ready Now. */
+  visits?: Visit[];
 }
 
 export interface Printout {
@@ -32,25 +42,35 @@ export interface Printout {
   title: string;
   /** The PDF's name: "Fish Completion List for SMS Carpentry, October 30 2026.pdf". */
   fileName: string;
+  /** The heading in the page's top corner, for the page footer too: "Completion List". */
+  kind: string;
   /** The page's content, laid out by PRINT_CSS inside an element with the class rb-doc. */
   body: string;
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /** "October 30, 2026" */
 export function printDate(date: Date): string {
   return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
-/** A Ready By date as it reads on a list: "November 2", with the year only when it is not this one. */
-function readyByText(ymd: string, today: Date): string {
+/** A day as it reads on a list: "November 2", with the year only when it is not this one. */
+function dayText(ymd: string, today: Date, weekday = false): string {
   const [y, m, d] = ymd.split('-').map(Number);
   if (!y || !m || !d) return ymd;
-  return `${MONTHS[m - 1]} ${d}${y === today.getFullYear() ? '' : `, ${y}`}`;
+  const name = weekday ? `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}, ` : '';
+  return `${name}${MONTHS[m - 1]} ${d}${y === today.getFullYear() ? '' : `, ${y}`}`;
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** "3 ready now, 4 waiting and 1 that needs a price" */
+function andList(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -90,6 +110,12 @@ function photoCell(photo: PrintPhoto | undefined): string {
   return `<div class="rb-ph" style="height:${height}in"><img src="${esc(photo.src)}" alt="">${svg}</div>`;
 }
 
+/** The item number, and New when it was not on the last list. */
+function numberCell(line: ListLine, settings: PrintSettings): string {
+  const isNew = settings.isNew?.(line.item.id) ? '<div class="rb-new">New</div>' : '';
+  return `${esc(itemNumberLabel(line.item))}${isNew}`;
+}
+
 /** The title, then where exactly, then for added scope whether it is priced. */
 function workCell(line: ListLine): string {
   const { item } = line;
@@ -106,15 +132,21 @@ function readyCell(line: ListLine, today: Date): string {
   const { item } = line;
   if (item.ready) return 'Ready';
   const on = waitingOnText(item.waitingOn) || 'something not named';
-  return esc(`Waiting on ${on}${item.readyBy ? `, ready by ${readyByText(item.readyBy, today)}` : ''}`);
+  let text = `Waiting on ${on}`;
+  if (isDay(item.readyBy)) {
+    text += `, ready by ${dayText(item.readyBy, today)}`;
+    const late = daysBetween(item.readyBy, dayOfDate(today));
+    if (late > 0) return `${esc(text)}, <span class="rb-late">${late} ${late === 1 ? 'day' : 'days'} past due</span>`;
+  }
+  return esc(text);
 }
 
-function header(settings: PrintSettings, title: string, summary: string): string {
+function header(settings: PrintSettings, kind: string, title: string, summary: string): string {
   const { job, date } = settings;
   return [
     '<div class="rb-head">',
     '<div class="rb-brand"><div class="rb-brand-name">ROSS BUILT</div><div class="rb-brand-sub">CUSTOM HOMES</div></div>',
-    `<div class="rb-head-right"><b>Completion List</b>${esc(printDate(date))}</div>`,
+    `<div class="rb-head-right"><b>${esc(kind)}</b>${esc(printDate(date))}</div>`,
     '</div>',
     `<h1 class="rb-title">${esc(title)}</h1>`,
     `<p class="rb-job">${esc([job.name, job.address].filter(Boolean).join(', '))}</p>`,
@@ -129,7 +161,7 @@ interface Column {
   className?: string;
 }
 
-function table(columns: Column[], body: string): string {
+function table(columns: { label: string; width?: string }[], body: string): string {
   const cols = columns.map((c) => `<col${c.width ? ` style="width:${c.width}"` : ''}>`).join('');
   const head = columns.map((c) => `<th>${esc(c.label)}</th>`).join('');
   return `<table class="rb-table"><colgroup>${cols}</colgroup><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
@@ -144,72 +176,147 @@ function rows(columns: Column[], lines: ListLine[], start = 0): string {
     .join('');
 }
 
-const band = (columns: Column[], text: string) => `<tr class="rb-band"><td colspan="${columns.length}">${esc(text)}</td></tr>`;
-const blanks = (columns: Column[], count: number) =>
-  Array.from({ length: count }, () => `<tr class="rb-blank">${columns.map(() => '<td></td>').join('')}</tr>`).join('');
+const band = (span: number, text: string) => `<tr class="rb-band"><td colspan="${span}">${esc(text)}</td></tr>`;
+const blanks = (span: number, count: number) =>
+  Array.from({ length: count }, () => `<tr class="rb-blank">${'<td></td>'.repeat(span)}</tr>`).join('');
 
-/** One company's list, for the sub: Ready Now, then Waiting by what it waits on, then lines to add more. */
+/** A line for the sub to write how many days a batch takes: one duration per batch. */
+const daysLine = (span: number, count: number) =>
+  `<tr class="rb-days"><td colspan="${span}">Days for ${count === 1 ? 'this item' : `these ${count} items`}<span class="rb-fill"></span></td></tr>`;
+
+const photoColumn = (settings: PrintSettings): Column[] =>
+  settings.photo ? [{ label: 'Photo', width: `${PHOTO_WIDTH + 0.16}in`, cell: (l: ListLine) => photoCell(settings.photo?.(l.item.id)) }] : [];
+
+/** One company's list, for the sub. */
 export function companyPrintout(list: CompanyList, settings: PrintSettings): Printout {
-  const withPhotos = !!settings.photo;
   const columns: Column[] = [
-    { label: 'Item', width: '0.5in', cell: (l) => esc(itemNumberLabel(l.item)), className: 'rb-num' },
+    { label: 'Item', width: '0.55in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
     { label: 'Room', width: '1.3in', cell: (l) => esc(l.room) },
     { label: 'Work', cell: workCell },
-    ...(withPhotos ? [{ label: 'Photo', width: `${PHOTO_WIDTH + 0.16}in`, cell: (l: ListLine) => photoCell(settings.photo?.(l.item.id)) }] : []),
-    { label: 'Days', width: '0.6in', cell: () => '' },
+    ...photoColumn(settings),
   ];
-  const waitingCount = list.waiting.reduce((n, g) => n + g.lines.length, 0);
-  const counts =
+  const span = columns.length;
+
+  // Items on a planned visit print under the visit, not again under Ready Now or Waiting.
+  const all = [...list.ready, ...list.waiting.flatMap((g) => g.lines), ...list.needsPrice];
+  const planned = (settings.visits ?? [])
+    .filter((v) => !v.removed)
+    .sort((a, b) => a.start.localeCompare(b.start))
+    .map((visit) => ({ visit, lines: all.filter((l) => l.item.visitId === visit.id) }))
+    .filter((v) => v.lines.length > 0);
+  const booked = new Set(planned.flatMap((v) => v.lines.map((l) => l.item.id)));
+  const ready = list.ready.filter((l) => !booked.has(l.item.id));
+  const waiting = list.waiting
+    .map((g) => ({ ...g, lines: g.lines.filter((l) => !booked.has(l.item.id)) }))
+    .filter((g) => g.lines.length > 0);
+  const needsPrice = list.needsPrice.filter((l) => !booked.has(l.item.id));
+
+  const waitingCount = waiting.reduce((n, g) => n + g.lines.length, 0);
+  const counts = [
+    booked.size > 0 ? `${booked.size} on planned visits` : '',
+    ready.length > 0 ? `${ready.length} ready now` : '',
+    waitingCount > 0 ? `${waitingCount} waiting` : '',
+    needsPrice.length > 0 ? `${needsPrice.length} ${needsPrice.length === 1 ? 'that needs' : 'that need'} a price` : '',
+  ].filter(Boolean);
+  const summary =
     list.open === 0
       ? 'Nothing open right now.'
-      : waitingCount === 0
+      : counts.length === 1 && ready.length === list.open
         ? `${plural(list.open, 'open item')}, all ready now.`
-        : list.ready.length === 0
-          ? `${plural(list.open, 'open item')}, all waiting on something first.`
-          : `${plural(list.open, 'open item')}: ${list.ready.length} ready now and ${waitingCount} waiting.`;
+        : `${plural(list.open, 'open item')}: ${andList(counts)}.`;
   const trades = list.trades.length > 0 ? `${waitingOnText(list.trades)}. ` : '';
-  const parts = [header(settings, list.company, `${trades}${counts}`)];
+  const parts = [header(settings, 'Completion List', list.company, `${trades}${summary}`)];
 
-  parts.push('<h2 class="rb-section">Ready Now</h2>');
-  if (list.ready.length > 0) {
-    parts.push('<p class="rb-section-note">These can be done any time.</p>');
-    parts.push(table(columns, rows(columns, list.ready)));
-  } else {
-    parts.push('<p class="rb-section-note">Nothing is ready yet.</p>');
-  }
-
-  if (list.waiting.length > 0) {
-    parts.push('<h2 class="rb-section">Waiting</h2>');
-    parts.push('<p class="rb-section-note">Grouped by what each is waiting on, soonest first.</p>');
-    const body = list.waiting
-      .map((g) => band(columns, `Waiting on ${g.on}${g.readyBy ? `, ready by ${readyByText(g.readyBy, settings.date)}` : ''}`) + rows(columns, g.lines))
+  if (planned.length > 0) {
+    parts.push('<h2 class="rb-section">Planned Visits</h2>');
+    parts.push('<p class="rb-section-note">Tell us if a start or the days need to change.</p>');
+    const body = planned
+      .map(({ visit, lines }) => {
+        const end = visitEnd(visit);
+        const when = end === visit.start ? dayText(visit.start, settings.date, true) : `${dayText(visit.start, settings.date, true)} to ${dayText(end, settings.date, true)}`;
+        return band(span, `${when}: ${plural(visit.days, 'day')}, ${visit.confirmed ? 'confirmed' : 'our best guess'}`) + rows(columns, lines);
+      })
       .join('');
     parts.push(table(columns, body));
+  }
+
+  parts.push(`<h2 class="rb-section">${planned.length > 0 ? 'Ready Now, Not Planned Yet' : 'Ready Now'}</h2>`);
+  if (ready.length > 0) {
+    parts.push('<p class="rb-section-note">These can be done any time.</p>');
+    parts.push(table(columns, rows(columns, ready) + daysLine(span, ready.length)));
+  } else {
+    parts.push(`<p class="rb-section-note">${planned.length > 0 ? 'Everything ready is on a planned visit.' : 'Nothing is ready yet.'}</p>`);
+  }
+
+  if (waiting.length > 0) {
+    parts.push('<h2 class="rb-section">Waiting</h2>');
+    parts.push('<p class="rb-section-note">Grouped by what each is waiting on, soonest first.</p>');
+    const body = waiting
+      .map(
+        (g) =>
+          band(span, `Waiting on ${g.on}${g.readyBy ? `, ready by ${dayText(g.readyBy, settings.date)}` : ''}`) +
+          rows(columns, g.lines) +
+          daysLine(span, g.lines.length),
+      )
+      .join('');
+    parts.push(table(columns, body));
+  }
+
+  if (needsPrice.length > 0) {
+    parts.push('<h2 class="rb-section">Needs a Price</h2>');
+    parts.push('<p class="rb-section-note">Added scope we need a price for before it is scheduled.</p>');
+    parts.push(table(columns, rows(columns, needsPrice)));
   }
 
   const added = columns.filter((c) => c.label !== 'Photo');
   parts.push('<h2 class="rb-section">Anything Missing</h2>');
   parts.push('<p class="rb-section-note">Add anything not on this list.</p>');
-  parts.push(table(added, blanks(added, 6)));
+  parts.push(table(added, blanks(added.length, 6)));
 
-  const title = list.company;
   return {
-    title,
+    title: list.company,
+    kind: 'Completion List',
     fileName: `${safeName(`${settings.job.name} Completion List for ${list.company}, ${printDate(settings.date).replace(',', '')}`)}.pdf`,
+    body: parts.join(''),
+  };
+}
+
+/** What Ross Built needs from the owner or the design team, the soonest needed first. */
+export function partyPrintout(party: string, lines: ListLine[], settings: PrintSettings): Printout {
+  const columns: Column[] = [
+    { label: 'Item', width: '0.55in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
+    { label: 'Room', width: '1.3in', cell: (l) => esc(l.room) },
+    { label: 'Work', cell: workCell },
+    { label: 'Needed By', width: '1.05in', cell: (l) => esc(isDay(l.item.readyBy) ? dayText(l.item.readyBy, settings.date) : 'When you can') },
+    ...photoColumn(settings),
+  ];
+  const summary =
+    lines.length === 0
+      ? 'Nothing is waiting on you right now.'
+      : `${plural(lines.length, 'item')} ${lines.length === 1 ? 'is' : 'are'} ready to move as soon as we have your answer.`;
+  const parts = [header(settings, 'Decisions Needed', party, summary)];
+  if (lines.length > 0) {
+    parts.push('<h2 class="rb-section">Decisions Needed</h2>');
+    parts.push('<p class="rb-section-note">The date is when an answer keeps the work on schedule.</p>');
+    parts.push(table(columns, rows(columns, lines)));
+  }
+  return {
+    title: party,
+    kind: 'Decisions Needed',
+    fileName: `${safeName(`${settings.job.name} Decisions Needed for ${party}, ${printDate(settings.date).replace(',', '')}`)}.pdf`,
     body: parts.join(''),
   };
 }
 
 /** The whole job, for Ross Built: floor by floor, room by room, the trade and company on every line. */
 export function jobPrintout(lines: ListLine[], settings: PrintSettings): Printout {
-  const withPhotos = !!settings.photo;
   const columns: Column[] = [
     { label: 'Item', width: '0.5in', cell: (l) => esc(itemNumberLabel(l.item)), className: 'rb-num' },
     { label: 'Work', cell: workCell },
     { label: 'Trade', width: '1.05in', cell: (l) => esc(l.trade), className: 'rb-small' },
     { label: 'Company', width: '1.1in', cell: (l) => esc(l.company), className: 'rb-small' },
     { label: 'Ready', width: '1.3in', cell: (l) => readyCell(l, settings.date), className: 'rb-small' },
-    ...(withPhotos ? [{ label: 'Photo', width: `${PHOTO_WIDTH + 0.16}in`, cell: (l: ListLine) => photoCell(settings.photo?.(l.item.id)) }] : []),
+    ...photoColumn(settings),
   ];
   const ready = lines.filter((l) => l.item.ready).length;
   const rooms = new Set(lines.map((l) => l.item.locationId)).size;
@@ -217,15 +324,15 @@ export function jobPrintout(lines: ListLine[], settings: PrintSettings): Printou
     lines.length === 0
       ? 'Nothing open right now.'
       : `${plural(lines.length, 'open item')} in ${plural(rooms, 'room')}: ${ready} ready now and ${lines.length - ready} waiting.`;
-  const parts = [header(settings, 'Whole Job', summary)];
+  const parts = [header(settings, 'Completion List', 'Whole Job', summary)];
 
   // Floors in the order they come, each with its rooms in order and a blank line in each room.
   const floors: { floor: string; rooms: { room: string; lines: ListLine[] }[] }[] = [];
   for (const line of lines) {
-    let floor = floors[floors.length - 1];
-    if (!floor || floor.floor !== line.floor) {
-      floor = floors.find((f) => f.floor === line.floor) ?? { floor: line.floor, rooms: [] };
-      if (!floors.includes(floor)) floors.push(floor);
+    let floor = floors.find((f) => f.floor === line.floor);
+    if (!floor) {
+      floor = { floor: line.floor, rooms: [] };
+      floors.push(floor);
     }
     let room = floor.rooms.find((r) => r.room === line.room);
     if (!room) {
@@ -236,11 +343,12 @@ export function jobPrintout(lines: ListLine[], settings: PrintSettings): Printou
   }
   for (const floor of floors) {
     parts.push(`<h2 class="rb-section">${esc(floor.floor)}</h2>`);
-    parts.push(table(columns, floor.rooms.map((r) => band(columns, r.room) + rows(columns, r.lines) + blanks(columns, 1)).join('')));
+    parts.push(table(columns, floor.rooms.map((r) => band(columns.length, r.room) + rows(columns, r.lines) + blanks(columns.length, 1)).join('')));
   }
 
   return {
     title: 'Whole Job',
+    kind: 'Completion List',
     fileName: `${safeName(`${settings.job.name} Completion List, ${printDate(settings.date).replace(',', '')}`)}.pdf`,
     body: parts.join(''),
   };
@@ -271,8 +379,12 @@ export const PRINT_CSS = `
 .rb-table tr.rb-alt td{background:#F7F5EC}
 .rb-table tr.rb-band td{background:#CBD8DB;font-weight:700;padding:4pt 6pt;page-break-after:avoid;break-after:avoid}
 .rb-table tr.rb-blank td{height:26pt}
+.rb-table tr.rb-days td{text-align:right;font-size:9pt;font-weight:600;color:#4E7A8C;padding:8pt 6pt 9pt}
+.rb-fill{display:inline-block;width:0.9in;margin-left:6pt;border-bottom:0.75pt solid #5B8699;vertical-align:baseline}
 .rb-num{font-weight:700;font-variant-numeric:tabular-nums}
+.rb-new{display:inline-block;margin-top:3pt;padding:0 3pt;border:0.75pt solid #4E7A8C;border-radius:2pt;font-size:7pt;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#4E7A8C}
 .rb-small{font-size:9pt}
+.rb-late{font-weight:700}
 .rb-work{font-weight:700}
 .rb-desc{margin-top:1pt}
 .rb-note{margin-top:2pt;font-size:9pt;color:#4E7A8C}
@@ -293,4 +405,9 @@ export function printPage(printout: Printout, options: { fontCss?: string; pageM
     `<style>${options.fontCss ?? ''}${PRINT_CSS}${page}html,body{margin:0;padding:0;background:#FFFFFF}</style>`,
     `</head><body><div class="rb-doc">${printout.body}</div></body></html>`,
   ].join('');
+}
+
+/** The footer on every page: the job and list on the left, the page on the right. */
+export function footerText(printout: Printout, settings: Pick<PrintSettings, 'job' | 'date'>): string {
+  return `${settings.job.name}, ${printout.kind}, ${printout.title}, ${printDate(settings.date)}`;
 }

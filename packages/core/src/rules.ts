@@ -26,16 +26,21 @@ export type ItemFields = Pick<
   | 'completedBy'
   | 'completedAt'
   | 'extra'
+  | 'unfinished'
+  | 'visitId'
 >;
 
-/** Everything that stops an item from saving, in plain words. An empty list means it saves. */
+/**
+ * Everything that stops an item from saving, in plain words. An empty list means it saves. An
+ * unfinished item may still be missing its title, company and trade; the other rules still hold.
+ */
 export function checkItem(item: ItemFields): Problem[] {
   const problems: Problem[] = [];
   const title = item.title.trim();
-  if (title === '') problems.push({ field: 'title', message: 'Give it a title' });
+  if (title === '' && !item.unfinished) problems.push({ field: 'title', message: 'Give it a title' });
   if (title.length > TITLE_MAX) problems.push({ field: 'title', message: `Keep the title under ${TITLE_MAX} characters` });
-  if (!item.companyId) problems.push({ field: 'companyId', message: 'Pick the company doing the work' });
-  if (!item.tradeId) problems.push({ field: 'tradeId', message: 'Pick the trade' });
+  if (!item.companyId && !item.unfinished) problems.push({ field: 'companyId', message: 'Pick the company doing the work' });
+  if (!item.tradeId && !item.unfinished) problems.push({ field: 'tradeId', message: 'Pick the trade' });
   if (!item.ready && item.waitingOn.every((w) => w.trim() === '')) {
     problems.push({ field: 'waitingOn', message: 'Not ready: say what it is waiting on' });
   }
@@ -48,7 +53,37 @@ export function checkItem(item: ItemFields): Problem[] {
   if (item.status === 'complete' && (!item.completedBy || !item.completedAt)) {
     problems.push({ field: 'status', message: 'A complete item records who completed it and when' });
   }
+  if (item.status === 'complete' && item.unfinished) {
+    problems.push({ field: 'status', message: 'Finish the item before it is completed' });
+  }
   return problems;
+}
+
+/** What an unfinished item still needs, in the order the form asks for it. */
+export function missingDetails(item: Pick<ItemFields, 'title' | 'companyId' | 'tradeId'>): ('title' | 'company' | 'trade')[] {
+  const out: ('title' | 'company' | 'trade')[] = [];
+  if (item.title.trim() === '') out.push('title');
+  if (!item.companyId) out.push('company');
+  if (!item.tradeId) out.push('trade');
+  return out;
+}
+
+/** "Needs a title and a company." */
+export function missingText(item: Pick<ItemFields, 'title' | 'companyId' | 'tradeId'>): string {
+  const words = missingDetails(item).map((m) => `a ${m}`);
+  if (words.length === 0) return '';
+  const list = words.length === 1 ? words[0]! : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+  return `Needs ${list}`;
+}
+
+/** Deficiencies are the company's own work; added scope is ready to schedule only once it is priced. */
+export function isPriced(item: Pick<ItemFields, 'kind' | 'boughtOut'>): boolean {
+  return item.kind === 'deficiency' || item.boughtOut;
+}
+
+/** Open, finished, ready and priced: work a company can be booked for now. */
+export function readyToSchedule(item: Pick<Item, 'status' | 'unfinished' | 'ready' | 'kind' | 'boughtOut'>): boolean {
+  return item.status === 'open' && !item.unfinished && item.ready && isPriced(item);
 }
 
 /** A Waiting On list tidied: trimmed, each one once, nothing empty. */
@@ -82,6 +117,8 @@ export function tidyItem<T extends ItemFields>(item: T): T {
     out.waitingOn = [];
     out.readyBy = null;
   }
+  // An unfinished item is finished the moment it has everything a finished item needs.
+  if (out.unfinished && checkItem({ ...out, unfinished: false }).length === 0) out.unfinished = false;
   return out;
 }
 
@@ -105,6 +142,7 @@ export class RuleError extends Error {
 export function complete<T extends ItemFields>(item: T, by: Person, at: Date = new Date()): T {
   if (!by.active) throw new RuleError('Only an active Ross Built user can mark an item complete');
   if (item.status === 'removed') throw new RuleError('A removed item cannot be completed; restore it first');
+  if (item.unfinished) throw new RuleError('Finish the item before it is completed');
   return { ...item, status: 'complete', completedBy: by.id, completedAt: at.toISOString() };
 }
 

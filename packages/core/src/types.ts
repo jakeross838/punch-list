@@ -78,11 +78,53 @@ export interface Item {
   source: ItemSource;
   /** Answers to the added fields from Item Form setup, by field id. */
   extra: Record<string, ExtraValue>;
+  /**
+   * Saved quickly to finish later: a photo snapped on a walk, or an item saved before its company
+   * was known. It may have no title, company or trade yet, and it stays off the lists that go out.
+   */
+  unfinished: boolean;
+  /** The visit it is booked on, when the company's trip is planned. */
+  visitId: string | null;
   /** Empty until the Buildertrend connection is turned on. */
   btExternalId: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------- the schedule ----------
+
+/**
+ * A company's trip to the job to do a batch of items: when it starts and how many working days it
+ * takes. A best guess until the company confirms it. Removing keeps it, marked removed.
+ */
+export interface Visit {
+  id: string;
+  jobId: string;
+  companyId: string;
+  /** The first day, YYYY-MM-DD. */
+  start: string;
+  /** Working days, Monday to Friday. */
+  days: number;
+  confirmed: boolean;
+  note: string;
+  removed: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A list that went out: to a company, the whole job, or the owner and design team. */
+export interface ListSend {
+  id: string;
+  jobId: string;
+  /** Which list: "job", "company:<id>" or "party:<name>". */
+  list: string;
+  /** The items on it when it went out, to mark what is new on the next one. */
+  itemIds: string[];
+  sentAt: string;
+  sentBy: string;
+  removed: boolean;
 }
 
 // ---------- photos and their marks ----------

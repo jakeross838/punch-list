@@ -52,7 +52,7 @@ function item(over: Partial<Item>): Item {
   return {
     id: `i${n}`, jobId: 'j', locationId: 'k', number: n, title: `Item ${n}`, description: '', tradeId: 't-carp',
     companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], readyBy: null, boughtOut: true, poOrCo: null,
-    status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, btExternalId: null, createdBy: 'p1',
+    status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null, btExternalId: null, createdBy: 'p1',
     createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
   };
 }
@@ -142,7 +142,7 @@ describe('walking the job', () => {
     expect(neighborRooms(rooms, 'a').previous).toBeNull();
   });
 
-  it('groups by what items wait on: ready now, then the biggest holdup first', () => {
+  it('groups by what items wait on: unfinished, ready now, needs a price, then late holdups and the biggest first', () => {
     const items = [
       item({ ready: false, waitingOn: ['Owner'] }),
       item({ ready: false, waitingOn: ['Volcano Stone', 'owner'] }),
@@ -151,14 +151,27 @@ describe('walking the job', () => {
       item({}),
       item({ status: 'complete', completedBy: 'p1', completedAt: '2026-10-29T12:00:00Z' }),
       item({ tradeId: 't-paint', companyId: 'c-hhh' }),
+      item({ unfinished: true, title: '', companyId: null, tradeId: null }),
+      item({ kind: 'added_scope', boughtOut: false }),
+      item({ kind: 'added_scope', boughtOut: false, ready: false, waitingOn: ['Owner'] }),
     ];
     const lookups = { locations: rooms, trades: [], companies: [] };
     const groups = groupItems(items, 'waiting', 'open', lookups, { showCompleted: true });
     expect(groups.map((g) => [g.label, g.items.length])).toEqual([
+      ['Unfinished', 1],
       ['Ready Now', 2],
+      ['Needs a Price', 2],
+      ['Owner', 3],
       ['Volcano Stone', 3],
-      ['Owner', 2],
       ['Completed', 1],
+    ]);
+    // A holdup past its Ready By goes first, however small.
+    const late = [...items, item({ ready: false, waitingOn: ['Gator Plumbing'], readyBy: '2026-10-20' })];
+    const byLate = groupItems(late, 'waiting', 'open', lookups, { today: '2026-10-30' }).filter((g) => g.key.startsWith('waiting:'));
+    expect(byLate.map((g) => [g.label, g.late])).toEqual([
+      ['Gator Plumbing', 10],
+      ['Owner', 0],
+      ['Volcano Stone', 0],
     ]);
     const painting = groupItems(items, 'room', 'open', lookups, { tradeId: 't-paint' });
     expect(painting.flatMap((g) => g.items).map((i) => i.tradeId)).toEqual(['t-paint']);
@@ -207,8 +220,8 @@ describe('the lists that go to the subs', () => {
 
   it('lists the companies with open work, and the whole job by room then trade', () => {
     expect(companiesWithWork(items, lookups)).toEqual([
-      { companyId: 'c-sms', name: 'SMS Carpentry', open: 5, ready: 2 },
-      { companyId: 'c-hhh', name: 'Triple H Painting', open: 1, ready: 1 },
+      { companyId: 'c-sms', name: 'SMS Carpentry', open: 5, ready: 2, needsPrice: 0 },
+      { companyId: 'c-hhh', name: 'Triple H Painting', open: 1, ready: 1, needsPrice: 0 },
     ]);
     expect(jobList(items, lookups).map((l) => [l.room, l.trade, l.item.number])).toEqual([
       ['Living 107', 'Carpentry', 2],
@@ -223,7 +236,7 @@ describe('the lists that go to the subs', () => {
   const settings = { job: { name: 'Fish', address: '715 North Shore Drive' }, date: new Date(2026, 9, 30) };
   const dataRows = (html: string) => html.match(/<tr class="rb-row[^"]*">.*?<\/tr>/g) ?? [];
 
-  it('prints a company list: ready now, then waiting by what it waits on, a Days column and lines to add more', () => {
+  it('prints a company list: ready now, then waiting by what it waits on, days for each batch and lines to add more', () => {
     const page = companyPrintout(companyList('c-sms', items, lookups), settings);
     expect(page.title).toBe('SMS Carpentry');
     expect(page.fileName).toBe('Fish Completion List for SMS Carpentry, October 30 2026.pdf');
@@ -237,7 +250,10 @@ describe('the lists that go to the subs', () => {
     const lines = dataRows(page.body);
     expect(lines).toHaveLength(5);
     for (const line of lines) expect(line).toMatch(/Living 107|Kitchen 109/);
-    expect(page.body).toContain('<th>Days</th>');
+    // One line for the days of each batch: the ready items, then each waiting group.
+    expect(page.body.match(/<tr class="rb-days">/g)).toHaveLength(3);
+    expect(page.body).toContain('Days for these 2 items');
+    expect(page.body).toContain('Days for this item');
     expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(6);
     expect(page.body).not.toContain('<th>Photo</th>');
   });
@@ -258,16 +274,20 @@ describe('the lists that go to the subs', () => {
     // A tall photo stops at the most the line allows.
     expect(page.body).toContain('style="height:1.45in"');
     // The lines to add more have no photo column.
-    expect(page.body).toMatch(/<h2 class="rb-section">Anything Missing<\/h2>.*?<colgroup>(<col[^>]*>){4}<\/colgroup>/);
+    expect(page.body).toMatch(/<h2 class="rb-section">Anything Missing<\/h2>.*?<colgroup>(<col[^>]*>){3}<\/colgroup>/);
   });
 
-  it('notes added scope that is not priced yet', () => {
+  it('puts added scope that is not priced yet under Needs a Price, not Ready Now', () => {
     const extra = item({ locationId: 'a', number: 9, kind: 'added_scope', boughtOut: false });
     const priced = item({ locationId: 'a', number: 10, kind: 'added_scope', boughtOut: true, poOrCo: 'CO 12' });
-    const page = companyPrintout(companyList('c-sms', [extra, priced], lookups), settings);
+    const list = companyList('c-sms', [extra, priced], lookups);
+    expect(list.ready.map((l) => l.item.number)).toEqual([10]);
+    expect(list.needsPrice.map((l) => l.item.number)).toEqual([9]);
+    const page = companyPrintout(list, settings);
     expect(page.body).toContain('Added scope, not priced yet');
     expect(page.body).toContain('Added scope, CO 12');
-    expect(page.body).toContain('2 open items, all ready now.');
+    expect(page.body).toContain('2 open items: 1 ready now and 1 that needs a price.');
+    expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Ready Now', 'Needs a Price', 'Anything Missing']);
   });
 
   it('prints the whole job floor by floor and room by room, with the trade and company on every line', () => {

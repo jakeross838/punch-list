@@ -25,8 +25,9 @@ export interface ItemDraft extends ItemFields {
 }
 
 export function fieldsOf(item: Item): ItemFields {
-  const { title, description, tradeId, companyId, kind, ready, waitingOn, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra } = item;
-  return { title, description, tradeId, companyId, kind, ready, waitingOn, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra };
+  const { title, description, tradeId, companyId, kind, ready, waitingOn, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra, unfinished, visitId } =
+    item;
+  return { title, description, tradeId, companyId, kind, ready, waitingOn, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra, unfinished, visitId };
 }
 
 export function blankDraft(locationId: string): ItemDraft {
@@ -46,6 +47,8 @@ export function blankDraft(locationId: string): ItemDraft {
     completedBy: null,
     completedAt: null,
     extra: {},
+    unfinished: false,
+    visitId: null,
   };
 }
 
@@ -61,11 +64,31 @@ export interface ItemFormState {
   tried: boolean;
   /** Marks the form tried and returns the tidied draft when it can save, or null. */
   submit: () => ItemDraft | null;
+  /**
+   * Save now, finish later: the draft as an unfinished item when only its title, company or trade is
+   * missing, or null when something else stops it.
+   */
+  submitUnfinished: () => ItemDraft | null;
   problem: (field: keyof ItemDraft) => string | undefined;
 }
 
 /** The fields the form edits. Status changes go through Mark Complete and the like instead. */
-export const EDITABLE: (keyof ItemDraft)[] = ['locationId', 'title', 'description', 'tradeId', 'companyId', 'kind', 'ready', 'waitingOn', 'readyBy', 'boughtOut', 'poOrCo', 'extra'];
+export const EDITABLE: (keyof ItemDraft)[] = [
+  'locationId',
+  'title',
+  'description',
+  'tradeId',
+  'companyId',
+  'kind',
+  'ready',
+  'waitingOn',
+  'readyBy',
+  'boughtOut',
+  'poOrCo',
+  'extra',
+  'unfinished',
+  'visitId',
+];
 
 /** One field's value against another's: lists and added fields by what they hold. */
 export function sameValue(a: unknown, b: unknown): boolean {
@@ -92,6 +115,14 @@ export function useItemForm(initial: ItemDraft): ItemFormState {
     submit: () => {
       setTried(true);
       return problems.length === 0 ? { ...tidy, locationId: value.locationId } : null;
+    },
+    submitUnfinished: () => {
+      const draft = tidyItem({ ...value, unfinished: true });
+      if (value.locationId === '' || checkItem(draft).length > 0) {
+        setTried(true);
+        return null;
+      }
+      return { ...draft, locationId: value.locationId };
     },
     problem: (field) => (tried ? problems.find((p) => p.field === field)?.message : undefined),
   };

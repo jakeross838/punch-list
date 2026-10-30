@@ -2,6 +2,8 @@
 
 > **Parked, 29 October 2026.** Jake took Buildertrend out of version 1; the connection may come back later as an option (a one-time import of an existing list, then sync). Everything below is built and tested against the stand-in. Finishing it needs one live session.
 
+> **One-time import, 30 October 2026.** `npm run import:buildertrend` reads a job's Completion List (Fish by default) through the same pasted session, read only, and writes `local/fish-import.json` in the app's shape: rooms in floor order with the shared areas, companies, trades, and every item with Ready, Waiting On (split into who it waits on), Ready By, Bought Out, PO or CO and whether it is complete. Anything it cannot place is listed in plain sentences. Code: `packages/buildertrend/src/importList.ts`, tested on the stand-in. It needs one live session to run on Fish.
+
 **Goal:** a Chrome extension that, inside a logged-in Buildertrend tab, reads the whole Fish completion list and writes to the sandbox job, using the recipes verified in the Buildertrend skill. No app yet.
 
 **Plan:** [Punch List App: Version 1 Plan](https://claude.ai/artifact/8aKXo8iiTrKoH78Q1Mce7a), section 5.

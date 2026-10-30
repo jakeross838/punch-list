@@ -1,6 +1,6 @@
 // Database rows (snake_case, booleans as 0 or 1 on the phone) to and from the app's records.
 
-import type { Company, CustomField, Item, ItemFields, Job, JobCompany, Location, Mark, Person, Photo, StandardTitle, Trade } from '@punch/core';
+import type { Company, CustomField, Item, ItemFields, Job, JobCompany, ListSend, Location, Mark, Person, Photo, StandardTitle, Trade, Visit } from '@punch/core';
 import type { ItemPatch } from './api';
 
 type Row = Record<string, unknown>;
@@ -77,6 +77,8 @@ export const rowToItem = (r: Row): Item => ({
   completedAt: textOrNull(r.completed_at),
   source: r.source === 'walk' || r.source === 'import' ? r.source : 'typed',
   extra: json<Item['extra']>(r.extra, {}),
+  unfinished: bool(r.unfinished),
+  visitId: textOrNull(r.visit_id),
   btExternalId: textOrNull(r.bt_external_id),
   createdBy: text(r.created_by),
   createdAt: text(r.created_at),
@@ -99,6 +101,8 @@ const ITEM_COLUMNS: Record<keyof ItemPatch, string> = {
   completedBy: 'completed_by',
   completedAt: 'completed_at',
   extra: 'extra',
+  unfinished: 'unfinished',
+  visitId: 'visit_id',
 };
 
 /** An item patch as column and value pairs for the phone database (booleans as 0 or 1). */
@@ -143,6 +147,30 @@ export const rowToCustomField = (r: Row): CustomField => ({
   active: bool(r.active),
 });
 
+export const rowToVisit = (r: Row): Visit => ({
+  id: text(r.id),
+  jobId: text(r.job_id),
+  companyId: text(r.company_id),
+  start: text(r.start_date).slice(0, 10),
+  days: Math.max(1, num(r.days)),
+  confirmed: bool(r.confirmed),
+  note: text(r.note),
+  removed: bool(r.removed),
+  createdBy: text(r.created_by),
+  createdAt: text(r.created_at),
+  updatedAt: text(r.updated_at),
+});
+
+export const rowToListSend = (r: Row): ListSend => ({
+  id: text(r.id),
+  jobId: text(r.job_id),
+  list: text(r.list),
+  itemIds: waitingList(r.item_ids),
+  sentAt: text(r.sent_at),
+  sentBy: text(r.sent_by),
+  removed: bool(r.removed),
+});
+
 export function itemFieldsColumns(fields: ItemFields): [string, unknown][] {
   return itemPatchColumns(fields);
 }
@@ -154,15 +182,18 @@ export const BOOLEAN_COLUMNS: Record<string, string[]> = {
   locations: ['active'],
   trades: ['active'],
   companies: ['active'],
-  items: ['ready', 'bought_out'],
+  items: ['ready', 'bought_out', 'unfinished'],
   title_library: ['approved'],
   custom_fields: ['active'],
   photos: ['removed'],
+  visits: ['confirmed', 'removed'],
+  list_sends: ['removed'],
 };
 
 /** Columns the server keeps as JSON; the phone stores them as text. */
 export const JSON_COLUMNS: Record<string, string[]> = {
   items: ['extra', 'waiting_on'],
+  list_sends: ['item_ids'],
   custom_fields: ['options'],
   photos: ['marks'],
   person_settings: ['item_form', 'job_view'],

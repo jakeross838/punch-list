@@ -27,13 +27,16 @@ cd apps/mobile && npx expo lint   lint for the phone app
 npm run test:db           migrations, access rules and item history on a fresh local Postgres
 npm run preview:build     exports the app for the web and builds the one-page preview in local/preview
 npm run test:preview      walks the preview at iPhone size in Chromium, under the preview page's rules
+npm run import:buildertrend   reads a job's Completion List from Buildertrend, read only, into local/ for loading
 npm run build:extension   parked: builds the Buildertrend extension
 npm run test:extension    parked: runs the extension in Chromium against the stand-in Buildertrend
 ```
 
 ## Rules the code enforces
 
-- Not ready means it says what it waits on: one thing or several. One company and one trade per item.
+- Not ready means it says who it waits on: one or several. One company and one trade per item.
+- An unfinished item (a Quick Snap photo, or saved before its company was known) may wait for its title, company and trade, stays off every list, and cannot be completed until it is finished.
+- An item goes only on a visit of its own company. Visits and sent lists are never deleted; removing sets removed.
 - Only an active Ross Built user marks an item complete.
 - Removing an item marks it Removed. Nothing is ever deleted, photos included.
 - Marks are kept apart from the photo, as points on it, so the original photo is never changed.

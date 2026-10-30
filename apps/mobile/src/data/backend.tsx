@@ -57,6 +57,14 @@ const api: DataApi = {
   useCustomFields: () => useStore().customFields,
   useFormSettings: () => useStore().formSettings,
   useViewSettings: () => useStore().viewSettings,
+  useVisits: (jobId) => {
+    const s = useStore();
+    return useMemo(() => s.visits.filter((v) => v.jobId === jobId && !v.removed), [s.visits, jobId]);
+  },
+  useSends: (jobId) => {
+    const s = useStore();
+    return useMemo(() => s.sends.filter((x) => x.jobId === jobId && !x.removed), [s.sends, jobId]);
+  },
 
   async createJob({ name, address }) {
     const id = randomUUID();
@@ -93,6 +101,52 @@ const api: DataApi = {
   },
   async updateItem(id: string, patch: ItemPatch) {
     setState({ ...state, items: state.items.map((i) => (i.id === id ? { ...i, ...patch, updatedAt: now() } : i)) });
+  },
+  async updateItems(changes) {
+    const byId = new Map(changes.map((c) => [c.id, c.patch]));
+    setState({ ...state, items: state.items.map((i) => (byId.has(i.id) ? { ...i, ...byId.get(i.id), updatedAt: now() } : i)) });
+  },
+  async addVisit({ itemIds, note, ...input }) {
+    const id = randomUUID();
+    const visit = { ...input, id, note: note ?? '', removed: false, createdBy: state.me.id, createdAt: now(), updatedAt: now() };
+    const on = new Set(itemIds);
+    setState({
+      ...state,
+      visits: [...state.visits, visit],
+      items: state.items.map((i) => (on.has(i.id) ? { ...i, visitId: id, updatedAt: now() } : i)),
+    });
+    return id;
+  },
+  async updateVisit(id, patch, itemIds) {
+    const on = itemIds ? new Set(itemIds) : null;
+    setState({
+      ...state,
+      visits: state.visits.map((v) => (v.id === id ? { ...v, ...patch, updatedAt: now() } : v)),
+      items: on
+        ? state.items.map((i) =>
+            on.has(i.id) && i.visitId !== id
+              ? { ...i, visitId: id, updatedAt: now() }
+              : !on.has(i.id) && i.visitId === id
+                ? { ...i, visitId: null, updatedAt: now() }
+                : i,
+          )
+        : state.items,
+    });
+  },
+  async removeVisit(id) {
+    setState({
+      ...state,
+      visits: state.visits.map((v) => (v.id === id ? { ...v, removed: true, updatedAt: now() } : v)),
+      items: state.items.map((i) => (i.visitId === id ? { ...i, visitId: null, updatedAt: now() } : i)),
+    });
+  },
+  async recordSend({ jobId, list, itemIds }) {
+    const id = randomUUID();
+    setState({ ...state, sends: [...state.sends, { id, jobId, list, itemIds, sentAt: now(), sentBy: state.me.id, removed: false }] });
+    return id;
+  },
+  async undoSend(id) {
+    setState({ ...state, sends: state.sends.map((x) => (x.id === id ? { ...x, removed: true } : x)) });
   },
   async addPhotos(list) {
     const added: Photo[] = [];

@@ -1,5 +1,6 @@
-// Not ready: a box over the item asking what it is waiting on (tick one thing or several) and when
-// it should be ready. Done keeps it; Cancel leaves the item as it was.
+// Not ready: a box over the item asking who it is waiting on (tick one or several) and when it
+// should be ready. Waiting On is always a who: a company, Ross Built, the owner, the design team;
+// what it is waiting for goes in the description. Done keeps it; Cancel leaves the item as it was.
 
 import { tidyTitle } from '@punch/core';
 import { useState } from 'react';
@@ -66,7 +67,7 @@ export function NotReadyBox({
             Not Ready
           </Text>
           <Text variant="footnote" color={colors.secondary} align="center" style={styles.lead}>
-            What is it waiting on? Pick one or more.
+            Who is it waiting on? Pick one or more.
           </Text>
           <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
             {shown.map((c, i) => (
@@ -92,13 +93,13 @@ export function NotReadyBox({
                   value={newChoice}
                   onChangeText={setNewChoice}
                   onSubmitEditing={addChoice}
-                  placeholder="Something else"
+                  placeholder="Company or person"
                   placeholderTextColor={colors.placeholder}
                   selectionColor={colors.tint}
                   autoFocus
                   autoCapitalize="words"
                   returnKeyType="done"
-                  accessibilityLabel="Something else it is waiting on"
+                  accessibilityLabel="Someone else it is waiting on"
                   testID="waiting-new"
                   style={styles.input}
                 />
@@ -111,7 +112,7 @@ export function NotReadyBox({
             ) : (
               <Touchable feedback="highlight" onPress={() => setAdding(true)} accessibilityRole="button" testID="waiting-other" style={[styles.choice, styles.rule]}>
                 <Icon name="plus" size={15} color={colors.tint} weight="semibold" />
-                <Text color={colors.tint}>Something Else</Text>
+                <Text color={colors.tint}>Someone Else</Text>
               </Touchable>
             )}
           </ScrollView>

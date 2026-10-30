@@ -14,7 +14,7 @@ function item(over: Partial<Item>): Item {
     id: `i${n}`, jobId: 'j', locationId: 'l1', number: n, title: `Item ${n}`, description: '',
     tradeId: 't1', companyId: 'c1', kind: 'deficiency', ready: true, waitingOn: [], readyBy: null,
     boughtOut: true, poOrCo: null, status: 'open', completedBy: null, completedAt: null, source: 'typed',
-    extra: {}, btExternalId: null, createdBy: 'p1', createdAt: `2026-10-29T10:00:0${n % 10}Z`, updatedAt: '2026-10-29T10:00:00Z',
+    extra: {}, unfinished: false, visitId: null, btExternalId: null, createdBy: 'p1', createdAt: `2026-10-29T10:00:0${n % 10}Z`, updatedAt: '2026-10-29T10:00:00Z',
     ...over,
   };
 }

@@ -170,6 +170,85 @@ begin
   end if;
 end $$;
 
+-- ---------- drafts, visits and lists sent ----------
+do $$
+declare
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  j uuid := (select id from public.jobs where name = 'Fish');
+  loc uuid := (select l.id from public.locations l join public.jobs jb on jb.id = l.job_id where jb.name = 'Fish' limit 1);
+  t uuid := (select id from public.trades where name = 'Plumbing');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  c2 uuid; d uuid; v uuid; v2 uuid; s uuid;
+  rec record;
+begin
+  -- An unfinished item may wait for its title, company and trade; a finished one may not.
+  insert into public.items (job_id, location_id, title, ready, unfinished) values (j, loc, '', true, true) returning id into d;
+  begin
+    insert into public.items (job_id, location_id, title, ready) values (j, loc, '', true);
+    raise exception 'FAIL: a finished item with no title was accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.items (job_id, location_id, title, ready) values (j, loc, 'Install vanity', true);
+    raise exception 'FAIL: a finished item with no company or trade was accepted';
+  exception when check_violation then null;
+  end;
+  -- Every other rule still holds: not ready needs Waiting On, and it cannot be completed.
+  begin
+    update public.items set ready = false where id = d;
+    raise exception 'FAIL: an unfinished, not ready item with no Waiting On was accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.items set status = 'complete' where id = d;
+    raise exception 'FAIL: an unfinished item was completed';
+  exception when check_violation then null;
+  end;
+  update public.items set title = 'Install vanity', trade_id = t, company_id = c, unfinished = false where id = d;
+
+  -- Visits: stamped, kept to their job and company, never deleted.
+  insert into public.visits (job_id, company_id, start_date, days) values (j, c, '2026-11-03', 2) returning id into v;
+  if (select created_by from public.visits where id = v) is distinct from jake then
+    raise exception 'FAIL: the visit creator was not stamped';
+  end if;
+  begin
+    insert into public.visits (job_id, company_id, start_date, days) values (j, c, '2026-11-03', 0);
+    raise exception 'FAIL: a visit of no days was accepted';
+  exception when check_violation then null;
+  end;
+  update public.visits set company_id = gen_random_uuid(), confirmed = true, days = 3 where id = v;
+  select company_id, confirmed, days into rec from public.visits where id = v;
+  if rec.company_id <> c or not rec.confirmed or rec.days <> 3 then
+    raise exception 'FAIL: a visit moved companies or its changes did not save';
+  end if;
+  update public.items set visit_id = v where id = d;
+  insert into public.companies (name, default_trade_id) values ('LaPensee Plumbing', t) returning id into c2;
+  insert into public.visits (job_id, company_id, start_date, days) values (j, c2, '2026-11-04', 1) returning id into v2;
+  begin
+    update public.items set visit_id = v2 where id = d;
+    raise exception 'FAIL: an item went on another company''s visit';
+  exception when check_violation then null;
+  end;
+  begin
+    delete from public.visits where id = v;
+    raise exception 'FAIL: the app deleted a visit';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- Lists sent: what went out stays as it went out; Undo only sets removed.
+  insert into public.list_sends (job_id, list, item_ids) values (j, 'company:' || c, array[d]) returning id into s;
+  update public.list_sends set item_ids = '{}', removed = true where id = s;
+  select item_ids, removed, sent_by into rec from public.list_sends where id = s;
+  if cardinality(rec.item_ids) <> 1 or not rec.removed or rec.sent_by is distinct from jake then
+    raise exception 'FAIL: a sent list was changed or not stamped';
+  end if;
+  begin
+    insert into public.list_sends (job_id, list) values (j, 'somewhere');
+    raise exception 'FAIL: a send to an unknown list was accepted';
+  exception when check_violation then null;
+  end;
+end $$;
+
 reset role;
 
 -- ---------- another active person ----------

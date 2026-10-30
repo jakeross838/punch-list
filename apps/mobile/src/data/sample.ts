@@ -2,8 +2,12 @@
 // the rooms, items and photos are made up and are not the real Fish list.
 
 import {
+  addDays,
+  dayOfDate,
   DEFAULT_FORM,
   DEFAULT_VIEW,
+  earliestStart,
+  mondayOf,
   parseRoomList,
   type Company,
   type CustomField,
@@ -11,12 +15,14 @@ import {
   type Item,
   type Job,
   type JobCompany,
+  type ListSend,
   type Location,
   type Person,
   type Photo,
   type StandardTitle,
   type Trade,
   type ViewSettings,
+  type Visit,
 } from '@punch/core';
 import { RANGE_WALL, RANGE_WALL_NO_UPPERS, SAMPLE_PHOTO_SIZE } from './samplePhotos';
 
@@ -30,6 +36,8 @@ export interface SampleState {
   waitingOn: Record<string, string[]>;
   items: Item[];
   photos: Photo[];
+  visits: Visit[];
+  sends: ListSend[];
   titles: StandardTitle[];
   customFields: CustomField[];
   formSettings: FormSettings;
@@ -127,6 +135,8 @@ export function sampleState(): SampleState {
       completedAt: null,
       source: 'typed',
       extra: {},
+      unfinished: false,
+      visitId: null,
       btExternalId: null,
       createdBy: me.id,
       createdAt: at,
@@ -152,6 +162,35 @@ export function sampleState(): SampleState {
     item('Master Bedroom 206', 'Install closet system', 'Walk in closet, both long walls.', 'SMS Carpentry', { kind: 'added_scope', boughtOut: true, poOrCo: 'CO-14' }),
     item('Living 107', 'Patch drywall', 'Behind the television mount, two screw holes.', 'Triple H Painting'),
     item('Kitchen 109', 'Adjust cabinet door', 'Upper cabinet left of the hood. The right door rubs the hood.', 'SMS Carpentry', { source: 'walk' }),
+    // Snapped on a walk with Quick Snap, waiting to be filled in.
+    item('Kitchen 109', '', '', 'SMS Carpentry', { source: 'walk', unfinished: true, tradeId: null, companyId: null }),
+    item('Master Bathroom 207', 'Install shower trim', 'Valve trim and the hand shower.', 'Gator Plumbing'),
+  ];
+
+  // The schedule: a confirmed visit next, and one that ended with work still open.
+  const today = dayOfDate(new Date());
+  const visit = (id: string, company: string, start: string, days: number, confirmed: boolean, itemNumbers: number[]): Visit => {
+    for (const no of itemNumbers) {
+      const it = items.find((x) => x.number === no);
+      if (it) it.visitId = id;
+    }
+    return { id, jobId: job.id, companyId: c(company), start, days, confirmed, note: '', removed: false, createdBy: me.id, createdAt: at, updatedAt: at };
+  };
+  const visits: Visit[] = [
+    visit('visit-paint', 'Triple H Painting', earliestStart(today), 2, true, [3, 15]),
+    visit('visit-tile', 'Rangel Custom Tile', addDays(mondayOf(today), -7), 1, true, [8]),
+  ];
+  // SMS Carpentry's list went out last week, before the cabinet door was found.
+  const sends: ListSend[] = [
+    {
+      id: 'send-sms',
+      jobId: job.id,
+      list: `company:${c('SMS Carpentry')}`,
+      itemIds: ['item-1', 'item-13', 'item-14'],
+      sentAt: `${addDays(mondayOf(today), -3)}T16:00:00.000Z`,
+      sentBy: me.id,
+      removed: false,
+    },
   ];
 
   const photo = (itemId: string, uri: string, marks: Photo['marks']): Photo => ({
@@ -169,6 +208,7 @@ export function sampleState(): SampleState {
   });
   const photos: Photo[] = [
     photo('item-1', RANGE_WALL_NO_UPPERS, []),
+    photo('item-17', RANGE_WALL, []),
     photo('item-16', RANGE_WALL, [
       { tool: 'circle', color: 'red', from: [0.174, 0.092], to: [0.4, 0.469] },
       { tool: 'arrow', color: 'red', from: [0.538, 0.588], to: [0.395, 0.415] },
@@ -195,6 +235,8 @@ export function sampleState(): SampleState {
     waitingOn: { [job.id]: ['Ross Built', 'Owner', 'Cortney Bishop Design'] },
     items,
     photos,
+    visits,
+    sends,
     titles,
     customFields,
     formSettings: DEFAULT_FORM,

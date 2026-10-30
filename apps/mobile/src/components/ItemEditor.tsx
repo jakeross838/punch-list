@@ -2,11 +2,15 @@
 // (typing offers the standard titles, and picking one fills in the trade and the company), where
 // exactly, the room and the company, Ready as a checkbox, and Deficiency or Added Scope. The rest
 // waits under More Details. On an item that already exists, every change saves as it is made.
+// Fill In From Photo asks Claude for what is still blank; the same title already in the room is
+// pointed out.
 
 import {
   companyForTrade,
   DEFAULT_WAITING_ON_EXTRAS,
+  duplicatesOf,
   formShows,
+  itemNumberLabel,
   kindDefaults,
   suggestTitles,
   tidyTitle,
@@ -18,7 +22,7 @@ import {
   type TitleSuggestion,
 } from '@punch/core';
 import { useState, type ReactNode } from 'react';
-import { Keyboard, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, StyleSheet, TextInput, View } from 'react-native';
 import { colors, layout, type as typeScale } from '@/constants/theme';
 import { useData } from '@/data/api';
 import {
@@ -60,6 +64,8 @@ export function ItemEditor({
   onAddPhoto,
   autoFocusTitle,
   showReady = true,
+  itemId,
+  fillIn,
   children,
 }: {
   jobId: string;
@@ -73,6 +79,10 @@ export function ItemEditor({
   autoFocusTitle?: boolean;
   /** Ready only means something while the item is open. */
   showReady?: boolean;
+  /** The item being looked at, so it is not its own duplicate. */
+  itemId?: string;
+  /** Fill In From Photo, when Claude can look at the photo. */
+  fillIn?: { busy: boolean; onPress: () => void };
   children?: ReactNode;
 }) {
   const data = useData();
@@ -126,6 +136,8 @@ export function ItemEditor({
   const whereProblem = problem('locationId') ?? problem('companyId') ?? problem('tradeId');
   const titleProblem = problem('title');
   const first = photos?.[0];
+  const twin = !titleFocused && value.title.trim() ? duplicatesOf(value.title, value.locationId, items, itemId)[0] : undefined;
+  const blanks = !value.title.trim() || !value.companyId;
 
   return (
     <>
@@ -201,6 +213,25 @@ export function ItemEditor({
         <Text variant="footnote" color={colors.destructive} style={styles.note}>
           {sentence(titleProblem)}
         </Text>
+      ) : twin ? (
+        <Text variant="footnote" color={colors.secondary} style={styles.note} testID="duplicate-note">
+          {roomLabel ?? 'This room'} already has this: item {itemNumberLabel(twin)}.
+        </Text>
+      ) : null}
+      {fillIn && blanks ? (
+        <Touchable
+          feedback="opacity"
+          onPress={fillIn.onPress}
+          disabled={fillIn.busy}
+          accessibilityRole="button"
+          testID="fill-in"
+          style={styles.fillIn}
+        >
+          {fillIn.busy ? <ActivityIndicator size="small" color={colors.tint} /> : <Icon name="sparkles" size={17} color={colors.tint} weight="semibold" />}
+          <Text variant="subheadline" weight="600" color={colors.tint}>
+            {fillIn.busy ? 'Looking at the Photo' : 'Fill In From Photo'}
+          </Text>
+        </Touchable>
       ) : null}
 
       {suggestions.length > 0 ? (
@@ -331,7 +362,8 @@ export function ItemEditor({
         options={options.companyOptions}
         value={value.companyId}
         onSelect={(companyId) => {
-          set({ companyId, tradeId: options.tradeFor(companyId, value.tradeId) });
+          // A visit belongs to one company: changing the company takes the item off it.
+          set({ companyId, tradeId: options.tradeFor(companyId, value.tradeId), ...(companyId !== value.companyId ? { visitId: null } : {}) });
           setFilled(false);
         }}
         onClose={() => setPicker(null)}
@@ -368,5 +400,6 @@ const styles = StyleSheet.create({
   suggestion: { height: 50, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, backgroundColor: colors.cell },
   suggestionRule: { borderTopWidth: 1, borderTopColor: colors.separator },
   section: { marginTop: 20 },
+  fillIn: { alignSelf: 'flex-start', height: 40, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6, marginHorizontal: layout.margin + layout.rowPadding },
   kind: { marginHorizontal: layout.margin, marginBottom: 22 },
 });

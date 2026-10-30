@@ -1,7 +1,7 @@
 // Ready, as a checkbox. Checked: it can be done now. Unchecking opens the Not Ready box to say what
 // it is waiting on and when; tap the line under it to change that later.
 
-import { waitingOnText } from '@punch/core';
+import { dayOfDate, daysBetween, pastDueText, waitingOnText } from '@punch/core';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -27,9 +27,10 @@ export function ReadyRow({
 }) {
   const [asking, setAsking] = useState(false);
   const late = !value.ready && value.readyBy !== null && isBeforeToday(value.readyBy);
+  const lateText = late && value.readyBy ? `, ${pastDueText(daysBetween(value.readyBy, dayOfDate(new Date())))}` : '';
   const summary = value.ready
     ? 'It can be done now.'
-    : `Waiting on ${waitingOnText(value.waitingOn) || 'something'}${value.readyBy ? `, ready by ${shortDate(value.readyBy)}${late ? ', past due' : ''}` : ''}`;
+    : `Waiting on ${waitingOnText(value.waitingOn) || 'something'}${value.readyBy ? `, ready by ${shortDate(value.readyBy)}${lateText}` : ''}`;
 
   function tapBox() {
     if (value.ready) {

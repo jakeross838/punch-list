@@ -79,6 +79,9 @@ const items = new Table(
     source: column.text,
     /** JSON: the answers to the added fields, by field id. */
     extra: column.text,
+    /** 1 while it waits for its title, company or trade. */
+    unfinished: column.integer,
+    visit_id: column.text,
     bt_external_id: column.text,
     created_by: column.text,
     created_at: column.text,
@@ -141,6 +144,39 @@ const photos = new Table(
   { indexes: { item: ['item_id'], job: ['job_id'] } },
 );
 
+/** A company's trip to the job for a batch of items. */
+const visits = new Table(
+  {
+    org: column.text,
+    job_id: column.text,
+    company_id: column.text,
+    start_date: column.text,
+    days: column.integer,
+    confirmed: column.integer,
+    note: column.text,
+    removed: column.integer,
+    created_by: column.text,
+    created_at: column.text,
+    updated_at: column.text,
+  },
+  { indexes: { job: ['job_id'] } },
+);
+
+/** Each list that went out, and the items on it. */
+const list_sends = new Table(
+  {
+    org: column.text,
+    job_id: column.text,
+    list: column.text,
+    /** JSON: the item ids. */
+    item_ids: column.text,
+    sent_at: column.text,
+    sent_by: column.text,
+    removed: column.integer,
+  },
+  { indexes: { job: ['job_id'] } },
+);
+
 const person_settings = new Table({
   org: column.text,
   person_id: column.text,
@@ -177,6 +213,8 @@ export const AppSchema = new Schema({
   title_library,
   custom_fields,
   photos,
+  visits,
+  list_sends,
   person_settings,
   rejected_changes,
 });

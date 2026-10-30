@@ -37,6 +37,15 @@ export function shortDate(iso: string, today: Date = new Date()): string {
   return p[0] === today.getFullYear() ? `${MONTHS[p[1] - 1]} ${p[2]}` : longDate(iso);
 }
 
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** "Tuesday, November 3", with the year when it is not this one. */
+export function weekdayDate(iso: string, today: Date = new Date()): string {
+  const p = parts(iso);
+  if (!p) return iso;
+  return `${WEEKDAYS[new Date(p[0], p[1] - 1, p[2]).getDay()]}, ${shortDate(iso, today)}`;
+}
+
 /** "October 29" from an ISO time, for when an item was completed. */
 export function dayOf(isoTime: string): string {
   return shortDate(isoFromDate(new Date(isoTime)));

@@ -1,6 +1,9 @@
 // The camera, for walking the job. The room the photos go to sits at the top; tap it to change
 // rooms. Take the photo, mark it up or leave it as is, then fill in the item. Save and Next comes
 // straight back here for the next one. No Photo makes an item without one.
+//
+// Quick Snap is for going around fast: each photo is saved as it is taken, as an unfinished item
+// in the room at the top, to mark up and fill in later sitting down (Unfinished on the job).
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +12,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { leaveOrConfirm } from '@/components/discard';
+import { blankDraft } from '@/components/ItemForm';
 import { MarkupEditor, type MarkupShot } from '@/components/MarkupEditor';
 import { Viewfinder, type ViewfinderHandle } from '@/components/Viewfinder';
 import { colors } from '@/constants/theme';
@@ -49,18 +53,36 @@ export default function CaptureScreen() {
   const editing = walk.editing ? walk.shots.find((s) => s.key === walk.editing) : undefined;
   const addingTo = walk.itemId;
 
+  const quick = walk.quick && !addingTo;
+
   async function grab(how: 'take' | 'pick') {
     if (busy) return;
+    if (quick && !walk.roomId) {
+      // Quick Snap needs to know where the photos go before the first one.
+      setPicker(true);
+      return;
+    }
     if (how === 'take') haptic.tap();
     setBusy(true);
     try {
       const photo = await (how === 'take' ? finder.current?.take() : finder.current?.pick());
-      if (photo) setShot({ ...photo, marks: [] });
+      if (photo && quick) await saveQuick(photo);
+      else if (photo) setShot({ ...photo, marks: [] });
     } catch {
       feedback.toast({ message: 'The photo did not come through. Try again.' });
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Quick Snap: the photo becomes an unfinished item in the room, ready to fill in later. */
+  async function saveQuick(photo: { uri: string; width: number; height: number }) {
+    if (!walk.roomId) return;
+    const { locationId, ...fields } = blankDraft(walk.roomId);
+    const id = await data.createItem({ ...fields, unfinished: true, jobId, locationId, source: 'walk' });
+    await data.addPhotos([{ jobId, itemId: id, uri: photo.uri, width: photo.width, height: photo.height, marks: [] }]);
+    haptic.success();
+    capture.itemSaved('photo to finish later', room?.label ?? null);
   }
 
   function openForm() {
@@ -166,6 +188,39 @@ export default function CaptureScreen() {
         ) : null}
       </View>
 
+      {addingTo ? null : (
+        <View style={styles.modes} accessibilityRole="tablist">
+          {(
+            [
+              [false, 'Item'],
+              [true, 'Quick Snap'],
+            ] as const
+          ).map(([on, label]) => (
+            <Touchable
+              key={label}
+              feedback="opacity"
+              onPress={() => {
+                haptic.selection();
+                capture.setQuick(on);
+              }}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: walk.quick === on }}
+              testID={on ? 'mode-quick' : 'mode-item'}
+              style={styles.mode}
+            >
+              <Text variant="footnote" weight="700" color={walk.quick === on ? colors.onDark : colors.onDarkQuiet} style={styles.modeText}>
+                {label.toUpperCase()}
+              </Text>
+            </Touchable>
+          ))}
+        </View>
+      )}
+      {quick ? (
+        <Text variant="footnote" color={colors.onDarkQuiet} align="center" style={styles.modeHint}>
+          {walk.saved > 0 ? `${walk.saved} saved on this walk. ` : ''}Each photo saves as it is taken, to fill in later.
+        </Text>
+      ) : null}
+
       <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
         <View style={styles.side}>
           <Touchable feedback="scale" onPress={() => void grab('pick')} accessibilityRole="button" accessibilityLabel="Choose from Photos" testID="camera-library" style={styles.library}>
@@ -176,7 +231,7 @@ export default function CaptureScreen() {
           <View style={styles.shutterInner} />
         </Touchable>
         <View style={[styles.side, styles.sideRight]}>
-          {addingTo ? null : (
+          {addingTo || quick ? null : (
             <Touchable feedback="opacity" onPress={openForm} accessibilityRole="button" testID="no-photo" style={styles.noPhoto}>
               <Text variant="subheadline" weight="600" color={colors.onDark}>
                 No Photo
@@ -212,6 +267,10 @@ const styles = StyleSheet.create({
   shutter: { width: 78, height: 78, borderRadius: 39, borderWidth: 4, borderColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   shutterInner: { width: 62, height: 62, borderRadius: 31, backgroundColor: colors.white },
   noPhoto: { height: 44, justifyContent: 'center' },
+  modes: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingTop: 12 },
+  mode: { height: 32, paddingHorizontal: 12, justifyContent: 'center' },
+  modeText: { letterSpacing: 1.2 },
+  modeHint: { paddingHorizontal: 32, marginTop: 2 },
   saved: {
     position: 'absolute',
     top: 14,

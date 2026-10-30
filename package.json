@@ -14,7 +14,8 @@
     "phase0": "tsx tools/phase0.ts",
     "test:db": "bash tools/db-test.sh",
     "preview:build": "cd apps/mobile && npx expo export --platform web && cd ../.. && node tools/build-preview.mjs",
-    "test:preview": "tsx tools/preview-e2e.ts"
+    "test:preview": "tsx tools/preview-e2e.ts",
+    "import:buildertrend": "tsx tools/import-buildertrend.ts"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

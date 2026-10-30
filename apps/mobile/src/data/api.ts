@@ -12,6 +12,7 @@ import type {
   ItemFields,
   Job,
   JobCompany,
+  ListSend,
   Location,
   Mark,
   ParsedLocation,
@@ -20,6 +21,7 @@ import type {
   StandardTitle,
   Trade,
   ViewSettings,
+  Visit,
 } from '@punch/core';
 
 export interface NewItem extends ItemFields {
@@ -44,6 +46,19 @@ export interface NewPhoto {
 
 export type PhotoPatch = Partial<Pick<Photo, 'marks' | 'removed' | 'sortOrder'>>;
 
+export interface NewVisit {
+  jobId: string;
+  companyId: string;
+  start: string;
+  days: number;
+  confirmed: boolean;
+  note?: string;
+  /** The items it covers; each moves onto this visit. */
+  itemIds: string[];
+}
+
+export type VisitPatch = Partial<Pick<Visit, 'start' | 'days' | 'confirmed' | 'note'>>;
+
 export interface DataApi {
   /** preview: sample data, nothing saved beyond this browser tab. live: the real database. */
   mode: 'preview' | 'live';
@@ -65,11 +80,17 @@ export interface DataApi {
   useFormSettings(): FormSettings;
   /** How the signed-in person likes a job to open. */
   useViewSettings(): ViewSettings;
+  /** The job's visits that are not removed. */
+  useVisits(jobId: string): Visit[];
+  /** The lists that went out on the job, not counting any undone. */
+  useSends(jobId: string): ListSend[];
   createJob(input: { name: string; address: string }): Promise<string>;
   /** Adds rooms after the job's existing ones, keeping floor order. Returns how many were added. */
   addLocations(jobId: string, locations: ParsedLocation[]): Promise<number>;
   createItem(item: NewItem): Promise<string>;
   updateItem(id: string, patch: ItemPatch): Promise<void>;
+  /** Several items at once, as one change: clearing a holdup, moving a Ready By. */
+  updateItems(changes: { id: string; patch: ItemPatch }[]): Promise<void>;
   /** Keeps the pictures with the item, after the ones it has. */
   addPhotos(photos: NewPhoto[]): Promise<void>;
   updatePhoto(id: string, patch: PhotoPatch): Promise<void>;
@@ -81,6 +102,13 @@ export interface DataApi {
   updateTitle(id: string, patch: Partial<Pick<StandardTitle, 'title' | 'tradeId' | 'approved'>>): Promise<void>;
   addCustomField(input: Pick<CustomField, 'label' | 'kind' | 'options'>): Promise<string>;
   updateCustomField(id: string, patch: Partial<Pick<CustomField, 'label' | 'options' | 'active'>>): Promise<void>;
+  addVisit(visit: NewVisit): Promise<string>;
+  /** Changes the visit; with itemIds, those become exactly the items on it. */
+  updateVisit(id: string, patch: VisitPatch, itemIds?: string[]): Promise<void>;
+  /** Marks it removed and takes its items off it. */
+  removeVisit(id: string): Promise<void>;
+  recordSend(send: { jobId: string; list: string; itemIds: string[] }): Promise<string>;
+  undoSend(id: string): Promise<void>;
   setFormSettings(settings: FormSettings): Promise<void>;
   setViewSettings(settings: ViewSettings): Promise<void>;
   signOut(): Promise<void>;

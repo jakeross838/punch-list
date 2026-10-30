@@ -27,7 +27,7 @@ export async function printPhoto(uri: string): Promise<string> {
 
 const ONLY_ON_THE_PHONE = 'PDFs are made on the iPhone';
 
-export async function makePdf(_printout: Printout): Promise<File> {
+export async function makePdf(_printout: Printout, _footer: string): Promise<File> {
   throw new Error(ONLY_ON_THE_PHONE);
 }
 

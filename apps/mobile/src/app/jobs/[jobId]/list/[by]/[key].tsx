@@ -1,8 +1,21 @@
-// One room's items (or one trade's, company's or status's), kept calm: the circle, the title, an
+// One room's items (or one trade's, company's or holdup's), kept calm: the circle, the title, an
 // hourglass when it is not ready, and the photo. Completed items wait under their own heading. In
-// a room, the bottom bar steps to the room before or after, with the camera between.
+// a room, the bottom bar steps to the room before or after, with the camera between. Past Due
+// lists everything late, the latest first, with the days. A holdup's list can clear the holdup for
+// all its items at once, or move their Ready By together.
 
-import { GROUP_LABELS, groupItems, neighborRooms, type GroupBy, type Item, type Photo } from '@punch/core';
+import {
+  clearHoldup,
+  dayOfDate,
+  GROUP_LABELS,
+  groupItems,
+  neighborRooms,
+  pastDue,
+  pastDueText,
+  type GroupBy,
+  type Item,
+  type Photo,
+} from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
@@ -14,7 +27,7 @@ import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
 import { useJobView } from '@/data/view';
-import { EmptyState, Page, Text, Touchable } from '@/ui';
+import { DateField, EmptyState, haptic, Icon, Page, Text, Touchable, useFeedback } from '@/ui';
 
 interface Section {
   key: 'open' | 'done';
@@ -25,8 +38,12 @@ interface Section {
 export default function GroupScreen() {
   const params = useLocalSearchParams<{ jobId: string; by: string; key: string }>();
   const { jobId, key } = params;
+  const due = params.by === 'due';
   const by: GroupBy = params.by === 'trade' || params.by === 'company' || params.by === 'waiting' ? params.by : 'room';
   const data = useData();
+  const feedback = useFeedback();
+  const visits = data.useVisits(jobId);
+  const today = dayOfDate(new Date());
   const job = data.useJobs().find((j) => j.id === jobId);
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId);
@@ -44,6 +61,8 @@ export default function GroupScreen() {
       ),
     [items, by, key, view.filter, view.tradeId, view.companyId, locations, trades, companies],
   );
+  const late = useMemo(() => (due ? pastDue(items, visits, today) : []), [due, items, visits, today]);
+  const lateBy = useMemo(() => new Map(late.map((p) => [p.item.id, p])), [late]);
   const firstPhoto = useMemo(() => {
     const map = new Map<string, Photo>();
     for (const p of photos) if (!map.has(p.itemId)) map.set(p.itemId, p);
@@ -51,8 +70,9 @@ export default function GroupScreen() {
   }, [photos]);
   const roomName = useMemo(() => new Map(locations.map((l) => [l.id, l.label])), [locations]);
 
-  const open = (group?.items ?? []).filter((i) => i.status !== 'complete' || actions.checking.has(i.id));
-  const done = (group?.items ?? []).filter((i) => i.status === 'complete' && !actions.checking.has(i.id));
+  const listed = due ? late.map((p) => p.item) : (group?.items ?? []);
+  const open = listed.filter((i) => i.status !== 'complete' || actions.checking.has(i.id));
+  const done = listed.filter((i) => i.status === 'complete' && !actions.checking.has(i.id));
   const doneShown = view.showCompleted || showDone;
   const sections: Section[] = [
     { key: 'open', title: null, data: open },
@@ -61,10 +81,51 @@ export default function GroupScreen() {
 
   const room = by === 'room' ? locations.find((l) => l.id === key) : undefined;
   const { previous, next } = room ? neighborRooms(locations, room.id) : { previous: null, next: null };
-  const title =
-    room?.label ??
-    (by === 'waiting' && group && key.startsWith('waiting:') ? `Waiting on ${group.label}` : (group?.label ?? GROUP_LABELS[by]));
-  const subtitle = `${open.length} ${SHOW_WORDS[view.filter]}`;
+  const holdup = by === 'waiting' && group && key.startsWith('waiting:') ? group.label : null;
+  const title = due ? 'Past Due' : (room?.label ?? (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
+  const subtitle = due
+    ? `${open.length} late`
+    : key === 'unfinished'
+      ? `${open.length} to mark up and fill in`
+      : `${open.length} ${SHOW_WORDS[view.filter]}`;
+  const contextFor = (item: Item) => {
+    const where = by === 'room' && !due ? undefined : roomName.get(item.locationId);
+    const p = lateBy.get(item.id);
+    if (!p) return where;
+    return [where, `${pastDueText(p.days)}${p.reason === 'visit' ? ', after its visit' : ''}`].filter(Boolean).join(', ');
+  };
+
+  // A holdup's actions, for every open item it holds up at once.
+  const heldUp = holdup ? open.filter((i) => i.status === 'open' && !i.ready) : [];
+  function clearAll() {
+    if (!holdup || heldUp.length === 0) return;
+    const count = heldUp.length === 1 ? '1 item' : `${heldUp.length} items`;
+    feedback.actionSheet({
+      title: `${holdup} is done`,
+      message: `Mark the ${count} waiting on ${holdup} ready. An item also waiting on something else keeps waiting on that.`,
+      actions: [
+        {
+          label: `Mark ${count} Ready`,
+          onPress: () => {
+            haptic.success();
+            const before = heldUp.map((i) => ({ id: i.id, patch: { ready: i.ready, waitingOn: i.waitingOn, readyBy: i.readyBy } }));
+            void data.updateItems(heldUp.map((i) => ({ id: i.id, patch: clearHoldup(i, holdup) })));
+            feedback.toast({ message: `No longer waiting on ${holdup}`, action: { label: 'Undo', onPress: () => void data.updateItems(before) } });
+            router.back();
+          },
+        },
+      ],
+    });
+  }
+  function setAllReadyBy(readyBy: string | null) {
+    if (heldUp.length === 0) return;
+    haptic.tap();
+    void data.updateItems(heldUp.map((i) => ({ id: i.id, patch: { readyBy } })));
+  }
+  const groupReadyBy = heldUp.find((i) => i.readyBy)?.readyBy ?? null;
+  // Filling in after a walk: each unfinished item steps to the next.
+  const openUnfinished = (item: Item) =>
+    router.push({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: item.id, from: 'unfinished' } });
 
   const goRoom = (id: string) => router.replace({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'room', key: id } });
   const openCamera = () => {
@@ -96,7 +157,25 @@ export default function GroupScreen() {
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
-          ListHeaderComponent={<View>{scroll.header}</View>}
+          ListHeaderComponent={
+            <View>
+              {scroll.header}
+              {holdup && heldUp.length > 0 ? (
+                <View style={styles.holdup}>
+                  <View style={styles.holdupRow}>
+                    <Text style={{ flex: 1 }}>Ready By</Text>
+                    <DateField value={groupReadyBy} onChange={setAllReadyBy} label={`Ready By for everything waiting on ${holdup}`} testID="holdup-ready-by" />
+                  </View>
+                  <Touchable feedback="highlight" onPress={clearAll} accessibilityRole="button" testID="holdup-clear" style={[styles.holdupRow, styles.holdupRule]}>
+                    <Icon name="checkmark.circle.fill" size={20} color={colors.tint} />
+                    <Text color={colors.tint} style={{ flex: 1 }}>
+                      {holdup} Is Done: Mark Ready
+                    </Text>
+                  </Touchable>
+                </View>
+              ) : null}
+            </View>
+          }
           renderSectionHeader={({ section }) =>
             section.title ? (
               <View style={styles.header}>
@@ -130,10 +209,10 @@ export default function GroupScreen() {
             <ItemRow
               item={item}
               photo={firstPhoto.get(item.id)}
-              context={by === 'room' ? undefined : roomName.get(item.locationId)}
+              context={contextFor(item)}
               last={index === section.data.length - 1}
               checking={actions.checking.has(item.id)}
-              onOpen={actions.onOpen}
+              onOpen={key === 'unfinished' ? openUnfinished : actions.onOpen}
               onCheck={actions.onCheck}
               onReady={actions.onReady}
               onRemove={actions.onRemove}
@@ -146,6 +225,9 @@ export default function GroupScreen() {
 }
 
 const styles = StyleSheet.create({
+  holdup: { marginHorizontal: layout.margin, marginTop: 6, marginBottom: 8, borderRadius: layout.radius, backgroundColor: colors.surface, overflow: 'hidden' },
+  holdupRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+  holdupRule: { borderTopWidth: 1, borderTopColor: colors.rule },
   header: { paddingHorizontal: layout.inset, paddingTop: 30, paddingBottom: 6, backgroundColor: colors.background },
   showDone: { height: 44, justifyContent: 'center', paddingHorizontal: layout.inset, marginTop: 10, alignSelf: 'flex-start' },
 });

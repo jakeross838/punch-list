@@ -1,10 +1,12 @@
 // How the lists are cut: by room (floor order), by trade, by company or by what items wait on, with
 // the filters from the plan. Removed items never show. Every room shows, even an empty one, so items
 // can be added to it. Show Completed (as in Reminders) adds completed items that fit the filter, after
-// the open ones. By Waiting On shows what is ready now, then each thing holding work up with the
-// items it holds up (an item waiting on two things is under both), biggest first: the order to
-// clear them in.
+// the open ones. By Waiting On shows unfinished items, what is ready now and what needs a price,
+// then each thing holding work up with the items it holds up (an item waiting on two things is
+// under both): the late ones first, then the biggest. That is the order to clear them in.
 
+import { isPriced } from './rules';
+import { daysBetween } from './dates';
 import type { Company, Item, Location, Trade } from './types';
 
 export type GroupBy = 'room' | 'trade' | 'company' | 'waiting';
@@ -72,6 +74,8 @@ export interface ViewOptions {
   showCompleted?: boolean;
   tradeId?: string | null;
   companyId?: string | null;
+  /** Today, YYYY-MM-DD: By Waiting On puts late holdups first. */
+  today?: string;
 }
 
 /** The trade and company filters from View: an item passes when it matches every one that is set. */
@@ -88,6 +92,8 @@ export interface ItemGroup {
   items: Item[];
   open: number;
   ready: number;
+  /** By Waiting On: how many days the latest item in the group is past its Ready By, or 0. */
+  late: number;
 }
 
 export interface Lookups {
@@ -106,11 +112,17 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
         return [i.tradeId ?? 'none'];
       case 'company':
         return [i.companyId ?? 'none'];
-      case 'waiting':
+      case 'waiting': {
         if (i.status === 'complete') return ['complete'];
-        return i.ready || i.waitingOn.length === 0 ? ['ready'] : i.waitingOn.map(waitingKey);
+        if (i.unfinished) return ['unfinished'];
+        const keys = i.ready || i.waitingOn.length === 0 ? [] : i.waitingOn.map(waitingKey);
+        if (!isPriced(i)) return ['price', ...keys];
+        return keys.length > 0 ? keys : ['ready'];
+      }
     }
   };
+  const lateBy = (i: Item) =>
+    options.today && i.status === 'open' && !i.ready && i.readyBy && i.readyBy < options.today ? daysBetween(i.readyBy, options.today) : 0;
   const groups = new Map<string, Item[]>();
   const waitingLabels = new Map<string, string>();
   for (const item of live) {
@@ -130,9 +142,18 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
       .map((l) => ({ key: l.id, label: l.label }));
   } else if (by === 'waiting') {
     const holding = [...waitingLabels]
-      .map(([key, label]) => ({ key, label, n: (groups.get(key) ?? []).filter((i) => i.status === 'open').length }))
-      .sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
-    order = [{ key: 'ready', label: 'Ready Now' }, ...holding.map(({ key, label }) => ({ key, label })), { key: 'complete', label: 'Completed' }];
+      .map(([key, label]) => {
+        const open = (groups.get(key) ?? []).filter((i) => i.status === 'open');
+        return { key, label, n: open.length, late: Math.max(0, ...open.map(lateBy)) };
+      })
+      .sort((a, b) => b.late - a.late || b.n - a.n || a.label.localeCompare(b.label));
+    order = [
+      { key: 'unfinished', label: 'Unfinished' },
+      { key: 'ready', label: 'Ready Now' },
+      { key: 'price', label: 'Needs a Price' },
+      ...holding.map(({ key, label }) => ({ key, label })),
+      { key: 'complete', label: 'Completed' },
+    ];
   } else {
     const names = new Map((by === 'trade' ? lookups.trades : lookups.companies).map((x) => [x.id, x.name]));
     order = [...groups.keys()]
@@ -148,6 +169,7 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
       items: arrange(all.filter((i) => matchesView(i, filter, options.showCompleted)), filter, options),
       open: all.filter((i) => i.status === 'open').length,
       ready: all.filter((i) => i.status === 'open' && i.ready).length,
+      late: by === 'waiting' ? Math.max(0, ...all.map(lateBy)) : 0,
     };
   });
 }
