@@ -32,11 +32,43 @@ export function CameraBar({
   );
 }
 
-/** An icon with a small label under it, like a tab bar item. */
-export function BarTool({ icon, label, onPress, testID }: { icon: IconName; label: string; onPress: () => void; testID?: string }) {
+/** An icon with a small label under it, like a tab bar item. A badge is a red count on the icon. */
+export function BarTool({
+  icon,
+  label,
+  onPress,
+  badge,
+  badgeLabel,
+  testID,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  badge?: number;
+  /** What the badge counts, for VoiceOver: "past due". */
+  badgeLabel?: string;
+  testID?: string;
+}) {
+  const shown = badge !== undefined && badge > 0;
   return (
-    <Touchable feedback="opacity" onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID={testID} style={styles.tool}>
-      <Icon name={icon} size={25} color={colors.tint} />
+    <Touchable
+      feedback="opacity"
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={shown ? `${label}, ${badge} ${badgeLabel ?? ''}`.trim() : label}
+      testID={testID}
+      style={styles.tool}
+    >
+      <View>
+        <Icon name={icon} size={25} color={colors.tint} />
+        {shown ? (
+          <View style={styles.badge} testID={testID ? `${testID}-badge` : undefined}>
+            <Text variant="caption1" weight="700" color={colors.white} tabular style={styles.badgeText}>
+              {badge}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <Text variant="caption1" weight="500" color={colors.tint} numberOfLines={1} style={styles.toolLabel}>
         {label}
       </Text>
@@ -82,6 +114,19 @@ const styles = StyleSheet.create({
   camera: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.tint },
   tool: { minWidth: 88, height: 60, alignItems: 'center', justifyContent: 'center', gap: 3 },
   toolLabel: { fontSize: 11, lineHeight: 13 },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -11,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.destructive,
+  },
+  badgeText: { fontSize: 11, lineHeight: 13 },
   step: { flex: 1, height: 60, flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0 },
   stepNext: { justifyContent: 'flex-end' },
   stepLabel: { flexShrink: 1, fontSize: 14, lineHeight: 19 },

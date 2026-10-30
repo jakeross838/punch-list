@@ -1,6 +1,6 @@
 // A job: its levels and locations with how many items are open in each, calm and quick to scan.
-// Tap a location for its items. Drafts and anything past due sit at the top when there
-// are any. View and Filter switches to trades, companies, what items wait on or status and
+// Tap a location for its items. Drafts sit on their own at the top when there are any; anything past
+// due shows as a red count on Schedule. View and Filter switches to trades, companies, what items wait on or status and
 // narrows what counts; the camera in the bottom bar starts a walk; Schedule is each company's
 // visits; Send Lists makes each company's list to send.
 
@@ -91,8 +91,7 @@ export default function JobScreen() {
     () => groupItems(items, view.groupBy, view.filter, { locations, trades, companies }, { tradeId: view.tradeId, companyId: view.companyId, today }),
     [items, view.groupBy, view.filter, view.tradeId, view.companyId, locations, trades, companies, today],
   );
-  // Grouped by Waiting On, the drafts are a group of their own already.
-  const unfinished = view.groupBy === 'waiting' ? 0 : items.filter((i) => i.unfinished && i.status === 'open').length;
+  const drafts = items.filter((i) => i.unfinished && i.status === 'open').length;
   const late = useMemo(() => pastDue(items, visits, today).length, [items, visits, today]);
   const rows: Row[] = groups
     .map((group) => ({ group, count: group.items.filter((i) => i.status !== 'complete').length }))
@@ -124,18 +123,26 @@ export default function JobScreen() {
   const openSetup = () => router.push({ pathname: '/jobs/[jobId]/setup', params: { jobId } });
   const openSend = () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId } });
   const openSchedule = () => router.push({ pathname: '/jobs/[jobId]/schedule', params: { jobId } });
-  const openSpecial = (by: 'waiting' | 'due', key: string) => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by, key } });
-  const smartRows =
-    unfinished > 0 || late > 0 ? (
-      <View style={styles.smart}>
-        {unfinished > 0 ? (
-          <SmartRow icon="pencil.tip" label="Drafts" count={unfinished} onPress={() => openSpecial('waiting', 'unfinished')} testID="open-unfinished" />
-        ) : null}
-        {unfinished > 0 && late > 0 ? <View style={styles.smartRule} /> : null}
-        {late > 0 ? (
-          <SmartRow icon="exclamationmark.circle.fill" danger label="Past Due" count={late} onPress={() => openSpecial('due', 'all')} testID="open-past-due" />
-        ) : null}
-      </View>
+  const openDrafts = () => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'drafts', key: 'all' } });
+  const draftsRow =
+    drafts > 0 ? (
+      <Touchable
+        feedback="highlight"
+        onPress={openDrafts}
+        accessibilityRole="button"
+        accessibilityLabel={`Drafts, ${drafts}`}
+        testID="open-unfinished"
+        style={styles.drafts}
+      >
+        <Icon name="pencil.tip" size={20} color={colors.tint} weight="semibold" />
+        <Text weight="600" style={{ flex: 1 }}>
+          Drafts
+        </Text>
+        <Text color={colors.secondary} tabular>
+          {drafts}
+        </Text>
+        <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" />
+      </Touchable>
     ) : null;
   const openCamera = () => {
     capture.start({ jobId, roomId: null });
@@ -182,7 +189,7 @@ export default function JobScreen() {
         footer={
           <CameraBar
             onCamera={openCamera}
-            left={<BarTool icon="calendar" label="Schedule" onPress={openSchedule} testID="schedule" />}
+            left={<BarTool icon="calendar" label="Schedule" badge={late} badgeLabel="past due" onPress={openSchedule} testID="schedule" />}
             right={
               <BarTool
                 icon={narrowed || view.showCompleted ? 'filter' : GROUP_ICONS[view.groupBy]}
@@ -235,7 +242,7 @@ export default function JobScreen() {
               ListHeaderComponent={
                 <View>
                   {scroll.header}
-                  {smartRows}
+                  {draftsRow}
                 </View>
               }
               ListEmptyComponent={empty}
@@ -278,36 +285,6 @@ export default function JobScreen() {
   );
 }
 
-/** A short cut at the top of the job: Drafts, Past Due. */
-function SmartRow({
-  icon,
-  label,
-  count,
-  danger,
-  onPress,
-  testID,
-}: {
-  icon: IconName;
-  label: string;
-  count: number;
-  danger?: boolean;
-  onPress: () => void;
-  testID: string;
-}) {
-  return (
-    <Touchable feedback="highlight" onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}, ${count}`} testID={testID} style={styles.smartRow}>
-      <Icon name={icon} size={20} color={danger ? colors.destructive : colors.tint} weight="semibold" />
-      <Text weight="600" style={{ flex: 1 }}>
-        {label}
-      </Text>
-      <Text color={danger ? colors.destructive : colors.secondary} weight={danger ? '600' : '400'} tabular>
-        {count}
-      </Text>
-      <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" />
-    </Touchable>
-  );
-}
-
 function GroupRow({ row, by, location, last, onPress }: { row: Row; by: GroupBy; location?: Location; last: boolean; onPress: () => void }) {
   const { group, count } = row;
   const nothingOpen = group.open === 0;
@@ -347,9 +324,19 @@ function GroupRow({ row, by, location, last, onPress }: { row: Row; by: GroupBy;
 }
 
 const styles = StyleSheet.create({
-  smart: { marginHorizontal: layout.margin, marginTop: 8, marginBottom: 4, borderRadius: layout.radius, backgroundColor: colors.surface, overflow: 'hidden' },
-  smartRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 8 },
-  smartRule: { height: 1, marginLeft: 46, backgroundColor: colors.rule },
+  drafts: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: layout.margin,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: layout.radius,
+    backgroundColor: colors.surface,
+  },
   header: { paddingHorizontal: layout.inset, paddingTop: 18, paddingBottom: 6, backgroundColor: colors.background },
   rowWrap: { backgroundColor: colors.background },
   row: { paddingLeft: layout.inset, backgroundColor: colors.background },

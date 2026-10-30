@@ -1,8 +1,9 @@
 // One location's items (or one trade's, company's or what they wait on), kept calm: the circle,
 // the title, an hourglass when it is not ready, and the photo. Completed items wait under their own
 // heading. In a location, the bottom bar steps to the one before or after, with the camera between.
-// Past Due lists everything late, the latest first, with the days. A Waiting On list can stop the
-// wait for all its items at once, or move their Ready By together.
+// Past Due lists everything late, the latest first, with the days. Drafts lists what was saved to fill
+// in later. A Waiting On list can stop the wait for all its items at once, or move their Ready By
+// together.
 
 import {
   clearHoldup,
@@ -13,6 +14,7 @@ import {
   pastDue,
   pastDueText,
   SHARED_GROUP,
+  sortItems,
   type GroupBy,
   type Item,
   type Photo,
@@ -40,6 +42,7 @@ export default function GroupScreen() {
   const params = useLocalSearchParams<{ jobId: string; by: string; key: string }>();
   const { jobId, key } = params;
   const due = params.by === 'due';
+  const drafts = params.by === 'drafts';
   const by: GroupBy = params.by === 'trade' || params.by === 'company' || params.by === 'waiting' ? params.by : 'room';
   const data = useData();
   const feedback = useFeedback();
@@ -71,7 +74,11 @@ export default function GroupScreen() {
   }, [photos]);
   const roomName = useMemo(() => new Map(locations.map((l) => [l.id, l.label])), [locations]);
 
-  const listed = due ? late.map((p) => p.item) : (group?.items ?? []);
+  const listed = due
+    ? late.map((p) => p.item)
+    : drafts
+      ? sortItems(items.filter((i) => i.unfinished && i.status === 'open'))
+      : (group?.items ?? []);
   const open = listed.filter((i) => i.status !== 'complete' || actions.checking.has(i.id));
   const done = listed.filter((i) => i.status === 'complete' && !actions.checking.has(i.id));
   const doneShown = view.showCompleted || showDone;
@@ -83,13 +90,13 @@ export default function GroupScreen() {
   const room = by === 'room' ? locations.find((l) => l.id === key) : undefined;
   const { previous, next } = room ? neighborRooms(locations, room.id) : { previous: null, next: null };
   const holdup = by === 'waiting' && group && key.startsWith('waiting:') ? group.label : null;
-  const title = due ? 'Past Due' : (room?.label ?? (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
+  const title = due ? 'Past Due' : drafts ? 'Drafts' : (room?.label ?? (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
   const subtitle = due
     ? `${open.length} open`
-    : key === 'unfinished'
+    : drafts
       ? `${open.length} ${open.length === 1 ? 'draft' : 'drafts'}. Tap one to fill it in.`
       : `${open.length} ${SHOW_WORDS[view.filter]}`;
-  const contextFor = (item: Item) => (by === 'room' && !due ? undefined : roomName.get(item.locationId));
+  const contextFor = (item: Item) => (by === 'room' && !due && !drafts ? undefined : roomName.get(item.locationId));
   const lateFor = (item: Item) => {
     const p = lateBy.get(item.id);
     if (!p) return undefined;
@@ -195,8 +202,14 @@ export default function GroupScreen() {
                 {section.data.length === 0 ? (
                   <EmptyState
                     icon="checkmark.circle.fill"
-                    title="Nothing Open"
-                    message={room ? 'Take a photo to add an item here.' : `No ${SHOW_WORDS[view.filter]} items here right now.`}
+                    title={drafts ? 'No Drafts' : 'Nothing Open'}
+                    message={
+                      drafts
+                        ? 'Photos taken in Draft mode wait here to be filled in.'
+                        : room
+                          ? 'Take a photo to add an item here.'
+                          : `No ${SHOW_WORDS[view.filter]} items here right now.`
+                    }
                   />
                 ) : null}
                 {done.length > 0 && !doneShown ? (
@@ -217,7 +230,7 @@ export default function GroupScreen() {
               lateText={lateFor(item)}
               last={index === section.data.length - 1}
               checking={actions.checking.has(item.id)}
-              onOpen={key === 'unfinished' ? openUnfinished : actions.onOpen}
+              onOpen={drafts ? openUnfinished : actions.onOpen}
               onCheck={actions.onCheck}
               onReady={actions.onReady}
               onRemove={actions.onRemove}

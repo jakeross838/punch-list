@@ -391,13 +391,17 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('Past Due shows what is late and by how many days', async () => {
-      await app.getByTestId('open-past-due').click();
+    await step('Past Due is on the Schedule, with a red count on its button', async () => {
+      await app.getByTestId('schedule-badge').waitFor();
+      await app.getByTestId('schedule').click();
+      await app.getByTestId('schedule-past-due').click();
       await app.getByText('Hang front door').waitFor();
       await app.getByText(/Foyer 115, \d+ days? past due/).waitFor();
       await app.getByText(/Bathroom 116, visit ended \d+ days? ago/).waitFor();
       await settle();
       await shot('28-past-due');
+      await app.getByTestId('back').last().click();
+      await settle();
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();

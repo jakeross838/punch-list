@@ -144,7 +144,7 @@ describe('walking the job', () => {
     expect(neighborRooms(rooms, 'a').previous).toBeNull();
   });
 
-  it('groups by what items wait on: unfinished, ready now, needs a price, then late holdups and the biggest first', () => {
+  it('groups by what items wait on: ready, needs a price, then late holdups and the biggest first, with drafts left in Drafts', () => {
     const items = [
       item({ ready: false, waitingOn: ['Owner'] }),
       item({ ready: false, waitingOn: ['Volcano Stone', 'owner'] }),
@@ -160,13 +160,16 @@ describe('walking the job', () => {
     const lookups = { locations: rooms, trades: [], companies: [] };
     const groups = groupItems(items, 'waiting', 'open', lookups, { showCompleted: true });
     expect(groups.map((g) => [g.label, g.items.length])).toEqual([
-      ['Drafts', 1],
       ['Ready', 2],
       ['Needs a Price', 2],
       ['Owner', 3],
       ['Volcano Stone', 3],
       ['Completed', 1],
     ]);
+    // Drafts stay out of every other list until they are filled in.
+    for (const by of ['room', 'trade', 'company'] as const) {
+      expect(groupItems(items, by, 'all', lookups).some((g) => g.items.some((i) => i.unfinished))).toBe(false);
+    }
     // A holdup past its Ready By goes first, however small.
     const late = [...items, item({ ready: false, waitingOn: ['Gator Plumbing'], readyBy: '2026-10-20' })];
     const byLate = groupItems(late, 'waiting', 'open', lookups, { today: '2026-10-30' }).filter((g) => g.key.startsWith('waiting:'));

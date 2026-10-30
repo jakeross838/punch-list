@@ -1,9 +1,10 @@
 // How the lists are cut: by location (floor order), by trade, by company or by what items wait on, with
-// the filters from the plan. Removed items never show. Every location shows, even an empty one, so items
-// can be added to it. Show Completed (as in Reminders) adds completed items that fit the filter, after
-// the open ones. By Waiting On shows the drafts, what is ready now and what needs a price,
-// then each thing holding work up with the items it holds up (an item waiting on two things is
-// under both): the late ones first, then the biggest. That is the order to clear them in.
+// the filters from the plan. Removed items never show, and drafts stay in Drafts until they are filled
+// in. Every location shows, even an empty one, so items can be added to it. Show Completed (as in
+// Reminders) adds completed items that fit the filter, after the open ones. By Waiting On shows what
+// is ready now and what needs a price, then each thing holding work up with the items it holds up (an
+// item waiting on two things is under both): the late ones first, then the biggest. That is the order
+// to clear them in.
 
 import { isPriced } from './rules';
 import { daysBetween } from './dates';
@@ -103,7 +104,7 @@ export interface Lookups {
 }
 
 export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, lookups: Lookups, options: ViewOptions = {}): ItemGroup[] {
-  const live = items.filter((i) => i.status !== 'removed' && matchesScope(i, options));
+  const live = items.filter((i) => i.status !== 'removed' && !i.unfinished && matchesScope(i, options));
   const keysOf = (i: Item): string[] => {
     switch (by) {
       case 'room':
@@ -114,7 +115,6 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
         return [i.companyId ?? 'none'];
       case 'waiting': {
         if (i.status === 'complete') return ['complete'];
-        if (i.unfinished) return ['unfinished'];
         const keys = i.ready || i.waitingOn.length === 0 ? [] : i.waitingOn.map(waitingKey);
         if (!isPriced(i)) return ['price', ...keys];
         return keys.length > 0 ? keys : ['ready'];
@@ -148,7 +148,6 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
       })
       .sort((a, b) => b.late - a.late || b.n - a.n || a.label.localeCompare(b.label));
     order = [
-      { key: 'unfinished', label: 'Drafts' },
       { key: 'ready', label: 'Ready' },
       { key: 'price', label: 'Needs a Price' },
       ...holding.map(({ key, label }) => ({ key, label })),
