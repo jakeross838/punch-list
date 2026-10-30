@@ -288,7 +288,7 @@ export default function SendScreen() {
             />
           </ListSection>
           <ListSection
-            footer={`Adds each item's first photo, with its markup, to the company lists.${unfinished > 0 ? ` ${plural(unfinished, 'item')} to fill in ${unfinished === 1 ? 'is' : 'are'} not on any list yet.` : ''}`}
+            footer={`Adds each item's first photo, with its markup, to the company lists.${unfinished > 0 ? ` ${plural(unfinished, 'draft')} ${unfinished === 1 ? 'is' : 'are'} not on any list yet.` : ''}`}
           >
             <ListSwitchRow title="Include Photos" value={withPhotos} onValueChange={setWithPhotos} testID="switch-photos" />
           </ListSection>

@@ -1,7 +1,7 @@
 // One item, everything about it in one calm place, and every part of it changes right where it is:
 // tap the title to retype it, tick Ready, pick another location, mark up a photo. Each change saves
 // as it is made. Mark Complete is the big button; only Ross Built marks items complete, and removing
-// never deletes. An item to fill in says what it still needs, offers Fill In From Photo, and steps to
+// never deletes. A draft says what it still needs, offers Fill In From Photo, and steps to
 // the next one, for filling them in sitting down after a walk.
 
 import {
@@ -136,7 +136,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   // Tall photos are cropped here to keep the item readable; tap for the whole photo.
   const photoHeight = photo ? Math.min(Math.round((photoWidth * photo.height) / (photo.width || 1)), 300) : 0;
 
-  // Filling in after a walk: the items to fill in, in number order, and the next one after this.
+  // Filling in after a walk: the drafts in number order, and the next one after this.
   const unfinished = sortItems(items.filter((i) => i.unfinished && i.status === 'open' && i.id !== item.id));
   const nextUnfinished = unfinished.find((i) => (i.number ?? 0) > (item.number ?? 0)) ?? unfinished[0];
 
@@ -204,7 +204,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
       : item.status === 'removed'
         ? { icon: 'trash', color: colors.quiet, line: 'Removed from the list', detail: 'It stays in the history.' }
         : item.unfinished
-          ? { icon: 'pencil.tip', color: colors.tint, line: 'To Fill In', detail: `${missingText(live.value).replace(/^Needs/, 'Add')} to put it on the lists.` }
+          ? { icon: 'pencil.tip', color: colors.tint, line: 'Draft', detail: `${missingText(live.value).replace(/^Needs/, 'Add')} to put it on the lists.` }
           : null;
 
   const stepping = item.unfinished || fromUnfinished;

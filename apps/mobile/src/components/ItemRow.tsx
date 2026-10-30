@@ -1,6 +1,6 @@
 // One item in a list, kept calm: the circle to check it off, the title, a small hourglass when it
 // is not ready, the days in red under the title when it is past due, and its photo. Everything else
-// is one tap in. Swipe left for Ready and Remove. An item to fill in shows a pencil instead of the
+// is one tap in. Swipe left for Ready and Remove. A draft shows a pencil instead of the
 // circle and what it still needs.
 
 import { dayOfDate, daysBetween, missingDetails, pastDueText, type Item, type Photo } from '@punch/core';
@@ -42,7 +42,7 @@ export const ItemRow = memo(function ItemRow({
   const lateDays = late && item.readyBy ? daysBetween(item.readyBy, dayOfDate(new Date())) : 0;
   const red = lateText ?? (late ? pastDueText(lateDays) : undefined);
   const title = item.title || 'No title yet';
-  // In a location, what an item to fill in still needs (a missing title already shows as No title
+  // In a location, what a draft still needs (a missing title already shows as No title
   // yet); in other lists, where it is.
   const needs = item.unfinished && !context ? missingDetails(item).filter((m) => m !== 'title') : [];
   const second = context ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : '');

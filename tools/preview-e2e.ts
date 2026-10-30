@@ -151,6 +151,8 @@ async function main(): Promise<void> {
       await app.getByTestId('check-item-3').click();
       await settle(200);
       await shot('04-checking');
+      // A way back from a tap that was a mistake.
+      await app.getByText('Completed Touch up paint').waitFor();
       await app.getByTestId('show-done').waitFor({ timeout: 5_000 });
       await app.getByTestId('show-done').click();
       await app.getByText('Completed', { exact: true }).waitFor();
@@ -320,7 +322,7 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('Fill In Later saves each photo on its own', async () => {
+    await step('Draft saves each photo as a draft', async () => {
       await app.getByTestId('group-room-4').click();
       await settle();
       await app.getByTestId('camera').last().click();
@@ -331,7 +333,7 @@ async function main(): Promise<void> {
         const chooser = tab.waitForEvent('filechooser');
         await app.getByTestId('shutter').click();
         await (await chooser).setFiles(photoPath);
-        await app.getByText(`${i + 1} saved to fill in later.`).waitFor();
+        await app.getByText(`${i + 1} ${i === 0 ? 'draft' : 'drafts'} saved.`).waitFor();
         await settle(500);
       }
       await shot('21-quick-snap');
@@ -345,7 +347,7 @@ async function main(): Promise<void> {
     });
     await step('fill them in sitting down: Fill In From Photo, Mark Up, Next', async () => {
       await app.getByTestId('open-unfinished').click();
-      await app.getByText('3 items. Tap one to fill it in.').waitFor();
+      await app.getByText('3 drafts. Tap one to fill it in.').waitFor();
       await settle();
       await shot('23-unfinished-list');
       await app.getByText('No title yet').first().click();
@@ -369,10 +371,10 @@ async function main(): Promise<void> {
       await shot('26-marked-after');
       await app.getByTestId('next-unfinished').click();
       await settle();
-      await app.getByText('To Fill In', { exact: true }).last().waitFor();
+      await app.getByText('Draft', { exact: true }).last().waitFor();
       await settle();
       await app.getByTestId('back').last().click();
-      await app.getByText('2 items. Tap one to fill it in.').waitFor();
+      await app.getByText('2 drafts. Tap one to fill it in.').waitFor();
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
@@ -409,7 +411,7 @@ async function main(): Promise<void> {
       await app.getByTestId('show-not_ready').click();
       await settle(300);
       await app.getByTestId('save-default').click();
-      await app.getByText('Every Job Opens This Way').waitFor();
+      await app.getByText('Saved as My Default').waitFor();
       await app.getByTestId('view-done').click();
       await app.getByText('Carpentry', { exact: true }).first().waitFor();
       await settle(600);

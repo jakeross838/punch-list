@@ -1,5 +1,5 @@
 // View and Filter: how the job's list is grouped and what it shows. Changes apply as you make
-// them; Open Every Job This Way saves it as the person's default.
+// them; Save as My Default makes every job open this way.
 
 import { DEFAULT_VIEW, GROUP_LABELS, type Company, type GroupBy, type ShowFilter, type Trade, type ViewSettings } from '@punch/core';
 import { useState } from 'react';
@@ -96,7 +96,7 @@ export function ViewSheet({
         </ListSection>
         <ListSection>
           <ListRow
-            title={isDefault ? 'Every Job Opens This Way' : 'Open Every Job This Way'}
+            title={isDefault ? 'Saved as My Default' : 'Save as My Default'}
             tone={isDefault ? 'default' : 'tint'}
             accessory={isDefault ? 'checkmark' : 'none'}
             disabled={isDefault}

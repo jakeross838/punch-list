@@ -1,9 +1,9 @@
 // The camera, for walking the job. The location the photos go to sits at the top; tap it to
-// change it. Fill In Now: take the photo, mark it up or leave it as is, then fill in the item. Save
+// change it. Item: take the photo, mark it up or leave it as is, then fill in the item. Save
 // and Next comes straight back here for the next one. Skip Photo makes an item without one.
 //
-// Fill In Later is for going around fast: each photo saves as it is taken, as an item in the
-// location at the top, to mark up and fill in later sitting down (To Fill In on the job).
+// Draft is for going around fast: each photo saves as it is taken, as a draft in the location at
+// the top, to mark up and fill in later sitting down (Drafts on the job).
 
 import { floorOf } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -60,7 +60,7 @@ export default function CaptureScreen() {
   async function grab(how: 'take' | 'pick') {
     if (busy) return;
     if (quick && !walk.roomId) {
-      // Fill In Later needs to know where the photos go before the first one.
+      // Draft needs to know where the photos go before the first one.
       setPicker(true);
       return;
     }
@@ -77,7 +77,7 @@ export default function CaptureScreen() {
     }
   }
 
-  /** Fill In Later: the photo becomes an item in the location, to fill in later. */
+  /** Draft: the photo becomes a draft in the location, to fill in later. */
   async function saveQuick(photo: { uri: string; width: number; height: number }) {
     if (!walk.roomId) return;
     const { locationId, ...fields } = startDraft(walk.roomId, formSettings);
@@ -194,8 +194,8 @@ export default function CaptureScreen() {
         <View style={styles.modes} accessibilityRole="tablist">
           {(
             [
-              [false, 'Fill In Now'],
-              [true, 'Fill In Later'],
+              [false, 'Item'],
+              [true, 'Draft'],
             ] as const
           ).map(([on, label]) => (
             <Touchable
@@ -219,7 +219,7 @@ export default function CaptureScreen() {
       )}
       {quick ? (
         <Text variant="footnote" color={colors.onDarkQuiet} align="center" style={styles.modeHint}>
-          {walk.saved > 0 ? `${walk.saved} saved to fill in later.` : 'Each photo saves to fill in later.'}
+          {walk.saved > 0 ? `${walk.saved} ${walk.saved === 1 ? 'draft' : 'drafts'} saved.` : 'Each photo saves as a draft.'}
         </Text>
       ) : null}
 

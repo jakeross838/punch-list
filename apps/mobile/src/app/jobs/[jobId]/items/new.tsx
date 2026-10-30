@@ -2,7 +2,7 @@
 // titles, and picking one fills in the trade and the company), the location already filled in,
 // Ready as a checkbox, and the type. Added fields wait under More Details. Save and Next goes
 // straight back to the camera; Save goes back to the list. Saving without the company (or the
-// title, with a photo) keeps it to fill in later.
+// title, with a photo) keeps it as a draft.
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -64,7 +64,7 @@ export default function NewItemScreen() {
         await data.addPhotos(shots.map((s) => ({ jobId, itemId: id, uri: s.uri, width: s.width, height: s.height, marks: s.marks })));
       }
       haptic.success();
-      const what = fields.unfinished ? 'to fill in later' : fields.title;
+      const what = fields.unfinished ? 'as a draft' : fields.title;
       capture.itemSaved(what, roomLabel ?? null);
       if (next) {
         // The camera confirms it, over the viewfinder.

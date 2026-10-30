@@ -1,5 +1,5 @@
 // A job: its levels and locations with how many items are open in each, calm and quick to scan.
-// Tap a location for its items. Photos to fill in and anything past due sit at the top when there
+// Tap a location for its items. Drafts and anything past due sit at the top when there
 // are any. View and Filter switches to trades, companies, what items wait on or status and
 // narrows what counts; the camera in the bottom bar starts a walk; Schedule is each company's
 // visits; Send Lists makes each company's list to send.
@@ -91,7 +91,7 @@ export default function JobScreen() {
     () => groupItems(items, view.groupBy, view.filter, { locations, trades, companies }, { tradeId: view.tradeId, companyId: view.companyId, today }),
     [items, view.groupBy, view.filter, view.tradeId, view.companyId, locations, trades, companies, today],
   );
-  // Grouped by Waiting On, the items to fill in are a group of their own already.
+  // Grouped by Waiting On, the drafts are a group of their own already.
   const unfinished = view.groupBy === 'waiting' ? 0 : items.filter((i) => i.unfinished && i.status === 'open').length;
   const late = useMemo(() => pastDue(items, visits, today).length, [items, visits, today]);
   const rows: Row[] = groups
@@ -129,7 +129,7 @@ export default function JobScreen() {
     unfinished > 0 || late > 0 ? (
       <View style={styles.smart}>
         {unfinished > 0 ? (
-          <SmartRow icon="pencil.tip" label="To Fill In" count={unfinished} onPress={() => openSpecial('waiting', 'unfinished')} testID="open-unfinished" />
+          <SmartRow icon="pencil.tip" label="Drafts" count={unfinished} onPress={() => openSpecial('waiting', 'unfinished')} testID="open-unfinished" />
         ) : null}
         {unfinished > 0 && late > 0 ? <View style={styles.smartRule} /> : null}
         {late > 0 ? (
@@ -278,7 +278,7 @@ export default function JobScreen() {
   );
 }
 
-/** A short cut at the top of the job: To Fill In, Past Due. */
+/** A short cut at the top of the job: Drafts, Past Due. */
 function SmartRow({
   icon,
   label,

@@ -162,7 +162,7 @@ export function sampleState(): SampleState {
     item('Master Bedroom 206', 'Install closet system', 'Walk in closet, both long walls.', 'SMS Carpentry', { kind: 'added_scope', boughtOut: true, poOrCo: 'CO-14' }),
     item('Living 107', 'Patch drywall', 'Behind the television mount, two screw holes.', 'Triple H Painting', { kind: 'deficiency' }),
     item('Kitchen 109', 'Adjust cabinet door', 'Upper cabinet left of the hood. The right door rubs the hood.', 'SMS Carpentry', { kind: 'deficiency', source: 'walk' }),
-    // Snapped on a walk with Fill In Later, waiting to be filled in.
+    // Snapped on a walk as a draft, waiting to be filled in.
     item('Kitchen 109', '', '', 'SMS Carpentry', { source: 'walk', unfinished: true, tradeId: null, companyId: null }),
     item('Master Bathroom 207', 'Install shower trim', 'Valve trim and the hand shower.', 'Gator Plumbing'),
   ];

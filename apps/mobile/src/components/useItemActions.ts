@@ -1,6 +1,6 @@
 // What a tap or a swipe does to an item in a list: check it off (a second tap takes it back while
-// it is still showing), mark it ready, remove it with Undo, open it. Checking off a company's last
-// item in a room offers to mark ready what was waiting on that company there.
+// it is still showing, and Undo after), mark it ready, remove it with Undo, open it. Checking off a
+// company's last item in a location offers to mark ready what was waiting on that company there.
 
 import { clearHoldup, complete, freedBy, remove, reopen, restore, RuleError, tidyItem, type Item, type ItemFields } from '@punch/core';
 import { router } from 'expo-router';
@@ -11,17 +11,17 @@ import { haptic, useFeedback } from '@/ui';
 
 const CHECK_DELAY = 650;
 
-/** After an item is completed: offer to mark ready what was waiting on its company in that room. */
+/** After an item is completed: offer to mark ready what was waiting on its company in that location. Says whether it did. */
 export function useRelease(jobId: string) {
   const data = useData();
   const feedback = useFeedback();
   const items = data.useItems(jobId);
   const companies = data.useCompanies();
   return useCallback(
-    (done: Item) => {
+    (done: Item): boolean => {
       const company = companies.find((c) => c.id === done.companyId)?.name;
       const freed = freedBy(done, items, company);
-      if (!company || freed.length === 0) return;
+      if (!company || freed.length === 0) return false;
       const what = freed.length === 1 ? freed[0]!.title || '1 item here' : `${freed.length} items here`;
       feedback.toast({
         message: `${what} ${freed.length === 1 ? 'was' : 'were'} waiting on ${company}. Ready now?`,
@@ -33,6 +33,7 @@ export function useRelease(jobId: string) {
           },
         },
       });
+      return true;
     },
     [companies, data, feedback, items],
   );
@@ -91,13 +92,15 @@ export function useItemActions(jobId: string) {
             return complete(f, me);
           })
             .then((ok) => {
-              if (ok) release(item);
+              // Offer what it frees up; otherwise a way back from a tap that was a mistake.
+              if (!ok || release(item)) return;
+              feedback.toast({ message: `Completed ${item.title}`, action: { label: 'Undo', onPress: () => void apply(item, reopen) } });
             })
             .finally(() => setChecking((s) => new Set([...s].filter((id) => id !== item.id))));
         }, CHECK_DELAY),
       );
     },
-    [apply, me, release],
+    [apply, feedback, me, release],
   );
 
   const onReady = useCallback(

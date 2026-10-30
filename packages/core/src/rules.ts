@@ -51,7 +51,7 @@ export function checkItem(item: ItemFields): Problem[] {
     problems.push({ field: 'status', message: 'A complete item records who completed it and when' });
   }
   if (item.status === 'complete' && item.unfinished) {
-    problems.push({ field: 'status', message: 'Fill it in before you mark it complete' });
+    problems.push({ field: 'status', message: 'Finish the draft before you mark it complete' });
   }
   return problems;
 }
@@ -140,7 +140,7 @@ export class RuleError extends Error {
 export function complete<T extends ItemFields>(item: T, by: Person, at: Date = new Date()): T {
   if (!by.active) throw new RuleError('Only Ross Built can mark items complete');
   if (item.status === 'removed') throw new RuleError('Restore it to the list first');
-  if (item.unfinished) throw new RuleError('Fill it in before you mark it complete');
+  if (item.unfinished) throw new RuleError('Finish the draft before you mark it complete');
   return { ...item, status: 'complete', completedBy: by.id, completedAt: at.toISOString() };
 }
 

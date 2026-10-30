@@ -1,7 +1,7 @@
 // How the lists are cut: by location (floor order), by trade, by company or by what items wait on, with
 // the filters from the plan. Removed items never show. Every location shows, even an empty one, so items
 // can be added to it. Show Completed (as in Reminders) adds completed items that fit the filter, after
-// the open ones. By Waiting On shows the items to fill in, what is ready now and what needs a price,
+// the open ones. By Waiting On shows the drafts, what is ready now and what needs a price,
 // then each thing holding work up with the items it holds up (an item waiting on two things is
 // under both): the late ones first, then the biggest. That is the order to clear them in.
 
@@ -148,7 +148,7 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
       })
       .sort((a, b) => b.late - a.late || b.n - a.n || a.label.localeCompare(b.label));
     order = [
-      { key: 'unfinished', label: 'To Fill In' },
+      { key: 'unfinished', label: 'Drafts' },
       { key: 'ready', label: 'Ready' },
       { key: 'price', label: 'Needs a Price' },
       ...holding.map(({ key, label }) => ({ key, label })),

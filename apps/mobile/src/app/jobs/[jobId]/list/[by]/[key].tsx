@@ -87,7 +87,7 @@ export default function GroupScreen() {
   const subtitle = due
     ? `${open.length} open`
     : key === 'unfinished'
-      ? `${open.length} ${open.length === 1 ? 'item' : 'items'}. Tap one to fill it in.`
+      ? `${open.length} ${open.length === 1 ? 'draft' : 'drafts'}. Tap one to fill it in.`
       : `${open.length} ${SHOW_WORDS[view.filter]}`;
   const contextFor = (item: Item) => (by === 'room' && !due ? undefined : roomName.get(item.locationId));
   const lateFor = (item: Item) => {
@@ -127,7 +127,7 @@ export default function GroupScreen() {
     void data.updateItems(heldUp.map((i) => ({ id: i.id, patch: { readyBy } })));
   }
   const groupReadyBy = heldUp.find((i) => i.readyBy)?.readyBy ?? null;
-  // Filling in after a walk: each item steps to the next one to fill in.
+  // Filling in after a walk: each draft steps to the next one.
   const openUnfinished = (item: Item) =>
     router.push({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: item.id, from: 'unfinished' } });
 

@@ -160,7 +160,7 @@ describe('walking the job', () => {
     const lookups = { locations: rooms, trades: [], companies: [] };
     const groups = groupItems(items, 'waiting', 'open', lookups, { showCompleted: true });
     expect(groups.map((g) => [g.label, g.items.length])).toEqual([
-      ['To Fill In', 1],
+      ['Drafts', 1],
       ['Ready', 2],
       ['Needs a Price', 2],
       ['Owner', 3],

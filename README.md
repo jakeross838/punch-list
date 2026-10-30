@@ -35,7 +35,7 @@ npm run test:extension    parked: runs the extension in Chromium against the sta
 ## Rules the code enforces
 
 - Not ready means it says who it waits on: one or several. One company and one trade per item.
-- An item to fill in (a Fill In Later photo, or saved before its company was known) may wait for its title, company and trade, stays off every list, and cannot be completed until it is filled in.
+- A draft (a photo taken in Draft mode, or an item saved before its company was known) may wait for its title, company and trade, stays off every list, and cannot be completed until it is filled in.
 - Each item is a Deficiency, Incomplete (scope completion) or Additional. Additional work counts as priced, and ready to schedule, once it has its purchase order or change order number; Bought Out follows from that and is never asked for.
 - An item goes only on a visit of its own company. Visits and sent lists are never deleted; removing sets removed.
 - Only an active Ross Built user marks an item complete.
