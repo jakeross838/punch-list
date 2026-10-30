@@ -3,3 +3,6 @@ export * from './rooms';
 export * from './rules';
 export * from './waitingOn';
 export * from './views';
+export * from './marks';
+export * from './titles';
+export * from './forms';

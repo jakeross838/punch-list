@@ -1,6 +1,6 @@
 // Database rows (snake_case, booleans as 0 or 1 on the phone) to and from the app's records.
 
-import type { Company, Item, ItemFields, Job, JobCompany, Location, Person, Trade } from '@punch/core';
+import type { Company, CustomField, Item, ItemFields, Job, JobCompany, Location, Mark, Person, Photo, StandardTitle, Trade } from '@punch/core';
 import type { ItemPatch } from './api';
 
 type Row = Record<string, unknown>;
@@ -10,6 +10,16 @@ const textOrNull = (v: unknown): string | null => (v === null || v === undefined
 const bool = (v: unknown): boolean => v === true || v === 1 || v === '1' || v === 'true';
 const num = (v: unknown): number => Number(v ?? 0);
 const numOrNull = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v));
+/** JSON columns arrive as text on the phone and as values from the server. */
+function json<T>(v: unknown, fallback: T): T {
+  if (v === null || v === undefined || v === '') return fallback;
+  if (typeof v !== 'string') return v as T;
+  try {
+    return JSON.parse(v) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 export const rowToPerson = (r: Row): Person => ({ id: text(r.id), email: text(r.email), name: text(r.name), active: bool(r.active) });
 
@@ -59,6 +69,7 @@ export const rowToItem = (r: Row): Item => ({
   completedBy: textOrNull(r.completed_by),
   completedAt: textOrNull(r.completed_at),
   source: r.source === 'walk' || r.source === 'import' ? r.source : 'typed',
+  extra: json<Item['extra']>(r.extra, {}),
   btExternalId: textOrNull(r.bt_external_id),
   createdBy: text(r.created_by),
   createdAt: text(r.created_at),
@@ -80,6 +91,7 @@ const ITEM_COLUMNS: Record<keyof ItemPatch, string> = {
   status: 'status',
   completedBy: 'completed_by',
   completedAt: 'completed_at',
+  extra: 'extra',
 };
 
 /** An item patch as column and value pairs for the phone database (booleans as 0 or 1). */
@@ -88,9 +100,41 @@ export function itemPatchColumns(patch: ItemPatch): [string, unknown][] {
     .filter((k) => k in ITEM_COLUMNS && patch[k] !== undefined)
     .map((k) => {
       const v = patch[k];
-      return [ITEM_COLUMNS[k], typeof v === 'boolean' ? (v ? 1 : 0) : v];
+      return [ITEM_COLUMNS[k], typeof v === 'boolean' ? (v ? 1 : 0) : typeof v === 'object' && v !== null ? JSON.stringify(v) : v];
     });
 }
+
+export const rowToPhoto = (r: Row, uri: string): Photo => ({
+  id: text(r.id),
+  jobId: text(r.job_id),
+  itemId: text(r.item_id),
+  uri,
+  storagePath: textOrNull(r.storage_path),
+  width: num(r.width),
+  height: num(r.height),
+  marks: json<Mark[]>(r.marks, []),
+  sortOrder: num(r.sort_order),
+  removed: bool(r.removed),
+  createdBy: text(r.created_by),
+  createdAt: text(r.created_at),
+});
+
+export const rowToStandardTitle = (r: Row): StandardTitle => ({
+  id: text(r.id),
+  title: text(r.title),
+  tradeId: textOrNull(r.trade_id),
+  uses: num(r.uses),
+  approved: bool(r.approved),
+});
+
+export const rowToCustomField = (r: Row): CustomField => ({
+  id: text(r.id),
+  label: text(r.label),
+  kind: r.kind === 'list' || r.kind === 'yes_no' || r.kind === 'date' ? r.kind : 'text',
+  options: json<string[]>(r.options, []),
+  sortOrder: num(r.sort_order),
+  active: bool(r.active),
+});
 
 export function itemFieldsColumns(fields: ItemFields): [string, unknown][] {
   return itemPatchColumns(fields);
@@ -105,12 +149,25 @@ export const BOOLEAN_COLUMNS: Record<string, string[]> = {
   companies: ['active'],
   items: ['ready', 'bought_out'],
   title_library: ['approved'],
+  custom_fields: ['active'],
+  photos: ['removed'],
+};
+
+/** Columns the server keeps as JSON; the phone stores them as text. */
+export const JSON_COLUMNS: Record<string, string[]> = {
+  items: ['extra'],
+  custom_fields: ['options'],
+  photos: ['marks'],
+  person_settings: ['item_form', 'job_view'],
 };
 
 export function toServerRow(table: string, data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...data };
   for (const col of BOOLEAN_COLUMNS[table] ?? []) {
     if (col in out && out[col] !== null && out[col] !== undefined) out[col] = bool(out[col]);
+  }
+  for (const col of JSON_COLUMNS[table] ?? []) {
+    if (typeof out[col] === 'string') out[col] = json<unknown>(out[col], null);
   }
   return out;
 }

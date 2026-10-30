@@ -73,7 +73,17 @@ export interface PageProps {
   right?: BarItem[];
   /** The bottom toolbar, like New Item in Reminders. */
   bottom?: BarButton[];
-  search?: { value: string; onChange: (text: string) => void; placeholder?: string };
+  /** A bar of the screen's own at the bottom, drawn the same on both platforms: the camera bar. */
+  footer?: ReactNode;
+  /** How tall the footer is above the safe area, so the list can scroll clear of it. */
+  footerHeight?: number;
+  search?: {
+    value: string;
+    onChange: (text: string) => void;
+    placeholder?: string;
+    /** Tucked away until asked for: pull down on the iPhone, the magnifying glass on the preview page. */
+    collapsed?: boolean;
+  };
   /** False for the first screen, which has nothing to go back to. */
   back?: boolean;
   /** The screen is shown as a sheet: small title, Cancel and Done in the bar, no back button. */

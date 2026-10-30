@@ -188,6 +188,49 @@ const GLYPHS: Record<IconName, Draw> = {
       {line('M8 8h3M8 12h3M8 16h3M16.5 13h.5M16.5 17h.5', c, w * 1.8)}
     </>
   ),
+  camera: (c, w) => (
+    <>
+      {line('M3.5 8.5A2.5 2.5 0 0 1 6 6h1.8l1.5-2.2h5.4L16.2 6H18a2.5 2.5 0 0 1 2.5 2.5V17a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 17z', c, w * 1.8)}
+      {ring(12, 12.8, 3.6, c, w * 1.8)}
+    </>
+  ),
+  'photo.on.rectangle': (c, w) => (
+    <>
+      <rect x={3.5} y={5} width={17} height={14} rx={2.5} stroke={c} strokeWidth={w * 1.8} fill="none" />
+      {ring(9, 10, 1.6, c, w * 1.6)}
+      {line('M20.5 15.5L16 11l-8.5 8', c, w * 1.8)}
+    </>
+  ),
+  bolt: (c, w) => line('M13.5 3L6.5 13h5l-1 8 7-10h-5z', c, w * 1.8),
+  'bolt.slash': (c, w) => (
+    <>
+      {line('M13.5 3L6.5 13h5l-1 8 7-10h-5z', c, w * 1.8)}
+      {line('M4 4l16 16', c, w * 1.8)}
+    </>
+  ),
+  'pencil.tip': (c, w) => (
+    <>
+      {line('M4.5 19.5l1.2-4.6L15.6 5a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L9.1 18.3z', c, w * 1.8)}
+      {line('M14 6.6l3.4 3.4', c, w * 1.8)}
+    </>
+  ),
+  'arrow.up.right': (c, w) => line('M5.5 18.5L18.5 5.5M9.5 5.5h9v9', c, w * 1.9),
+  circle: (c, w) => <ellipse cx={12} cy={12} rx={8.5} ry={7} stroke={c} strokeWidth={w * 1.8} fill="none" />,
+  square: (c, w) => <rect x={4.5} y={6} width={15} height={12} rx={1.5} stroke={c} strokeWidth={w * 1.8} fill="none" />,
+  textformat: (c, w) => line('M5.5 6.5h13M12 6.5v12', c, w * 1.9),
+  rooms: (c, w) => (
+    <>
+      <rect x={3.5} y={3.5} width={17} height={17} rx={2.5} stroke={c} strokeWidth={w * 1.7} fill="none" />
+      {line('M3.5 11.5H11V3.5M11 11.5v9M11 15.5h9.5', c, w * 1.7)}
+    </>
+  ),
+  filter: (c, w) => line('M4 7h16M7 12h10M10 17h4', c, w * 1.8),
+  checklist: (c, w) => (
+    <>
+      {line('M10 6.5h10M10 12h10M10 17.5h10', c, w * 1.8)}
+      {line('M3.5 6.6l1.4 1.4 2.4-2.8M3.5 12.1l1.4 1.4 2.4-2.8M3.5 17.6l1.4 1.4 2.4-2.8', c, w * 1.6)}
+    </>
+  ),
 };
 
 export function Icon({ name, size = 20, color = colors.label, weight = 'regular', style }: IconProps) {

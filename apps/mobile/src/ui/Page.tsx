@@ -4,6 +4,7 @@
 
 import { Stack } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, layout } from '@/constants/theme';
 import { SF_SYMBOLS } from './icons';
 import type { BarButton, BarItem, PageProps, PageScroll } from './page-types';
@@ -58,6 +59,8 @@ export function Page({
   left,
   right,
   bottom,
+  footer,
+  footerHeight = 72,
   search,
   sheet,
   dismissible = true,
@@ -65,6 +68,7 @@ export function Page({
   list,
   testID,
 }: PageProps) {
+  const insets = useSafeAreaInsets();
   const bg = background === 'grouped' ? colors.grouped : colors.background;
   const header = subtitle ? (
     <Text variant="subheadline" color={colors.secondary} style={styles.subtitle}>
@@ -79,7 +83,7 @@ export function Page({
       keyboardDismissMode: 'interactive',
     },
     header,
-    bottomInset: 32,
+    bottomInset: footer ? footerHeight + Math.max(insets.bottom, 12) + 16 : 32,
   };
 
   return (
@@ -95,7 +99,7 @@ export function Page({
           headerSearchBarOptions: search
             ? {
                 placeholder: search.placeholder ?? 'Search',
-                hideWhenScrolling: false,
+                hideWhenScrolling: !!search.collapsed,
                 onChangeText: (e) => search.onChange(e.nativeEvent.text),
                 onCancelButtonPress: () => search.onChange(''),
               }
@@ -120,6 +124,7 @@ export function Page({
           {children}
         </ScrollView>
       )}
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
       {/* After the list: the large title follows the first scroll view it finds. */}
       {bottom?.length ? (
         <Stack.Toolbar placement="bottom">
@@ -133,4 +138,5 @@ export function Page({
 
 const styles = StyleSheet.create({
   subtitle: { marginHorizontal: layout.margin + 4, marginBottom: 14 },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 });

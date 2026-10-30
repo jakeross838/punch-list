@@ -77,6 +77,8 @@ const items = new Table(
     completed_by: column.text,
     completed_at: column.text,
     source: column.text,
+    /** JSON: the answers to the added fields, by field id. */
+    extra: column.text,
     bt_external_id: column.text,
     created_by: column.text,
     created_at: column.text,
@@ -109,6 +111,46 @@ const title_library = new Table({
   created_at: column.text,
 });
 
+const custom_fields = new Table({
+  org: column.text,
+  label: column.text,
+  kind: column.text,
+  /** JSON: the choices, for a list. */
+  options: column.text,
+  sort_order: column.integer,
+  active: column.integer,
+  created_at: column.text,
+});
+
+/** The picture itself is a file on the phone named for the photo's id, until it is uploaded. */
+const photos = new Table(
+  {
+    org: column.text,
+    job_id: column.text,
+    item_id: column.text,
+    storage_path: column.text,
+    width: column.integer,
+    height: column.integer,
+    /** JSON: the marks drawn on it. */
+    marks: column.text,
+    sort_order: column.integer,
+    removed: column.integer,
+    created_by: column.text,
+    created_at: column.text,
+  },
+  { indexes: { item: ['item_id'], job: ['job_id'] } },
+);
+
+const person_settings = new Table({
+  org: column.text,
+  person_id: column.text,
+  /** JSON */
+  item_form: column.text,
+  /** JSON */
+  job_view: column.text,
+  updated_at: column.text,
+});
+
 /** Changes the server refused for good (a broken rule, not a lost signal). Kept on the phone, shown in the app. */
 const rejected_changes = new Table(
   {
@@ -133,5 +175,8 @@ export const AppSchema = new Schema({
   items,
   item_history,
   title_library,
+  custom_fields,
+  photos,
+  person_settings,
   rejected_changes,
 });

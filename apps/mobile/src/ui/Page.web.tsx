@@ -30,6 +30,8 @@ export function Page({
   left,
   right,
   bottom,
+  footer,
+  footerHeight = 72,
   search,
   sheet,
   children,
@@ -38,6 +40,8 @@ export function Page({
 }: PageProps) {
   const insets = useSafeAreaInsets();
   const canGoBack = useCanGoBack();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const showSearch = !!search && (!search.collapsed || searchOpen || search.value !== '');
   const [scrollY] = useState(() => new Animated.Value(0));
   const onScroll = useMemo(() => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false }), [scrollY]);
   const bg = background === 'grouped' ? colors.grouped : colors.background;
@@ -76,15 +80,27 @@ export function Page({
           {subtitle}
         </Text>
       ) : null}
-      {search ? (
-        <View style={styles.search}>
-          <SearchField value={search.value} onChangeText={search.onChange} placeholder={search.placeholder} testID="search" />
+      {search && showSearch ? (
+        <View style={[styles.search, search.collapsed ? styles.searchRow : null]}>
+          <View style={{ flex: 1 }}>
+            <SearchField value={search.value} onChangeText={search.onChange} placeholder={search.placeholder} autoFocus={!!search.collapsed} testID="search" />
+          </View>
+          {search.collapsed ? (
+            <BarButtonView
+              label="Cancel"
+              onPress={() => {
+                search.onChange('');
+                setSearchOpen(false);
+              }}
+              testID="search-cancel"
+            />
+          ) : null}
         </View>
       ) : null}
     </View>
   );
 
-  const bottomInset = (bottom?.length ? 96 : 36) + insets.bottom;
+  const bottomInset = footer ? footerHeight + Math.max(insets.bottom, 12) + 16 : (bottom?.length ? 96 : 36) + insets.bottom;
   const scroll: PageScroll = {
     props: { onScroll, scrollEventThrottle: 16, keyboardShouldPersistTaps: 'handled' },
     header,
@@ -99,6 +115,15 @@ export function Page({
     testID: 'back',
   };
   const leftItems = sheet || !back || !canGoBack ? (left ?? []) : [backItem, ...(left ?? [])];
+  const searchItem: BarButton = {
+    kind: 'button',
+    label: 'Search',
+    icon: 'magnifyingglass',
+    iconOnly: true,
+    onPress: () => setSearchOpen(true),
+    testID: 'open-search',
+  };
+  const rightItems = search?.collapsed && !showSearch ? [searchItem, ...(right ?? [])] : (right ?? []);
 
   return (
     <View style={[styles.page, { backgroundColor: bg }]} testID={testID}>
@@ -110,7 +135,7 @@ export function Page({
               {title}
             </Text>
           </Animated.View>
-          <View style={[styles.side, styles.right]}>{(right ?? []).map(barItem)}</View>
+          <View style={[styles.side, styles.right]}>{rightItems.map(barItem)}</View>
         </View>
         <Animated.View style={[styles.edge, { opacity: edgeOpacity }]} />
       </View>
@@ -124,6 +149,7 @@ export function Page({
           </ScrollView>
         )}
       </View>
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
       {bottom?.length ? (
         <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 14) + 8 }]}>
           {bottom.map((b) => (
@@ -149,6 +175,8 @@ const styles = StyleSheet.create({
   eyebrow: { marginBottom: 2 },
   subtitle: { marginHorizontal: layout.inset, marginBottom: 14 },
   search: { paddingHorizontal: layout.margin, paddingBottom: 14 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 8 },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 5 },
   bottom: {
     position: 'absolute',
     left: 0,

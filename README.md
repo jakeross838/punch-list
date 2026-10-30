@@ -2,7 +2,7 @@
 
 Ross Built's punch list app: walk the job, take marked-up photos, and the Completion List builds and keeps itself current.
 
-Plan: [Punch List App: Version 1 Plan](https://claude.ai/artifact/8aKXo8iiTrKoH78Q1Mce7a). Current phase: [Phase 1, app foundation and job setup](docs/phase-1.md). Preview: [Punch List Preview](https://claude.ai/artifact/JeNrTrbh3PNZE7YeNTcYmV), the screens on sample data. The Buildertrend connection ([Phase 0](docs/phase-0.md)) is built and parked; it is not part of version 1.
+Plan: [Punch List App: Version 1 Plan](https://claude.ai/artifact/8aKXo8iiTrKoH78Q1Mce7a). Current phase: [Phase 1, the camera walk, the list and job setup](docs/phase-1.md). Design: [Punch List App Design](https://claude.ai/artifact/MkYkFBRyhwxCDGG488omuC). Preview: [Punch List Preview](https://claude.ai/artifact/JeNrTrbh3PNZE7YeNTcYmV), the screens on sample data. The Buildertrend connection ([Phase 0](docs/phase-0.md)) is built and parked; it is not part of version 1.
 
 ## Layout
 
@@ -35,6 +35,8 @@ npm run test:extension    parked: runs the extension in Chromium against the sta
 
 - Not ready means Waiting On is filled in. One company and one trade per item.
 - Only an active Ross Built user marks an item complete.
-- Removing an item marks it Removed. Nothing is ever deleted.
+- Removing an item marks it Removed. Nothing is ever deleted, photos included.
+- Marks are kept apart from the photo, as points on it, so the original photo is never changed.
+- A standard title fills in its trade, and the company doing that trade on the job.
 - Every signed-in person is checked against the Ross Built people list on every read and write.
 - Secrets and sessions live only in `local/`, which git ignores.

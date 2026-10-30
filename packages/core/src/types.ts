@@ -75,9 +75,77 @@ export interface Item {
   completedBy: string | null;
   completedAt: string | null;
   source: ItemSource;
+  /** Answers to the added fields from Item Form setup, by field id. */
+  extra: Record<string, ExtraValue>;
   /** Empty until the Buildertrend connection is turned on. */
   btExternalId: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------- photos and their marks ----------
+
+/** A point on a photo as fractions of its width and height (0 to 1), so marks fit any size. */
+export type MarkPoint = [x: number, y: number];
+export type MarkColor = 'red' | 'yellow' | 'white' | 'black';
+export type MarkTool = 'pen' | 'arrow' | 'circle' | 'box' | 'text';
+
+export type Mark =
+  | { tool: 'pen'; color: MarkColor; points: MarkPoint[] }
+  | { tool: 'arrow' | 'circle' | 'box'; color: MarkColor; from: MarkPoint; to: MarkPoint }
+  | { tool: 'text'; color: MarkColor; at: MarkPoint; text: string };
+
+export interface Photo {
+  id: string;
+  jobId: string;
+  itemId: string;
+  /** Where to show it from: a file on the phone, or a blob or data URL on the preview page. */
+  uri: string;
+  /** Its place in storage once uploaded; null until then. */
+  storagePath: string | null;
+  width: number;
+  height: number;
+  /** Drawn over the photo, never burned in, so the original is always kept. */
+  marks: Mark[];
+  sortOrder: number;
+  removed: boolean;
+  createdBy: string;
+  createdAt: string;
+}
+
+// ---------- the New Item form ----------
+
+/** A title from the standard list. Its trade lets the form fill in the trade and the company. */
+export interface StandardTitle {
+  id: string;
+  title: string;
+  tradeId: string | null;
+  uses: number;
+  approved: boolean;
+}
+
+export type CustomFieldKind = 'text' | 'list' | 'yes_no' | 'date';
+
+/** A field Ross Built adds to the form in Item Form setup, like Found By. */
+export interface CustomField {
+  id: string;
+  label: string;
+  kind: CustomFieldKind;
+  /** The choices, for a list. */
+  options: string[];
+  sortOrder: number;
+  active: boolean;
+}
+
+export type ExtraValue = string | boolean | null;
+
+/** The fields Item Form setup can turn off. Title and room are always on the form. */
+export type FormField = 'description' | 'company' | 'trade' | 'kind' | 'ready' | 'waitingOn' | 'readyBy' | 'boughtOut' | 'poOrCo';
+
+export interface FormSettings {
+  hidden: FormField[];
+  /** What a new item starts as. */
+  startReady: boolean;
+  startKind: ItemKind;
 }

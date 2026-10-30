@@ -1,7 +1,10 @@
 -- Database checks: the access rule and everything the database keeps itself.
 -- Run by tools/db-test.sh on a fresh local Postgres. Any failed check stops the run.
 
-insert into public.people (email, name) values ('jake@rossbuilt.com', 'Jake Ross'), ('former@rossbuilt.com', 'Former Employee');
+insert into public.people (email, name) values
+  ('jake@rossbuilt.com', 'Jake Ross'),
+  ('andrew@rossbuilt.com', 'Andrew Ross'),
+  ('former@rossbuilt.com', 'Former Employee');
 update public.people set active = false where email = 'former@rossbuilt.com';
 
 -- ---------- an active person ----------
@@ -103,6 +106,82 @@ begin
   end;
 end $$;
 
+-- ---------- capture: photos, added fields and settings ----------
+do $$
+declare
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  j uuid := (select id from public.jobs where name = 'Fish');
+  j2 uuid := (select id from public.jobs where name = 'Biales');
+  a uuid := (select i.id from public.items i where i.title = 'Install toilet' and i.job_id = (select id from public.jobs where name = 'Fish'));
+  p uuid;
+  rec record;
+begin
+  insert into public.photos (job_id, item_id, width, height, marks)
+    values (j, a, 3024, 4032, '[{"tool":"circle","color":"red","from":[0.1,0.2],"to":[0.4,0.6]}]') returning id into p;
+  if (select created_by from public.photos where id = p) is distinct from jake then
+    raise exception 'FAIL: the photo creator was not stamped';
+  end if;
+
+  -- A photo cannot go on another job's item, and it stays with its item and its size.
+  begin
+    insert into public.photos (job_id, item_id, width, height) values (j2, a, 10, 10);
+    raise exception 'FAIL: a photo was put on another job''s item';
+  exception when check_violation then null;
+  end;
+  update public.photos set item_id = gen_random_uuid(), width = 1, marks = '[]', storage_path = 'fish/a.jpg' where id = p;
+  select item_id, width, marks, storage_path into rec from public.photos where id = p;
+  if rec.item_id <> a or rec.width <> 3024 then raise exception 'FAIL: a photo moved items or changed size'; end if;
+  if rec.marks <> '[]'::jsonb or rec.storage_path <> 'fish/a.jpg' then raise exception 'FAIL: marks or the upload path did not save'; end if;
+
+  -- Photos are never deleted.
+  begin
+    delete from public.photos where id = p;
+    raise exception 'FAIL: the app deleted a photo';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- Added fields: a list needs its choices; the answers sit on the item, as an object.
+  insert into public.custom_fields (label, kind, options) values ('Found By', 'list', '["Owner", "Architect", "Ross Built"]');
+  begin
+    insert into public.custom_fields (label, kind) values ('Empty List', 'list');
+    raise exception 'FAIL: a list field with no choices was accepted';
+  exception when check_violation then null;
+  end;
+  update public.items set extra = '{"found_by": "Owner"}' where id = a;
+  begin
+    update public.items set extra = '["Owner"]' where id = a;
+    raise exception 'FAIL: item answers that are not an object were accepted';
+  exception when check_violation then null;
+  end;
+  if not exists (select 1 from public.item_history where item_id = a and field = 'extra') then
+    raise exception 'FAIL: a change to the added fields is not in the history';
+  end if;
+
+  -- Settings always belong to the person signed in, whatever the app sends.
+  insert into public.person_settings (person_id, item_form, job_view)
+    values (gen_random_uuid(), '{"hidden": ["poOrCo"]}', '{"groupBy": "trade"}');
+  if (select person_id from public.person_settings) is distinct from jake then
+    raise exception 'FAIL: settings were saved for someone else';
+  end if;
+end $$;
+
+reset role;
+
+-- ---------- another active person ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"andrew@rossbuilt.com"}';
+
+do $$
+begin
+  if (select count(*) from public.photos) <> 1 or (select count(*) from public.custom_fields) <> 1 then
+    raise exception 'FAIL: photos and added fields are not shared with the team';
+  end if;
+  if (select count(*) from public.person_settings) <> 0 then
+    raise exception 'FAIL: one person can see another''s settings';
+  end if;
+  update public.person_settings set job_view = '{"groupBy": "company"}';
+end $$;
+
 reset role;
 
 -- ---------- someone who was never invited ----------
@@ -113,7 +192,9 @@ do $$
 begin
   if (select count(*) from public.jobs) + (select count(*) from public.items) + (select count(*) from public.people)
      + (select count(*) from public.locations) + (select count(*) from public.companies) + (select count(*) from public.trades)
-     + (select count(*) from public.item_history) + (select count(*) from public.job_companies) <> 0 then
+     + (select count(*) from public.item_history) + (select count(*) from public.job_companies)
+     + (select count(*) from public.photos) + (select count(*) from public.custom_fields)
+     + (select count(*) from public.person_settings) <> 0 then
     raise exception 'FAIL: an uninvited account can see data';
   end if;
   begin
@@ -152,6 +233,9 @@ do $$
 begin
   if exists (select 1 from public.items where title = 'Changed by a stranger') then
     raise exception 'FAIL: an uninvited account changed an item';
+  end if;
+  if (select job_view ->> 'groupBy' from public.person_settings) <> 'trade' then
+    raise exception 'FAIL: one person changed another''s settings';
   end if;
   begin
     delete from public.items;

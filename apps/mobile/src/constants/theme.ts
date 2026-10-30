@@ -24,6 +24,9 @@ export const colors = {
   secondary: '#6E6E73',
   placeholder: '#8E8E93',
   chevron: '#C7C7CC',
+  /** The ring of an unchecked circle, and quiet status icons like the hourglass. */
+  circle: '#AEAEB2',
+  quiet: '#8E8E93',
 
   separator: '#EDEDF0',
   rule: '#E8E8ED',
@@ -36,6 +39,12 @@ export const colors = {
   white: '#FFFFFF',
   black: '#000000',
   dim: 'rgba(0, 0, 0, 0.22)',
+
+  /** The camera and markup: white on black, with frosted chips. */
+  onDark: '#FFFFFF',
+  onDarkQuiet: 'rgba(255, 255, 255, 0.72)',
+  darkChip: 'rgba(255, 255, 255, 0.16)',
+  darkChipOn: 'rgba(255, 255, 255, 0.28)',
 } as const;
 
 /** Apple's text styles at the default text size. */

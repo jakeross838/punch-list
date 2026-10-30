@@ -33,6 +33,7 @@ function item(over: Partial<ItemFields> = {}): ItemFields {
     status: 'open',
     completedBy: null,
     completedAt: null,
+    extra: {},
     ...over,
   };
 }

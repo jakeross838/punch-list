@@ -12,7 +12,20 @@ export interface Problem {
 
 export type ItemFields = Pick<
   Item,
-  'title' | 'description' | 'tradeId' | 'companyId' | 'kind' | 'ready' | 'waitingOn' | 'readyBy' | 'boughtOut' | 'poOrCo' | 'status' | 'completedBy' | 'completedAt'
+  | 'title'
+  | 'description'
+  | 'tradeId'
+  | 'companyId'
+  | 'kind'
+  | 'ready'
+  | 'waitingOn'
+  | 'readyBy'
+  | 'boughtOut'
+  | 'poOrCo'
+  | 'status'
+  | 'completedBy'
+  | 'completedAt'
+  | 'extra'
 >;
 
 /** Everything that stops an item from saving, in plain words. An empty list means it saves. */
@@ -44,6 +57,8 @@ export function checkItem(item: ItemFields): Problem[] {
  */
 export function tidyItem<T extends ItemFields>(item: T): T {
   const text = (v: string | null) => (v === null ? null : v.trim() === '' ? null : v.trim());
+  const extra: Record<string, string | boolean | null> = {};
+  for (const [k, v] of Object.entries(item.extra ?? {})) extra[k] = typeof v === 'string' ? text(v) : v;
   const out = {
     ...item,
     title: item.title.trim().replace(/\s+/g, ' '),
@@ -51,6 +66,7 @@ export function tidyItem<T extends ItemFields>(item: T): T {
     waitingOn: text(item.waitingOn),
     readyBy: text(item.readyBy),
     poOrCo: text(item.poOrCo),
+    extra,
   };
   if (out.ready) {
     out.waitingOn = null;

@@ -11,6 +11,7 @@ streams:
     auto_subscribe: true
     with:
       my_org: SELECT org FROM people WHERE email = auth.parameter('email') AND active = true
+      me: SELECT id FROM people WHERE email = auth.parameter('email') AND active = true
     queries:
       - SELECT * FROM people WHERE org IN my_org
       - SELECT * FROM jobs WHERE org IN my_org
@@ -22,3 +23,7 @@ streams:
       - SELECT * FROM items WHERE org IN my_org
       - SELECT * FROM item_history WHERE org IN my_org
       - SELECT * FROM title_library WHERE org IN my_org
+      - SELECT * FROM custom_fields WHERE org IN my_org
+      - SELECT * FROM photos WHERE org IN my_org
+      # Settings are each person's own: a phone gets only its signed-in person's row.
+      - SELECT * FROM person_settings WHERE person_id IN me

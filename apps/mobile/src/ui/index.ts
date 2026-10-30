@@ -28,3 +28,6 @@ export { SwipeRow, type SwipeAction } from './SwipeRow';
 export { Switch } from './Switch';
 export { Text } from './Text';
 export { easeOut, easeSheet, Touchable } from './Touchable';
+export { MarkLayer } from './MarkLayer';
+export { fitPhoto, PhotoView, type PhotoLike } from './PhotoView';
+export { PhotoViewer } from './PhotoViewer';

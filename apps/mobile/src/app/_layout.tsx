@@ -1,7 +1,7 @@
-// The app shell. On the iPhone, screens use the native stack: system push and swipe back, and real
-// page sheets for New Job, New Item and an item's details. The preview page uses the JavaScript
-// stack with the same iOS motion: screens slide in from the right, and sheets rise from the bottom
-// while the screen behind shrinks back.
+// The app shell. On the iPhone, screens use the native stack: system push and swipe back, real
+// page sheets for New Job, New Item, Edit Item and Item Form, and the camera over everything. The
+// preview page uses the JavaScript stack with the same iOS motion: screens slide in from the right,
+// sheets rise from the bottom while the screen behind shrinks back, and the camera rises full screen.
 
 import '@/ui/web-setup';
 import { Stack } from 'expo-router';
@@ -15,8 +15,9 @@ import { DataProvider } from '@/data/backend';
 import { FeedbackProvider } from '@/ui';
 import { forSheetIOS } from '@/ui/sheetTransition';
 
-const SCREENS = ['index', 'jobs/[jobId]/index', 'jobs/[jobId]/setup'] as const;
-const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/items/[itemId]'] as const;
+const SCREENS = ['index', 'jobs/[jobId]/index', 'jobs/[jobId]/setup', 'jobs/[jobId]/list/[by]/[key]', 'jobs/[jobId]/items/[itemId]/index'] as const;
+const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/items/[itemId]/edit', 'settings/item-form'] as const;
+const CAMERA = 'jobs/[jobId]/capture';
 
 function NativeStack() {
   return (
@@ -27,6 +28,7 @@ function NativeStack() {
       {SHEETS.map((name) => (
         <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
       ))}
+      <Stack.Screen name={CAMERA} options={{ presentation: 'fullScreenModal', headerShown: false, contentStyle: { backgroundColor: colors.black } }} />
     </Stack>
   );
 }
@@ -61,6 +63,16 @@ function WebStack() {
           }}
         />
       ))}
+      <JSStack.Screen
+        name={CAMERA}
+        options={{
+          presentation: 'modal',
+          ...TransitionPresets.ModalSlideFromBottomIOS,
+          detachPreviousScreen: false,
+          gestureEnabled: false,
+          cardStyle: { flex: 1, backgroundColor: colors.black },
+        }}
+      />
     </JSStack>
   );
 }

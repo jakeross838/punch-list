@@ -7,7 +7,7 @@ import { colors } from '@/constants/theme';
 import { Icon } from './Icon';
 import { easeOut } from './Touchable';
 
-const SIZE = 22;
+const SIZE = 24;
 
 const pop = {
   '0%': { transform: [{ scale: 1 }] },
@@ -32,7 +32,7 @@ export function CompleteCircle({
   return (
     <Pressable
       onPress={onPress}
-      hitSlop={{ top: 14, bottom: 14, left: 14, right: 10 }}
+      hitSlop={{ top: 14, bottom: 14, left: 16, right: 12 }}
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
       accessibilityLabel={label}
@@ -43,7 +43,7 @@ export function CompleteCircle({
         style={[
           styles.circle,
           {
-            borderColor: checked ? colors.tint : colors.chevron,
+            borderColor: checked ? colors.tint : colors.circle,
             backgroundColor: checked ? colors.tint : 'transparent',
             transitionProperty: ['borderColor', 'backgroundColor'],
             transitionDuration: 180,
@@ -61,7 +61,7 @@ export function CompleteCircle({
             transitionTimingFunction: easeOut,
           }}
         >
-          <Icon name="checkmark" size={13} color={colors.white} weight="bold" />
+          <Icon name="checkmark" size={14} color={colors.white} weight="bold" />
         </Animated.View>
       </Animated.View>
     </Pressable>
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    borderWidth: 1.5,
+    borderWidth: 1.75,
     alignItems: 'center',
     justifyContent: 'center',
   },

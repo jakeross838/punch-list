@@ -1,4 +1,4 @@
-// Jobs: the first screen. Each job is a card with its open and ready counts and how much of the
+// Jobs: the first screen. Each job is a card with how many items are open and how much of the
 // list is complete.
 
 import type { Job } from '@punch/core';
@@ -58,7 +58,6 @@ function JobCard({ job }: { job: Job }) {
     .useItems(job.id)
     .filter((i) => i.status !== 'removed');
   const open = items.filter((i) => i.status === 'open');
-  const ready = open.filter((i) => i.ready).length;
   const done = items.filter((i) => i.status === 'complete').length;
   const share = items.length > 0 ? Math.max(done / items.length, done > 0 ? 0.02 : 0) : 0;
   return (
@@ -66,7 +65,7 @@ function JobCard({ job }: { job: Job }) {
       feedback="scale"
       onPress={() => router.push({ pathname: '/jobs/[jobId]', params: { jobId: job.id } })}
       accessibilityRole="button"
-      accessibilityLabel={`${job.name}, ${open.length} open, ${ready} ready`}
+      accessibilityLabel={`${job.name}, ${open.length} open`}
       testID={`job-${job.id}`}
       style={styles.card}
     >
@@ -84,21 +83,9 @@ function JobCard({ job }: { job: Job }) {
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${share * 100}%` }]} />
       </View>
-      <View style={styles.cardBottom}>
-        <Text variant="subheadline">
-          <Text variant="subheadline" weight="600" tabular>
-            {open.length}
-          </Text>{' '}
-          open,{' '}
-          <Text variant="subheadline" weight="600" tabular>
-            {ready}
-          </Text>{' '}
-          ready
-        </Text>
-        <Text variant="subheadline" color={colors.secondary} tabular>
-          {done} of {items.length} complete
-        </Text>
-      </View>
+      <Text variant="subheadline" color={colors.secondary} tabular>
+        {open.length} open
+      </Text>
     </Touchable>
   );
 }
@@ -111,7 +98,6 @@ const styles = StyleSheet.create({
   chevron: { marginTop: 7 },
   track: { height: 4, borderRadius: 2, backgroundColor: colors.progressTrack, overflow: 'hidden' },
   fill: { height: 4, borderRadius: 2, backgroundColor: colors.tint },
-  cardBottom: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   actions: { flexDirection: 'row', paddingHorizontal: layout.inset, paddingTop: 10 },
   textButton: { height: 44, justifyContent: 'center' },
   footer: { gap: 4, paddingHorizontal: 32, paddingTop: 40 },

@@ -42,7 +42,22 @@
           "imageWidth": 76
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Punch List uses the camera to take photos of items on the job.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Punch List uses your photos so you can add one to an item.",
+          "cameraPermission": "Punch List uses the camera to take photos of items on the job.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,30 +1,46 @@
-// The Completion List for one job, built like Reminders: count tiles, search, items grouped by
-// room (or trade, or company) under sticky headers, a circle to check each one off, swipe for
-// Ready and Remove, and the "…" menu for Group By, Show Completed and Job Setup.
+// A job: its levels and rooms with how many items are open in each, calm and quick to scan. Tap a
+// room for its items. View and Filter switches to trades, companies or status and narrows what
+// counts; the camera in the bottom bar starts a walk.
 
-import { complete, groupItems, remove, reopen, restore, RuleError, tidyItem, type GroupBy, type Item, type ItemFields } from '@punch/core';
+import {
+  byFloor,
+  GROUP_LABELS,
+  groupItems,
+  type GroupBy,
+  type Item,
+  type ItemGroup,
+  type Location,
+  type Photo,
+} from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, SectionList, StyleSheet, View } from 'react-native';
-import { ItemRow, type Names } from '@/components/ItemRow';
-import { fieldsOf } from '@/components/ItemForm';
-import { CountStrip, FILTER_NAMES, type FilterCounts, type ListFilter } from '@/components/CountStrip';
+import { useMemo, useState } from 'react';
+import { SectionList, StyleSheet, View } from 'react-native';
+import { BarTool, CAMERA_BAR_HEIGHT, CameraBar } from '@/components/CameraBar';
+import { ItemRow } from '@/components/ItemRow';
+import { useItemActions } from '@/components/useItemActions';
+import { SHOW_WORDS, ViewSheet } from '@/components/ViewSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Button, EmptyState, haptic, Icon, Page, Text, Touchable, useFeedback, type BarMenu } from '@/ui';
+import { capture } from '@/data/capture';
+import { useJobView } from '@/data/view';
+import { Button, EmptyState, Icon, Page, Text, Touchable, type BarMenu, type IconName } from '@/ui';
 
-const CHECK_DELAY = 650;
+const GROUP_ICONS: Record<GroupBy, IconName> = { room: 'rooms', trade: 'wrench', company: 'person.2.fill', status: 'checklist' };
+
+interface Row {
+  group: ItemGroup;
+  /** Items that count under the filter, not counting completed ones. */
+  count: number;
+}
 
 interface Section {
   key: string;
-  title: string;
-  open: number;
-  ready: number;
-  data: Item[];
+  title: string | null;
+  data: Row[];
 }
 
-function matchesQuery(item: Item, q: string, names: Names): boolean {
-  const hay = [item.title, item.description, item.waitingOn ?? '', item.poOrCo ?? '', String(item.number ?? ''), names.of(item.companyId), names.of(item.tradeId), names.of(item.locationId)]
+function matchesQuery(item: Item, q: string, name: (id: string | null) => string): boolean {
+  const hay = [item.title, item.description, item.waitingOn ?? '', item.poOrCo ?? '', String(item.number ?? ''), name(item.companyId), name(item.tradeId), name(item.locationId)]
     .join(' ')
     .toLowerCase();
   return q
@@ -34,132 +50,72 @@ function matchesQuery(item: Item, q: string, names: Names): boolean {
     .every((word) => hay.includes(word));
 }
 
-export default function CompletionListScreen() {
+export default function JobScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const data = useData();
-  const feedback = useFeedback();
   const job = data.useJobs().find((j) => j.id === jobId);
   const items = data.useItems(jobId);
+  const photos = data.usePhotos(jobId);
   const locations = data.useLocations(jobId);
   const trades = data.useTrades();
   const companies = data.useCompanies();
-  const me = data.useMe();
-
-  const [by, setBy] = useState<GroupBy>('room');
-  const [filter, setFilter] = useState<ListFilter>('open');
-  const [showCompleted, setShowCompleted] = useState(false);
+  const jobCompanies = data.useJobCompanies(jobId);
+  const saved = data.useViewSettings();
+  const [view, setView] = useJobView(jobId, saved);
   const [query, setQuery] = useState('');
-  const [checking, setChecking] = useState<ReadonlySet<string>>(new Set());
-  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [sheet, setSheet] = useState(false);
+  const actions = useItemActions(jobId);
 
-  useEffect(() => {
-    const pending = timers.current;
-    return () => pending.forEach((t) => clearTimeout(t));
-  }, []);
-
-  const names = useMemo<Names>(() => {
+  const names = useMemo(() => {
     const map = new Map<string, string>();
     for (const t of trades) map.set(t.id, t.name);
     for (const c of companies) map.set(c.id, c.name);
     for (const l of locations) map.set(l.id, l.label);
-    return {
-      of: (id) => (id ? (map.get(id) ?? '') : ''),
-      person: (id) => (me && id === me.id ? me.name : 'Ross Built'),
-    };
-  }, [trades, companies, locations, me]);
+    return (id: string | null) => (id ? (map.get(id) ?? '') : '');
+  }, [trades, companies, locations]);
+  const firstPhoto = useMemo(() => {
+    const map = new Map<string, Photo>();
+    for (const p of photos) if (!map.has(p.itemId)) map.set(p.itemId, p);
+    return map;
+  }, [photos]);
+  const locationById = useMemo(() => new Map(locations.map((l) => [l.id, l])), [locations]);
 
-  const counts = useMemo<FilterCounts>(() => {
-    const open = items.filter((i) => i.status === 'open');
-    return {
-      open: open.length,
-      ready: open.filter((i) => i.ready).length,
-      not_ready: open.filter((i) => !i.ready).length,
-      added_scope: open.filter((i) => i.kind === 'added_scope').length,
-    };
-  }, [items]);
+  const narrowed = view.filter !== 'open' || !!view.tradeId || !!view.companyId;
+  const groups = useMemo(
+    () => groupItems(items, view.groupBy, view.filter, { locations, trades, companies }, { tradeId: view.tradeId, companyId: view.companyId }),
+    [items, view.groupBy, view.filter, view.tradeId, view.companyId, locations, trades, companies],
+  );
+  const rows: Row[] = groups
+    .map((group) => ({ group, count: group.items.filter((i) => i.status !== 'complete').length }))
+    .filter((r) => r.count > 0 || (view.groupBy === 'room' && !narrowed));
+  const total = rows.reduce((n, r) => n + r.count, 0);
+
+  const sections = useMemo<Section[]>(() => {
+    if (view.groupBy !== 'room') return [{ key: 'all', title: null, data: rows }];
+    return byFloor(rows, (r) => locationById.get(r.group.key)).map((f) => ({ key: f.floor, title: f.floor, data: f.rows }));
+  }, [rows, view.groupBy, locationById]);
 
   const q = query.trim();
-  const sections = useMemo<Section[]>(() => {
-    const found = q ? items.filter((i) => matchesQuery(i, q, names)) : items;
-    const showEmptyRooms = by === 'room' && filter === 'open' && !q;
-    return groupItems(found, by, filter, { locations, trades, companies }, { showCompleted })
-      .filter((g) => g.items.length > 0 || showEmptyRooms)
-      .map((g) => ({ key: g.key, title: g.label, open: g.open, ready: g.ready, data: g.items }));
-  }, [items, q, names, by, filter, showCompleted, locations, trades, companies]);
-  const shownCount = sections.reduce((n, s) => n + s.data.length, 0);
+  const found = useMemo(() => {
+    if (!q) return [];
+    const hits = items.filter((i) => i.status !== 'removed' && matchesQuery(i, q, names));
+    return groupItems(hits, 'room', 'all', { locations, trades, companies }, { tradeId: view.tradeId, companyId: view.companyId })
+      .filter((g) => g.items.length > 0)
+      .map((g) => ({ key: g.key, title: g.label, data: g.items }));
+  }, [q, items, names, locations, trades, companies, view.tradeId, view.companyId]);
 
-  const apply = useCallback(
-    async (item: Item, change: (f: ItemFields) => ItemFields) => {
-      try {
-        const next = change(fieldsOf(item));
-        await data.updateItem(item.id, { status: next.status, completedBy: next.completedBy, completedAt: next.completedAt });
-      } catch (e) {
-        haptic.warning();
-        feedback.toast({ message: e instanceof RuleError ? e.message : 'That did not save. Try again.' });
-      }
-    },
-    [data, feedback],
-  );
+  const scopeName = [names(view.tradeId), names(view.companyId)].filter(Boolean).join(', ');
+  const subtitle = `${total} ${SHOW_WORDS[view.filter]}${scopeName ? `, ${scopeName}` : ''}`;
+  const jobTrades = trades.filter((t) => jobCompanies.some((jc) => jc.tradeId === t.id));
+  const jobCompanyList = companies.filter((c) => jobCompanies.some((jc) => jc.companyId === c.id)).sort((a, b) => a.name.localeCompare(b.name));
 
-  const onCheck = useCallback(
-    (item: Item) => {
-      if (item.status === 'complete') {
-        haptic.tap();
-        void apply(item, reopen);
-        return;
-      }
-      const pending = timers.current.get(item.id);
-      if (pending) {
-        // A second tap before it leaves the list takes the check back.
-        clearTimeout(pending);
-        timers.current.delete(item.id);
-        setChecking((s) => new Set([...s].filter((id) => id !== item.id)));
-        return;
-      }
-      haptic.success();
-      setChecking((s) => new Set(s).add(item.id));
-      timers.current.set(
-        item.id,
-        setTimeout(() => {
-          timers.current.delete(item.id);
-          void apply(item, (f) => {
-            if (!me) throw new RuleError('Sign in to mark items complete');
-            return complete(f, me);
-          }).finally(() => setChecking((s) => new Set([...s].filter((id) => id !== item.id))));
-        }, CHECK_DELAY),
-      );
-    },
-    [apply, me],
-  );
-
-  const onReady = useCallback(
-    (item: Item) => {
-      haptic.tap();
-      const next = tidyItem({ ...fieldsOf(item), ready: true });
-      void data.updateItem(item.id, { ready: next.ready, waitingOn: next.waitingOn, readyBy: next.readyBy });
-    },
-    [data],
-  );
-
-  const onRemove = useCallback(
-    (item: Item) => {
-      haptic.heavy();
-      void apply(item, remove);
-      feedback.toast({
-        message: `Removed ${item.title}`,
-        action: { label: 'Undo', onPress: () => void data.updateItem(item.id, restore({ ...fieldsOf(item), status: 'removed' })) },
-      });
-    },
-    [apply, data, feedback],
-  );
-
-  const onOpen = useCallback(
-    (item: Item) => router.push({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: item.id } }),
-    [jobId],
-  );
-  const addItem = (locationId?: string) =>
-    router.push({ pathname: '/jobs/[jobId]/items/new', params: locationId ? { jobId, locationId } : { jobId } });
+  const openGroup = (key: string) =>
+    router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: view.groupBy, key } });
   const openSetup = () => router.push({ pathname: '/jobs/[jobId]/setup', params: { jobId } });
+  const openCamera = () => {
+    capture.start({ jobId, roomId: null });
+    router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
+  };
 
   const menu: BarMenu = {
     kind: 'menu',
@@ -168,134 +124,160 @@ export default function CompletionListScreen() {
     testID: 'more',
     groups: [
       {
-        title: 'Group By',
         actions: [
-          { label: 'Room', icon: 'door', checked: by === 'room', onPress: () => setBy('room'), testID: 'group-room' },
-          { label: 'Trade', icon: 'wrench', checked: by === 'trade', onPress: () => setBy('trade'), testID: 'group-trade' },
-          { label: 'Company', icon: 'person.2.fill', checked: by === 'company', onPress: () => setBy('company'), testID: 'group-company' },
-        ],
-      },
-      {
-        actions: [
-          {
-            label: showCompleted ? 'Hide Completed' : 'Show Completed',
-            icon: showCompleted ? 'eye.slash' : 'eye',
-            onPress: () => setShowCompleted((v) => !v),
-            testID: 'toggle-completed',
-          },
           { label: 'Job Setup', icon: 'slider', onPress: openSetup, testID: 'job-setup' },
+          { label: 'Item Form', icon: 'list.bullet', onPress: () => router.push('/settings/item-form'), testID: 'item-form' },
         ],
       },
     ],
   };
 
-  const noRooms = locations.length === 0;
-  const empty = noRooms ? (
-    <EmptyState icon="door" title="No Rooms Yet" message="Paste the room list from the plans to start this job's list.">
-      <View style={{ marginTop: 14 }}>
-        <Button label="Set Up the Job" variant="tinted" onPress={openSetup} />
-      </View>
-    </EmptyState>
-  ) : q ? (
-    <EmptyState icon="magnifyingglass" title="No Results" message={`No items match “${q}”.`} />
-  ) : (
-    <EmptyState icon="checkmark.circle.fill" title="Nothing Here" message={`No ${FILTER_NAMES[filter].toLowerCase()} items right now.`} />
-  );
+  const empty =
+    locations.length === 0 ? (
+      <EmptyState icon="door" title="No Rooms Yet" message="Paste the room list from the plans to start this job's list.">
+        <View style={{ marginTop: 14 }}>
+          <Button label="Set Up the Job" variant="tinted" onPress={openSetup} />
+        </View>
+      </EmptyState>
+    ) : (
+      <EmptyState icon="checkmark.circle.fill" title="Nothing Here" message={`No ${SHOW_WORDS[view.filter]} items${scopeName ? ` for ${scopeName}` : ''} right now.`} />
+    );
 
   return (
-    <Page
-      title={job?.name ?? 'Completion List'}
-      large
-      subtitle={job?.address}
-      backLabel="Jobs"
-      background="plain"
-      right={[menu]}
-      bottom={[{ kind: 'button', label: 'New Item', icon: 'plus', variant: 'prominent', onPress: () => addItem(), testID: 'new-item' }]}
-      search={{ value: query, onChange: setQuery, placeholder: 'Search Items' }}
-      list={(scroll) => (
-        <SectionList
-          {...scroll.props}
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          stickySectionHeadersEnabled
-          initialNumToRender={24}
-          windowSize={12}
-          contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
-          ListHeaderComponent={
-            <View>
-              {scroll.header}
-              <CountStrip counts={counts} value={filter} onChange={setFilter} />
-              {showCompleted ? (
-                <Text variant="footnote" color={colors.secondary} style={styles.note}>
-                  Showing completed items too.
-                </Text>
-              ) : null}
-            </View>
-          }
-          ListEmptyComponent={empty}
-          ListFooterComponent={
-            shownCount > 0 ? (
-              <Text variant="footnote" color={colors.secondary} align="center" style={styles.footer}>
-                {shownCount} {shownCount === 1 ? 'item' : 'items'}
-              </Text>
-            ) : undefined
-          }
-          renderSectionHeader={({ section }) => (
-            <View style={styles.header}>
-              <Text variant="title2" numberOfLines={2} color={section.data.length === 0 ? colors.secondary : colors.label} style={{ flex: 1 }}>
-                {section.title}
-              </Text>
-              {section.open > 0 ? (
-                <Text variant="subheadline" color={colors.secondary} tabular>
-                  {section.open} open
-                </Text>
-              ) : null}
-              {by === 'room' ? (
-                <Touchable
-                  feedback="opacity"
-                  hitSlop={12}
-                  onPress={() => addItem(section.key)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Add an item to ${section.title}`}
-                  style={styles.add}
-                >
-                  <Icon name="plus" size={18} color={colors.tint} weight="medium" />
-                </Touchable>
-              ) : null}
-            </View>
-          )}
-          renderSectionFooter={() => <View style={{ height: 6 }} />}
-          renderItem={({ item, index, section }) => (
-            <ItemRow
-              item={item}
-              by={by}
-              names={names}
-              last={index === section.data.length - 1}
-              checking={checking.has(item.id)}
-              onOpen={onOpen}
-              onCheck={onCheck}
-              onReady={onReady}
-              onRemove={onRemove}
+    <>
+      <Page
+        title={job?.name ?? 'Job'}
+        large
+        subtitle={subtitle}
+        backLabel="Jobs"
+        background="plain"
+        right={[menu]}
+        search={{ value: query, onChange: setQuery, placeholder: 'Search Items', collapsed: true }}
+        footerHeight={CAMERA_BAR_HEIGHT}
+        footer={
+          <CameraBar
+            onCamera={openCamera}
+            left={<BarTool icon={GROUP_ICONS[view.groupBy]} label={`By ${GROUP_LABELS[view.groupBy]}`} onPress={() => setSheet(true)} testID="group-by" />}
+            right={<BarTool icon="filter" label={narrowed || view.showCompleted ? 'Filtered' : 'Filter'} onPress={() => setSheet(true)} testID="filter" />}
+          />
+        }
+        list={(scroll) =>
+          q ? (
+            <SectionList
+              {...scroll.props}
+              key="search"
+              sections={found}
+              keyExtractor={(item) => item.id}
+              stickySectionHeadersEnabled
+              contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
+              ListHeaderComponent={<View>{scroll.header}</View>}
+              ListEmptyComponent={<EmptyState icon="magnifyingglass" title="No Results" message={`No items match “${q}”.`} />}
+              renderSectionHeader={({ section }) => (
+                <View style={styles.header}>
+                  <Text variant="subheadline" weight="600" color={colors.secondary}>
+                    {section.title}
+                  </Text>
+                </View>
+              )}
+              renderItem={({ item, index, section }) => (
+                <ItemRow
+                  item={item}
+                  photo={firstPhoto.get(item.id)}
+                  last={index === section.data.length - 1}
+                  checking={actions.checking.has(item.id)}
+                  onOpen={actions.onOpen}
+                  onCheck={actions.onCheck}
+                  onReady={actions.onReady}
+                  onRemove={actions.onRemove}
+                />
+              )}
             />
-          )}
-        />
-      )}
-    />
+          ) : (
+            <SectionList
+              {...scroll.props}
+              key="groups"
+              sections={sections}
+              keyExtractor={(row) => row.group.key}
+              stickySectionHeadersEnabled={false}
+              contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
+              ListHeaderComponent={<View>{scroll.header}</View>}
+              ListEmptyComponent={empty}
+              renderSectionHeader={({ section }) =>
+                section.title ? (
+                  <View style={styles.header}>
+                    <Text variant="subheadline" weight="600" color={colors.secondary}>
+                      {section.title}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ height: 8 }} />
+                )
+              }
+              renderSectionFooter={() => <View style={{ height: 14 }} />}
+              renderItem={({ item: row, index, section }) => (
+                <GroupRow
+                  row={row}
+                  by={view.groupBy}
+                  location={locationById.get(row.group.key)}
+                  last={index === section.data.length - 1}
+                  onPress={() => openGroup(row.group.key)}
+                />
+              )}
+            />
+          )
+        }
+      />
+      <ViewSheet
+        visible={sheet}
+        onClose={() => setSheet(false)}
+        view={view}
+        onChange={setView}
+        saved={saved}
+        onSaveDefault={() => void data.setViewSettings(view)}
+        trades={jobTrades}
+        companies={jobCompanyList}
+      />
+    </>
+  );
+}
+
+function GroupRow({ row, by, location, last, onPress }: { row: Row; by: GroupBy; location?: Location; last: boolean; onPress: () => void }) {
+  const { group, count } = row;
+  const nothingOpen = group.open === 0;
+  const label = by === 'room' && location ? location.label : group.label;
+  return (
+    <View style={styles.rowWrap}>
+      <Touchable
+        feedback="highlight"
+        pressDelay={40}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}, ${nothingOpen ? 'nothing open' : `${count}`}`}
+        testID={`group-${group.key}`}
+        style={styles.row}
+      >
+        <View style={[styles.rowBody, last ? null : styles.divider]}>
+          <Text numberOfLines={1} style={{ flex: 1 }}>
+            {label}
+          </Text>
+          {nothingOpen ? (
+            <Icon name="checkmark" size={17} color={colors.circle} weight="semibold" />
+          ) : count > 0 ? (
+            <Text color={colors.secondary} tabular>
+              {count}
+            </Text>
+          ) : null}
+          <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" />
+        </View>
+      </Touchable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 12,
-    paddingHorizontal: layout.inset,
-    paddingTop: 20,
-    paddingBottom: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.97)',
-    ...(Platform.OS === 'web' ? { backdropFilter: 'blur(20px) saturate(180%)' } : null),
-  },
-  add: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
-  note: { marginHorizontal: layout.inset, marginTop: 8 },
-  footer: { marginTop: 18 },
+  header: { paddingHorizontal: layout.inset, paddingTop: 18, paddingBottom: 6, backgroundColor: colors.background },
+  rowWrap: { backgroundColor: colors.background },
+  row: { paddingLeft: layout.inset, backgroundColor: colors.background },
+  rowBody: { height: 54, flexDirection: 'row', alignItems: 'center', gap: 12, paddingRight: layout.inset },
+  divider: { borderBottomWidth: 1, borderBottomColor: colors.separator },
 });

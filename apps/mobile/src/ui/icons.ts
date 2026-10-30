@@ -41,6 +41,18 @@ export const SF_SYMBOLS = {
   'plus.app.fill': 'plus.app.fill',
   'minus.circle.fill': 'minus.circle.fill',
   building: 'building.2.fill',
+  camera: 'camera',
+  'photo.on.rectangle': 'photo.on.rectangle',
+  bolt: 'bolt',
+  'bolt.slash': 'bolt.slash',
+  'pencil.tip': 'pencil.tip',
+  'arrow.up.right': 'arrow.up.right',
+  circle: 'circle',
+  square: 'square',
+  textformat: 'textformat',
+  rooms: 'square.split.2x2',
+  filter: 'line.3.horizontal.decrease',
+  checklist: 'checklist',
 } as const satisfies Record<string, SFSymbolName>;
 
 export type IconName = keyof typeof SF_SYMBOLS;
