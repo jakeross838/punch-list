@@ -24,6 +24,7 @@ const SCREENS = [
   'jobs/[jobId]/schedule',
   'jobs/[jobId]/plan/[companyId]',
   'jobs/[jobId]/activity',
+  'jobs/[jobId]/company/[companyId]',
 ] as const;
 const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/send', 'settings/item-form'] as const;
 const CAMERA = 'jobs/[jobId]/capture';

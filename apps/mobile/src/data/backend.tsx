@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'expo-crypto';
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
-import { itemChanges, renamedHoldups, type Activity, type ActivityDetail, type ActivityKind, type Item, type Photo } from '@punch/core';
+import { itemChanges, renamedHoldups, tidyComment, tidyName, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Item, type Photo } from '@punch/core';
 import { DataContext, type DataApi, type ItemPatch, type NewItem } from './api';
 import { keepPhoto } from './photoFiles';
 import { sampleState, type SampleState } from './sample';
@@ -35,6 +35,8 @@ interface Happened {
   itemId?: string | null;
   kind: Exclude<ActivityKind, 'item_created' | 'item_changed'>;
   detail?: ActivityDetail;
+  /** Someone other than the signed-in person: null for the company, on its page. */
+  personId?: string | null;
 }
 
 let seq = 0;
@@ -60,7 +62,9 @@ function commit(next: Partial<SampleState>, happened: Happened[] = []): void {
       }
     }
   }
-  for (const h of happened) entries.push({ id: nextId(), jobId: h.jobId, itemId: h.itemId ?? null, personId, at, kind: h.kind, detail: h.detail ?? {} });
+  for (const h of happened) {
+    entries.push({ id: nextId(), jobId: h.jobId, itemId: h.itemId ?? null, personId: h.personId !== undefined ? h.personId : personId, at, kind: h.kind, detail: h.detail ?? {} });
+  }
   setState({ ...state, ...next, activity: entries.length > 0 ? [...state.activity, ...entries] : state.activity });
 }
 
@@ -70,6 +74,16 @@ const visitDetail = (v: { id: string; companyId: string; start: string; days: nu
   start: v.start,
   days: v.days,
   confirmed: v.confirmed,
+});
+
+/** A comment as the database logs it in the job's activity. */
+const commentDetail = (c: Comment): ActivityDetail => ({
+  comment_id: c.id,
+  company_id: c.companyId,
+  from_company: c.fromCompany,
+  author_name: c.authorName,
+  internal: c.internal,
+  body: c.body.slice(0, 200),
 });
 
 const api: DataApi = {
@@ -110,6 +124,10 @@ const api: DataApi = {
   useSends: (jobId) => {
     const s = useStore();
     return useMemo(() => s.sends.filter((x) => x.jobId === jobId && !x.removed), [s.sends, jobId]);
+  },
+  useComments: (jobId) => {
+    const s = useStore();
+    return useMemo(() => s.comments.filter((c) => c.jobId === jobId), [s.comments, jobId]);
   },
   useActivity: (jobId) => {
     const s = useStore();
@@ -233,6 +251,52 @@ const api: DataApi = {
       },
       [{ jobId: was.jobId, kind: 'visit_removed', detail: visitDetail(was) }],
     );
+  },
+  async addComment({ jobId, itemId, companyId, body, internal }) {
+    const text = tidyComment(body);
+    if (text === '') return '';
+    const item = itemId ? state.items.find((i) => i.id === itemId) : undefined;
+    const comment: Comment = {
+      id: randomUUID(),
+      jobId,
+      itemId,
+      // An item's comment is with the company doing the item, as the database keeps it.
+      companyId: item ? item.companyId : (companyId ?? null),
+      body: text,
+      personId: state.me.id,
+      fromCompany: false,
+      authorName: null,
+      internal,
+      removed: false,
+      createdAt: now(),
+    };
+    commit({ comments: [...state.comments, comment] }, [{ jobId, itemId, kind: 'comment_added', detail: commentDetail(comment) }]);
+    return comment.id;
+  },
+  async setCommentRemoved(id, removed) {
+    const was = state.comments.find((c) => c.id === id);
+    if (!was || was.personId !== state.me.id) return;
+    setState({ ...state, comments: state.comments.map((c) => (c.id === id ? { ...c, removed } : c)) });
+  },
+  async addCompanyComment({ jobId, companyId, itemId, body, name }) {
+    const text = tidyComment(body);
+    if (text === '') return '';
+    if (itemId && !state.items.some((i) => i.id === itemId && i.jobId === jobId && i.companyId === companyId)) throw new Error('That item is not on this list');
+    const comment: Comment = {
+      id: randomUUID(),
+      jobId,
+      itemId,
+      companyId,
+      body: text,
+      personId: null,
+      fromCompany: true,
+      authorName: tidyName(name),
+      internal: false,
+      removed: false,
+      createdAt: now(),
+    };
+    commit({ comments: [...state.comments, comment] }, [{ jobId, itemId, kind: 'comment_added', detail: commentDetail(comment), personId: null }]);
+    return comment.id;
   },
   async recordSend({ jobId, list, itemIds }) {
     const id = randomUUID();

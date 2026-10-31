@@ -19,16 +19,21 @@ export function useActivityLines(jobId: string, itemId?: string): ActivityLine[]
   const trades = data.useTrades();
   const visits = data.useVisits(jobId);
   const customFields = data.useCustomFields();
+  const comments = data.useComments(jobId);
   return useMemo(() => {
-    const look = activityLookups({ people, items, locations, companies, trades, visits, customFields });
+    const look = activityLookups({ people, items, locations, companies, trades, visits, customFields, comments });
     const mine = itemId ? entries.filter((e) => e.itemId === itemId) : entries;
     return activityLines(mine, look, { forItem: !!itemId });
-  }, [entries, people, items, locations, companies, trades, visits, customFields, itemId]);
+  }, [entries, people, items, locations, companies, trades, visits, customFields, comments, itemId]);
 }
 
 /** "JR" for Jake Ross. */
 export function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
+  // "Mike at SMS Carpentry" reads MS: the small words are left out.
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter((w) => /^[A-Z0-9]/.test(w));
   return words
     .slice(0, 2)
     .map((w) => w.charAt(0).toUpperCase())

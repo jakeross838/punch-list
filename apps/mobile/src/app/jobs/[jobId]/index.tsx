@@ -8,6 +8,7 @@
 
 import {
   byFloor,
+  commentCounts,
   GROUP_LABELS,
   groupItems,
   isFiltered,
@@ -84,6 +85,7 @@ export default function JobScreen() {
   const [query, setQuery] = useState('');
   const [sheet, setSheet] = useState(false);
   const actions = useItemActions(jobId);
+  const commentsOn = commentCounts(data.useComments(jobId));
 
   const names = useMemo(() => {
     const map = new Map<string, string>();
@@ -282,6 +284,7 @@ export default function JobScreen() {
                 <ItemRow
                   item={item}
                   photo={firstPhoto.get(item.id)}
+                  comments={commentsOn.get(item.id)}
                   company={names(item.companyId) || undefined}
                   last={index === section.data.length - 1}
                   checking={actions.checking.has(item.id)}

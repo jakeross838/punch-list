@@ -696,6 +696,82 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
+    await step('comments: a back and forth on an item, and a Ross Built only note', async () => {
+      await app.getByTestId('group-room-1').click();
+      // The row says how many comments the item has.
+      await app.getByText('SMS Carpentry · Deficiency · 3 comments', { exact: true }).waitFor();
+      await app.getByText('Adjust cabinet door').first().click();
+      const thread = app.getByTestId('item-comments');
+      await thread.getByText('Will do. We are bringing new hinges for both.').waitFor();
+      await thread.getByText('Mike at SMS Carpentry', { exact: true }).waitFor();
+      await thread.getByText('Ross Built only', { exact: true }).waitFor();
+      await thread.scrollIntoViewIfNeeded();
+      await app.getByTestId('item-comments-input').fill('Bring the hinge jig too.');
+      await app.getByTestId('item-comments-post').click();
+      await thread.getByText('Bring the hinge jig too.').waitFor();
+      await app.getByTestId('item-comments-internal').click();
+      await app.getByTestId('item-comments-input').fill('Their last invoice is still open.');
+      await app.getByTestId('item-comments-post').click();
+      await thread.getByText('Their last invoice is still open.').waitFor();
+      if ((await thread.getByText('Ross Built only', { exact: true }).count()) !== 2) throw new Error('The note is not marked Ross Built only');
+      await thread.scrollIntoViewIfNeeded();
+      await settle(500);
+      await shot('38a-item-comments');
+      await app.getByTestId('back').last().click();
+      await app.getByText('SMS Carpentry · Deficiency · 5 comments', { exact: true }).waitFor();
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
+    await step("the company's page: what SMS Carpentry sees from its link, and its comments come straight back", async () => {
+      await app.getByTestId('schedule').click();
+      await app.getByTestId('schedule-company-company-4').click();
+      await app.getByTestId('plan-comments').getByText('We can do all the trim work Monday and Tuesday next week if that works.').waitFor();
+      await app.getByTestId('company-page').click();
+      await app.getByTestId('company-name').waitFor();
+      await app.getByText('This is the page SMS Carpentry opens from the link on its list. What they write here comes straight to you.').waitFor();
+      // Ross Built only notes never show here.
+      await app.getByTestId('company-comments-item-16').getByText('Bring the hinge jig too.').waitFor();
+      for (const note of ['pantry doors', 'last invoice']) {
+        if ((await app.getByText(note, { exact: false }).filter({ visible: true }).count()) !== 0) throw new Error(`A Ross Built only note shows on the company's page: ${note}`);
+      }
+      await settle(500);
+      await shot('38b-company-page');
+      await app.getByTestId('company-name').fill('Mike');
+      await app.getByTestId('company-comments-item-16-input').fill('Hinges are on the truck.');
+      await app.getByTestId('company-comments-item-16-post').click();
+      await app.getByTestId('company-comments-item-16').getByText('Hinges are on the truck.').waitFor();
+      // An item with no comments yet opens a box for one.
+      await app.getByTestId('company-comment-item-22').click();
+      await app.getByTestId('company-comments-item-22-input').fill('Is the hearth stone sealed yet?');
+      await app.getByTestId('company-comments-item-22-post').click();
+      await app.getByTestId('company-comments-item-22').getByText('Mike at SMS Carpentry', { exact: true }).waitFor();
+      await app.getByTestId('company-list-comments-input').fill('We can start Monday at 7.');
+      await app.getByTestId('company-list-comments-post').click();
+      await app.getByTestId('company-list-comments').getByText('We can start Monday at 7.').waitFor();
+      await app.getByTestId('company-comments-item-16').scrollIntoViewIfNeeded();
+      await settle(500);
+      await shot('38c-company-commented');
+      await app.getByTestId('back').last().click();
+      // Back in the app, the company's comments are there.
+      await app.getByTestId('plan-comments').getByText('We can start Monday at 7.').waitFor();
+      await app.getByTestId('back').last().click();
+      await app.getByText('Schedule', { exact: true }).first().waitFor();
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+      await menu('activity');
+      // Newest first: what Mike just wrote, under his name and the company's.
+      await app.getByText('Mike at SMS Carpentry commented on the SMS Carpentry list', { exact: true }).first().waitFor();
+      await app.getByText('Mike at SMS Carpentry commented on Adjust cabinet door', { exact: true }).first().waitFor();
+      await app.getByText('Kitchen 109. Hinges are on the truck.', { exact: true }).waitFor();
+      await app.getByText('Jake Ross added a Ross Built only note on Adjust cabinet door', { exact: true }).waitFor();
+      await settle(500);
+      await shot('38d-activity-comments');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
     await step('Send Lists: a company list and the whole job, ready to send', async () => {
       await app.getByTestId('send').last().click();
       await app.getByTestId('send-done').waitFor();
@@ -707,6 +783,13 @@ async function main(): Promise<void> {
       await doc.getByText('Waiting', { exact: true }).first().waitFor();
       await doc.getByText('New', { exact: true }).first().waitFor();
       await doc.getByText(/^How many days for (this item|these \d+ items)\?$/).first().waitFor();
+      // The comments print: on the whole list under the heading, and under each item. Ross Built only notes never do.
+      await doc.getByText('Comments', { exact: true }).first().waitFor();
+      await doc.getByText('We can start Monday at 7.', { exact: false }).waitFor();
+      await doc.getByText('Hinges are on the truck.', { exact: false }).waitFor();
+      for (const note of ['pantry doors', 'last invoice']) {
+        if ((await doc.getByText(note, { exact: false }).count()) !== 0) throw new Error(`A Ross Built only note printed: ${note}`);
+      }
       await settle(800);
       await shot('39-company-list');
       await app.getByTestId('mark-sent').click();
@@ -738,13 +821,12 @@ async function main(): Promise<void> {
       await sheet.waitFor();
       await settle(700);
       await shot('41b-make-a-list');
-      // SMS Carpentry's ready work on Level 1, by location, with a line for the days and no photos.
+      // SMS Carpentry's ready work on Level 1, by location, with a line for the days.
       await app.getByTestId('export-filters-toggle').click();
       await app.getByTestId('export-filter-state-ready').click();
       await app.getByTestId('export-filter-company-company-4').click();
       await app.getByTestId('export-filter-floor-Level 1').click();
       await app.getByTestId('export-days').click();
-      await app.getByTestId('export-detail-photo').click();
       await app.getByTestId('export-summary').getByText(/^\d+ items? · [\d.]+ (hours|minutes)/).waitFor();
       // Folded again, the filters that are on still show, each one off with a tap.
       await app.getByTestId('export-filters-toggle').click();

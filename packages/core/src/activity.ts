@@ -6,7 +6,7 @@
 
 import { KIND_LABELS } from './forms';
 import { hoursText } from './time';
-import type { Company, CustomField, Item, ItemKind, Location, Person, Trade, Visit } from './types';
+import type { Comment, Company, CustomField, Item, ItemKind, Location, Person, Trade, Visit } from './types';
 import { waitingOnText } from './waitingOn';
 
 export type ActivityKind =
@@ -29,7 +29,8 @@ export type ActivityKind =
   | 'company_trade_changed'
   | 'company_removed'
   | 'job_renamed'
-  | 'job_address_changed';
+  | 'job_address_changed'
+  | 'comment_added';
 
 export type ActivityDetail = Record<string, string | number | boolean | null>;
 
@@ -90,6 +91,8 @@ export interface ActivityLookups {
   trades: Map<string, string>;
   visits: Map<string, Pick<Visit, 'start' | 'days'>>;
   fields: Map<string, string>;
+  /** Comments their writers took back: gone from Activity too. */
+  takenBack: Set<string>;
   today: Date;
 }
 
@@ -101,6 +104,7 @@ export function activityLookups(input: {
   trades: Trade[];
   visits: Visit[];
   customFields: CustomField[];
+  comments?: Comment[];
   today?: Date;
 }): ActivityLookups {
   return {
@@ -111,6 +115,7 @@ export function activityLookups(input: {
     trades: new Map(input.trades.map((t) => [t.id, t.name])),
     visits: new Map(input.visits.map((v) => [v.id, { start: v.start, days: v.days }])),
     fields: new Map(input.customFields.map((f) => [f.id, f.label])),
+    takenBack: new Set((input.comments ?? []).filter((c) => c.removed).map((c) => c.id)),
     today: input.today ?? new Date(),
   };
 }
@@ -249,6 +254,7 @@ function classOf(e: Activity): Kind {
   if (e.kind === 'item_changed') return e.field === 'status' || e.field === 'completed_by' || e.field === 'completed_at' ? 'status' : 'change';
   if (e.kind === 'photo_added' || e.kind === 'photo_marked' || e.kind === 'photo_removed') return 'photo';
   if (e.kind === 'location_added') return 'locations';
+  // A comment is its own line, never folded into changes to its item.
   return 'other';
 }
 
@@ -336,6 +342,24 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     action,
     detail: details.filter(Boolean).map(sentence).join(' '),
   });
+
+  if (first.kind === 'comment_added') {
+    // An item's own Comments show its comments; its History does not repeat them.
+    const d = first.detail ?? {};
+    if (forItem || look.takenBack.has(String(d.comment_id ?? ''))) return null;
+    const companyName = look.companies.get(String(d.company_id ?? '')) ?? 'the company';
+    const named = typeof d.author_name === 'string' && d.author_name.trim() !== '' ? d.author_name.trim() : '';
+    const who = d.from_company === true ? (named ? `${named} at ${companyName}` : companyName) : base.who;
+    const item = g.itemId ? look.items.get(g.itemId) : undefined;
+    const on = g.itemId ? item?.title.trim() || 'an item' : `the ${companyName} list`;
+    const where = item ? (look.locations.get(item.locationId) ?? '') : '';
+    return {
+      ...base,
+      who,
+      action: d.internal === true ? `added a Ross Built only note on ${on}` : `commented on ${on}`,
+      detail: [where, clip(String(d.body ?? ''), 140)].filter(Boolean).map(sentence).join(' '),
+    };
+  }
 
   if (g.itemId) {
     const item = look.items.get(g.itemId);

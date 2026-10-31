@@ -11,6 +11,7 @@ import {
   mondayOf,
   parseRoomList,
   type Activity,
+  type Comment,
   type Company,
   type CustomField,
   type FormSettings,
@@ -44,6 +45,8 @@ export interface SampleState {
   photos: Photo[];
   visits: Visit[];
   sends: ListSend[];
+  /** The back and forth with the companies, and Ross Built only notes. */
+  comments: Comment[];
   titles: StandardTitle[];
   customFields: CustomField[];
   formSettings: FormSettings;
@@ -316,6 +319,43 @@ export function sampleState(): SampleState {
   }
   for (const s of sends) log(s.sentBy, s.sentAt, { kind: 'list_sent', itemId: null, detail: { list: s.list, items: s.itemIds.length } });
 
+  // A back and forth with SMS Carpentry about the cabinet door and its week, a note only Ross Built
+  // sees, and Triple H Painting asking about the hood.
+  const comments: Comment[] = [];
+  let commentNo = 0;
+  const say = (at: string, itemNo: number | null, company: string, body: string, by: { person?: string; name?: string | null; internal?: boolean }) => {
+    const it = itemNo === null ? undefined : byNumber(itemNo);
+    const c: Comment = {
+      id: `comment-${++commentNo}`,
+      jobId: job.id,
+      itemId: it?.id ?? null,
+      companyId: companies.find((x) => x.name === company)!.id,
+      body,
+      personId: by.person ?? null,
+      fromCompany: !by.person,
+      authorName: by.person ? null : (by.name ?? null),
+      internal: by.internal ?? false,
+      removed: false,
+      createdAt: at,
+    };
+    comments.push(c);
+    activity.push({
+      id: `activity-${String(++seq).padStart(4, '0')}`,
+      jobId: job.id,
+      personId: c.personId,
+      at,
+      kind: 'comment_added',
+      itemId: c.itemId,
+      detail: { comment_id: c.id, company_id: c.companyId, from_company: c.fromCompany, author_name: c.authorName, internal: c.internal, body: c.body },
+    });
+  };
+  say(ago(1, 15, 40), 16, 'SMS Carpentry', 'Can you look at the left door while you are there? It drags a little too.', { person: me.id });
+  say(ago(1, 17, 5), 16, 'SMS Carpentry', 'Will do. We are bringing new hinges for both.', { name: 'Mike' });
+  say(ago(0, 8, 20), 16, 'SMS Carpentry', 'The owner asked us to check the pantry doors too. Add it if they say so.', { person: sam.id, internal: true });
+  say(ago(1, 17, 10), null, 'SMS Carpentry', 'We can do all the trim work Monday and Tuesday next week if that works.', { name: 'Mike' });
+  say(ago(2, 10, 30), 3, 'Triple H Painting', 'Is the hood going in before we paint the soffit?', { name: null });
+  say(ago(2, 11, 15), 3, 'Triple H Painting', 'Yes, it is in now. The soffit is ready for you.', { person: me.id });
+
   return {
     me,
     people: [me, sam],
@@ -330,6 +370,7 @@ export function sampleState(): SampleState {
     photos,
     visits,
     sends,
+    comments,
     titles,
     customFields,
     formSettings: DEFAULT_FORM,

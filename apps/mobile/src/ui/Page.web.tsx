@@ -1,7 +1,8 @@
 // Preview page: the navigation bar drawn to match the iPhone. The large title scrolls with the
 // content and the small title fades into the bar once it passes under it; a hairline appears when
 // content scrolls under the bar. Bar buttons are plain accent text and icons; the main action is
-// a filled pill.
+// a filled pill. Like the iPhone, the back button says Back in place of the last screen's name when
+// the name would run into the title.
 
 import { router, useCanGoBack } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -47,6 +48,13 @@ export function Page({
   const bg = background === 'grouped' ? colors.grouped : colors.background;
   const showLarge = !!large && !sheet;
   const largeTop = eyebrow ? 22 : 0;
+
+  // The bar's width, the small title's width, and how wide the back button is with the name on it.
+  const [barWidth, setBarWidth] = useState(0);
+  const [titleWidth, setTitleWidth] = useState(0);
+  const [named, setNamed] = useState<{ label: string; width: number } | null>(null);
+  const room = barWidth / 2 - titleWidth / 2 - 6 - 10;
+  const showName = !!backLabel && (named?.label !== backLabel || barWidth === 0 || named.width <= room);
 
   const titleOpacity = showLarge
     ? scrollY.interpolate({ inputRange: [20 + largeTop, 38 + largeTop], outputRange: [0, 1], extrapolate: 'clamp' })
@@ -109,7 +117,7 @@ export function Page({
   const backItem: BarButton = {
     kind: 'button',
     label: backLabel ? `Back to ${backLabel}` : 'Back',
-    text: backLabel ?? 'Back',
+    text: showName ? backLabel : 'Back',
     icon: 'chevron.left',
     onPress: () => router.back(),
     testID: 'back',
@@ -128,10 +136,23 @@ export function Page({
   return (
     <View style={[styles.page, { backgroundColor: bg }]} testID={testID}>
       <View style={[styles.bar, { paddingTop: insets.top, backgroundColor: bg }]}>
-        <View style={[styles.barRow, sheet ? styles.sheetBarRow : null]}>
-          <View style={styles.side}>{leftItems.map(barItem)}</View>
+        <View style={[styles.barRow, sheet ? styles.sheetBarRow : null]} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}>
+          <View style={styles.side}>
+            {leftItems.map((item) =>
+              item === backItem ? (
+                <View
+                  key="back"
+                  onLayout={showName && backLabel ? (e) => setNamed({ label: backLabel, width: e.nativeEvent.layout.width }) : undefined}
+                >
+                  {barItem(item)}
+                </View>
+              ) : (
+                barItem(item)
+              ),
+            )}
+          </View>
           <Animated.View pointerEvents="none" style={[styles.barTitle, { opacity: titleOpacity }]}>
-            <Text variant="headline" numberOfLines={1} style={styles.barTitleText}>
+            <Text variant="headline" numberOfLines={1} style={styles.barTitleText} onLayout={(e) => setTitleWidth(e.nativeEvent.layout.width)}>
               {title}
             </Text>
           </Animated.View>

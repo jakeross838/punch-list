@@ -395,12 +395,12 @@ describe('the lists that go to the subs', () => {
     expect(page.fileName).toBe('Fish Completion List, October 30 2026.pdf');
     expect(page.body).toContain('6 open items in 2 locations: 3 ready now and 3 waiting.');
     expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Level 1']);
-    expect([...page.body.matchAll(/<tr class="rb-band"><td colspan="5">(.*?)<\/td>/g)].map((m) => m[1])).toEqual(['Living 107', 'Kitchen 109']);
+    expect([...page.body.matchAll(/<tr class="rb-band"><td colspan="4">(.*?) \u00b7 /g)].map((m) => m[1])).toEqual(['Living 107', 'Kitchen 109']);
     const lines = dataRows(page.body);
     expect(lines).toHaveLength(6);
-    for (const line of lines) expect(line).toMatch(/<td class="rb-small">(Carpentry|Painting)<\/td><td class="rb-small">(SMS Carpentry|Triple H Painting)<\/td>/);
+    for (const line of lines) expect(line).toMatch(/<div class="rb-meta">(SMS Carpentry \u00b7 Carpentry|Triple H Painting \u00b7 Painting) \u00b7 /);
     expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November\u00a02');
-    expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(2);
+    expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(4);
     expect(printPage(page)).toMatch(/^<!DOCTYPE html>.*<div class="rb-doc">.*<\/div><\/body><\/html>$/s);
     expect(printPage(page, { pageMargins: false })).toContain('@page{size:letter;margin:0}');
   });

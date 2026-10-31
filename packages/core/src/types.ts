@@ -132,6 +132,32 @@ export interface ListSend {
   removed: boolean;
 }
 
+// ---------- comments ----------
+
+/**
+ * A comment on an item, or on a company's whole list on a job: a back and forth between Ross Built
+ * and the company doing the work. Never deleted; taking one back marks it removed.
+ */
+export interface Comment {
+  id: string;
+  jobId: string;
+  /** The item it is on, or null for a comment on the company's whole list. */
+  itemId: string | null;
+  /** The company the conversation is with. */
+  companyId: string | null;
+  body: string;
+  /** Who at Ross Built wrote it; null when the company did. */
+  personId: string | null;
+  /** The company wrote it, from its page. */
+  fromCompany: boolean;
+  /** The name the company's person typed on the page. */
+  authorName: string | null;
+  /** Ross Built only: never on the company's page or a printed list. */
+  internal: boolean;
+  removed: boolean;
+  createdAt: string;
+}
+
 // ---------- photos and their marks ----------
 
 /** A point on a photo as fractions of its width and height (0 to 1), so marks fit any size. */

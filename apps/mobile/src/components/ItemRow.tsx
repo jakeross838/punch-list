@@ -2,10 +2,11 @@
 // its estimated time at the right, then who does it and what type of work it is (and where, in lists
 // that are not one location's), then what it waits on when it is not ready, with the days in red
 // when it is past due. Its photo sits at the end; an open item with no photo yet has an empty slot:
-// tap it to take the photo. Everything else is one tap in. Swipe left for Ready and Remove. A draft
-// shows a pencil instead of the circle and what it still needs.
+// tap it to take the photo. How many comments it has shows too. Everything else is one tap in.
+// Swipe left for Ready and Remove. A draft shows a pencil instead of the circle and what it still needs.
 
 import {
+  commentCountText,
   dayOfDate,
   daysBetween,
   hoursText,
@@ -36,6 +37,7 @@ export const ItemRow = memo(function ItemRow({
   company,
   note,
   lateText,
+  comments = 0,
   last,
   checking,
   onOpen,
@@ -55,6 +57,8 @@ export const ItemRow = memo(function ItemRow({
   note?: string;
   /** Past Due's own words for how late it is, in place of the Ready By days. */
   lateText?: string;
+  /** How many comments it has. */
+  comments?: number;
   last: boolean;
   /** Just checked: shows complete for a moment before it leaves the list. */
   checking: boolean;
@@ -79,7 +83,8 @@ export const ItemRow = memo(function ItemRow({
   // What a draft still needs (a missing title already shows as No title yet).
   const needs = item.unfinished ? missingDetails(item).filter((m) => m !== 'title') : [];
   const draftNote = note ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : undefined);
-  const meta = (item.unfinished ? [location, draftNote] : [location, company, kindText(item)]).filter(Boolean).join(' · ');
+  const talk = comments > 0 ? commentCountText(comments) : undefined;
+  const meta = (item.unfinished ? [location, draftNote, talk] : [location, company, kindText(item), talk]).filter(Boolean).join(' · ');
   const waiting = notReady ? `Waiting on ${waitingOnText(item.waitingOn) || 'something'}${item.readyBy && !late ? `, ready by ${shortDate(item.readyBy)}` : ''}` : undefined;
 
   const actions: SwipeAction[] = open

@@ -3,11 +3,14 @@
 // time. Ready work longer than a day splits into full working days, location by location, so each
 // day can be scheduled on its own, or all of it at once. A batch that comes free schedules as soon
 // as what it waits on is done (with a day of handoff and fair notice), for the days its time needs.
+// At the top, the company's own page (what it sees from the link on its list) and the comments on
+// its whole list: the back and forth about its week.
 
 import {
   companyPlan,
   dayOfDate,
   daysFor,
+  listComments,
   daysText,
   earliestStart,
   hoursText,
@@ -22,6 +25,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { CommentThread } from '@/components/Comments';
 import { VisitSheet, VisitStatus, type VisitDraft } from '@/components/VisitSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
@@ -39,6 +43,7 @@ export default function PlanScreen() {
   const companies = data.useCompanies();
   const today = dayOfDate(new Date());
   const [draft, setDraft] = useState<VisitDraft | null>(null);
+  const thread = listComments(data.useComments(jobId), companyId);
 
   const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
   const plan = useMemo(() => companyPlan(companyId, items, visits, lookups, today), [companyId, items, visits, lookups, today]);
@@ -88,6 +93,27 @@ export default function PlanScreen() {
   return (
     <Page title={plan.company} large subtitle={subtitle} backLabel="Schedule" background="grouped">
       {open === 0 ? <EmptyState icon="checkmark.circle.fill" title="Nothing Open" message={`${plan.company} has no open work on this job.`} /> : null}
+
+      <ListSection footer="What they see from the link on their list, and where they comment.">
+        <ListRow
+          title={`${plan.company}'s Page`}
+          icon="eye"
+          accessory="chevron"
+          onPress={() => router.push({ pathname: '/jobs/[jobId]/company/[companyId]', params: { jobId, companyId } })}
+          testID="company-page"
+        />
+      </ListSection>
+      <Text variant="footnote" color={colors.secondary} style={styles.threadTitle}>
+        Comments on the Whole List
+      </Text>
+      <CommentThread
+        comments={thread}
+        onPost={(body, internal) => void data.addComment({ jobId, itemId: null, companyId, body, internal })}
+        placeholder={`Anything for ${plan.company} about the whole list`}
+        hint={`${plan.company} sees these on its page and on its next list.`}
+        style={styles.thread}
+        testID="plan-comments"
+      />
 
       {plan.visits.length > 0 ? (
         <ListSection header="Visits">
@@ -217,5 +243,7 @@ function TimeNote({ time }: { time: TimeTotal }) {
 }
 
 const styles = StyleSheet.create({
+  threadTitle: { marginHorizontal: layout.margin + layout.rowPadding, marginBottom: 7 },
+  thread: { marginBottom: 22 },
   visit: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: layout.rowPadding, paddingVertical: 8, backgroundColor: colors.cell },
 });

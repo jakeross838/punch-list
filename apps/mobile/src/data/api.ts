@@ -5,6 +5,7 @@
 import { createContext, useContext } from 'react';
 import type {
   Activity,
+  Comment,
   Company,
   CustomField,
   FormSettings,
@@ -88,6 +89,8 @@ export interface DataApi {
   useSends(jobId: string): ListSend[];
   /** Who did what on the job: item_history and job_activity together, in no particular order. */
   useActivity(jobId: string): Activity[];
+  /** The job's comments, Ross Built only ones and ones taken back included. */
+  useComments(jobId: string): Comment[];
   createJob(input: { name: string; address: string }): Promise<string>;
   updateJob(id: string, patch: Partial<Pick<Job, 'name' | 'address'>>): Promise<void>;
   /**
@@ -123,6 +126,15 @@ export interface DataApi {
   updateVisit(id: string, patch: VisitPatch, itemIds?: string[]): Promise<void>;
   /** Marks it removed and takes its items off it. */
   removeVisit(id: string): Promise<void>;
+  /** A comment from the signed-in person, on an item or on a company's whole list on the job. */
+  addComment(input: { jobId: string; itemId: string | null; companyId: string | null; body: string; internal: boolean }): Promise<string>;
+  /** Takes back the signed-in person's own comment, or brings it back (Undo). */
+  setCommentRemoved(id: string, removed: boolean): Promise<void>;
+  /**
+   * A comment from the company's own page, through its private link: on one of its items, or on its
+   * whole list. On the phone this goes through the database's trade_comment with the link's token.
+   */
+  addCompanyComment(input: { jobId: string; companyId: string; itemId: string | null; body: string; name: string | null }): Promise<string>;
   recordSend(send: { jobId: string; list: string; itemIds: string[] }): Promise<string>;
   undoSend(id: string): Promise<void>;
   setFormSettings(settings: FormSettings): Promise<void>;

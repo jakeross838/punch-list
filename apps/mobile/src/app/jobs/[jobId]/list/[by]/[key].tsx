@@ -9,6 +9,7 @@
 
 import {
   clearHoldup,
+  commentCounts,
   GROUP_LABELS,
   groupItems,
   isFiltered,
@@ -63,6 +64,7 @@ export default function GroupScreen() {
   const [view, setView] = useJobView(jobId, data.useViewSettings());
   const [showDone, setShowDone] = useState(false);
   const actions = useItemActions(jobId);
+  const commentsOn = commentCounts(data.useComments(jobId));
   const fill = useDraftFill();
 
   const filters = view.filters;
@@ -257,6 +259,7 @@ export default function GroupScreen() {
             <ItemRow
               item={item}
               photo={firstPhoto.get(item.id)}
+              comments={commentsOn.get(item.id)}
               location={locationFor(item)}
               company={companyFor(item)}
               note={noteFor(item)}

@@ -4,9 +4,13 @@
 // Each list sent is recorded (with Undo), so the next one marks what is new. The owner and the
 // design team get what Ross Built needs from them; the whole job, location by location, is for Ross Built.
 // Make a List makes any other list: it starts from what the job shows now, takes every filter, and
-// lays the page out as picked.
+// lays the page out as picked. A company's list prints each item's comments and the comments on its
+// whole list, the Whole Job prints each item's comments, and so can a list made to order. The owner's
+// and the design team's lists leave them off: they are between Ross Built and the company. Ross Built
+// only notes never print.
 
 import {
+  commentAuthor,
   companiesWithWork,
   companyList,
   companyPrintout,
@@ -15,10 +19,12 @@ import {
   filterChips,
   filteredLines,
   footerText,
+  itemComments,
   jobList,
   jobPrintout,
   lastSend,
   LIST_KEYS,
+  listComments,
   listTitle,
   newSince,
   partiesWaitedOn,
@@ -29,7 +35,9 @@ import {
   type GroupBy,
   type ListGroupBy,
   type ListLine,
+  type Comment,
   type Photo,
+  type PrintComment,
   type PrintPhoto,
   type Printout,
   type PrintSettings,
@@ -81,6 +89,8 @@ export default function SendScreen() {
   const locations = data.useLocations(jobId);
   const trades = data.useTrades();
   const companies = data.useCompanies();
+  const people = data.usePeople();
+  const comments = data.useComments(jobId);
   const [withPhotos, setWithPhotos] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ made: Made; fontCss: string } | null>(null);
@@ -90,6 +100,14 @@ export default function SendScreen() {
   const [draft, setDraft] = useState<ListDraft | null>(null);
 
   const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
+  const look = useMemo(
+    () => ({ people: new Map(people.map((p) => [p.id, p.name])), companies: new Map(companies.map((c) => [c.id, c.name])) }),
+    [people, companies],
+  );
+  /** A comment as it prints: who, when, what. */
+  const printed = (list: Comment[]): PrintComment[] => list.map((c) => ({ who: commentAuthor(c, look), at: c.createdAt, body: c.body }));
+  /** An item's comments as they print: only what the company sees. */
+  const printedOn = (itemId: string) => printed(itemComments(comments, itemId, { shared: true }));
   const rows = useMemo(() => companiesWithWork(items, lookups), [items, lookups]);
   const parties = useMemo(() => partiesWaitedOn(items, lookups), [items, lookups]);
   const open = items.filter((i) => i.status === 'open' && !i.unfinished);
@@ -158,14 +176,15 @@ export default function SendScreen() {
     const lines = linesOf(target);
     const itemIds = lines.map((l) => l.item.id);
     const fresh = newSince(itemIds, lastSend(sends, target.list));
-    // The whole job runs to hundreds of items, so its list stays short: no photos.
-    const prepared = withPhotos && target.kind !== 'job' ? await printPhotos(itemIds) : null;
+    const prepared = withPhotos ? await printPhotos(itemIds) : null;
     const settings: PrintSettings = {
       job: { name: job?.name ?? 'Job', address: job?.address ?? '' },
       date: new Date(),
       photo: prepared ? (id) => prepared.get(id) : undefined,
       isNew: target.kind === 'job' ? undefined : (id) => fresh.has(id),
       visits: target.kind === 'company' ? visits.filter((v) => v.companyId === target.companyId) : undefined,
+      comments: target.kind === 'party' ? undefined : printedOn,
+      listComments: target.kind === 'company' && target.companyId ? printed(listComments(comments, target.companyId, { shared: true })) : undefined,
     };
     const printout =
       target.kind === 'company' && target.companyId
@@ -184,6 +203,7 @@ export default function SendScreen() {
       job: { name: job?.name ?? 'Job', address: job?.address ?? '' },
       date: new Date(),
       photo: prepared ? (id) => prepared.get(id) : undefined,
+      comments: printedOn,
       filters: filterChips(list.filters, names).map((c) => c.label),
     };
     const printout = customPrintout(customLines, { ...list.design, title: customTitle }, settings);
@@ -367,7 +387,7 @@ export default function SendScreen() {
             />
           </ListSection>
           <ListSection
-            footer={`Adds each item's first photo, with its markup, to the company lists.${unfinished > 0 ? ` ${plural(unfinished, 'draft')} ${unfinished === 1 ? 'is' : 'are'} not on any list yet.` : ''}`}
+            footer={`Adds each item's first photo, with its markup, to every list.${unfinished > 0 ? ` ${plural(unfinished, 'draft')} ${unfinished === 1 ? 'is' : 'are'} not on any list yet.` : ''}`}
           >
             <ListSwitchRow title="Include Photos" value={withPhotos} onValueChange={setWithPhotos} testID="switch-photos" />
           </ListSection>

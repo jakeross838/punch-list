@@ -379,6 +379,145 @@ begin
   end;
 end $$;
 
+-- ---------- comments, and the company's own page ----------
+do $$
+declare
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  j uuid := (select id from public.jobs where name = 'Fish');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  i uuid := (select id from public.items where title = 'Install hose bib');
+  loc uuid := (select location_id from public.items where title = 'Install hose bib');
+  t2 uuid; c2 uuid; other uuid; m uuid; link text;
+begin
+  -- From the app: stamped with who is signed in, and with the company doing the item.
+  insert into public.comments (job_id, item_id, body) values (j, i, '  Bring the frost free one.  ') returning id into m;
+  if (select person_id from public.comments where id = m) is distinct from jake then raise exception 'FAIL: a comment was not stamped with its writer'; end if;
+  if (select company_id from public.comments where id = m) is distinct from c then raise exception 'FAIL: an item comment is not with the item''s company'; end if;
+  if (select body from public.comments where id = m) <> 'Bring the frost free one.' then raise exception 'FAIL: a comment was not tidied'; end if;
+  insert into public.comments (job_id, item_id, body, internal) values (j, i, 'Owner wants one by the pool too.', true);
+  insert into public.comments (job_id, company_id, body) values (j, c, 'Can you come Tuesday?');
+  if (select count(*) from public.job_activity where job_id = j and kind = 'comment_added' and person_id = jake) <> 3 then
+    raise exception 'FAIL: comments are not in Activity';
+  end if;
+  -- The app never writes as the company.
+  begin
+    insert into public.comments (job_id, company_id, body, from_company, author_name) values (j, c, 'Fake', true, 'Mike');
+    raise exception 'FAIL: the app wrote a comment as the company';
+  exception when insufficient_privilege then null;
+  end;
+  -- A comment is never changed or deleted; its writer can take it back.
+  update public.comments set removed = true where id = m;
+  if not (select removed from public.comments where id = m) then raise exception 'FAIL: a comment could not be taken back'; end if;
+  begin
+    update public.comments set body = 'Changed' where id = m;
+    raise exception 'FAIL: a comment was changed';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.comments where id = m;
+    raise exception 'FAIL: a comment was deleted';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- Another company's item, which Gator Plumbing's link must not reach.
+  insert into public.trades (name) values ('Painting') returning id into t2;
+  insert into public.companies (name, default_trade_id) values ('Triple H Painting', t2) returning id into c2;
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready) values (j, loc, 'Touch up paint', t2, c2, true) returning id into other;
+  -- An item's comment is always with the company doing the item, whatever the app sends.
+  insert into public.comments (job_id, item_id, company_id, body) values (j, other, c, 'The ceiling by the hood.') returning id into m;
+  if (select company_id from public.comments where id = m) is distinct from c2 then raise exception 'FAIL: an item comment went to another company'; end if;
+  -- A link is always long and random.
+  begin
+    insert into public.company_links (token, job_id, company_id) values ('abc123', j, c2);
+    raise exception 'FAIL: a short link was made';
+  exception when check_violation then null;
+  end;
+
+  -- The company's private link.
+  insert into public.company_links (job_id, company_id) values (j, c) returning token into link;
+  if length(link) < 60 then raise exception 'FAIL: the link is too easy to guess'; end if;
+  perform set_config('test.link', link, false);
+  perform set_config('test.item', i::text, false);
+  perform set_config('test.other_item', other::text, false);
+end $$;
+
+reset role;
+
+-- ---------- the company, on its page ----------
+set role anon;
+set request.jwt.claims = '';
+do $$
+declare
+  link text := current_setting('test.link');
+  page jsonb := public.trade_page(current_setting('test.link'));
+  shared text[];
+begin
+  if page is null then raise exception 'FAIL: the company page did not open'; end if;
+  if page -> 'company' ->> 'name' <> 'Gator Plumbing' or page -> 'job' ->> 'name' <> 'Fish' then raise exception 'FAIL: the page is for the wrong company or job'; end if;
+  if exists (select 1 from jsonb_array_elements(page -> 'items') x where x ->> 'title' = 'Touch up paint') then
+    raise exception 'FAIL: the page shows another company''s work';
+  end if;
+  -- Never a Ross Built only note or one taken back.
+  select array_agg(x ->> 'body') into shared from jsonb_array_elements(page -> 'comments') x;
+  if shared is distinct from array['Can you come Tuesday?'] then raise exception 'FAIL: the page shows the wrong comments: %', shared; end if;
+
+  perform public.trade_comment(link, current_setting('test.item')::uuid, 'Tuesday works.', ' Mike ');
+  perform public.trade_comment(link, null, 'We will bring the frost free bib.', null);
+  page := public.trade_page(link);
+  if jsonb_array_length(page -> 'comments') <> 3 or (page -> 'comments' -> 1 ->> 'author') <> 'Mike' then
+    raise exception 'FAIL: the company''s comments did not land';
+  end if;
+  begin
+    perform public.trade_comment(link, current_setting('test.other_item')::uuid, 'Not ours', 'Mike');
+    raise exception 'FAIL: a company commented on another company''s item';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.trade_comment('not-a-link', null, 'Hello', 'Mike');
+    raise exception 'FAIL: a made up link was accepted';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform 1 from public.comments;
+    raise exception 'FAIL: the page reached the comments table';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.log_activity(null, null, 'job_renamed', '{}'::jsonb);
+    raise exception 'FAIL: anyone could write to the activity log';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+-- ---------- back in the app: the company's comments, and taking a link back ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+declare
+  link text := current_setting('test.link');
+begin
+  if (select count(*) from public.comments where from_company and author_name = 'Mike' and person_id is null) <> 1 then
+    raise exception 'FAIL: the company''s comment is not in the app';
+  end if;
+  if (select count(*) from public.job_activity where kind = 'comment_added' and person_id is null and (detail ->> 'from_company')::boolean) <> 2 then
+    raise exception 'FAIL: the company''s comments are not in Activity';
+  end if;
+  update public.company_links set revoked = true where token = link;
+  begin
+    update public.company_links set revoked = false where token = link;
+    raise exception 'FAIL: a link taken back came back';
+  exception when restrict_violation then null;
+  end;
+end $$;
+reset role;
+
+set role anon;
+set request.jwt.claims = '';
+do $$
+begin
+  if public.trade_page(current_setting('test.link')) is not null then raise exception 'FAIL: a link taken back still works'; end if;
+end $$;
 reset role;
 
 -- ---------- another active person ----------
@@ -396,6 +535,14 @@ begin
   if (select count(*) from public.job_activity) = 0 then
     raise exception 'FAIL: activity is not shared with the team';
   end if;
+  -- Comments are the team's, but only their writer takes one back.
+  if (select count(*) from public.comments) = 0 then
+    raise exception 'FAIL: comments are not shared with the team';
+  end if;
+  update public.comments set removed = true where not from_company;
+  if (select count(*) from public.comments where removed) <> 1 then
+    raise exception 'FAIL: one person took back another''s comment';
+  end if;
   update public.person_settings set job_view = '{"groupBy": "company"}';
 end $$;
 
@@ -411,7 +558,8 @@ begin
      + (select count(*) from public.locations) + (select count(*) from public.companies) + (select count(*) from public.trades)
      + (select count(*) from public.item_history) + (select count(*) from public.job_companies)
      + (select count(*) from public.photos) + (select count(*) from public.custom_fields)
-     + (select count(*) from public.person_settings) + (select count(*) from public.job_activity) <> 0 then
+     + (select count(*) from public.person_settings) + (select count(*) from public.job_activity)
+     + (select count(*) from public.comments) + (select count(*) from public.company_links) <> 0 then
     raise exception 'FAIL: an uninvited account can see data';
   end if;
   begin

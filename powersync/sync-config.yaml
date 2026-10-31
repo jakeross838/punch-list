@@ -28,5 +28,8 @@ streams:
       - SELECT * FROM photos WHERE org IN my_org
       - SELECT * FROM visits WHERE org IN my_org
       - SELECT * FROM list_sends WHERE org IN my_org
+      - SELECT * FROM comments WHERE org IN my_org
+      # The token is the link and the row's id on the phone.
+      - SELECT token AS id, org, job_id, company_id, created_by, created_at, revoked FROM company_links WHERE org IN my_org
       # Settings are each person's own: a phone gets only its signed-in person's row.
       - SELECT * FROM person_settings WHERE person_id IN me

@@ -3,12 +3,14 @@
 // as it is made. Mark Complete is the big button; only Ross Built marks items complete, and removing
 // never deletes. A draft says what it still needs (or that Claude is filling it in from the photo)
 // and steps to the next one, for checking them sitting down after a walk: Next puts a draft that has
-// everything it needs on the lists. History at the bottom shows who added and changed it, and when.
+// everything it needs on the lists. Comments are the back and forth with the company doing it (and
+// Ross Built only notes); History at the bottom shows who added and changed it, and when.
 
 import {
   checkItem,
   complete,
   dayOfDate,
+  itemComments,
   itemNumberLabel,
   missingText,
   remove,
@@ -29,6 +31,7 @@ import { useState } from 'react';
 import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityRow, useActivityLines } from '@/components/ActivityRow';
+import { CommentThread } from '@/components/Comments';
 import { draftFill, isFilling, useDraftFill } from '@/components/draftFill';
 import { ItemEditor, type EditorSet } from '@/components/ItemEditor';
 import { EDITABLE, fieldsOf, sameValue, type ItemDraft } from '@/components/ItemForm';
@@ -156,6 +159,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   const filling = item.unfinished && isFilling(fill, item.id);
   const people = data.usePeople();
   const history = useActivityLines(jobId, item.id);
+  const thread = itemComments(data.useComments(jobId), item.id);
   const [allHistory, setAllHistory] = useState(false);
   const [shown, setShown] = useState(0);
   const [viewing, setViewing] = useState<Photo | null>(null);
@@ -356,6 +360,19 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
               />
             </ListSection>
           ) : null}
+          {item.status !== 'removed' ? (
+            <View style={styles.comments}>
+              <Text variant="footnote" color={colors.secondary} style={styles.commentsHeader}>
+                Comments
+              </Text>
+              <CommentThread
+                comments={thread}
+                onPost={(body, internal) => void data.addComment({ jobId, itemId: item.id, companyId: item.companyId, body, internal })}
+                hint={company ? `${company.name} sees comments on its page and on its next list.` : 'The company sees comments on its page and on its next list.'}
+                testID="item-comments"
+              />
+            </View>
+          ) : null}
           {history.length > 0 ? (
             <ListSection header="History" testID="item-history">
               {(allHistory ? history : history.slice(0, HISTORY_SHOWN)).map((line, i, shown) => (
@@ -403,6 +420,8 @@ const styles = StyleSheet.create({
   status: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: layout.margin, marginTop: 14, padding: 14, borderRadius: layout.radius, backgroundColor: colors.cell },
   statusIcon: { alignSelf: 'flex-start', marginTop: 2 },
   editor: { marginTop: 14 },
+  comments: { marginBottom: 22 },
+  commentsHeader: { marginHorizontal: layout.margin + layout.rowPadding, marginBottom: 7 },
   remove: { alignSelf: 'flex-start', height: 44, justifyContent: 'center', marginHorizontal: layout.inset, marginTop: -8 },
   footer: { paddingTop: 10, paddingHorizontal: layout.margin, backgroundColor: 'rgba(245, 245, 247, 0.96)', borderTopWidth: layout.hairline, borderTopColor: colors.rule },
   primary: { height: 50, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.tint },

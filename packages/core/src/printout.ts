@@ -40,6 +40,17 @@ export interface PrintSettings {
   isNew?: (itemId: string) => boolean;
   /** The company's scheduled visits; their items print under them instead of under Ready Now. */
   visits?: Visit[];
+  /** Each item's comments to print, oldest first: only ones the company may see, never Ross Built only notes. */
+  comments?: (itemId: string) => PrintComment[];
+  /** Comments on the company's whole list, the same way. */
+  listComments?: PrintComment[];
+}
+
+/** A comment ready to print: who wrote it, when (an ISO time) and what it says. */
+export interface PrintComment {
+  who: string;
+  at: string;
+  body: string;
 }
 
 export interface Printout {
@@ -123,8 +134,16 @@ function numberCell(line: ListLine, settings: PrintSettings): string {
   return `${esc(itemNumberLabel(line.item))}${isNew}`;
 }
 
-/** The title, then where exactly, then for additional work its order number or that it needs a price. */
-function workCell(line: ListLine): string {
+/** Comments under an item, or under a list's heading: who, the day, and what they said. */
+function commentsHtml(list: PrintComment[] | undefined, today: Date): string {
+  if (!list || list.length === 0) return '';
+  const one = (c: PrintComment) =>
+    `<div class="rb-comment"><b>${esc(c.who)}</b>, ${esc(dayText(dayOfDate(new Date(c.at)), today))}: ${esc(c.body).replace(/\n/g, '<br>')}</div>`;
+  return `<div class="rb-comments">${list.map(one).join('')}</div>`;
+}
+
+/** The title, then where exactly, then for additional work its order number or that it needs a price, then its comments. */
+function workCell(line: ListLine, settings: PrintSettings): string {
   const { item } = line;
   const parts = [`<div class="rb-work">${esc(item.title)}</div>`];
   if (item.description) parts.push(`<div class="rb-desc">${esc(item.description)}</div>`);
@@ -132,6 +151,7 @@ function workCell(line: ListLine): string {
     const note = item.poOrCo ? `Additional, ${item.poOrCo}` : 'Additional, needs a price';
     parts.push(`<div class="rb-note">${esc(note)}</div>`);
   }
+  parts.push(commentsHtml(settings.comments?.(item.id), settings.date));
   return parts.join('');
 }
 
@@ -199,7 +219,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
   const columns: Column[] = [
     { label: 'Item', width: '0.55in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
     { label: 'Location', width: '1.3in', cell: (l) => esc(l.room) },
-    { label: 'Work', cell: workCell },
+    { label: 'Work', cell: (l) => workCell(l, settings) },
     ...photoColumn(settings),
   ];
   const span = columns.length;
@@ -234,6 +254,11 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
   const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
   const trades = list.trades.length > 0 ? `${waitingOnText(list.trades)}: ${summary}` : sentence(summary);
   const parts = [header(settings, 'Completion List', list.company, trades)];
+
+  if (settings.listComments && settings.listComments.length > 0) {
+    parts.push('<h2 class="rb-section">Comments</h2>');
+    parts.push(commentsHtml(settings.listComments, settings.date));
+  }
 
   if (planned.length > 0) {
     parts.push('<h2 class="rb-section">Scheduled Visits</h2>');
@@ -296,7 +321,7 @@ export function partyPrintout(party: string, lines: ListLine[], settings: PrintS
   const columns: Column[] = [
     { label: 'Item', width: '0.55in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
     { label: 'Location', width: '1.3in', cell: (l) => esc(l.room) },
-    { label: 'Work', cell: workCell },
+    { label: 'Work', cell: (l) => workCell(l, settings) },
     { label: 'Needed By', width: '1.05in', cell: (l) => esc(isDay(l.item.readyBy) ? dayText(l.item.readyBy, settings.date) : 'When you can') },
     ...photoColumn(settings),
   ];
@@ -318,56 +343,10 @@ export function partyPrintout(party: string, lines: ListLine[], settings: PrintS
   };
 }
 
-/** The whole job, for Ross Built: level by level, location by location, the trade and company on every line. */
-export function jobPrintout(lines: ListLine[], settings: PrintSettings): Printout {
-  const columns: Column[] = [
-    { label: 'Item', width: '0.5in', cell: (l) => esc(itemNumberLabel(l.item)), className: 'rb-num' },
-    { label: 'Work', cell: workCell },
-    { label: 'Trade', width: '1.2in', cell: (l) => esc(l.trade), className: 'rb-small' },
-    { label: 'Company', width: '1.1in', cell: (l) => esc(l.company), className: 'rb-small' },
-    { label: 'Ready', width: '1.6in', cell: (l) => readyCell(l, settings.date), className: 'rb-small' },
-    ...photoColumn(settings),
-  ];
-  const ready = lines.filter((l) => l.item.ready).length;
-  const places = new Set(lines.map((l) => l.item.locationId)).size;
-  const summary =
-    lines.length === 0
-      ? 'Nothing open right now.'
-      : `${plural(lines.length, 'open item')} in ${plural(places, 'location')}: ${ready} ready now and ${lines.length - ready} waiting.`;
-  const parts = [header(settings, 'Completion List', 'Whole Job', summary)];
-
-  // Levels in the order they come, each with its locations in order and a blank line in each.
-  const floors: { floor: string; rooms: { room: string; lines: ListLine[] }[] }[] = [];
-  for (const line of lines) {
-    let floor = floors.find((f) => f.floor === line.floor);
-    if (!floor) {
-      floor = { floor: line.floor, rooms: [] };
-      floors.push(floor);
-    }
-    let room = floor.rooms.find((r) => r.room === line.room);
-    if (!room) {
-      room = { room: line.room, lines: [] };
-      floor.rooms.push(room);
-    }
-    room.lines.push(line);
-  }
-  for (const floor of floors) {
-    parts.push(`<h2 class="rb-section">${esc(floor.floor)}</h2>`);
-    parts.push(table(columns, floor.rooms.map((r) => band(columns.length, r.room) + rows(columns, r.lines) + blanks(columns.length, 1)).join('')));
-  }
-
-  return {
-    title: 'Whole Job',
-    kind: 'Completion List',
-    fileName: `${safeName(`${settings.job.name} Completion List, ${printDate(settings.date).replace(',', '')}`)}.pdf`,
-    body: parts.join(''),
-  };
-}
-
 // ---------- a list made to order ----------
 
 export type ListGroupBy = 'location' | 'trade' | 'company' | 'waiting';
-export type ListDetail = 'description' | 'location' | 'company' | 'trade' | 'type' | 'status' | 'time' | 'photo';
+export type ListDetail = 'description' | 'location' | 'company' | 'trade' | 'type' | 'status' | 'time' | 'comments' | 'photo';
 
 export const LIST_GROUP_LABELS: Record<ListGroupBy, string> = { location: 'Location', trade: 'Trade', company: 'Company', waiting: 'Waiting On' };
 
@@ -380,6 +359,7 @@ export const LIST_DETAILS: { detail: ListDetail; label: string }[] = [
   { detail: 'type', label: 'Type' },
   { detail: 'status', label: 'Ready or Waiting' },
   { detail: 'time', label: 'Estimated Time' },
+  { detail: 'comments', label: 'Comments' },
   { detail: 'photo', label: 'Photo' },
 ];
 
@@ -399,7 +379,7 @@ export interface ListDesign {
 export const DEFAULT_LIST_DESIGN: ListDesign = {
   title: '',
   groupBy: 'location',
-  details: ['description', 'company', 'trade', 'type', 'status', 'time', 'photo'],
+  details: ['description', 'company', 'trade', 'type', 'status', 'time', 'comments', 'photo'],
   daysLines: false,
   blankLines: false,
 };
@@ -481,6 +461,7 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
     if (meta) parts.push(`<div class="rb-meta">${esc(meta)}</div>`);
     // Whether additional work is priced always shows: it decides whether it can be scheduled.
     if (!has('type') && item.kind === 'added_scope') parts.push(`<div class="rb-note">${esc(kindWords(item))}</div>`);
+    if (has('comments')) parts.push(commentsHtml(settings.comments?.(item.id), today));
     return parts.join('');
   };
   const status = (line: ListLine) =>
@@ -562,6 +543,20 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
   };
 }
 
+/** The whole job, for Ross Built: level by level, location by location, every detail on every line, photos included when given. */
+export const WHOLE_JOB_DESIGN: ListDesign = {
+  title: 'Whole Job',
+  groupBy: 'location',
+  details: ['description', 'company', 'trade', 'type', 'status', 'time', 'comments', 'photo'],
+  daysLines: false,
+  blankLines: true,
+};
+
+export function jobPrintout(lines: ListLine[], settings: PrintSettings): Printout {
+  const page = customPrintout(lines, WHOLE_JOB_DESIGN, settings);
+  return { ...page, fileName: `${safeName(`${settings.job.name} Completion List, ${printDate(settings.date).replace(',', '')}`)}.pdf` };
+}
+
 const FONT = "'Nunito Sans', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
 /** The house look, kept to the class rb-doc so the preview page can show it beside the app. */
@@ -599,6 +594,10 @@ export const PRINT_CSS = `
 .rb-meta{margin-top:2pt;font-size:9pt;color:#4E7A8C}
 .rb-quiet{color:#5B8699}
 .rb-filters{margin:4pt 0 0;font-size:9pt;color:#4E7A8C}
+.rb-comments{margin-top:4pt;padding-left:6pt;border-left:1.5pt solid #CBD8DB}
+.rb-comment{font-size:8.5pt;line-height:1.3;margin-top:2pt;overflow-wrap:break-word}
+.rb-comment b{font-weight:700}
+.rb-section + .rb-comments{margin-top:8pt}
 .rb-ph{position:relative;width:${PHOTO_WIDTH}in;overflow:hidden;border-radius:3pt;background:#F7F5EC}
 .rb-ph img{display:block;width:100%;height:100%;object-fit:cover}
 .rb-ph svg{position:absolute;left:0;top:0;width:100%;height:100%;font-family:${FONT}}

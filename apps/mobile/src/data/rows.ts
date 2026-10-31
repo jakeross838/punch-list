@@ -1,6 +1,6 @@
 // Database rows (snake_case, booleans as 0 or 1 on the phone) to and from the app's records.
 
-import { tidyHours, type Activity, type ActivityDetail, type ActivityKind, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type Trade, type Visit } from '@punch/core';
+import { tidyHours, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type Trade, type Visit } from '@punch/core';
 import type { ItemPatch } from './api';
 
 type Row = Record<string, unknown>;
@@ -189,6 +189,20 @@ export const rowToJobActivity = (r: Row): Activity => ({
   detail: json<ActivityDetail>(r.detail, {}),
 });
 
+export const rowToComment = (r: Row): Comment => ({
+  id: text(r.id),
+  jobId: text(r.job_id),
+  itemId: textOrNull(r.item_id),
+  companyId: textOrNull(r.company_id),
+  body: text(r.body),
+  personId: textOrNull(r.person_id),
+  fromCompany: bool(r.from_company),
+  authorName: textOrNull(r.author_name),
+  internal: bool(r.internal),
+  removed: bool(r.removed),
+  createdAt: text(r.created_at),
+});
+
 export const rowToListSend = (r: Row): ListSend => ({
   id: text(r.id),
   jobId: text(r.job_id),
@@ -216,6 +230,8 @@ export const BOOLEAN_COLUMNS: Record<string, string[]> = {
   photos: ['removed'],
   visits: ['confirmed', 'removed'],
   list_sends: ['removed'],
+  comments: ['from_company', 'internal', 'removed'],
+  company_links: ['revoked'],
 };
 
 /** Columns the server keeps as JSON; the phone stores them as text. */

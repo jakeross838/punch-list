@@ -196,6 +196,38 @@ const list_sends = new Table(
   { indexes: { job: ['job_id'] } },
 );
 
+/** A comment on an item, or on a company's whole list: from Ross Built, or from the company's page. Never deleted. */
+const comments = new Table(
+  {
+    org: column.text,
+    job_id: column.text,
+    item_id: column.text,
+    company_id: column.text,
+    body: column.text,
+    person_id: column.text,
+    from_company: column.integer,
+    author_name: column.text,
+    /** 1: Ross Built only. */
+    internal: column.integer,
+    removed: column.integer,
+    created_at: column.text,
+  },
+  { indexes: { job: ['job_id'], item: ['item_id'] } },
+);
+
+/** Each company's private page on a job. The row's id is the link's token. */
+const company_links = new Table(
+  {
+    org: column.text,
+    job_id: column.text,
+    company_id: column.text,
+    created_by: column.text,
+    created_at: column.text,
+    revoked: column.integer,
+  },
+  { indexes: { job: ['job_id'] } },
+);
+
 const person_settings = new Table({
   org: column.text,
   person_id: column.text,
@@ -235,6 +267,8 @@ export const AppSchema = new Schema({
   photos,
   visits,
   list_sends,
+  comments,
+  company_links,
   person_settings,
   rejected_changes,
 });
