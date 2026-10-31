@@ -1,7 +1,8 @@
 // One item in a list, kept calm: the circle to check it off, the title, a small hourglass when it
-// is not ready, the days in red under the title when it is past due, and its photo. Everything else
-// is one tap in. Swipe left for Ready and Remove. A draft shows a pencil instead of the
-// circle and what it still needs.
+// is not ready, the days in red under the title when it is past due, and its photo. An open item
+// with no photo yet has an empty photo slot: tap it to take the photo. Everything else is one tap
+// in. Swipe left for Ready and Remove. A draft shows a pencil instead of the circle and what it
+// still needs.
 
 import { dayOfDate, daysBetween, missingDetails, pastDueText, type Item, type Photo } from '@punch/core';
 import { memo } from 'react';
@@ -20,6 +21,7 @@ export const ItemRow = memo(function ItemRow({
   onCheck,
   onReady,
   onRemove,
+  onAddPhoto,
 }: {
   item: Item;
   /** The item's first photo, shown small at the end of the row. */
@@ -35,6 +37,8 @@ export const ItemRow = memo(function ItemRow({
   onCheck: (item: Item) => void;
   onReady: (item: Item) => void;
   onRemove: (item: Item) => void;
+  /** Takes a photo for an item that has none yet. */
+  onAddPhoto?: (item: Item) => void;
 }) {
   const done = item.status === 'complete' || checking;
   const notReady = item.status === 'open' && !item.ready && !item.unfinished;
@@ -97,7 +101,21 @@ export const ItemRow = memo(function ItemRow({
             ) : null}
           </View>
           {notReady ? <Icon name="hourglass" size={16} color={colors.quiet} weight="semibold" /> : null}
-          {photo ? <PhotoView photo={photo} width={44} height={44} radius={8} /> : null}
+          {photo ? (
+            <PhotoView photo={photo} width={44} height={44} radius={8} />
+          ) : onAddPhoto && item.status === 'open' && !checking ? (
+            <Touchable
+              feedback="scale"
+              onPress={() => onAddPhoto(item)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Take a photo for ${item.title || 'this draft'}`}
+              testID={`add-photo-${item.id}`}
+              style={styles.photoSlot}
+            >
+              <Icon name="camera" size={18} color={colors.quiet} />
+            </Touchable>
+          ) : null}
         </View>
       </Touchable>
     </SwipeRow>
@@ -111,4 +129,5 @@ const styles = StyleSheet.create({
   divider: { borderBottomWidth: 1, borderBottomColor: colors.separator },
   text: { flex: 1, gap: 1 },
   draft: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  photoSlot: { width: 44, height: 44, borderRadius: 8, borderWidth: 1.5, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
 });

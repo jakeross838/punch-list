@@ -163,6 +163,17 @@ export default function JobScreen() {
     capture.start({ jobId, roomId: null });
     router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
   };
+  /** Starting with the words: the form, with no camera, in the last location used. */
+  const newItem = () => {
+    capture.start({ jobId, roomId: null });
+    capture.discardItem();
+    router.push({ pathname: '/jobs/[jobId]/items/new', params: { jobId, typed: '1' } });
+  };
+  /** The photo for an item typed in earlier: the camera, straight onto it. */
+  const addPhoto = (item: Item) => {
+    capture.start({ jobId, roomId: item.locationId, itemId: item.id });
+    router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
+  };
 
   const menu: BarMenu = {
     kind: 'menu',
@@ -198,7 +209,11 @@ export default function JobScreen() {
         subtitle={subtitle}
         backLabel="Jobs"
         background="plain"
-        right={[{ kind: 'button', label: 'Send Lists', icon: 'share', iconOnly: true, onPress: openSend, testID: 'send' }, menu]}
+        right={[
+          { kind: 'button', label: 'New Item', icon: 'plus', iconOnly: true, onPress: newItem, testID: 'new-item' },
+          { kind: 'button', label: 'Send Lists', icon: 'share', iconOnly: true, onPress: openSend, testID: 'send' },
+          menu,
+        ]}
         search={{ value: query, onChange: setQuery, placeholder: 'Search Items', collapsed: true }}
         footerHeight={CAMERA_BAR_HEIGHT}
         footer={
@@ -243,6 +258,7 @@ export default function JobScreen() {
                   onCheck={actions.onCheck}
                   onReady={actions.onReady}
                   onRemove={actions.onRemove}
+                  onAddPhoto={addPhoto}
                 />
               )}
             />

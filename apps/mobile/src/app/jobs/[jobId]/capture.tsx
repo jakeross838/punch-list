@@ -1,6 +1,8 @@
 // The camera, for walking the job. The location the photos go to sits at the top; tap it to
-// change it. Item: take the photo, mark it up or leave it as is, then fill in the item. Save
-// and Next comes straight back here for the next one. Skip Photo makes an item without one.
+// change it. Item: take the photo, mark it up or leave it as is, then fill in the item, or add the
+// photo to an item already on the list. Save and Next comes straight back here for the next one.
+// Skip Photo makes an item without one. Opened from a form to add its photo, closing goes back to
+// the form.
 //
 // Draft is for going around fast: each photo saves as it is taken, as a draft in the location at
 // the top, and Claude starts filling it in from the photo straight away; sitting down, check each
@@ -131,6 +133,11 @@ export default function CaptureScreen() {
   }
 
   function close() {
+    // Opened from a form to take its photo: back to the form, as it was.
+    if (walk.draft) {
+      openForm();
+      return;
+    }
     const pending = !!shot || walk.shots.length > 0;
     leaveOrConfirm(
       pending,
@@ -203,7 +210,7 @@ export default function CaptureScreen() {
           <Animated.View key={saved.at} entering={FadeIn.duration(220)} exiting={FadeOut.duration(260)} style={styles.saved} pointerEvents="none">
             <Icon name="checkmark" size={16} color={colors.white} weight="bold" />
             <Text variant="subheadline" weight="600" color={colors.white} numberOfLines={1} style={{ flexShrink: 1 }}>
-              {saved.title ? `Saved ${saved.title}` : 'Saved'}
+              {saved.text ?? (saved.title ? `Saved ${saved.title}` : 'Saved')}
             </Text>
           </Animated.View>
         ) : null}

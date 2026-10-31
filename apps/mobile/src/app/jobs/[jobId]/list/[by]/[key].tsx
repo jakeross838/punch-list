@@ -1,6 +1,7 @@
 // One location's items (or one trade's, company's or what they wait on), kept calm: the circle,
-// the title, an hourglass when it is not ready, and the photo. Completed items wait under their own
-// heading. In a location, the bottom bar steps to the one before or after, with the camera between.
+// the title, an hourglass when it is not ready, and the photo, or an empty photo slot to take it.
+// Completed items wait under their own heading. In a location, New Item under the list types one in
+// with no camera, and the bottom bar steps to the one before or after, with the camera between.
 // Past Due lists everything late, the latest first, with the days. Drafts lists what was saved to
 // finish later, filling in from the photos while it shows. A Waiting On list can stop the wait for all its items at once, or move their Ready By
 // together.
@@ -150,6 +151,17 @@ export default function GroupScreen() {
     capture.start({ jobId, roomId: room?.id ?? null });
     router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
   };
+  /** Starting with the words: the form, with no camera. */
+  const newItem = () => {
+    capture.start({ jobId, roomId: room?.id ?? null });
+    capture.discardItem();
+    router.push({ pathname: '/jobs/[jobId]/items/new', params: { jobId, typed: '1' } });
+  };
+  /** The photo for an item typed in earlier: the camera, straight onto it. */
+  const addPhoto = (item: Item) => {
+    capture.start({ jobId, roomId: item.locationId, itemId: item.id });
+    router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
+  };
 
   return (
     <Page
@@ -214,10 +226,16 @@ export default function GroupScreen() {
                       drafts
                         ? 'Photos taken in Draft mode wait here to be filled in.'
                         : room
-                          ? 'Take a photo to add an item here.'
+                          ? 'Take a photo, or tap New Item to type one in.'
                           : `No ${SHOW_WORDS[view.filter]} items here right now.`
                     }
                   />
+                ) : null}
+                {room && !due && !drafts ? (
+                  <Touchable feedback="highlight" onPress={newItem} accessibilityRole="button" testID="new-item-row" style={styles.newItem}>
+                    <Icon name="plus.circle.fill" size={26} color={colors.tint} />
+                    <Text color={colors.tint}>New Item</Text>
+                  </Touchable>
                 ) : null}
                 {done.length > 0 && !doneShown ? (
                   <Touchable feedback="opacity" onPress={() => setShowDone(true)} accessibilityRole="button" testID="show-done" style={styles.showDone}>
@@ -241,6 +259,7 @@ export default function GroupScreen() {
               onCheck={actions.onCheck}
               onReady={actions.onReady}
               onRemove={actions.onRemove}
+              onAddPhoto={addPhoto}
             />
           )}
         />
@@ -255,4 +274,5 @@ const styles = StyleSheet.create({
   holdupRule: { borderTopWidth: 1, borderTopColor: colors.rule },
   header: { paddingHorizontal: layout.inset, paddingTop: 30, paddingBottom: 6, backgroundColor: colors.background },
   showDone: { height: 44, justifyContent: 'center', paddingHorizontal: layout.inset, marginTop: 10, alignSelf: 'flex-start' },
+  newItem: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 14, paddingLeft: layout.inset - 1, paddingRight: layout.inset },
 });

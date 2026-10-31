@@ -30,8 +30,8 @@ export interface CaptureState {
   editing: string | null;
   /** Items saved on this walk. */
   saved: number;
-  /** The item just saved with Save and Next, for the camera to confirm. */
-  lastSaved: { title: string; room: string | null; at: number } | null;
+  /** The item just saved with Save and Next, or the item a photo was just added to, for the camera to confirm. */
+  lastSaved: { title: string; room: string | null; at: number; text?: string } | null;
   /** Draft: every photo is saved as a draft as it is taken. Kept from walk to walk. */
   quick: boolean;
 }
@@ -102,6 +102,10 @@ export const capture = {
   /** The item is saved: clear its photos and form, keep the room for the next one. */
   itemSaved(title: string, room: string | null): void {
     set({ ...state, shots: [], draft: null, editing: null, saved: state.saved + 1, lastSaved: { title, room, at: Date.now() } });
+  },
+  /** The photos went on an item already on the list: clear them and the form, keep the room. */
+  photoAdded(title: string, room: string | null): void {
+    set({ ...state, shots: [], draft: null, editing: null, lastSaved: { title, room, at: Date.now(), text: `Added the photo to ${title}` } });
   },
   clearSaved(): void {
     if (state.lastSaved) set({ ...state, lastSaved: null });

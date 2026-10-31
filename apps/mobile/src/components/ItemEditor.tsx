@@ -20,6 +20,7 @@ import {
   TITLE_MAX,
   tradeForTitle,
   type FormField,
+  type Item,
   type ItemKind,
   type Mark,
   type TitleSuggestion,
@@ -68,6 +69,7 @@ export function ItemEditor({
   showReady = true,
   itemId,
   fillIn,
+  onTwin,
   children,
 }: {
   jobId: string;
@@ -85,6 +87,8 @@ export function ItemEditor({
   itemId?: string;
   /** Fill In From Photo, when Claude can look at the photo. */
   fillIn?: { busy: boolean; onPress: () => void };
+  /** What to offer when the same title is already in the location: putting the photo on it instead. */
+  onTwin?: { label: string; onPress: (twin: Item) => void };
   children?: ReactNode;
 }) {
   const data = useData();
@@ -217,6 +221,11 @@ export function ItemEditor({
       ) : twin ? (
         <Text variant="footnote" color={colors.secondary} style={styles.note} testID="duplicate-note">
           Already on the list{roomLabel ? ` in ${roomLabel}` : ' here'}: item {itemNumberLabel(twin)}.
+          {onTwin ? (
+            <Text variant="footnote" weight="600" color={colors.tint} onPress={() => onTwin.onPress(twin)} accessibilityRole="button" testID="twin-add">
+              {` ${onTwin.label}`}
+            </Text>
+          ) : null}
         </Text>
       ) : null}
       {fillIn && blanks ? (
