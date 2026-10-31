@@ -12,6 +12,7 @@ export * from './dates';
 export * from './schedule';
 export * from './holdups';
 export * from './holds';
+export * from './timeline';
 export * from './sends';
 export * from './suggest';
 export * from './activity';

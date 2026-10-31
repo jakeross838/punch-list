@@ -552,7 +552,7 @@ async function main(): Promise<void> {
       await app.getByTestId('schedule-badge').waitFor();
       await app.getByTestId('schedule').click();
       await app.getByTestId('schedule-past-due').click();
-      await app.getByText('Hang front door').waitFor();
+      await app.getByText('Hang front door').filter({ visible: true }).first().waitFor();
       await app.getByText('Foyer 115 · SMS Carpentry · Incomplete', { exact: true }).waitFor();
       await app.getByText(/^Waiting on Owner, \d+ days? past due$/).waitFor();
       await app.getByText('Bathroom 116 · Rangel Custom Tile · Deficiency', { exact: true }).waitFor();
@@ -659,10 +659,10 @@ async function main(): Promise<void> {
     });
     await step('the schedule: schedule a visit from the plan, then confirm it', async () => {
       await app.getByTestId('schedule').click();
-      await app.getByText('Not Scheduled').waitFor();
+      await app.getByTestId('gantt').waitFor();
       await settle();
       await shot('33-schedule');
-      await app.getByTestId('schedule-company-company-4').click();
+      await app.getByTestId('gantt-company-company-4').click();
       await app.getByTestId('book-ready').waitFor();
       // The ready work splits into full days, each one to schedule on its own.
       await app.getByTestId('ready-day-2').waitFor();
@@ -710,6 +710,35 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
+    await step('the schedule builds itself from the list: a chart, and Save the Best Guess keeps the dates', async () => {
+      await app.getByTestId('schedule').click();
+      await app.getByTestId('gantt').waitFor();
+      // The headline: when everything with a date is done.
+      await app.getByText(/^Everything with a date is done by [A-Z][a-z]+day, [A-Z][a-z]+ \d+\./).waitFor();
+      // SMS Carpentry's confirmed visit is green; work that moves with the list is pale.
+      await app.locator('[data-testid^="gantt-bar-auto:"]').first().waitFor();
+      await settle(500);
+      await shot('37a-gantt');
+      // A pale bar opens as a new visit with its dates and items picked.
+      await app.locator('[data-testid^="gantt-bar-auto:"]').first().click();
+      await app.getByTestId('visit-save').waitFor();
+      await settle(600);
+      await shot('37b-gantt-visit');
+      await app.getByTestId('visit-cancel').click();
+      await app.getByTestId('visit-sheet').waitFor({ state: 'detached' });
+      // Keep every best guess where it is: the pale bars turn blue, with Undo.
+      await app.getByTestId('schedule-save-all').click();
+      await app.getByText(/^\d+ visits? on the schedule as our best guess$/).waitFor();
+      await app.getByTestId('schedule-save-all').waitFor({ state: 'detached' });
+      if ((await app.locator('[data-testid^="gantt-bar-auto:"]').count()) !== 0) throw new Error('A best guess was not saved');
+      await settle(500);
+      await shot('37c-gantt-saved');
+      await app.getByRole('button', { name: 'Undo' }).click();
+      await app.getByTestId('schedule-save-all').waitFor();
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
     await step('comments: a back and forth on an item, and a Ross Built only note', async () => {
       await app.getByTestId('group-room-1').click();
       // The row says how many comments the item has.
@@ -739,7 +768,7 @@ async function main(): Promise<void> {
     });
     await step("the company's page: what SMS Carpentry sees from its link, and its comments come straight back", async () => {
       await app.getByTestId('schedule').click();
-      await app.getByTestId('schedule-company-company-4').click();
+      await app.getByTestId('gantt-company-company-4').click();
       await app.getByTestId('plan-comments').getByText('We can do all the trim work Monday and Tuesday next week if that works.').waitFor();
       await app.getByTestId('company-page').click();
       await app.getByTestId('company-name').waitFor();
@@ -822,6 +851,16 @@ async function main(): Promise<void> {
       await doc.getByText('Set mirror').waitFor();
       await settle(800);
       await shot('41-whole-job-list');
+      await app.getByTestId('preview-done').click();
+      await app.getByTestId('list-preview').waitFor({ state: 'detached' });
+      await settle(300);
+      // The schedule for everyone: three weeks of visits, and what each covers.
+      await app.getByTestId('send-lookahead').click();
+      await doc.getByText('Three Week Look Ahead', { exact: true }).waitFor();
+      await doc.getByText('What Each Visit Covers', { exact: true }).waitFor();
+      await doc.getByText(/^Everything with a date is done by /).waitFor();
+      await settle(800);
+      await shot('41b-look-ahead');
       await app.getByTestId('preview-done').click();
       await app.getByTestId('list-preview').waitFor({ state: 'detached' });
       await app.getByTestId('send-done').click();

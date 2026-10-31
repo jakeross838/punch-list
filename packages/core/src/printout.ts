@@ -9,12 +9,16 @@
 // list says what Ross Built needs from them and by when. The whole job list goes location by
 // location with the trade and company on every line. A list made to order takes any filters,
 // groups by location, trade, company or what it waits on, shows the details picked on every line,
-// and totals each group's estimated time.
+// and totals each group's estimated time. The three week look ahead is the schedule for everyone:
+// each company's visits across the next three weeks, green once confirmed and blue for our best
+// guess, what each visit covers, and what has no date yet.
 // Plain HTML, so the phone turns it into a PDF and the preview page shows the very same thing.
 
-import { dayOfDate, daysBetween, isDay, visitEnd } from './dates';
+import { addDays, dayOfDate, daysBetween, isDay, mondayOf, visitEnd } from './dates';
 import { KIND_LABELS } from './forms';
-import type { CompanyList, ListLine } from './lists';
+import { holdText } from './holds';
+import { holdsFor, type CompanyList, type ListLine, type ListLookups } from './lists';
+import { timelineRows, workingIndex, type Timeline, type TimelineBar } from './timeline';
 import { markShapes, type MarkShape } from './marks';
 import { isPriced } from './rules';
 import { daysText, hoursText, totalText, totalTime } from './time';
@@ -557,6 +561,120 @@ export function jobPrintout(lines: ListLine[], settings: PrintSettings): Printou
   return { ...page, fileName: `${safeName(`${settings.job.name} Completion List, ${printDate(settings.date).replace(',', '')}`)}.pdf` };
 }
 
+// ---------- the three week look ahead ----------
+
+const LOOK_AHEAD_WEEKS = 3;
+
+/** The look ahead starts this week, or next week once it is Friday: the day it goes out. */
+export function lookAheadStart(today: string): string {
+  const monday = mondayOf(today);
+  return daysBetween(monday, today) >= 4 ? addDays(monday, 7) : monday;
+}
+
+/**
+ * The schedule for everyone on the job, each week: every company's visits across the next three
+ * weeks of working days, green once confirmed and blue for our best guess, then what each visit
+ * covers with the location on every line, then what has no date yet.
+ */
+export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, settings: PrintSettings, today: string): Printout {
+  const monday = lookAheadStart(today);
+  const days = LOOK_AHEAD_WEEKS * 5;
+  const lastDay = addDays(monday, (LOOK_AHEAD_WEEKS - 1) * 7 + 4);
+  const company = (id: string) => lookups.companies.find((c) => c.id === id)?.name ?? 'Not set';
+  const place = (id: string) => lookups.locations.find((l) => l.id === id)?.label ?? 'Not set';
+  const inWindow = (b: TimelineBar) => !b.done && b.items.length > 0 && b.start <= lastDay && b.end >= monday;
+  const rows = timelineRows(timeline, monday)
+    .map((r) => ({ ...r, bars: r.bars.filter(inWindow) }))
+    .filter((r) => r.bars.length > 0);
+  const bars = rows.flatMap((r) => r.bars).sort((a, b) => a.start.localeCompare(b.start) || company(a.companyId).localeCompare(company(b.companyId)));
+  const todayIndex = workingIndex(monday, today);
+
+  const finish = timeline.finish ? `Everything with a date is done by ${dayText(timeline.finish, settings.date, true)}.` : '';
+  const summary = [
+    finish,
+    bars.length > 0
+      ? `${plural(bars.length, 'visit')} in the next three weeks. Green is confirmed; blue is our best guess. Tell us if your dates do not work, or if anything is missing.`
+      : 'No visits in the next three weeks.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const parts = [header(settings, 'Schedule', 'Three Week Look Ahead', summary)];
+
+  // The chart: a row for each company, a column for each working day.
+  const weekHeads = Array.from({ length: LOOK_AHEAD_WEEKS }, (_, w) => `<th colspan="5" class="rb-g-week">Week of ${esc(dayText(addDays(monday, w * 7), settings.date))}</th>`).join('');
+  const dayHeads = Array.from({ length: days }, (_, i) => {
+    const day = addDays(monday, Math.floor(i / 5) * 7 + (i % 5));
+    return `<th class="rb-g-day${i % 5 === 0 ? ' rb-g-wk' : ''}${i === todayIndex ? ' rb-g-now' : ''}">${Number(day.slice(8))}</th>`;
+  }).join('');
+  const body = rows
+    .map((r) => {
+      const cells: string[] = [];
+      for (let i = 0; i < days; ) {
+        const bar = r.bars.find((b) => Math.max(0, workingIndex(monday, b.start)) === i);
+        const wk = i % 5 === 0 ? ' rb-g-wk' : '';
+        if (bar) {
+          const span = Math.min(days - 1, workingIndex(monday, bar.end)) - i + 1;
+          const kind = bar.kind === 'confirmed' ? ' rb-g-ok' : '';
+          cells.push(`<td colspan="${span}" class="rb-g-cell${wk}"><div class="rb-g-bar${kind}${bar.pastDue ? ' rb-g-late' : ''}"></div></td>`);
+          i += span;
+        } else {
+          cells.push(`<td class="rb-g-cell${wk}${i === todayIndex ? ' rb-g-now' : ''}"></td>`);
+          i += 1;
+        }
+      }
+      return `<tr><td class="rb-g-name">${esc(company(r.companyId))}</td>${cells.join('')}</tr>`;
+    })
+    .join('');
+  if (rows.length > 0) {
+    const cols = `<col style="width:1.35in">${'<col>'.repeat(days)}`;
+    parts.push(
+      `<table class="rb-gantt"><colgroup>${cols}</colgroup><thead><tr><th rowspan="2">Company</th>${weekHeads}</tr><tr>${dayHeads}</tr></thead><tbody>${body}</tbody></table>`,
+    );
+    parts.push('<p class="rb-key"><span><i class="rb-g-ok"></i>Confirmed</span><span><i></i>Our best guess</span></p>');
+
+    // What each visit covers: the company, when, and the work, each piece with where it is.
+    const columns = [
+      { label: 'When', width: '1.75in' },
+      { label: 'Company', width: '1.35in' },
+      { label: 'Work' },
+    ];
+    const visitRows = bars
+      .map((b, i) => {
+        const when = b.days > 1 ? `${dayText(b.start, settings.date, true)} to ${dayText(b.end, settings.date, true)}` : dayText(b.start, settings.date, true);
+        const status = b.pastDue ? 'Over, with work still open' : b.kind === 'confirmed' ? 'Confirmed' : 'Our best guess';
+        const work = b.items.map((item) => `<div><b>${esc(item.title)}</b>, ${esc(place(item.locationId))}</div>`).join('');
+        return `<tr class="rb-row${i % 2 === 1 ? ' rb-alt' : ''}"><td>${esc(when)}<div class="rb-meta">${esc(`${plural(b.days, 'day')}, ${status.toLowerCase()}`)}</div></td><td>${esc(company(b.companyId))}</td><td>${work}</td></tr>`;
+      })
+      .join('');
+    parts.push('<h2 class="rb-section">What Each Visit Covers</h2>');
+    parts.push(table(columns, visitRows));
+  }
+
+  if (timeline.noDate.length > 0) {
+    const look = holdsFor(lookups);
+    const columns = [{ label: 'Location', width: '1.35in' }, { label: 'Company', width: '1.35in' }, { label: 'Work' }];
+    const undated = timeline.noDate
+      .map(
+        (item, i) =>
+          `<tr class="rb-row${i % 2 === 1 ? ' rb-alt' : ''}"><td>${esc(place(item.locationId))}</td><td>${esc(item.companyId ? company(item.companyId) : 'Not set')}</td><td><div class="rb-work">${esc(item.title)}</div><div class="rb-note">${esc(`Waiting on ${holdText(item, look) || 'something not named'}`)}</div></td></tr>`,
+      )
+      .join('');
+    parts.push('<h2 class="rb-section">No Date Yet</h2>');
+    parts.push('<p class="rb-section-note">These go on the schedule once what they wait on has a date.</p>');
+    parts.push(table(columns, undated));
+  }
+  if (timeline.needsPrice.length > 0) {
+    parts.push(`<p class="rb-section-note">Also ${plural(timeline.needsPrice.length, 'item')} of additional work that ${timeline.needsPrice.length === 1 ? 'needs' : 'need'} a price before it is scheduled.</p>`);
+  }
+
+  return {
+    title: 'Three Week Look Ahead',
+    kind: 'Schedule',
+    fileName: `${safeName(`${settings.job.name} Three Week Look Ahead, ${printDate(settings.date).replace(',', '')}`)}.pdf`,
+    body: parts.join(''),
+  };
+}
+
 const FONT = "'Nunito Sans', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
 /** The house look, kept to the class rb-doc so the preview page can show it beside the app. */
@@ -598,6 +716,22 @@ export const PRINT_CSS = `
 .rb-comment{font-size:8.5pt;line-height:1.3;margin-top:2pt;overflow-wrap:break-word}
 .rb-comment b{font-weight:700}
 .rb-section + .rb-comments{margin-top:8pt}
+.rb-gantt{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:14pt}
+.rb-gantt thead{display:table-header-group}
+.rb-gantt th{background:#3B5864;color:#FFFFFF;font-size:7.5pt;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;text-align:left;padding:4pt 6pt;vertical-align:bottom}
+.rb-gantt th.rb-g-week{border-left:0.75pt solid #5B8699}
+.rb-gantt th.rb-g-day{background:#4E7A8C;text-align:center;padding:2pt 0;font-size:7pt;letter-spacing:0;font-variant-numeric:tabular-nums}
+.rb-gantt th.rb-g-now{background:#3B5864}
+.rb-gantt td{border-bottom:0.75pt solid #CBD8DB;padding:3pt 1pt;height:19pt;vertical-align:middle}
+.rb-gantt tr{page-break-inside:avoid;break-inside:avoid}
+.rb-gantt td.rb-g-name{font-weight:700;font-size:8.5pt;line-height:1.2;padding:3pt 6pt 3pt 0;overflow-wrap:break-word}
+.rb-gantt .rb-g-wk{border-left:0.75pt solid #CBD8DB}
+.rb-gantt td.rb-g-now{background:#F7F5EC}
+.rb-g-bar{height:11pt;border-radius:2pt;background:#4E7A8C}
+.rb-g-bar.rb-g-ok,.rb-key i.rb-g-ok{background:#4E7F5E}
+.rb-g-bar.rb-g-late{border:1.25pt solid #B42318}
+.rb-key{display:flex;gap:16pt;margin:6pt 0 0;font-size:8.5pt;color:#4E7A8C}
+.rb-key i{display:inline-block;width:14pt;height:8pt;border-radius:2pt;margin-right:5pt;vertical-align:-1pt;background:#4E7A8C}
 .rb-ph{position:relative;width:${PHOTO_WIDTH}in;overflow:hidden;border-radius:3pt;background:#F7F5EC}
 .rb-ph img{display:block;width:100%;height:100%;object-fit:cover}
 .rb-ph svg{position:absolute;left:0;top:0;width:100%;height:100%;font-family:${FONT}}

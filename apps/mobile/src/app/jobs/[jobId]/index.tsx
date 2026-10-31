@@ -1,10 +1,10 @@
 // A job: its levels and locations, each with how much is open, how much is ready, what is past due
 // and how long the open work takes, and each level with its own totals. Tap a location for its
 // items. Drafts sit on their own at the top when there are any; anything past due shows as a red
-// count on Schedule. View and Filter groups by trade, company or what items wait on, and narrows
-// the list to exactly the work in question; the filters that are on show as chips under the title.
-// The camera in the bottom bar starts a walk; Schedule is each company's visits; Send Lists makes
-// each company's list to send.
+// count on Schedule. Filter, at the top under the title, narrows the list to exactly the work in
+// question and groups it by trade, company or what items wait on; the filters that are on show as
+// chips beside it. The bottom bar is the walk and what comes of it: Schedule (the chart the list
+// builds), the camera in the middle, and Send Lists.
 
 import {
   byFloor,
@@ -227,7 +227,16 @@ export default function JobScreen() {
     ) : (
       <EmptyState icon="checkmark.circle.fill" title="Nothing Open" message="Every item on this job is complete." />
     );
-  const filterBar = <FilterBar jobId={jobId} filters={filters} onChange={(next) => setView({ ...view, filters: next })} onOpen={() => setSheet(true)} />;
+  // The filter is at the top, with how the job is grouped beside it.
+  const filterBar = (
+    <FilterBar
+      jobId={jobId}
+      filters={filters}
+      onChange={(next) => setView({ ...view, filters: next })}
+      onOpen={() => setSheet(true)}
+      grouping={{ label: `By ${GROUP_LABELS[view.groupBy]}`, icon: GROUP_ICONS[view.groupBy], showCompleted: view.showCompleted }}
+    />
+  );
 
   return (
     <>
@@ -239,7 +248,6 @@ export default function JobScreen() {
         background="plain"
         right={[
           { kind: 'button', label: 'New Item', icon: 'plus', iconOnly: true, onPress: newItem, testID: 'new-item' },
-          { kind: 'button', label: 'Send Lists', icon: 'share', iconOnly: true, onPress: openSend, testID: 'send' },
           menu,
         ]}
         search={{ value: query, onChange: setQuery, placeholder: 'Search Items', collapsed: true }}
@@ -248,14 +256,7 @@ export default function JobScreen() {
           <CameraBar
             onCamera={openCamera}
             left={<BarTool icon="calendar" label="Schedule" badge={late} badgeLabel="past due" onPress={openSchedule} testID="schedule" />}
-            right={
-              <BarTool
-                icon={narrowed || view.showCompleted ? 'filter' : GROUP_ICONS[view.groupBy]}
-                label={`By ${GROUP_LABELS[view.groupBy]}${narrowed || view.showCompleted ? ', Filtered' : ''}`}
-                onPress={() => setSheet(true)}
-                testID="filter"
-              />
-            }
+            right={<BarTool icon="share" label="Send Lists" onPress={openSend} testID="send" />}
           />
         }
         list={(scroll) =>

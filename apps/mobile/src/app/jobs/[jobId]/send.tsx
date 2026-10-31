@@ -1,8 +1,9 @@
 // Send Lists: every company with open work on the job, how much of it is ready now, and what is new
 // since its last list. Tap one to see its list as a PDF and send it by email or text from there;
 // the share button goes straight to sending, and Send All goes through every company in one pass.
-// Each list sent is recorded (with Undo), so the next one marks what is new. The owner and the
-// design team get what Ross Built needs from them; the whole job, location by location, is for Ross Built.
+// Each list sent is recorded (with Undo), so the next one marks what is new. The three week look
+// ahead, first, is the schedule for everyone. The owner and the design team get what Ross Built
+// needs from them; the whole job, location by location, is for Ross Built.
 // Make a List makes any other list: it starts from what the job shows now, takes every filter, and
 // lays the page out as picked. A company's list prints each item's comments and the comments on its
 // whole list, the Whole Job prints each item's comments, and so can a list made to order. The owner's
@@ -10,6 +11,7 @@
 // only notes never print.
 
 import {
+  buildTimeline,
   commentAuthor,
   companiesWithWork,
   companyList,
@@ -27,6 +29,8 @@ import {
   LIST_KEYS,
   listComments,
   listTitle,
+  lookAheadPrintout,
+  lookAheadStart,
   newSince,
   partiesWaitedOn,
   partyList,
@@ -61,12 +65,14 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 /** One list that can go out. */
 interface Target {
-  /** The list key: "job", "company:<id>", "party:<name>"; "custom" for one made to order. */
+  /** The list key: "job", "company:<id>", "party:<name>", "lookahead"; "custom" for one made to order. */
   list: string;
   name: string;
-  kind: 'company' | 'party' | 'job' | 'custom';
+  kind: 'company' | 'party' | 'job' | 'custom' | 'lookahead';
   companyId?: string;
 }
+
+const LOOK_AHEAD: Target = { list: 'lookahead', name: 'Three Week Look Ahead', kind: 'lookahead' };
 
 /** How the job is grouped on screen, as a list made to order groups it. */
 const LIST_GROUP: Record<GroupBy, ListGroupBy> = { room: 'location', trade: 'trade', company: 'company', waiting: 'waiting' };
@@ -149,6 +155,7 @@ export default function SendScreen() {
   function sentLine(target: Target): string {
     const last = lastSend(sends, target.list);
     if (!last) return 'Not sent yet';
+    if (target.kind === 'lookahead') return `Sent ${shortDate(last.sentAt.slice(0, 10)).replace(' ', '\u00a0')}`;
     const fresh = newSince(
       linesOf(target).map((l) => l.item.id),
       last,
@@ -176,6 +183,14 @@ export default function SendScreen() {
   }
 
   async function make(target: Target): Promise<Made> {
+    if (target.kind === 'lookahead') {
+      const timeline = buildTimeline(items, visits, locations, today);
+      const settings = { job: { name: job?.name ?? 'Job', address: job?.address ?? '' }, date: new Date() };
+      const printout = lookAheadPrintout(timeline, lookups, settings, today);
+      const from = lookAheadStart(today);
+      const itemIds = timeline.bars.filter((b) => b.end >= from).flatMap((b) => b.items.map((i) => i.id));
+      return { target, printout, itemIds, footer: footerText(printout, settings) };
+    }
     const lines = linesOf(target);
     const itemIds = lines.map((l) => l.item.id);
     const fresh = newSince(itemIds, lastSend(sends, target.list));
@@ -316,6 +331,17 @@ export default function SendScreen() {
 
   return (
     <Page title="Send Lists" sheet right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: () => router.back(), testID: 'send-done' }]}>
+      <ListSection header="For Everyone" footer="Every company's visits for the next three weeks, from the schedule the list builds. Green is confirmed; blue is our best guess.">
+        <ListRow
+          title="Three Week Look Ahead"
+          subtitle={`${sentLine(LOOK_AHEAD)}.`}
+          icon="calendar"
+          accessory={ON_THE_PHONE ? 'none' : 'chevron'}
+          onPress={() => void openList(LOOK_AHEAD)}
+          right={trailing(LOOK_AHEAD)}
+          testID="send-lookahead"
+        />
+      </ListSection>
       <ListSection footer="Any filters, grouped your way, with the details you pick on every line. It starts from what the job shows now.">
         <ListRow
           title="Make a List"

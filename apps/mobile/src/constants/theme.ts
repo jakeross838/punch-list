@@ -46,6 +46,15 @@ export const colors = {
   black: '#000000',
   dim: 'rgba(0, 0, 0, 0.22)',
 
+  /**
+   * The schedule's bars, in the colors the companies already know from the weekly schedule: green
+   * is confirmed, blue is our best guess, and a pale blue bar is a best guess that still moves with
+   * the list.
+   */
+  confirmed: '#4E7F5E',
+  bestGuess: brand.coastal,
+  moving: '#DCE5E8',
+
   /** The camera and markup: white on black, with frosted chips. */
   onDark: '#FFFFFF',
   onDarkQuiet: 'rgba(255, 255, 255, 0.72)',

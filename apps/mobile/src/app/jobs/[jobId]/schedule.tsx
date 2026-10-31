@@ -1,74 +1,108 @@
-// The job's schedule, built from the list: what is past due first, then each company's visits this
-// week, next week and later (confirmed, or our best guess) with the time their work takes, then the
-// companies with work that is not scheduled yet and how many days of it is ready. Tap a company
-// for its plan.
+// The job's schedule, built from the list as it is right now: a chart of every company's visits
+// across the working days, in the order the work starts. Visits on the schedule stay where they are,
+// green once the company confirms and blue as our best guess. Everything else that is ready, or has
+// a date it will be ready, gets a pale best guess that moves as the list changes: work goes as soon
+// as it can, with notice and a day of handoff after what it waits on, in full days of 8 hours. Save
+// the Best Guess keeps those dates. The headline is when everything with a date is done. Past Due
+// comes first; what has no date yet and what needs a price are listed under the chart. Tap a bar for
+// its visit, or a company for its plan.
 
 import {
-  daysText,
-  DAY_HOURS,
+  buildTimeline,
+  companyPlan,
   dayOfDate,
-  notBooked,
+  holdText,
+  lookAheadStart,
   pastDue,
-  totalText,
-  totalTime,
-  visitEnd,
-  weekSection,
-  WEEK_LABELS,
-  type TimeTotal,
-  type Visit,
-  type WeekSection,
+  timelineRows,
+  type ListLine,
+  type TimelineBar,
 } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { VisitStatus } from '@/components/VisitSheet';
+import { Gantt, GanttKey } from '@/components/Gantt';
+import { VisitSheet, type VisitDraft } from '@/components/VisitSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { EmptyState, Icon, ListRow, ListSection, Page, shortDate, Text, Touchable, weekdayDate } from '@/ui';
+import { useHolds } from '@/data/view';
+import { EmptyState, haptic, ListRow, ListSection, Page, Text, Touchable, useFeedback, weekdayDate } from '@/ui';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const ORDER: WeekSection[] = ['past', 'this_week', 'next_week', 'later'];
 
 export default function ScheduleScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const data = useData();
+  const feedback = useFeedback();
   const job = data.useJobs().find((j) => j.id === jobId);
   const items = data.useItems(jobId);
   const visits = data.useVisits(jobId);
   const locations = data.useLocations(jobId);
   const trades = data.useTrades();
   const companies = data.useCompanies();
+  const holds = useHolds(jobId);
   const today = dayOfDate(new Date());
+  // This week, or next week once it is Friday: the three weeks the look ahead sends.
+  const monday = lookAheadStart(today);
+  const [draft, setDraft] = useState<VisitDraft | null>(null);
 
   const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
   const late = useMemo(() => pastDue(items, visits, today), [items, visits, today]);
-  const loose = useMemo(() => notBooked(items, visits, lookups, today), [items, visits, lookups, today]);
-  const sections = useMemo(() => {
-    const out = new Map<WeekSection, { visit: Visit; open: number; time: TimeTotal }[]>();
-    for (const visit of [...visits].sort((a, b) => a.start.localeCompare(b.start))) {
-      const openItems = items.filter((i) => i.visitId === visit.id && i.status === 'open');
-      const open = openItems.length;
-      const section = weekSection(visit, today);
-      // A finished visit in the past has nothing left to show.
-      if (section === 'past' && open === 0) continue;
-      const list = out.get(section) ?? [];
-      list.push({ visit, open, time: totalTime(openItems) });
-      out.set(section, list);
-    }
-    return out;
-  }, [visits, items, today]);
+  const timeline = useMemo(() => buildTimeline(items, visits, locations, today), [items, visits, locations, today]);
+  const rows = useMemo(() => timelineRows(timeline, monday), [timeline, monday]);
+  const moving = timeline.bars.filter((b) => b.kind === 'auto');
 
   const name = (id: string) => companies.find((c) => c.id === id)?.name ?? 'Not set';
+  const where = (id: string) => locations.find((l) => l.id === id)?.label ?? '';
   const openPlan = (companyId: string) => router.push({ pathname: '/jobs/[jobId]/plan/[companyId]', params: { jobId, companyId } });
-  const booked = ORDER.reduce((n, s) => n + (sections.get(s)?.length ?? 0), 0);
+  const openItem = (itemId: string) => router.push({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId } });
+
+  // A visit can cover its own items and the company's work not on another visit (work left on a visit that is over included).
+  const plan = useMemo(() => (draft ? companyPlan(draft.companyId, items, visits, lookups, today) : null), [draft, items, visits, lookups, today]);
+  const sheetLines: ListLine[] = plan
+    ? [
+        ...(draft?.visit ? (plan.visits.find((p) => p.visit.id === draft.visit!.id)?.lines ?? []) : []),
+        ...plan.visits.filter((p) => p.pastDue && p.visit.id !== draft?.visit?.id).flatMap((p) => p.lines),
+        ...plan.readyNow,
+        ...plan.comingFree.flatMap((g) => g.lines),
+        ...plan.noDate.flatMap((g) => g.lines),
+      ]
+    : [];
+
+  function openBar(bar: TimelineBar) {
+    haptic.tap();
+    const itemIds = bar.items.map((i) => i.id);
+    if (bar.visit) {
+      setDraft({ visit: bar.visit, companyId: bar.companyId, start: bar.visit.start, days: bar.visit.days, confirmed: bar.visit.confirmed, itemIds });
+    } else {
+      setDraft({ visit: null, companyId: bar.companyId, start: bar.start, days: bar.days, confirmed: false, itemIds });
+    }
+  }
+
+  /** Every best guess that moves with the list goes on the schedule as it is, with Undo. */
+  async function saveAll() {
+    if (moving.length === 0) return;
+    haptic.success();
+    const made: string[] = [];
+    for (const bar of moving) {
+      made.push(await data.addVisit({ jobId, companyId: bar.companyId, start: bar.start, days: bar.days, confirmed: false, itemIds: bar.items.map((i) => i.id) }));
+    }
+    feedback.toast({
+      message: `${plural(made.length, 'visit')} on the schedule as our best guess`,
+      action: { label: 'Undo', onPress: () => void Promise.all(made.map((id) => data.removeVisit(id))) },
+    });
+  }
+
+  const headline = timeline.finish
+    ? `Everything with a date is done by ${weekdayDate(timeline.finish)}.`
+    : timeline.bars.length > 0
+      ? 'Nothing open has a date yet.'
+      : '';
+  const undated = timeline.noDate.length;
+  const subtitle = [headline, undated > 0 ? `${plural(undated, 'item')} with no date yet.` : ''].filter(Boolean).join(' ');
 
   return (
-    <Page
-      title="Schedule"
-      large
-      subtitle={[plural(booked, 'visit'), late.length > 0 ? `${plural(late.length, 'item')} past due` : ''].filter(Boolean).join(', ')}
-      backLabel={job?.name}
-    >
+    <Page title="Schedule" large subtitle={subtitle || undefined} backLabel={job?.name}>
       {late.length > 0 ? (
         <ListSection>
           <ListRow
@@ -83,74 +117,69 @@ export default function ScheduleScreen() {
         </ListSection>
       ) : null}
 
-      {ORDER.map((section) => {
-        const rows = sections.get(section);
-        if (!rows || rows.length === 0) return null;
-        return (
-          <ListSection key={section} header={section === 'past' ? 'Ended With Work Open' : WEEK_LABELS[section]}>
-            {rows.map(({ visit, open, time }) => {
-              const end = visitEnd(visit);
-              const over = section !== 'past' && time.hours > visit.days * DAY_HOURS;
-              const when = visit.days > 1 ? `${weekdayDate(visit.start)} to ${weekdayDate(end)}` : weekdayDate(visit.start);
-              return (
-                <Touchable
-                  key={visit.id}
-                  feedback="highlight"
-                  onPress={() => openPlan(visit.companyId)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${name(visit.companyId)}, ${when}`}
-                  testID={`schedule-visit-${visit.id}`}
-                  style={styles.row}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1}>{name(visit.companyId)}</Text>
-                    <Text variant="subheadline" color={section === 'past' ? colors.destructive : colors.secondary}>
-                      {when}
-                    </Text>
-                    <Text variant="subheadline" color={section === 'past' || over ? colors.destructive : colors.secondary}>
-                      {[visit.days > 1 ? plural(visit.days, 'day') : '', `${plural(open, 'item')}${section === 'past' ? ' still open' : ''}`, totalText(time)]
-                        .filter(Boolean)
-                        .join(', ')}
-                      {over ? `, more than ${plural(visit.days, 'day')}` : ''}
-                    </Text>
-                  </View>
-                  <VisitStatus confirmed={visit.confirmed} />
-                  <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" />
-                </Touchable>
-              );
-            })}
-          </ListSection>
-        );
-      })}
+      {rows.length > 0 ? (
+        <View style={styles.chart}>
+          <Gantt timeline={timeline} rows={rows} monday={monday} today={today} companyName={name} onBar={openBar} onCompany={openPlan} />
+          <GanttKey />
+        </View>
+      ) : (
+        <EmptyState icon="calendar" title="Nothing to Schedule" message="Open work shows here as it is added, company by company." />
+      )}
 
-      {loose.length > 0 ? (
-        <ListSection header="Not Scheduled" footer="Tap a company to schedule its work.">
-          {loose.map((r) => (
-            <ListRow
-              key={r.companyId}
-              title={r.company}
-              subtitle={[
-                r.readyNow > 0 ? `${r.readyNow} ready now${r.readyTime.timed > 0 ? `, about ${daysText(r.readyTime.hours)} of work` : ''}` : '',
-                r.comingFree > 0 && r.nextFree ? `${r.comingFree} ${r.readyNow > 0 ? 'more' : 'ready'} by ${shortDate(r.nextFree)}` : '',
-                r.needsPrice > 0 ? `${r.needsPrice} ${r.needsPrice === 1 ? 'needs' : 'need'} a price` : '',
-              ]
-                .filter(Boolean)
-                .join(', ')}
-              accessory="chevron"
-              onPress={() => openPlan(r.companyId)}
-              testID={`schedule-company-${r.companyId}`}
-            />
+      {moving.length > 0 ? (
+        <ListSection footer="The pale bars move as the list changes. Saved, they stay where they are until you move them, ready to send and confirm.">
+          <ListRow
+            title="Save the Best Guess"
+            subtitle={`${plural(moving.length, 'visit')} for ${plural(new Set(moving.map((b) => b.companyId)).size, 'company', 'companies')}`}
+            icon="calendar"
+            tone="tint"
+            onPress={() => void saveAll()}
+            testID="schedule-save-all"
+          />
+        </ListSection>
+      ) : null}
+
+      {timeline.noDate.length > 0 ? (
+        <ListSection header={`No Date Yet (${timeline.noDate.length})`} footer="A Ready By date, or a date for the work they wait on, puts these on the schedule.">
+          {timeline.noDate.map((item, i) => (
+            <Touchable
+              key={item.id}
+              feedback="highlight"
+              onPress={() => openItem(item.id)}
+              accessibilityRole="button"
+              testID={`schedule-undated-${item.id}`}
+              style={[styles.row, i > 0 ? styles.rule : null]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1}>{item.title}</Text>
+                <Text variant="subheadline" color={colors.secondary} numberOfLines={2}>
+                  {[where(item.locationId), item.companyId ? name(item.companyId) : '', `Waiting on ${holdText(item, holds) || 'something'}`].filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+            </Touchable>
           ))}
         </ListSection>
       ) : null}
 
-      {booked === 0 && loose.length === 0 && late.length === 0 ? (
-        <EmptyState icon="calendar" title="Nothing to Schedule" message="Open work shows here by company." />
+      {timeline.needsPrice.length > 0 ? (
+        <ListSection footer="Additional work goes on the schedule once it has its order number.">
+          <ListRow
+            title="Needs a Price"
+            value={String(timeline.needsPrice.length)}
+            accessory="chevron"
+            onPress={() => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'waiting', key: 'price' } })}
+            testID="schedule-needs-price"
+          />
+        </ListSection>
       ) : null}
+
+      <VisitSheet jobId={jobId} company={draft ? name(draft.companyId) : ''} draft={draft} lines={sheetLines} onClose={() => setDraft(null)} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
+  chart: { marginBottom: 22 },
   row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: layout.rowPadding, paddingVertical: 8, backgroundColor: colors.cell },
+  rule: { borderTopWidth: layout.hairline, borderTopColor: colors.separator },
 });
