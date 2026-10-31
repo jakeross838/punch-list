@@ -19,6 +19,8 @@ export type ActivityKind =
   | 'visit_added'
   | 'visit_changed'
   | 'visit_removed'
+  | 'visit_confirmed_by_company'
+  | 'visit_change_asked'
   | 'list_sent'
   | 'list_undone'
   | 'location_added'
@@ -427,6 +429,25 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
       return done(`scheduled ${title}`, [where, visit ? `On the visit ${dayWords(visit.start, look.today, true)}` : '', ...photoWords]);
     }
     return done(`changed ${title}`, [...(forItem ? [] : [where]), ...words, ...photoWords]);
+  }
+
+  // The company's answer on its dates, from its page: under the name its person typed.
+  if (first.kind === 'visit_confirmed_by_company' || first.kind === 'visit_change_asked') {
+    const d = first.detail ?? {};
+    const companyName = look.companies.get(String(d.company_id ?? '')) ?? 'The company';
+    const named = typeof d.author_name === 'string' && d.author_name.trim() !== '' ? d.author_name.trim() : '';
+    const who = named ? `${named} at ${companyName}` : companyName;
+    const when = (start: unknown, days: unknown) =>
+      typeof start === 'string' && start ? `${dayWords(start, look.today, true)}, ${plural(typeof days === 'number' ? days : Number(days ?? 1), 'day')}` : '';
+    if (first.kind === 'visit_confirmed_by_company') {
+      return { ...base, who, action: 'confirmed its visit', detail: [when(d.start, d.days)].filter(Boolean).map(sentence).join(' ') };
+    }
+    return {
+      ...base,
+      who,
+      action: 'asked to move its visit',
+      detail: [`To ${when(d.start, d.days)}`, `Booked for ${when(d.was_start, d.was_days)}`].map(sentence).join(' '),
+    };
   }
 
   // Everything that is not one item.

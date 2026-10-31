@@ -1,5 +1,7 @@
 // A company's own page for a job: what the company sees from the private link sent with its list,
-// with no account. Its scheduled visits, then its open work (ready now, waiting, to be quoted)
+// with no account. Its scheduled visits, each with These Dates Work (the visit is confirmed, and
+// turns green for Ross Built) or Other Dates (the day it can start and the days it takes, for Ross
+// Built to move it), then its open work (ready now, waiting, to be quoted)
 // with each item's photo and where it is, and comments: on any item, or on the whole list, under
 // the name typed once at the top. Ross Built sees them right away. Ross Built only notes never
 // show here. In the app it opens from the company's plan, to see the page the way the company does.
@@ -15,6 +17,7 @@ import {
   type Comment,
   type ListLine,
   type Photo,
+  type Visit,
 } from '@punch/core';
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -22,7 +25,7 @@ import { StyleSheet, View } from 'react-native';
 import { CommentThread } from '@/components/Comments';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Banner, EmptyState, ListSection, ListTextField, Page, PhotoView, shortDate, Text, Touchable, weekdayDate } from '@/ui';
+import { Banner, Chip, DateField, EmptyState, haptic, ListSection, ListTextField, Page, PhotoView, shortDate, Text, Touchable, useFeedback, weekdayDate } from '@/ui';
 
 export default function CompanyPageScreen() {
   const { jobId, companyId } = useLocalSearchParams<{ jobId: string; companyId: string }>();
@@ -89,18 +92,10 @@ export default function CompanyPageScreen() {
       />
 
       {ownVisits.length > 0 ? (
-        <ListSection header="Scheduled Visits" footer="Tell us in a comment if these dates do not work for you." style={styles.after}>
-          {ownVisits.map((v) => {
-            const end = visitEnd(v);
-            return (
-              <View key={v.id} style={styles.visit}>
-                <Text style={{ flex: 1 }}>{end === v.start ? weekdayDate(v.start) : `${weekdayDate(v.start)} to ${weekdayDate(end)}`}</Text>
-                <Text variant="subheadline" color={v.confirmed ? colors.tint : colors.secondary} weight={v.confirmed ? '600' : '400'}>
-                  {v.confirmed ? 'Confirmed' : 'Our best guess'}
-                </Text>
-              </View>
-            );
-          })}
+        <ListSection header="Scheduled Visits" footer="Tell us whether each visit's dates work. Other dates come to Ross Built to move the visit." style={styles.after}>
+          {ownVisits.map((v) => (
+            <VisitAnswer key={v.id} visit={v} name={name} />
+          ))}
         </ListSection>
       ) : null}
 
@@ -111,6 +106,90 @@ export default function CompanyPageScreen() {
       )}
       {section('To Be Quoted', 'Extra work we would love a price for, item by item. It goes on the schedule once the order is in.', list.needsPrice, 'price')}
     </Page>
+  );
+}
+
+/** One visit on the company's page: its dates, and the company's answer: these dates work, or other dates. */
+function VisitAnswer({ visit: v, name }: { visit: Visit; name: string }) {
+  const data = useData();
+  const feedback = useFeedback();
+  const [changing, setChanging] = useState(false);
+  const [start, setStart] = useState(v.askedStart ?? v.start);
+  const [days, setDays] = useState(v.askedDays ?? v.days);
+  const end = visitEnd(v);
+  const dates = end === v.start ? weekdayDate(v.start) : `${weekdayDate(v.start)} to ${weekdayDate(end)}`;
+  const plural = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`;
+  const status = v.confirmed
+    ? 'Confirmed'
+    : v.askedStart
+      ? `You asked for ${weekdayDate(v.askedStart)}, ${plural(v.askedDays ?? 1)}. Ross Built will move it.`
+      : 'Our best guess';
+
+  async function confirm() {
+    haptic.success();
+    await data.companyConfirmVisit({ visitId: v.id, name: name.trim() || null });
+    feedback.toast({ message: `Confirmed ${dates}` });
+  }
+
+  async function ask() {
+    haptic.success();
+    await data.companyAskVisit({ visitId: v.id, start, days, name: name.trim() || null });
+    setChanging(false);
+    feedback.toast({ message: `Asked for ${weekdayDate(start)}, ${plural(days)}` });
+  }
+
+  return (
+    <View style={styles.visit} testID={`company-visit-${v.id}`}>
+      <View style={styles.visitTop}>
+        <Text style={{ flex: 1 }}>{dates}</Text>
+        <Text variant="subheadline" color={v.confirmed ? colors.confirmed : colors.secondary} weight={v.confirmed ? '600' : '400'}>
+          {v.confirmed ? 'Confirmed' : v.askedStart ? 'Other dates asked' : 'Our best guess'}
+        </Text>
+      </View>
+      {v.askedStart && !v.confirmed ? (
+        <Text variant="subheadline" color={colors.secondary}>
+          {status}
+        </Text>
+      ) : null}
+      {changing ? (
+        <View style={styles.change}>
+          <View style={styles.changeRow}>
+            <Text variant="subheadline" color={colors.secondary} style={{ flex: 1 }}>
+              We can start
+            </Text>
+            <DateField value={start} onChange={(d) => d && setStart(d)} label="The day you can start" testID={`visit-start-${v.id}`} />
+          </View>
+          <View style={styles.days}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Chip key={n} label={plural(n)} on={days === n} onPress={() => setDays(n)} testID={`visit-days-${v.id}-${n}`} />
+            ))}
+          </View>
+          <View style={styles.actions}>
+            <Touchable feedback="opacity" onPress={() => setChanging(false)} accessibilityRole="button" style={styles.action}>
+              <Text color={colors.tint}>Cancel</Text>
+            </Touchable>
+            <Touchable feedback="scale" onPress={() => void ask()} accessibilityRole="button" testID={`visit-ask-${v.id}`} style={[styles.action, styles.actionMain]}>
+              <Text weight="600" color={colors.white}>
+                Ask for These Dates
+              </Text>
+            </Touchable>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.actions}>
+          {!v.confirmed ? (
+            <Touchable feedback="scale" onPress={() => void confirm()} accessibilityRole="button" testID={`visit-ok-${v.id}`} style={[styles.action, styles.actionMain]}>
+              <Text weight="600" color={colors.white}>
+                These Dates Work
+              </Text>
+            </Touchable>
+          ) : null}
+          <Touchable feedback="opacity" onPress={() => setChanging(true)} accessibilityRole="button" testID={`visit-change-${v.id}`} style={styles.action}>
+            <Text color={colors.tint}>Other Dates</Text>
+          </Touchable>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -169,5 +248,12 @@ const styles = StyleSheet.create({
   cardText: { flex: 1, gap: 2 },
   cardThread: { marginHorizontal: 0 },
   comment: { alignSelf: 'flex-start', height: 30, justifyContent: 'center' },
-  visit: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: layout.rowPadding, paddingVertical: 8, backgroundColor: colors.cell },
+  visit: { gap: 8, paddingHorizontal: layout.rowPadding, paddingVertical: 10, backgroundColor: colors.cell, borderBottomWidth: layout.hairline, borderBottomColor: colors.separator },
+  visitTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  change: { gap: 10 },
+  changeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  days: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  action: { height: 36, paddingHorizontal: 12, borderRadius: 18, justifyContent: 'center' },
+  actionMain: { backgroundColor: colors.tint },
 });

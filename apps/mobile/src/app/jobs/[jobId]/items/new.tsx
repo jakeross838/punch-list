@@ -9,7 +9,7 @@
 //   Typed, from New Item in a location or the plus on the job, with no camera: Save and Next starts
 //   the next item right here, Save goes back to the list. Add Photo opens the camera for it.
 
-import { itemNumberLabel, type Item } from '@punch/core';
+import { buildTimeline, dayOfDate, itemNumberLabel, type Item } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
@@ -21,7 +21,7 @@ import { useFillIn } from '@/components/useFillIn';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture, useCapture } from '@/data/capture';
-import { haptic, Icon, Page, Text, Touchable, useFeedback } from '@/ui';
+import { haptic, Icon, Page, shortDate, Text, Touchable, useFeedback } from '@/ui';
 
 export default function NewItemScreen() {
   const { jobId, typed } = useLocalSearchParams<{ jobId: string; typed?: string }>();
@@ -49,6 +49,8 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
   const walk = useCapture();
   const settings = data.useFormSettings();
   const locations = data.useLocations(jobId);
+  const items = data.useItems(jobId);
+  const visits = data.useVisits(jobId);
   const [initial] = useState<ItemDraft>(() => walk.draft ?? startDraft(walk.roomId ?? '', settings));
   const form = useItemForm(initial);
   const { value } = form;
@@ -85,13 +87,21 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
     setSaving(true);
     try {
       const { locationId, ...fields } = draft;
-      const id = await data.createItem({ ...fields, jobId, locationId, source: shots.length > 0 ? 'walk' : 'typed' });
+      const source = shots.length > 0 ? 'walk' : 'typed';
+      // What the new work does to the finish date, said with the note when it moves it.
+      const today = dayOfDate(new Date());
+      const was = buildTimeline(items, visits, locations, today).finish;
+      const now = new Date().toISOString();
+      const added: Item = { ...fields, id: 'new', jobId, locationId, source, number: null, btExternalId: null, createdBy: '', createdAt: now, updatedAt: now };
+      const finish = buildTimeline([...items, added], visits, locations, today).finish;
+      const moved = finish && finish !== was ? `. Done by ${shortDate(finish)}${was ? `, was ${shortDate(was)}` : ''}` : '';
+      const id = await data.createItem({ ...fields, jobId, locationId, source });
       if (shots.length > 0) {
         await data.addPhotos(shots.map((s) => ({ jobId, itemId: id, uri: s.uri, width: s.width, height: s.height, marks: s.marks })));
       }
       haptic.success();
       const what = fields.unfinished ? 'as a draft' : fields.title;
-      const note = `Saved ${what}${roomLabel ? ` in ${roomLabel}` : ''}`;
+      const note = `Saved ${what}${roomLabel ? ` in ${roomLabel}` : ''}${moved}`;
       if (typed) {
         if (next) {
           capture.discardItem();

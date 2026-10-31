@@ -3,10 +3,13 @@
 // our best guess. Everything else that is ready, or has a date it will be ready, gets a best guess
 // that moves with the list: as soon as it can go, with more than a day's notice and a day of
 // handoff after the work it waits on, a company's work packed into full days of 8 hours, location
-// by location, never on a day that company already has a visit. Work that waits on a task follows
-// that task however far back the chain goes. What has no date yet, or is to be quoted, is listed.
+// by location, never on a holiday or a day that company already has a visit. Work that waits on a
+// task follows that task however far back the chain goes. What has no date yet, or is to be
+// quoted, is listed. The last visits, and the work they wait on, set the finish date: those are
+// the ones to keep on time. Drafts count only when asked (the walk, to see the finish date move as
+// photos are saved); the schedule and the lists leave them out until they are checked.
 
-import { addWorkingDays, daysBetween, isDay, mondayOf, visitEnd, weekdayOf, workingDayOnOrAfter } from './dates';
+import { addWorkingDays, daysBetween, isDay, mondayOf, visitDays, visitEnd, visitStart, weekdayOf, weekdayOnOrAfter, workingDayOnOrAfter } from './dates';
 import { isPriced } from './rules';
 import { earliestStart, startAfter } from './schedule';
 import { DAY_HOURS, NO_TIME, totalTime, type TimeTotal } from './time';
@@ -45,16 +48,29 @@ export interface Timeline {
   needsPrice: Item[];
   /** The last day with open work on it: when everything with a date is done. */
   finish: string | null;
+  /** What sets the finish date, first to last: the last visits and the visits of the work they wait on. */
+  critical: TimelineBar[];
 }
 
-export function buildTimeline(items: Item[], visits: Visit[], locations: Pick<Location, 'id' | 'sortOrder'>[], today: string): Timeline {
+export interface TimelineOptions {
+  /** Drafts with a company count too, as if they were checked. */
+  drafts?: boolean;
+}
+
+export function buildTimeline(
+  items: Item[],
+  visits: Visit[],
+  locations: Pick<Location, 'id' | 'sortOrder'>[],
+  today: string,
+  options: TimelineOptions = {},
+): Timeline {
   const live = visits.filter((v) => !v.removed);
   const visitById = new Map(live.map((v) => [v.id, v]));
   const place = new Map(locations.map((l) => [l.id, l.sortOrder]));
   const inOrder = (a: Item, b: Item) =>
     (place.get(a.locationId) ?? 1e9) - (place.get(b.locationId) ?? 1e9) || (a.number ?? 1e9) - (b.number ?? 1e9) || a.createdAt.localeCompare(b.createdAt);
   const byId = new Map(items.map((i) => [i.id, i]));
-  const open = items.filter((i) => i.status === 'open' && !i.unfinished);
+  const open = items.filter((i) => i.status === 'open' && (!i.unfinished || (options.drafts === true && !!i.companyId)));
   const first = earliestStart(today);
 
   // On the schedule already: done by the last day of its visit. Work on a visit that is over gets a new best guess.
@@ -72,7 +88,7 @@ export function buildTimeline(items: Item[], visits: Visit[], locations: Pick<Lo
   for (const v of live) {
     if (visitEnd(v) < today) continue;
     const days = busy.get(v.companyId) ?? new Set<string>();
-    for (let k = 0; k < Math.max(1, v.days); k++) days.add(addWorkingDays(workingDayOnOrAfter(v.start), k));
+    for (const d of visitDays(v)) days.add(d);
     busy.set(v.companyId, days);
   }
   const load = new Map<string, Map<string, number>>();
@@ -186,7 +202,7 @@ export function buildTimeline(items: Item[], visits: Visit[], locations: Pick<Lo
     bars.push({
       key: v.id,
       companyId: v.companyId,
-      start: workingDayOnOrAfter(v.start),
+      start: visitStart(v),
       days: Math.max(1, v.days),
       end,
       kind: v.confirmed ? 'confirmed' : 'planned',
@@ -232,18 +248,41 @@ export function buildTimeline(items: Item[], visits: Visit[], locations: Pick<Lo
   }
   bars.sort((a, b) => a.start.localeCompare(b.start) || a.companyId.localeCompare(b.companyId) || a.key.localeCompare(b.key));
 
-  const ends = bars.filter((b) => !b.done && b.items.length > 0 && !b.pastDue).map((b) => b.end);
+  const live2 = bars.filter((b) => !b.done && b.items.length > 0 && !b.pastDue);
+  const finish = live2.length > 0 ? live2.map((b) => b.end).reduce((a, b) => (b > a ? b : a)) : null;
+
+  // What sets the finish date: the visits that end on it, then, for each item on them, the visit of
+  // the task it waits on that ends last, and so on back.
+  const barOf = new Map<string, TimelineBar>();
+  for (const b of bars) for (const i of b.items) if (!barOf.has(i.id) || b.kind !== 'auto') barOf.set(i.id, b);
+  const critical = new Map<string, TimelineBar>();
+  const queue = live2.filter((b) => b.end === finish);
+  while (queue.length > 0) {
+    const bar = queue.shift()!;
+    if (critical.has(bar.key)) continue;
+    critical.set(bar.key, bar);
+    for (const item of bar.items) {
+      let latest: TimelineBar | undefined;
+      for (const id of item.waitingOnItems) {
+        const b = barOf.get(id);
+        if (b && !b.done && (!latest || b.end > latest.end)) latest = b;
+      }
+      if (latest && !critical.has(latest.key)) queue.push(latest);
+    }
+  }
+
   return {
     bars,
     noDate: noDate.sort(inOrder),
     needsPrice,
-    finish: ends.length > 0 ? ends.reduce((a, b) => (b > a ? b : a)) : null,
+    finish,
+    critical: [...critical.values()].sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end)),
   };
 }
 
-/** Where a working day falls on a timeline that starts on a Monday: 0 for that Monday, 5 for the next. */
+/** Where a weekday falls on a timeline that starts on a Monday: 0 for that Monday, 5 for the next. Holidays keep their column. */
 export function workingIndex(monday: string, day: string): number {
-  const d = workingDayOnOrAfter(day);
+  const d = weekdayOnOrAfter(day);
   const weeks = Math.floor(daysBetween(monday, mondayOf(d)) / 7);
   return weeks * 5 + (weekdayOf(d) - 1);
 }

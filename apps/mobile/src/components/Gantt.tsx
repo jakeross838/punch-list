@@ -1,10 +1,11 @@
 // The schedule as a chart: a row for each company, in the order their work starts, and a bar for
 // each visit across the working days. Green is confirmed, blue is our best guess, and a pale bar is
 // a best guess that still moves with the list; red is a visit that is over with work still open.
-// A line marks today. It scrolls sideways for the weeks after the first three. Tap a bar for its
-// visit, or a company for its plan.
+// A dark outline marks the visits that set the finish date. Holidays are shaded, with no work on
+// them. A line marks today. It scrolls sideways for the weeks after the first three. Tap a bar for
+// its visit, or a company for its plan.
 
-import { addDays, isWorkingDay, workingIndex, type Timeline, type TimelineBar } from '@punch/core';
+import { addDays, holidayOn, isWeekday, workingIndex, type Timeline, type TimelineBar } from '@punch/core';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { shortDate, Text, Touchable, weekdayDate } from '@/ui';
@@ -52,8 +53,13 @@ export function Gantt({
   const weeks = Math.max(MIN_WEEKS, Math.ceil((lastIndex + 1) / 5));
   const width = weeks * 5 * DAY;
   const todayIndex = workingIndex(monday, today);
-  const todayShown = todayIndex >= 0 && todayIndex < weeks * 5 && isWorkingDay(today);
+  const todayShown = todayIndex >= 0 && todayIndex < weeks * 5 && isWeekday(today);
   const now = new Date();
+  const critical = new Set(timeline.critical.map((b) => b.key));
+  // The holidays in view, by their column.
+  const off = Array.from({ length: weeks * 5 }, (_, i) => addDays(monday, Math.floor(i / 5) * 7 + (i % 5)))
+    .map((day, i) => ({ day, i, name: holidayOn(day) }))
+    .filter((d) => d.name !== null);
 
   return (
     <View style={styles.card} testID="gantt">
@@ -92,7 +98,7 @@ export function Gantt({
                         <Text
                           key={day}
                           variant="caption1"
-                          color={day === today ? colors.destructive : colors.quiet}
+                          color={day === today ? colors.destructive : holidayOn(day) ? colors.chevron : colors.quiet}
                           weight={day === today ? '600' : '400'}
                           style={styles.dayNumber}
                         >
@@ -105,6 +111,14 @@ export function Gantt({
               );
             })}
           </View>
+          {off.map((d) => (
+            <View
+              key={d.day}
+              pointerEvents="none"
+              accessibilityLabel={`${d.name}, no work`}
+              style={[styles.holiday, { left: d.i * DAY, height: rows.length * ROW }]}
+            />
+          ))}
           {rows.map((r) => (
             <View key={r.companyId} style={[styles.row, { width }]}>
               {Array.from({ length: weeks }, (_, w) => (
@@ -122,7 +136,7 @@ export function Gantt({
                     feedback="opacity"
                     onPress={() => onBar(bar)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${companyName(bar.companyId)}, ${when}, ${barWords(bar)}, ${plural(bar.items.length, 'item')}`}
+                    accessibilityLabel={`${companyName(bar.companyId)}, ${when}, ${barWords(bar)}, ${plural(bar.items.length, 'item')}${critical.has(bar.key) ? ', sets the finish date' : ''}${bar.visit?.askedStart && !bar.visit.confirmed ? ', other dates asked for' : ''}`}
                     testID={`gantt-bar-${bar.key}`}
                     style={[
                       styles.bar,
@@ -135,8 +149,10 @@ export function Gantt({
                             ? styles.planned
                             : styles.moving,
                       bar.pastDue ? styles.late : null,
+                      critical.has(bar.key) && !bar.pastDue ? styles.critical : null,
                     ]}
                   >
+                    {bar.visit?.askedStart && !bar.visit.confirmed ? <View style={styles.askedDot} testID={`gantt-asked-${bar.key}`} /> : null}
                     {span >= 3 ? (
                       <Text
                         variant="caption1"
@@ -161,7 +177,7 @@ export function Gantt({
 }
 
 /** What the colors mean, under the chart. */
-export function GanttKey() {
+export function GanttKey({ critical = false, holidays = false }: { critical?: boolean; holidays?: boolean }) {
   const swatch = (style: object, label: string) => (
     <View style={styles.keyItem}>
       <View style={[styles.swatch, style]} />
@@ -176,6 +192,8 @@ export function GanttKey() {
       {swatch(styles.planned, 'Our best guess')}
       {swatch(styles.moving, 'Moves with the list')}
       {swatch([styles.planned, styles.late], 'Over, work open')}
+      {critical ? swatch([styles.planned, styles.critical], 'Sets the finish date') : null}
+      {holidays ? swatch(styles.holidaySwatch, 'Holiday') : null}
     </View>
   );
 }
@@ -197,6 +215,10 @@ const styles = StyleSheet.create({
   moving: { backgroundColor: colors.moving, borderWidth: 1, borderColor: colors.bestGuess },
   done: { backgroundColor: colors.chevron },
   late: { borderWidth: 2, borderColor: colors.destructive },
+  critical: { borderWidth: 2, borderColor: colors.label },
+  askedDot: { position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: colors.destructive, borderWidth: 1, borderColor: colors.white },
+  holiday: { position: 'absolute', top: HEAD, width: DAY, backgroundColor: colors.surface },
+  holidaySwatch: { backgroundColor: colors.surface, borderWidth: layout.hairline, borderColor: colors.separator },
   today: { position: 'absolute', top: HEAD - 4, width: 0, borderLeftWidth: 1.5, borderLeftColor: colors.destructive },
   key: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginHorizontal: layout.inset, marginTop: 10 },
   keyItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },

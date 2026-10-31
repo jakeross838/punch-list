@@ -14,7 +14,7 @@
 // guess, what each visit covers, and what has no date yet.
 // Plain HTML, so the phone turns it into a PDF and the preview page shows the very same thing.
 
-import { addDays, dayOfDate, daysBetween, isDay, mondayOf, visitEnd } from './dates';
+import { addDays, dayOfDate, daysBetween, holidayGroups, holidayOn, holidaysBetween, isDay, mondayOf, visitEnd } from './dates';
 import { holdText } from './holds';
 import { kindText, orderText } from './orders';
 import { holdsFor, type CompanyList, type ListLine, type ListLookups } from './lists';
@@ -264,7 +264,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
 
   if (planned.length > 0) {
     parts.push('<h2 class="rb-section">Scheduled Visits</h2>');
-    parts.push('<p class="rb-section-note">Tell us if these dates do not work for you.</p>');
+    parts.push('<p class="rb-section-note">Say whether these dates work on your page, from the link with this list: These Dates Work, or Other Dates.</p>');
     const body = planned
       .map(({ visit, lines }) => {
         const end = visitEnd(visit);
@@ -585,8 +585,16 @@ export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, sett
   const todayIndex = workingIndex(monday, today);
 
   const finish = timeline.finish ? `Everything with a date is done by ${dayText(timeline.finish, settings.date, true)}.` : '';
+  // Who sets that date: the companies on the last visits, after the ones whose work they wait on.
+  const names = (list: TimelineBar[]) => andList([...new Set(list.map((b) => company(b.companyId)))]);
+  const last = timeline.critical.filter((b) => b.end === timeline.finish);
+  const lastCompanies = new Set(last.map((b) => b.companyId));
+  const before = timeline.critical.filter((b) => b.end !== timeline.finish && !lastCompanies.has(b.companyId));
+  const setBy = last.length > 0 ? `That date is set by ${names(last)}${before.length > 0 ? `, after ${names(before)}` : ''}.` : '';
+  const critical = new Set(timeline.critical.map((b) => b.key));
   const summary = [
     finish,
+    setBy,
     bars.length > 0
       ? `${plural(bars.length, 'visit')} in the next three weeks. Green is confirmed; blue is our best guess. Tell us if your dates do not work, or if anything is missing.`
       : 'No visits in the next three weeks.',
@@ -597,9 +605,10 @@ export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, sett
 
   // The chart: a row for each company, a column for each working day.
   const weekHeads = Array.from({ length: LOOK_AHEAD_WEEKS }, (_, w) => `<th colspan="5" class="rb-g-week">Week of ${esc(dayText(addDays(monday, w * 7), settings.date))}</th>`).join('');
+  const dayOf = (i: number) => addDays(monday, Math.floor(i / 5) * 7 + (i % 5));
   const dayHeads = Array.from({ length: days }, (_, i) => {
-    const day = addDays(monday, Math.floor(i / 5) * 7 + (i % 5));
-    return `<th class="rb-g-day${i % 5 === 0 ? ' rb-g-wk' : ''}${i === todayIndex ? ' rb-g-now' : ''}">${Number(day.slice(8))}</th>`;
+    const day = dayOf(i);
+    return `<th class="rb-g-day${i % 5 === 0 ? ' rb-g-wk' : ''}${i === todayIndex ? ' rb-g-now' : ''}${holidayOn(day) ? ' rb-g-off' : ''}">${Number(day.slice(8))}</th>`;
   }).join('');
   const body = rows
     .map((r) => {
@@ -610,10 +619,11 @@ export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, sett
         if (bar) {
           const span = Math.min(days - 1, workingIndex(monday, bar.end)) - i + 1;
           const kind = bar.kind === 'confirmed' ? ' rb-g-ok' : '';
-          cells.push(`<td colspan="${span}" class="rb-g-cell${wk}"><div class="rb-g-bar${kind}${bar.pastDue ? ' rb-g-late' : ''}"></div></td>`);
+          const sets = critical.has(bar.key) && !bar.pastDue ? ' rb-g-sets' : '';
+          cells.push(`<td colspan="${span}" class="rb-g-cell${wk}"><div class="rb-g-bar${kind}${bar.pastDue ? ' rb-g-late' : ''}${sets}"></div></td>`);
           i += span;
         } else {
-          cells.push(`<td class="rb-g-cell${wk}${i === todayIndex ? ' rb-g-now' : ''}"></td>`);
+          cells.push(`<td class="rb-g-cell${wk}${i === todayIndex ? ' rb-g-now' : ''}${holidayOn(dayOf(i)) ? ' rb-g-off' : ''}"></td>`);
           i += 1;
         }
       }
@@ -625,7 +635,15 @@ export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, sett
     parts.push(
       `<table class="rb-gantt"><colgroup>${cols}</colgroup><thead><tr><th rowspan="2">Company</th>${weekHeads}</tr><tr>${dayHeads}</tr></thead><tbody>${body}</tbody></table>`,
     );
-    parts.push('<p class="rb-key"><span><i class="rb-g-ok"></i>Confirmed</span><span><i></i>Our best guess</span></p>');
+    const holidays = holidayGroups(holidaysBetween(monday, lastDay));
+    parts.push(
+      `<p class="rb-key"><span><i class="rb-g-ok"></i>Confirmed</span><span><i></i>Our best guess</span>${critical.size > 0 ? '<span><i class="rb-g-sets"></i>Sets the finish date</span>' : ''}${holidays.length > 0 ? '<span><i class="rb-g-off"></i>Holiday</span>' : ''}</p>`,
+    );
+    if (holidays.length > 0) {
+      parts.push(
+        `<p class="rb-section-note">${esc(`No work on ${holidays.map((h) => `${h.name}, ${h.days.map((d) => dayText(d, settings.date, true)).join(' and ')}`).join('; ')}.`)}</p>`,
+      );
+    }
 
     // What each visit covers: the company, when, and the work, each piece with where it is.
     const columns = [
@@ -636,9 +654,10 @@ export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, sett
     const visitRows = bars
       .map((b, i) => {
         const when = b.days > 1 ? `${dayText(b.start, settings.date, true)} to ${dayText(b.end, settings.date, true)}` : dayText(b.start, settings.date, true);
+        const asked = b.visit?.askedStart && !b.visit.confirmed ? `, other dates asked: ${dayText(b.visit.askedStart, settings.date, true)}` : '';
         const status = b.pastDue ? 'Over, with work still open' : b.kind === 'confirmed' ? 'Confirmed' : 'Our best guess';
         const work = b.items.map((item) => `<div><b>${esc(item.title)}</b>, ${esc(place(item.locationId))}</div>`).join('');
-        return `<tr class="rb-row${i % 2 === 1 ? ' rb-alt' : ''}"><td>${esc(when)}<div class="rb-meta">${esc(`${plural(b.days, 'day')}, ${status.toLowerCase()}`)}</div></td><td>${esc(company(b.companyId))}</td><td>${work}</td></tr>`;
+        return `<tr class="rb-row${i % 2 === 1 ? ' rb-alt' : ''}"><td>${esc(when)}<div class="rb-meta">${esc(`${plural(b.days, 'day')}, ${status.toLowerCase()}${asked}`)}</div></td><td>${esc(company(b.companyId))}</td><td>${work}</td></tr>`;
       })
       .join('');
     parts.push('<h2 class="rb-section">What Each Visit Covers</h2>');
@@ -735,6 +754,9 @@ export const PRINT_CSS = `
 .rb-g-bar{height:11pt;border-radius:2pt;background:#4E7A8C}
 .rb-g-bar.rb-g-ok,.rb-key i.rb-g-ok{background:#4E7F5E}
 .rb-g-bar.rb-g-late{border:1.25pt solid #B42318}
+.rb-g-bar.rb-g-sets,.rb-key i.rb-g-sets{box-shadow:0 0 0 1.25pt #1D1D1F}
+.rb-gantt .rb-g-off,.rb-key i.rb-g-off{background:#F7F5EC}
+.rb-gantt th.rb-g-off{background:#CBD8DB;color:#3B5864}
 .rb-key{display:flex;gap:16pt;margin:6pt 0 0;font-size:8.5pt;color:#4E7A8C}
 .rb-key i{display:inline-block;width:14pt;height:8pt;border-radius:2pt;margin-right:5pt;vertical-align:-1pt;background:#4E7A8C}
 .rb-ph{position:relative;width:${PHOTO_WIDTH}in;overflow:hidden;border-radius:3pt;background:#F7F5EC}

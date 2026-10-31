@@ -22,7 +22,7 @@ import {
   type Location,
 } from '../src/index';
 
-const rooms: Location[] = [{ id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true }];
+const rooms: Location[] = [{ id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true, walkedAt: null }];
 const lookups = {
   locations: rooms,
   trades: [{ id: 't-carp', name: 'Carpentry', sortOrder: 1 }],

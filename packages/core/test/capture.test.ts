@@ -39,11 +39,11 @@ import {
 } from '../src/index';
 
 const library: StandardTitle[] = [
-  { id: 's1', title: 'Adjust cabinet door', tradeId: 't-carp', uses: 12, approved: true, hours: null },
-  { id: 's2', title: 'Adjust closet door', tradeId: 't-carp', uses: 3, approved: true, hours: null },
-  { id: 's3', title: 'Adjust thermostat', tradeId: 't-ac', uses: 1, approved: true, hours: null },
-  { id: 's4', title: 'Install cabinet hardware', tradeId: 't-carp', uses: 7, approved: true, hours: null },
-  { id: 's5', title: 'Touch up paint', tradeId: 't-paint', uses: 40, approved: true, hours: null },
+  { id: 's1', title: 'Adjust cabinet door', tradeId: 't-carp', uses: 12, approved: true, hours: null, rooms: [] },
+  { id: 's2', title: 'Adjust closet door', tradeId: 't-carp', uses: 3, approved: true, hours: null, rooms: [] },
+  { id: 's3', title: 'Adjust thermostat', tradeId: 't-ac', uses: 1, approved: true, hours: null, rooms: [] },
+  { id: 's4', title: 'Install cabinet hardware', tradeId: 't-carp', uses: 7, approved: true, hours: null, rooms: [] },
+  { id: 's5', title: 'Touch up paint', tradeId: 't-paint', uses: 40, approved: true, hours: null, rooms: [] },
 ];
 
 const jobCompanies: JobCompany[] = [
@@ -213,10 +213,10 @@ describe('the form and added fields', () => {
 
 describe('walking the job', () => {
   const rooms: Location[] = [
-    { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true },
-    { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true },
-    { id: 'm', jobId: 'j', name: 'Master Bedroom', number: '206', label: 'Master Bedroom 206', floor: 'Level 2', kind: 'room', sortOrder: 3, active: true },
-    { id: 'r', jobId: 'j', name: 'Roof', number: null, label: 'Roof', floor: null, kind: 'shared', sortOrder: 4, active: true },
+    { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true, walkedAt: null },
+    { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true, walkedAt: null },
+    { id: 'm', jobId: 'j', name: 'Master Bedroom', number: '206', label: 'Master Bedroom 206', floor: 'Level 2', kind: 'room', sortOrder: 3, active: true, walkedAt: null },
+    { id: 'r', jobId: 'j', name: 'Roof', number: null, label: 'Roof', floor: null, kind: 'shared', sortOrder: 4, active: true, walkedAt: null },
   ];
 
   it('lists rooms under their floor and the shared areas last', () => {
@@ -275,8 +275,8 @@ describe('walking the job', () => {
 
 describe('the lists that go to the subs', () => {
   const rooms: Location[] = [
-    { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true },
-    { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true },
+    { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true, walkedAt: null },
+    { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true, walkedAt: null },
   ];
   const lookups = {
     locations: rooms,

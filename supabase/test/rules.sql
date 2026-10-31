@@ -227,6 +227,19 @@ begin
     end if;
     update public.items set status = 'removed' where id = x;
   end;
+  -- A photo saves before a location is picked: a draft may wait for its location too.
+  declare
+    x uuid;
+  begin
+    insert into public.items (job_id, location_id, title, ready, unfinished) values (j, null, '', true, true) returning id into x;
+    begin
+      update public.items set title = 'Install mirror', company_id = c, unfinished = false where id = x;
+      raise exception 'FAIL: a finished item with no location was accepted';
+    exception when check_violation then null;
+    end;
+    update public.items set location_id = loc, title = 'Install mirror', company_id = c, unfinished = false where id = x;
+    update public.items set status = 'removed' where id = x;
+  end;
   -- Every other rule still holds: not ready needs Waiting On, and it cannot be completed.
   begin
     update public.items set ready = false where id = d;
@@ -481,6 +494,7 @@ declare
   c uuid := (select id from public.companies where name = 'Gator Plumbing');
   i uuid := (select id from public.items where title = 'Install hose bib');
   loc uuid := (select location_id from public.items where title = 'Install hose bib');
+  t uuid := (select id from public.trades where name = 'Plumbing');
   t2 uuid; c2 uuid; other uuid; m uuid; link text;
 begin
   -- From the app: stamped with who is signed in, and with the company doing the item.
@@ -525,6 +539,32 @@ begin
     insert into public.company_links (token, job_id, company_id) values ('abc123', j, c2);
     raise exception 'FAIL: a short link was made';
   exception when check_violation then null;
+  end;
+
+  -- The walk: Done Here stamps who walked the location; Start a New Walk clears it.
+  update public.locations set walked_at = now() where id = loc;
+  if (select walked_by from public.locations where id = loc) is distinct from jake then raise exception 'FAIL: the walk was not stamped with who walked it'; end if;
+  update public.locations set walked_at = null where id = loc;
+  if (select walked_by from public.locations where id = loc) is not null then raise exception 'FAIL: a new walk kept who walked it'; end if;
+  -- Common tasks: a title is common in kinds of room the app knows.
+  begin
+    insert into public.title_library (title, trade_id, rooms) values ('Install attic ladder', t, array['attic']);
+    raise exception 'FAIL: a title was common in a kind of room the app does not know';
+  exception when check_violation then null;
+  end;
+  insert into public.title_library (title, trade_id, rooms) values ('Trim out toilet', t, array['bathroom']);
+
+  -- Visits for the company to answer from its page, and one of another company's it must not reach.
+  declare
+    v uuid;
+    v2 uuid;
+  begin
+    insert into public.visits (job_id, company_id, start_date, days) values (j, c, '2026-11-04', 1) returning id into v;
+    insert into public.visits (job_id, company_id, start_date, days) values (j, c, '2026-11-11', 2) returning id into v2;
+    perform set_config('test.visit', v::text, false);
+    perform set_config('test.visit2', v2::text, false);
+    insert into public.visits (job_id, company_id, start_date, days) values (j, c2, '2026-11-05', 1) returning id into v;
+    perform set_config('test.other_visit', v::text, false);
   end;
 
   -- The company's private link.
@@ -578,6 +618,31 @@ begin
     raise exception 'FAIL: a made up link was accepted';
   exception when insufficient_privilege then null;
   end;
+  -- Its dates: these work, or other dates asked for.
+  perform public.trade_confirm_visit(link, current_setting('test.visit')::uuid, 'Mike');
+  perform public.trade_ask_visit(link, current_setting('test.visit2')::uuid, '2026-11-13', 1, ' Mike ');
+  page := public.trade_page(link);
+  if not exists (select 1 from jsonb_array_elements(page -> 'visits') x where x ->> 'id' = current_setting('test.visit') and (x ->> 'confirmed')::boolean) then
+    raise exception 'FAIL: the company could not confirm its dates';
+  end if;
+  if not exists (select 1 from jsonb_array_elements(page -> 'visits') x where x ->> 'id' = current_setting('test.visit2') and x ->> 'asked_start' = '2026-11-13' and (x ->> 'asked_days')::int = 1) then
+    raise exception 'FAIL: the page does not show the dates the company asked for';
+  end if;
+  begin
+    perform public.trade_confirm_visit(link, current_setting('test.other_visit')::uuid, 'Mike');
+    raise exception 'FAIL: a company confirmed another company''s visit';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.trade_ask_visit(link, current_setting('test.visit2')::uuid, null, 1, 'Mike');
+    raise exception 'FAIL: dates were asked for with no first day';
+  exception when check_violation then null;
+  end;
+  begin
+    perform 1 from public.visits;
+    raise exception 'FAIL: the page reached the visits table';
+  exception when insufficient_privilege then null;
+  end;
   begin
     perform 1 from public.comments;
     raise exception 'FAIL: the page reached the comments table';
@@ -603,6 +668,20 @@ begin
   end if;
   if (select count(*) from public.job_activity where kind = 'comment_added' and person_id is null and (detail ->> 'from_company')::boolean) <> 2 then
     raise exception 'FAIL: the company''s comments are not in Activity';
+  end if;
+  -- Its answers on its dates are in Activity under its name, and nothing else was logged for them.
+  if (select count(*) from public.job_activity where kind = 'visit_confirmed_by_company' and detail ->> 'author_name' = 'Mike') <> 1
+     or (select count(*) from public.job_activity where kind = 'visit_change_asked' and detail ->> 'start' = '2026-11-13' and detail ->> 'was_start' = '2026-11-11') <> 1 then
+    raise exception 'FAIL: the company''s answers on its dates are not in Activity';
+  end if;
+  if exists (select 1 from public.job_activity where kind = 'visit_changed' and person_id is null) then
+    raise exception 'FAIL: the company''s answer was logged as a change by nobody';
+  end if;
+  if (select asked_name from public.visits where id = current_setting('test.visit2')::uuid) <> 'Mike' then raise exception 'FAIL: the ask lost its name'; end if;
+  -- Moving the visit to the dates asked for answers it.
+  update public.visits set start_date = '2026-11-13', days = 1, confirmed = true where id = current_setting('test.visit2')::uuid;
+  if (select asked_start from public.visits where id = current_setting('test.visit2')::uuid) is not null then
+    raise exception 'FAIL: moving the visit did not answer what the company asked';
   end if;
   update public.company_links set revoked = true where token = link;
   begin

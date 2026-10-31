@@ -17,6 +17,7 @@ import {
   type Comment,
   type Item,
   type Photo,
+  type Visit,
 } from '@punch/core';
 import { DataContext, type DataApi, type ItemPatch, type NewItem } from './api';
 import { keepPhoto } from './photoFiles';
@@ -204,12 +205,17 @@ const api: DataApi = {
     let order = existing.reduce((m, l) => Math.max(m, l.sortOrder), 0);
     const added = parsed
       .filter((p) => !byLabel.has(p.label.toLowerCase()))
-      .map((p) => ({ ...p, id: randomUUID(), jobId, active: true, sortOrder: ++order }));
+      .map((p) => ({ ...p, id: randomUUID(), jobId, active: true, sortOrder: ++order, walkedAt: null }));
     commit({ locations: [...state.locations.map((l) => (back.has(l.id) ? { ...l, active: true } : l)), ...added] }, [
       ...added.map((l): Happened => ({ jobId, kind: 'location_added', detail: { location_id: l.id, label: l.label } })),
       ...existing.filter((l) => back.has(l.id)).map((l): Happened => ({ jobId, kind: 'location_restored', detail: { location_id: l.id, label: l.label } })),
     ]);
     return added.length + back.size;
+  },
+  async setWalked(locationIds, walked) {
+    const on = new Set(locationIds);
+    const at = walked ? now() : null;
+    setState({ ...state, locations: state.locations.map((l) => (on.has(l.id) ? { ...l, walkedAt: at } : l)) });
   },
   async updateLocation(id, patch) {
     const was = state.locations.find((l) => l.id === id);
@@ -250,7 +256,19 @@ const api: DataApi = {
   },
   async addVisit({ itemIds, note, ...input }) {
     const id = randomUUID();
-    const visit = { ...input, id, note: note ?? '', removed: false, createdBy: state.me.id, createdAt: now(), updatedAt: now() };
+    const visit: Visit = {
+      ...input,
+      id,
+      note: note ?? '',
+      removed: false,
+      askedStart: null,
+      askedDays: null,
+      askedName: null,
+      askedAt: null,
+      createdBy: state.me.id,
+      createdAt: now(),
+      updatedAt: now(),
+    };
     const on = new Set(itemIds);
     commit(
       {
@@ -264,7 +282,10 @@ const api: DataApi = {
   async updateVisit(id, patch, itemIds) {
     const was = state.visits.find((v) => v.id === id);
     if (!was) return;
-    const visit = { ...was, ...patch, updatedAt: now() };
+    const changed = { ...was, ...patch, updatedAt: now() };
+    // New dates, or confirming it, answer what the company asked for, as the database does.
+    const answered = changed.start !== was.start || changed.days !== was.days || (changed.confirmed && !was.confirmed);
+    const visit = answered ? { ...changed, askedStart: null, askedDays: null, askedName: null, askedAt: null } : changed;
     const on = itemIds ? new Set(itemIds) : null;
     const moved = visit.start !== was.start || visit.days !== was.days || visit.confirmed !== was.confirmed;
     commit(
@@ -284,6 +305,30 @@ const api: DataApi = {
         ? [{ jobId: was.jobId, kind: 'visit_changed', detail: { ...visitDetail(visit), was_start: was.start, was_days: was.days, was_confirmed: was.confirmed } }]
         : [],
     );
+  },
+  async keepVisitDates(id) {
+    commit({ visits: state.visits.map((v) => (v.id === id ? { ...v, askedStart: null, askedDays: null, askedName: null, askedAt: null, updatedAt: now() } : v)) });
+  },
+  async companyConfirmVisit({ visitId, name }) {
+    const was = state.visits.find((v) => v.id === visitId && !v.removed);
+    if (!was) throw new Error('That visit is not on this list');
+    const visit = { ...was, confirmed: true, askedStart: null, askedDays: null, askedName: null, askedAt: null, updatedAt: now() };
+    commit({ visits: state.visits.map((v) => (v.id === visitId ? visit : v)) }, [
+      { jobId: was.jobId, kind: 'visit_confirmed_by_company', detail: { ...visitDetail(visit), from_company: true, author_name: tidyName(name) }, personId: null },
+    ]);
+  },
+  async companyAskVisit({ visitId, start, days, name }) {
+    const was = state.visits.find((v) => v.id === visitId && !v.removed);
+    if (!was) throw new Error('That visit is not on this list');
+    const visit = { ...was, confirmed: false, askedStart: start, askedDays: Math.max(1, days), askedName: tidyName(name), askedAt: now(), updatedAt: now() };
+    commit({ visits: state.visits.map((v) => (v.id === visitId ? visit : v)) }, [
+      {
+        jobId: was.jobId,
+        kind: 'visit_change_asked',
+        detail: { visit_id: was.id, company_id: was.companyId, start, days: Math.max(1, days), was_start: was.start, was_days: was.days, from_company: true, author_name: tidyName(name) },
+        personId: null,
+      },
+    ]);
   },
   async removeVisit(id) {
     const was = state.visits.find((v) => v.id === id);
@@ -454,7 +499,7 @@ const api: DataApi = {
   },
   async addTitle({ title, tradeId, hours }) {
     const id = randomUUID();
-    setState({ ...state, titles: [...state.titles, { id, title, tradeId, uses: 0, approved: true, hours: hours ?? null }] });
+    setState({ ...state, titles: [...state.titles, { id, title, tradeId, uses: 0, approved: true, hours: hours ?? null, rooms: [] }] });
     return id;
   },
   async updateTitle(id, patch) {

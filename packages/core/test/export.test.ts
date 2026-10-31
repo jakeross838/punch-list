@@ -14,8 +14,8 @@ import {
 } from '../src/index';
 
 const rooms: Location[] = [
-  { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true },
-  { id: 'b', jobId: 'j', name: 'Bathroom', number: '207', label: 'Bathroom 207', floor: 'Level 2', kind: 'room', sortOrder: 2, active: true },
+  { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true, walkedAt: null },
+  { id: 'b', jobId: 'j', name: 'Bathroom', number: '207', label: 'Bathroom 207', floor: 'Level 2', kind: 'room', sortOrder: 2, active: true, walkedAt: null },
 ];
 const lookups = {
   locations: rooms,

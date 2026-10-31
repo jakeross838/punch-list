@@ -58,6 +58,7 @@ export interface NewVisit {
   itemIds: string[];
 }
 
+/** A visit's dates, days, confirmation and note. New dates, or confirming it, answer what the company asked for. */
 export type VisitPatch = Partial<Pick<Visit, 'start' | 'days' | 'confirmed' | 'note'>>;
 
 export interface DataApi {
@@ -100,6 +101,8 @@ export interface DataApi {
   addLocations(jobId: string, locations: ParsedLocation[]): Promise<number>;
   /** Renames a location, or removes it from the job (active false), which keeps it in the history. */
   updateLocation(id: string, patch: Partial<Pick<Location, 'name' | 'number' | 'label' | 'active'>>): Promise<void>;
+  /** Done Here on a walk marks locations walked; Start a New Walk clears them. */
+  setWalked(locationIds: string[], walked: boolean): Promise<void>;
   createItem(item: NewItem): Promise<string>;
   updateItem(id: string, patch: ItemPatch): Promise<void>;
   /** Several items at once, as one change: clearing a holdup, moving a Ready By. */
@@ -118,12 +121,14 @@ export interface DataApi {
   removeCompanyFromJob(jobId: string, companyId: string, tradeId: string): Promise<void>;
   setWaitingOnExtras(jobId: string, labels: string[]): Promise<void>;
   addTitle(input: { title: string; tradeId: string | null; hours?: number | null }): Promise<string>;
-  updateTitle(id: string, patch: Partial<Pick<StandardTitle, 'title' | 'tradeId' | 'approved' | 'hours'>>): Promise<void>;
+  updateTitle(id: string, patch: Partial<Pick<StandardTitle, 'title' | 'tradeId' | 'approved' | 'hours' | 'rooms'>>): Promise<void>;
   addCustomField(input: Pick<CustomField, 'label' | 'kind' | 'options'>): Promise<string>;
   updateCustomField(id: string, patch: Partial<Pick<CustomField, 'label' | 'options' | 'active'>>): Promise<void>;
   addVisit(visit: NewVisit): Promise<string>;
   /** Changes the visit; with itemIds, those become exactly the items on it. */
   updateVisit(id: string, patch: VisitPatch, itemIds?: string[]): Promise<void>;
+  /** Keeps a visit's dates when the company asked for others: what it asked is cleared, and the visit stays as it is. */
+  keepVisitDates(id: string): Promise<void>;
   /** Marks it removed and takes its items off it. */
   removeVisit(id: string): Promise<void>;
   /** A comment from the signed-in person, on an item or on a company's whole list on the job. */
@@ -135,6 +140,13 @@ export interface DataApi {
    * whole list. On the phone this goes through the database's trade_comment with the link's token.
    */
   addCompanyComment(input: { jobId: string; companyId: string; itemId: string | null; body: string; name: string | null }): Promise<string>;
+  /**
+   * From the company's own page: these dates work (the visit is confirmed), or other dates asked
+   * for (the visit keeps its dates until Ross Built moves it). On the phone these go through the
+   * database's trade_confirm_visit and trade_ask_visit with the link's token.
+   */
+  companyConfirmVisit(input: { visitId: string; name: string | null }): Promise<void>;
+  companyAskVisit(input: { visitId: string; start: string; days: number; name: string | null }): Promise<void>;
   recordSend(send: { jobId: string; list: string; itemIds: string[] }): Promise<string>;
   undoSend(id: string): Promise<void>;
   setFormSettings(settings: FormSettings): Promise<void>;

@@ -33,6 +33,8 @@ export interface Location {
   /** Floor order, as pasted from the plans. */
   sortOrder: number;
   active: boolean;
+  /** When Done Here marked it walked on the walk going now; null until then, and after Start a New Walk. */
+  walkedAt: string | null;
 }
 
 export interface Trade {
@@ -59,6 +61,7 @@ export interface JobCompany {
 export interface Item {
   id: string;
   jobId: string;
+  /** Empty while a draft waits for its location (a photo saves before one is picked). */
   locationId: string;
   /** Job-wide, assigned by the database on first sync. Null until then. */
   number: number | null;
@@ -116,6 +119,12 @@ export interface Visit {
   confirmed: boolean;
   note: string;
   removed: boolean;
+  /** Other dates the company asked for from its page, until Ross Built moves the visit or keeps it. */
+  askedStart: string | null;
+  askedDays: number | null;
+  /** The name the company's person typed. */
+  askedName: string | null;
+  askedAt: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -205,7 +214,12 @@ export interface StandardTitle {
   approved: boolean;
   /** How long the work usually takes, in hours: it fills in the estimate when the title is picked. */
   hours: number | null;
+  /** The kinds of room it is common in, offered as Common Tasks there. */
+  rooms: RoomKind[];
 }
+
+/** Kinds of room, worked out from a location's name, for the common tasks in each. */
+export type RoomKind = 'bathroom' | 'kitchen' | 'laundry' | 'bedroom' | 'closet' | 'living' | 'garage' | 'outside';
 
 export type CustomFieldKind = 'text' | 'list' | 'yes_no' | 'date';
 

@@ -35,8 +35,8 @@ import { ViewSheet } from '@/components/ViewSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
-import { useFilterContext, useHolds, useJobView } from '@/data/view';
-import { Button, EmptyState, Icon, Page, Text, Touchable, type BarMenu, type IconName } from '@/ui';
+import { useFilterContext, useHolds, useJobView, useTimeline } from '@/data/view';
+import { Button, EmptyState, Icon, Page, shortDate, Text, Touchable, useFeedback, type BarMenu, type IconName } from '@/ui';
 
 const GROUP_ICONS: Record<GroupBy, IconName> = { room: 'rooms', company: 'person.2.fill', waiting: 'hourglass' };
 
@@ -68,6 +68,7 @@ function matchesQuery(item: Item, q: string, name: (id: string | null) => string
 export default function JobScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const data = useData();
+  const feedback = useFeedback();
   const job = data.useJobs().find((j) => j.id === jobId);
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId);
@@ -80,6 +81,20 @@ export default function JobScreen() {
   const canFill = useCanSuggest();
   const saved = data.useViewSettings();
   const context = useFilterContext(jobId);
+  const timeline = useTimeline(jobId);
+  // When each location's open work is done: the last day of its visits, when all of it has a date.
+  const doneBy = useMemo(() => {
+    const end = new Map<string, string>();
+    for (const b of timeline.bars) for (const i of b.items) if (!end.has(i.id) || b.end > end.get(i.id)!) end.set(i.id, b.end);
+    const out = new Map<string, string | null>();
+    for (const i of items) {
+      if (i.status !== 'open' || i.unfinished || out.get(i.locationId) === null) continue;
+      const e = end.get(i.id);
+      const was = out.get(i.locationId);
+      out.set(i.locationId, !e ? null : !was || e > was ? e : was);
+    }
+    return out;
+  }, [timeline, items]);
   const today = context.today;
   const [view, setView] = useJobView(jobId, saved);
   const [query, setQuery] = useState('');
@@ -178,10 +193,39 @@ export default function JobScreen() {
         <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" />
       </Touchable>
     ) : null;
-  const openCamera = () => {
-    capture.start({ jobId, roomId: null });
+  const openCamera = (roomId: string | null = null) => {
+    capture.start({ jobId, roomId });
     router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
   };
+  // The walk: how many locations are walked, and the next one not walked yet, in floor order.
+  const inOrder = [...locations].filter((l) => l.active).sort((a, b) => a.sortOrder - b.sortOrder);
+  const walked = inOrder.filter((l) => l.walkedAt).length;
+  const nextToWalk = inOrder.find((l) => !l.walkedAt);
+  const newWalk = () => {
+    const ids = inOrder.filter((l) => l.walkedAt).map((l) => l.id);
+    void data.setWalked(ids, false);
+    feedback.toast({ message: 'A new walk: no location walked yet', action: { label: 'Undo', onPress: () => void data.setWalked(ids, true) } });
+  };
+  const walkRow =
+    walked > 0 && !q ? (
+      <Touchable
+        feedback="highlight"
+        onPress={() => (nextToWalk ? openCamera(nextToWalk.id) : newWalk())}
+        accessibilityRole="button"
+        accessibilityLabel={nextToWalk ? `Walk, ${walked} of ${inOrder.length} locations walked. Go on to ${nextToWalk.label}` : 'Every location is walked. Start a new walk'}
+        testID="walk-row"
+        style={styles.drafts}
+      >
+        <Icon name="rooms" size={20} color={colors.tint} weight="semibold" />
+        <View style={{ flex: 1 }}>
+          <Text weight="600">{nextToWalk ? `${walked} of ${inOrder.length} Locations Walked` : 'Every Location Walked'}</Text>
+          <Text variant="subheadline" color={colors.secondary} numberOfLines={1}>
+            {nextToWalk ? `Next: ${nextToWalk.label}` : 'Tap to start a new walk'}
+          </Text>
+        </View>
+        <Icon name={nextToWalk ? 'camera' : 'undo'} size={17} color={colors.tint} />
+      </Touchable>
+    ) : null;
   /** Starting with the words: the form, with no camera, in the last location used. */
   const newItem = () => {
     capture.start({ jobId, roomId: null });
@@ -203,6 +247,7 @@ export default function JobScreen() {
       {
         actions: [
           { label: 'Activity', icon: 'clock', onPress: openActivity, testID: 'activity' },
+          ...(walked > 0 ? [{ label: 'Start a New Walk', icon: 'rooms' as IconName, onPress: newWalk, testID: 'new-walk' }] : []),
           { label: 'Job Setup', icon: 'slider', onPress: openSetup, testID: 'job-setup' },
           { label: 'Item Form', icon: 'list.bullet', onPress: () => router.push('/settings/item-form'), testID: 'item-form' },
         ],
@@ -253,7 +298,7 @@ export default function JobScreen() {
         footerHeight={CAMERA_BAR_HEIGHT}
         footer={
           <CameraBar
-            onCamera={openCamera}
+            onCamera={() => openCamera()}
             left={<BarTool icon="calendar" label="Schedule" badge={late} badgeLabel="past due" onPress={openSchedule} testID="schedule" />}
             right={<BarTool icon="share" label="Send Lists" onPress={openSend} testID="send" />}
           />
@@ -311,6 +356,7 @@ export default function JobScreen() {
                   {scroll.header}
                   {filterBar}
                   {draftsRow}
+                  {walkRow}
                 </View>
               }
               ListEmptyComponent={empty}
@@ -336,6 +382,7 @@ export default function JobScreen() {
                   row={row}
                   by={view.groupBy}
                   location={locationById.get(row.group.key)}
+                  doneBy={view.groupBy === 'room' ? doneBy.get(row.group.key) : undefined}
                   last={index === section.data.length - 1}
                   sayReady={view.groupBy !== 'waiting' && !(filters.states.length === 1 && (filters.states[0] === 'ready' || filters.states[0] === 'not_ready'))}
                   onPress={() => openGroup(row.group.key)}
@@ -363,6 +410,7 @@ function GroupRow({
   row,
   by,
   location,
+  doneBy,
   last,
   sayReady,
   onPress,
@@ -370,6 +418,8 @@ function GroupRow({
   row: Row;
   by: GroupBy;
   location?: Location;
+  /** When the location's open work is done, when all of it has a date. */
+  doneBy?: string | null;
   last: boolean;
   /** How many are ready, unless the grouping or the filters say it already. */
   sayReady: boolean;
@@ -380,7 +430,7 @@ function GroupRow({
   const label = by === 'room' && location ? location.label : group.label;
   const time = totalText(group.time);
   const ready = !sayReady || count === 0 ? '' : group.ready === count ? 'All ready' : group.ready === 0 ? 'None ready' : `${group.ready} ready`;
-  const meta = [ready, time].filter(Boolean).join(' · ');
+  const meta = [ready, time, count > 0 && doneBy ? `Done by ${shortDate(doneBy)}` : ''].filter(Boolean).join(' · ');
   const lateDays = group.late > 0 ? `${group.late} ${group.late === 1 ? 'day' : 'days'} past due` : '';
   const lateCount = !lateDays && group.pastDue > 0 ? `${group.pastDue} past due` : '';
   const red = lateDays || lateCount;

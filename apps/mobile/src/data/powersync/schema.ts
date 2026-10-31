@@ -31,6 +31,9 @@ const locations = new Table(
     kind: column.text,
     sort_order: column.integer,
     active: column.integer,
+    /** Done Here on the walk going now. */
+    walked_at: column.text,
+    walked_by: column.text,
     created_at: column.text,
   },
   { indexes: { job: ['job_id'] } },
@@ -132,6 +135,8 @@ const title_library = new Table({
   approved: column.integer,
   /** How long the work usually takes, in hours. */
   hours: column.real,
+  /** The kinds of room it is common in, as a JSON list. */
+  rooms: column.text,
   created_at: column.text,
 });
 
@@ -176,6 +181,11 @@ const visits = new Table(
     confirmed: column.integer,
     note: column.text,
     removed: column.integer,
+    /** Other dates the company asked for from its page. */
+    asked_start: column.text,
+    asked_days: column.integer,
+    asked_name: column.text,
+    asked_at: column.text,
     created_by: column.text,
     created_at: column.text,
     updated_at: column.text,

@@ -37,9 +37,9 @@ const look = activityLookups({
   ],
   items: [item(), item({ id: 'i2', title: 'Install towel bar', locationId: 'bath' })],
   locations: [
-    { id: 'laundry', jobId: 'j', name: 'Laundry', number: '119', label: 'Laundry 119', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true },
-    { id: 'kitchen', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true },
-    { id: 'bath', jobId: 'j', name: 'Bathroom', number: '116', label: 'Bathroom 116', floor: 'Level 1', kind: 'room', sortOrder: 3, active: true },
+    { id: 'laundry', jobId: 'j', name: 'Laundry', number: '119', label: 'Laundry 119', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true, walkedAt: null },
+    { id: 'kitchen', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true, walkedAt: null },
+    { id: 'bath', jobId: 'j', name: 'Bathroom', number: '116', label: 'Bathroom 116', floor: 'Level 1', kind: 'room', sortOrder: 3, active: true, walkedAt: null },
   ],
   companies: [
     { id: 'triple-h', name: 'Triple H Painting', defaultTradeId: 'painting', phone: null, email: null, active: true },

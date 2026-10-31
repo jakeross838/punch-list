@@ -1,6 +1,6 @@
 // Database rows (snake_case, booleans as 0 or 1 on the phone) to and from the app's records.
 
-import { tidyHours, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type Trade, type Visit } from '@punch/core';
+import { tidyHours, tidyRooms, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type Trade, type Visit } from '@punch/core';
 import type { ItemPatch } from './api';
 
 type Row = Record<string, unknown>;
@@ -42,6 +42,7 @@ export const rowToLocation = (r: Row): Location => ({
   kind: r.kind === 'shared' ? 'shared' : 'room',
   sortOrder: num(r.sort_order),
   active: bool(r.active),
+  walkedAt: textOrNull(r.walked_at),
 });
 
 export const rowToTrade = (r: Row): Trade => ({ id: text(r.id), name: text(r.name), sortOrder: num(r.sort_order) });
@@ -114,7 +115,8 @@ export function itemPatchColumns(patch: ItemPatch): [string, unknown][] {
   return (Object.keys(patch) as (keyof ItemPatch)[])
     .filter((k) => k in ITEM_COLUMNS && patch[k] !== undefined)
     .map((k) => {
-      const v = patch[k];
+      // No location yet is empty in the app and null in the database.
+      const v = k === 'locationId' && patch[k] === '' ? null : patch[k];
       return [ITEM_COLUMNS[k], typeof v === 'boolean' ? (v ? 1 : 0) : typeof v === 'object' && v !== null ? JSON.stringify(v) : v];
     });
 }
@@ -141,6 +143,7 @@ export const rowToStandardTitle = (r: Row): StandardTitle => ({
   uses: num(r.uses),
   approved: bool(r.approved),
   hours: tidyHours(r.hours),
+  rooms: tidyRooms(json<unknown>(r.rooms, [])),
 });
 
 export const rowToCustomField = (r: Row): CustomField => ({
@@ -161,6 +164,10 @@ export const rowToVisit = (r: Row): Visit => ({
   confirmed: bool(r.confirmed),
   note: text(r.note),
   removed: bool(r.removed),
+  askedStart: textOrNull(r.asked_start)?.slice(0, 10) ?? null,
+  askedDays: numOrNull(r.asked_days),
+  askedName: textOrNull(r.asked_name),
+  askedAt: textOrNull(r.asked_at),
   createdBy: text(r.created_by),
   createdAt: text(r.created_at),
   updatedAt: text(r.updated_at),

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { groupItems, itemNumberLabel, matchesFilters, NO_FILTERS, readViewSettings, type Item, type ItemFilters, type Location } from '../src/index';
 
 const rooms: Location[] = [
-  { id: 'l2', jobId: 'j', name: 'Bathroom', number: '116', label: 'Bathroom 116', floor: null, kind: 'room', sortOrder: 2, active: true },
-  { id: 'l1', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: null, kind: 'room', sortOrder: 1, active: true },
-  { id: 'l3', jobId: 'j', name: 'Roof', number: null, label: 'Roof', floor: null, kind: 'shared', sortOrder: 3, active: true },
+  { id: 'l2', jobId: 'j', name: 'Bathroom', number: '116', label: 'Bathroom 116', floor: null, kind: 'room', sortOrder: 2, active: true, walkedAt: null },
+  { id: 'l1', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: null, kind: 'room', sortOrder: 1, active: true, walkedAt: null },
+  { id: 'l3', jobId: 'j', name: 'Roof', number: null, label: 'Roof', floor: null, kind: 'shared', sortOrder: 3, active: true, walkedAt: null },
 ];
 
 let n = 0;

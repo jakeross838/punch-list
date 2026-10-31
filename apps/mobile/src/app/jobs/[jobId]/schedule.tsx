@@ -3,18 +3,24 @@
 // green once the company confirms and blue as our best guess. Everything else that is ready, or has
 // a date it will be ready, gets a pale best guess that moves as the list changes: work goes as soon
 // as it can, with notice and a day of handoff after what it waits on, in full days of 8 hours. Save
-// the Best Guess keeps those dates. The headline is when everything with a date is done. Past Due
-// comes first; what has no date yet and the additional work to be quoted are listed under the chart. Tap a bar for
-// its visit, or a company for its plan.
+// the Best Guess keeps those dates. The headline is when everything with a date is done, and which
+// companies set that date: the last visits, and the work they wait on, outlined on the chart.
+// Holidays are shaded and never get work. Past Due comes first; what has no date yet, the
+// additional work to be quoted and the drafts not checked yet are listed under the chart. Tap a bar
+// for its visit, or a company for its plan.
 
 import {
+  addDays,
   buildTimeline,
   companyPlan,
   dayOfDate,
   holdText,
+  holidayGroups,
+  holidaysBetween,
   lookAheadStart,
   pastDue,
   timelineRows,
+  waitingOnText,
   type ListLine,
   type TimelineBar,
 } from '@punch/core';
@@ -26,7 +32,7 @@ import { VisitSheet, type VisitDraft } from '@/components/VisitSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { useHolds } from '@/data/view';
-import { EmptyState, haptic, ListRow, ListSection, Page, Text, Touchable, useFeedback, weekdayDate } from '@/ui';
+import { EmptyState, haptic, ListRow, ListSection, Page, shortDate, Text, Touchable, useFeedback, weekdayDate } from '@/ui';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -78,6 +84,13 @@ export default function ScheduleScreen() {
     }
   }
 
+  // What the companies asked for from their own pages, to answer first.
+  const asks = visits.filter((v) => v.askedStart && !v.confirmed && !v.removed);
+  function openVisit(visitId: string) {
+    const bar = timeline.bars.find((b) => b.key === visitId);
+    if (bar) openBar(bar);
+  }
+
   /** Every best guess that moves with the list goes on the schedule as it is, with Undo. */
   async function saveAll() {
     if (moving.length === 0) return;
@@ -97,8 +110,25 @@ export default function ScheduleScreen() {
     : timeline.bars.length > 0
       ? 'Nothing open has a date yet.'
       : '';
+  // What sets that date: the companies on the last visits, after the ones whose work they wait on.
+  const names = (bars: TimelineBar[]) => waitingOnText([...new Set(bars.map((b) => name(b.companyId)))]);
+  const last = timeline.critical.filter((b) => b.end === timeline.finish);
+  const lastCompanies = new Set(last.map((b) => b.companyId));
+  const before = timeline.critical.filter((b) => b.end !== timeline.finish && !lastCompanies.has(b.companyId));
+  // Work on those visits held to a Ready By: who it waits on until then.
+  const held = timeline.critical.flatMap((b) => b.items).find((i) => !i.ready && !!i.readyBy && i.waitingOn.length > 0);
+  const setBy =
+    last.length > 0
+      ? `The outlined visits set the finish date: ${names(last)}${before.length > 0 ? `, after ${names(before)}` : ''}${held ? `, waiting on ${waitingOnText(held.waitingOn)} until ${shortDate(held.readyBy!)}` : ''}.`
+      : '';
   const undated = timeline.noDate.length;
   const subtitle = [headline, undated > 0 ? `${plural(undated, 'item')} with no date yet.` : ''].filter(Boolean).join(' ');
+  const drafts = items.filter((i) => i.unfinished && i.status === 'open').length;
+  // The holidays across the chart, said under it.
+  const shownTo = [addDays(monday, 18), ...timeline.bars.map((b) => b.end)].reduce((a, b) => (b > a ? b : a));
+  const holidays = holidayGroups(holidaysBetween(monday, shownTo));
+  const holidayNote =
+    holidays.length > 0 ? `No work on ${holidays.map((h) => `${h.name}, ${h.days.map((d) => shortDate(d)).join(' and ')}`).join('; ')}.` : '';
 
   return (
     <Page title="Schedule" large subtitle={subtitle || undefined} backLabel={job?.name}>
@@ -116,10 +146,36 @@ export default function ScheduleScreen() {
         </ListSection>
       ) : null}
 
+      {asks.length > 0 ? (
+        <ListSection header={`Asked for Other Dates (${asks.length})`} footer="From the companies' own pages. Tap one to move it or keep its dates.">
+          {asks.map((v) => (
+            <ListRow
+              key={v.id}
+              title={name(v.companyId)}
+              subtitle={`Asked for ${weekdayDate(v.askedStart!)}, booked ${weekdayDate(v.start)}`}
+              icon="calendar.badge.clock"
+              accessory="chevron"
+              onPress={() => openVisit(v.id)}
+              testID={`schedule-asked-${v.id}`}
+            />
+          ))}
+        </ListSection>
+      ) : null}
+
       {rows.length > 0 ? (
         <View style={styles.chart}>
           <Gantt timeline={timeline} rows={rows} monday={monday} today={today} companyName={name} onBar={openBar} onCompany={openPlan} />
-          <GanttKey />
+          <GanttKey critical={timeline.critical.length > 0} holidays={holidays.length > 0} />
+          {setBy ? (
+            <Text variant="footnote" color={colors.secondary} style={styles.note} testID="schedule-set-by">
+              {setBy}
+            </Text>
+          ) : null}
+          {holidayNote ? (
+            <Text variant="footnote" color={colors.secondary} style={styles.note} testID="schedule-holidays">
+              {holidayNote}
+            </Text>
+          ) : null}
         </View>
       ) : (
         <EmptyState icon="calendar" title="Nothing to Schedule" message="Open work shows here as it is added, company by company." />
@@ -185,6 +241,19 @@ export default function ScheduleScreen() {
         </ListSection>
       ) : null}
 
+      {drafts > 0 ? (
+        <ListSection footer="Drafts go on the schedule once they are checked and on the lists.">
+          <ListRow
+            title="Drafts"
+            subtitle="Not on the schedule yet"
+            value={String(drafts)}
+            accessory="chevron"
+            onPress={() => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'drafts', key: 'all' } })}
+            testID="schedule-drafts"
+          />
+        </ListSection>
+      ) : null}
+
       <VisitSheet jobId={jobId} company={draft ? name(draft.companyId) : ''} draft={draft} lines={sheetLines} onClose={() => setDraft(null)} />
     </Page>
   );
@@ -192,6 +261,7 @@ export default function ScheduleScreen() {
 
 const styles = StyleSheet.create({
   chart: { marginBottom: 22 },
+  note: { marginHorizontal: layout.inset, marginTop: 8 },
   row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: layout.rowPadding, paddingVertical: 8, backgroundColor: colors.cell },
   rule: { borderTopWidth: layout.hairline, borderTopColor: colors.separator },
 });

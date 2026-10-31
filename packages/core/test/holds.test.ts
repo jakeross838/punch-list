@@ -32,8 +32,8 @@ function item(over: Partial<Item>): Item {
 }
 
 const rooms: Location[] = [
-  { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true },
-  { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true },
+  { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true, walkedAt: null },
+  { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true, walkedAt: null },
 ];
 const lookups = {
   locations: rooms,
@@ -44,7 +44,7 @@ const lookups = {
   ],
 };
 const stoneVisit: Visit = {
-  id: 'v-stone', jobId: 'j', companyId: 'c-vs', start: '2026-11-04', days: 2, confirmed: false, note: '', removed: false,
+  id: 'v-stone', jobId: 'j', companyId: 'c-vs', start: '2026-11-04', days: 2, confirmed: false, note: '', removed: false, askedStart: null, askedDays: null, askedName: null, askedAt: null,
   createdBy: 'p1', createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z',
 };
 

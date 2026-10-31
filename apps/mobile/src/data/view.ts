@@ -2,7 +2,7 @@
 // opens the way the person saved as their default; changes last until the app closes. Save as My
 // Default keeps the current view for every job.
 
-import { dayOfDate, holdLookups, type FilterContext, type HoldLookups, type ViewSettings } from '@punch/core';
+import { buildTimeline, dayOfDate, holdLookups, type FilterContext, type HoldLookups, type Timeline, type ViewSettings } from '@punch/core';
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { useData } from './api';
 
@@ -54,4 +54,17 @@ export function useFilterContext(jobId: string): FilterContext {
     () => ({ today, visits, photoItemIds: new Set(photos.map((p) => p.itemId)), locations, holds }),
     [today, visits, photos, locations, holds],
   );
+}
+
+/**
+ * The job's schedule as the list is right now. With drafts, the ones Claude has filled in with a
+ * company count too, for the finish date on a walk.
+ */
+export function useTimeline(jobId: string, drafts = false): Timeline {
+  const data = useData();
+  const items = data.useItems(jobId);
+  const visits = data.useVisits(jobId);
+  const locations = data.useLocations(jobId);
+  const today = dayOfDate(new Date());
+  return useMemo(() => buildTimeline(items, visits, locations, today, { drafts }), [items, visits, locations, today, drafts]);
 }

@@ -52,14 +52,14 @@ function item(over: Partial<Item>): Item {
 
 function visit(over: Partial<Visit>): Visit {
   return {
-    id: 'v1', jobId: 'j', companyId: 'c-sms', start: '2026-11-03', days: 2, confirmed: false, note: '', removed: false,
+    id: 'v1', jobId: 'j', companyId: 'c-sms', start: '2026-11-03', days: 2, confirmed: false, note: '', removed: false, askedStart: null, askedDays: null, askedName: null, askedAt: null,
     createdBy: 'p1', createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
   };
 }
 
 const rooms: Location[] = [
-  { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true },
-  { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true },
+  { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true, walkedAt: null },
+  { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true, walkedAt: null },
 ];
 const lookups = {
   locations: rooms,
@@ -298,9 +298,9 @@ describe('filling in from the photo', () => {
     const built = suggestContext({
       location: 'Kitchen 109',
       titles: [
-        { id: 'a', title: 'Touch up paint', tradeId: 't2', uses: 1, approved: true, hours: null },
-        { id: 'b', title: 'Adjust cabinet door', tradeId: 't1', uses: 5, approved: true, hours: 0.5 },
-        { id: 'c', title: 'Not approved', tradeId: null, uses: 9, approved: false, hours: null },
+        { id: 'a', title: 'Touch up paint', tradeId: 't2', uses: 1, approved: true, hours: null, rooms: [] },
+        { id: 'b', title: 'Adjust cabinet door', tradeId: 't1', uses: 5, approved: true, hours: 0.5, rooms: [] },
+        { id: 'c', title: 'Not approved', tradeId: null, uses: 9, approved: false, hours: null, rooms: [] },
       ],
       trades,
       companies,

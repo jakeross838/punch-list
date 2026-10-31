@@ -6,6 +6,7 @@ import {
   addDays,
   addWorkingDays,
   dayOfDate,
+  DEFAULT_ROOM_TASKS,
   DEFAULT_FORM,
   DEFAULT_VIEW,
   earliestStart,
@@ -61,6 +62,7 @@ export interface SampleState {
  */
 const STANDARD_TITLES: Record<string, [string, number, number][]> = {
   Carpentry: [
+    ['Install shelving', 4, 2],
     ['Adjust cabinet door', 14, 0.5], ['Adjust closet door', 6, 0.5], ['Adjust door strike', 9, 0.5], ['Adjust pocket door', 4, 1], ['Hang door', 5, 2],
     ['Install door stop', 8, 0.25], ['Install baseboard', 7, 2], ['Install shoe molding', 6, 1.5], ['Install door casing', 5, 1], ['Install cabinet hardware', 11, 2],
     ['Install closet system', 3, 6], ['Set upper cabinets', 4, 4], ['Install crown molding', 3, 4], ['Replace damaged trim', 6, 1],
@@ -70,7 +72,7 @@ const STANDARD_TITLES: Record<string, [string, number, number][]> = {
     ['Install outlet cover', 9, 0.25], ['Replace outlet cover', 5, 0.25], ['Install switch plate', 7, 0.25], ['Install pendant lights', 3, 3], ['Install light fixture', 10, 1],
     ['Replace light bulb', 4, 0.25], ['Install smoke detector', 2, 0.5],
   ],
-  Plumbing: [['Install toilet', 6, 2], ['Install faucet', 8, 1.5], ['Install shower head', 5, 0.5], ['Fix leak', 4, 1], ['Install hose bib', 2, 1], ['Adjust shower valve', 3, 1]],
+  Plumbing: [['Trim out toilet', 9, 1], ['Install shower trim', 7, 1.5], ['Install toilet', 6, 2], ['Install faucet', 8, 1.5], ['Install shower head', 5, 0.5], ['Fix leak', 4, 1], ['Install hose bib', 2, 1], ['Adjust shower valve', 3, 1]],
   Tile: [['Grout shower floor', 4, 3], ['Caulk tub surround', 5, 1], ['Replace cracked tile', 6, 2], ['Seal grout', 3, 2], ['Caulk shower corner', 4, 0.5]],
   Stone: [['Set vanity tops', 3, 4], ['Polish countertop edge', 2, 1], ['Seal countertop', 3, 1], ['Install backsplash', 2, 6]],
   'Air Conditioning': [['Mount thermostats', 3, 2], ['Adjust thermostat', 2, 0.5], ['Install dryer vent cover', 2, 0.5], ['Install return grille', 3, 0.5], ['Install supply register', 4, 0.25]],
@@ -126,7 +128,7 @@ export function sampleState(): SampleState {
       'Master Bathroom 207',
     ].join('\n'),
   );
-  const locations: Location[] = parsed.locations.map((l, i) => ({ ...l, id: `room-${i}`, jobId: job.id, active: true }));
+  const locations: Location[] = parsed.locations.map((l, i) => ({ ...l, id: `room-${i}`, jobId: job.id, active: true, walkedAt: null }));
   const room = (label: string) => locations.find((x) => x.label === label)!.id;
 
   const at = '2026-10-29T14:00:00.000Z';
@@ -207,7 +209,23 @@ export function sampleState(): SampleState {
       const it = items.find((x) => x.number === no);
       if (it) it.visitId = id;
     }
-    return { id, jobId: job.id, companyId: c(company), start, days, confirmed, note: '', removed: false, createdBy: me.id, createdAt: at, updatedAt: at };
+    return {
+      id,
+      jobId: job.id,
+      companyId: c(company),
+      start,
+      days,
+      confirmed,
+      note: '',
+      removed: false,
+      askedStart: null,
+      askedDays: null,
+      askedName: null,
+      askedAt: null,
+      createdBy: me.id,
+      createdAt: at,
+      updatedAt: at,
+    };
   };
   const visits: Visit[] = [
     visit('visit-paint', 'Triple H Painting', earliestStart(today), 2, true, [3, 15]),
@@ -252,7 +270,7 @@ export function sampleState(): SampleState {
 
   let titleNo = 0;
   const titles: StandardTitle[] = Object.entries(STANDARD_TITLES).flatMap(([trade, list]) =>
-    list.map(([title, uses, hours]) => ({ id: `title-${++titleNo}`, title, tradeId: t(trade), uses, approved: true, hours })),
+    list.map(([title, uses, hours]) => ({ id: `title-${++titleNo}`, title, tradeId: t(trade), uses, approved: true, hours, rooms: DEFAULT_ROOM_TASKS[title.toLowerCase()] ?? [] })),
   );
 
   const customFields: CustomField[] = [

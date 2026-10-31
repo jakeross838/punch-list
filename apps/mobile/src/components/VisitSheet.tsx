@@ -3,7 +3,7 @@
 // items picked add up, and the sheet says when they need more days or fewer, and can fill the days
 // with more of the company's ready work, location by location.
 
-import { DAY_HOURS, daysFor, daysText, fillHours, hoursText, totalText, totalTime, visitEnd, type ListLine, type Visit } from '@punch/core';
+import { DAY_HOURS, daysFor, daysText, fillHours, holidayOn, hoursText, totalText, totalTime, visitEnd, visitStart, type ListLine, type Visit } from '@punch/core';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -60,6 +60,9 @@ export function VisitSheet({
 
   const v = value;
   const end = v ? visitEnd(v) : null;
+  // Booked on a holiday, it keeps the day; it says so.
+  const startName = v ? holidayOn(visitStart(v)) : null;
+  const startHoliday = startName ? `${weekdayDate(visitStart(v!))} is ${startName}.` : '';
   const picked = new Set(v?.itemIds ?? []);
   const set = (patch: Partial<VisitDraft>) => setValue((cur) => (cur ? { ...cur, ...patch } : cur));
   const pickedTime = totalTime(lines.filter((l) => picked.has(l.item.id)).map((l) => l.item));
@@ -88,6 +91,28 @@ export function VisitSheet({
       await data.addVisit({ jobId, companyId: v.companyId, start: v.start, days: v.days, confirmed: v.confirmed, itemIds: v.itemIds });
     }
     onClose();
+  }
+
+  // The company asked for other dates from its page.
+  const asked =
+    v?.visit?.askedStart && !v.visit.confirmed
+      ? { who: v.visit.askedName ? `${v.visit.askedName} at ${company}` : company, start: v.visit.askedStart, days: v.visit.askedDays ?? v.visit.days }
+      : null;
+
+  async function moveToAsked() {
+    if (!v?.visit || !asked) return;
+    haptic.success();
+    await data.updateVisit(v.visit.id, { start: asked.start, days: asked.days, confirmed: true });
+    onClose();
+    feedback.toast({ message: `Moved ${company} to ${weekdayDate(asked.start)}, confirmed` });
+  }
+
+  async function keepDates() {
+    if (!v?.visit) return;
+    haptic.selection();
+    await data.keepVisitDates(v.visit.id);
+    onClose();
+    feedback.toast({ message: `Kept ${company} on ${weekdayDate(v.visit.start)}` });
   }
 
   function removeVisit() {
@@ -123,8 +148,20 @@ export function VisitSheet({
           <Text variant="subheadline" color={colors.secondary} style={styles.lead}>
             {company}
           </Text>
+          {asked ? (
+            <ListSection footer="Move It puts the visit on the dates asked for, confirmed. Keep These Dates leaves it as it is.">
+              <View style={styles.asked} testID="visit-asked">
+                <Icon name="calendar.badge.clock" size={19} color={colors.destructive} />
+                <Text style={{ flex: 1 }}>
+                  {`${asked.who} asked for ${weekdayDate(asked.start)}${asked.days > 1 ? `, ${asked.days} days` : ', 1 day'}.`}
+                </Text>
+              </View>
+              <ListRow title="Move It" tone="tint" onPress={() => void moveToAsked()} testID="visit-move-asked" />
+              <ListRow title="Keep These Dates" onPress={() => void keepDates()} testID="visit-keep-dates" />
+            </ListSection>
+          ) : null}
           <ListSection
-            footer={end ? [`Ends ${weekdayDate(end)}. Weekdays only.`, fitText].filter(Boolean).join(' ') : undefined}
+            footer={end ? [`Ends ${weekdayDate(end)}. Weekdays only, holidays skipped.`, startHoliday, fitText].filter(Boolean).join(' ') : undefined}
             footerTone={pickedTime.hours > v.days * DAY_HOURS ? 'danger' : 'default'}
           >
             <ListRow title="Starts" titleLines={1} right={<DateField value={v.start} onChange={(start) => start && set({ start })} label="Starts" testID="visit-start" />} />
@@ -232,6 +269,7 @@ export function VisitSheet({
 
 const styles = StyleSheet.create({
   content: { paddingBottom: 40 },
+  asked: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: layout.rowPadding, paddingVertical: 8, backgroundColor: colors.cell },
   lead: { marginHorizontal: layout.inset, marginTop: 4, marginBottom: 12 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   step: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },

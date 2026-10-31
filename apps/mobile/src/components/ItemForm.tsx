@@ -105,11 +105,7 @@ export function useItemForm(initial: ItemDraft): ItemFormState {
   const [value, setValue] = useState<ItemDraft>(initial);
   const [tried, setTried] = useState(false);
   const tidy = useMemo(() => tidyItem(value), [value]);
-  const problems = useMemo(() => {
-    const list = checkItem(tidy).map((p) => ({ field: p.field as keyof ItemDraft, message: p.message }));
-    if (value.locationId === '') list.unshift({ field: 'locationId', message: 'Pick the location' });
-    return list;
-  }, [tidy, value.locationId]);
+  const problems = useMemo(() => checkItem(tidy).map((p) => ({ field: p.field as keyof ItemDraft, message: p.message })), [tidy]);
   const dirty = EDITABLE.some((k) => !sameValue(value[k], initial[k]));
 
   return {
@@ -122,8 +118,9 @@ export function useItemForm(initial: ItemDraft): ItemFormState {
       return problems.length === 0 ? { ...tidy, locationId: value.locationId } : null;
     },
     submitUnfinished: () => {
+      // A draft may wait for its title, location and company.
       const draft = tidyItem({ ...value, unfinished: true });
-      if (value.locationId === '' || checkItem(draft).length > 0) {
+      if (checkItem(draft).length > 0) {
         setTried(true);
         return null;
       }

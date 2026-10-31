@@ -246,6 +246,26 @@ async function main(): Promise<void> {
       await app.getByTestId('item-item-16').waitFor();
       await settle();
     });
+    await step('the shutter never asks for anything first: with no location picked, the photo saves to finish later', async () => {
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+      await app.getByTestId('camera').last().click();
+      await app.getByTestId('shutter').waitFor();
+      await app.getByText('Choose Location').waitFor();
+      const chooser = tab.waitForEvent('filechooser');
+      await app.getByTestId('shutter').click();
+      await (await chooser).setFiles(photoPath);
+      await app.getByText('Saved, with no location yet').waitFor();
+      await app.getByTestId('camera-finish').getByText(/^Done by [A-Z][a-z]+day, [A-Z][a-z]+ \d+\.$/).waitFor();
+      await settle(400);
+      await shot('09f-no-location');
+      await app.getByTestId('camera-close').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await app.getByTestId('group-room-1').click();
+      await app.getByTestId('item-item-16').waitFor();
+      await settle();
+    });
     await step('the camera opens on the location', async () => {
       await app.getByTestId('camera').last().click();
       await app.getByTestId('shutter').waitFor();
@@ -416,20 +436,37 @@ async function main(): Promise<void> {
         await settle(500);
       }
       await shot('21-quick-snap');
+      // Common Tasks: the usual work for a bathroom, a tap each, with what is on the list here already marked.
+      await app.getByTestId('camera-common').click();
+      await app.getByTestId('common-tasks').waitFor();
+      if ((await app.getByTestId('common-kind-bathroom').getAttribute('aria-checked')) === 'false') throw new Error('The bathroom was not seen as a bathroom');
+      await app.getByTestId('common-task-Trim out toilet').click();
+      await app.getByTestId('common-task-Install shower trim').click();
+      await settle(500);
+      await shot('21b-common-tasks');
+      await app.getByTestId('common-add').click();
+      await app.getByText('Added 2 items to Bathroom 116').waitFor();
+      // Done here: the location is walked, and the camera goes on to the next one.
+      await app.getByTestId('camera-next').click();
+      await app.getByText(/^Bathroom 116 walked\. Now in [A-Z]/).waitFor();
+      await app.getByTestId('camera-finish').getByText(/^1 of \d+ walked\. Done by /).waitFor();
+      await settle(400);
+      await shot('21c-next-location');
       await app.getByTestId('camera-close').click();
       await settle(700);
       await app.getByTestId('back').last().click();
       await app.getByTestId('open-unfinished').waitFor();
+      await app.getByTestId('walk-row').getByText(/^1 of \d+ Locations Walked$/).waitFor();
       await settle();
       await shot('22-job-unfinished');
     });
     await step('check them sitting down: one is on the list already, so its photo goes there; Mark Up, then Next puts one on the lists', async () => {
       await app.getByTestId('open-unfinished').click();
-      await app.getByText('3 drafts. Filling in from the photos.').waitFor();
+      await app.getByText('4 drafts. Filling in from the photos.').waitFor();
       await app.getByText(/ · Filling in from the photo$/).first().waitFor();
       await settle(300);
       await shot('23-drafts-filling');
-      await app.getByText('3 drafts. Tap one to finish it.').waitFor({ timeout: 20000 });
+      await app.getByText('4 drafts. Tap one to finish it.').waitFor({ timeout: 20000 });
       if ((await app.getByText('No title yet').count()) !== 0) throw new Error('A draft did not fill in');
       await settle();
       await shot('23b-drafts-filled');
@@ -440,8 +477,15 @@ async function main(): Promise<void> {
       await shot('24-draft-twin');
       await app.getByTestId('twin-add').click();
       await app.getByText('Added the photo to Install towel bar').waitFor();
-      // On to the next draft.
-      await app.getByText('Check it over, then tap Next to put it on the lists.').waitFor();
+      // On to the next draft: the photo saved with no location, which is picked now.
+      await app.getByText('Add a location to put it on the lists.').waitFor();
+      await settle(700);
+      await shot('24a-draft-no-location');
+      await app.getByTestId('pick-room').last().click();
+      await settle(500);
+      await app.getByRole('button', { name: 'Laundry 119', exact: true }).last().click();
+      // With its location it has everything, so it is on the lists now, and Next steps on.
+      await app.getByTestId('item-status').waitFor({ state: 'detached' });
       await settle(700);
       if ((await app.getByTestId('field-title').last().inputValue()) !== 'Install towel bar') throw new Error('The draft did not fill in its title');
       await app.getByTestId('pick-company').last().getByText('SMS Carpentry').waitFor();
@@ -462,7 +506,7 @@ async function main(): Promise<void> {
       await app.getByText('Draft', { exact: true }).last().waitFor();
       await settle();
       await app.getByTestId('back').last().click();
-      await app.getByText('1 draft. Tap it to finish it.').waitFor();
+      await app.getByText('2 drafts. Tap one to finish it.').waitFor();
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
       // The one checked over is on the lists now, with the one from the walk; the last draft is not.
@@ -763,6 +807,8 @@ async function main(): Promise<void> {
       await app.getByTestId('gantt').waitFor();
       // The headline: when everything with a date is done.
       await app.getByText(/^Everything with a date is done by [A-Z][a-z]+day, [A-Z][a-z]+ \d+\./).waitFor();
+      // What sets that date is outlined, and said under the chart.
+      await app.getByTestId('schedule-set-by').getByText(/^The outlined visits set the finish date: /).waitFor();
       // SMS Carpentry's confirmed visit is green; work that moves with the list is pale.
       await app.locator('[data-testid^="gantt-bar-auto:"]').first().waitFor();
       await settle(500);
@@ -846,9 +892,39 @@ async function main(): Promise<void> {
       await app.getByTestId('company-comments-item-16').scrollIntoViewIfNeeded();
       await settle(500);
       await shot('38c-company-commented');
+      // Its dates: Other Dates asks for another start, for Ross Built to move the visit.
+      const visitCard = app.locator('[data-testid^="company-visit-"]').first();
+      const visitId = (await visitCard.getAttribute('data-testid'))!.slice('company-visit-'.length);
+      await visitCard.scrollIntoViewIfNeeded();
+      await app.getByTestId(`visit-change-${visitId}`).click();
+      await app.getByTestId(`visit-days-${visitId}-2`).click();
+      await settle(300);
+      await shot('38e-company-other-dates');
+      await app.getByTestId(`visit-ask-${visitId}`).click();
+      await visitCard.getByText('Other dates asked', { exact: true }).waitFor();
       await app.getByTestId('back').last().click();
       // Back in the app, the company's comments are there.
       await app.getByTestId('plan-comments').getByText('We can start Monday at 7.').waitFor();
+      await app.getByTestId('back').last().click();
+      await app.getByText('Schedule', { exact: true }).first().waitFor();
+      // The Schedule says what the company asked for; Keep These Dates leaves the visit as it is.
+      await app.getByTestId(`schedule-asked-${visitId}`).waitFor();
+      await app.getByTestId(`gantt-asked-${visitId}`).waitFor();
+      await settle(400);
+      await shot('38f-schedule-asked');
+      await app.getByTestId(`schedule-asked-${visitId}`).click();
+      await app.getByTestId('visit-asked').getByText(/^Mike at SMS Carpentry asked for [A-Z][a-z]+day, [A-Z][a-z]+ \d+, 2 days\.$/).waitFor();
+      await settle(600);
+      await shot('38g-visit-asked');
+      await app.getByTestId('visit-keep-dates').click();
+      await app.getByText(/^Kept SMS Carpentry on /).waitFor();
+      await app.getByTestId(`schedule-asked-${visitId}`).waitFor({ state: 'detached' });
+      // Volcano Stone says its best guess dates work: the visit is confirmed.
+      await app.getByTestId('gantt-company-company-5').click();
+      await app.getByTestId('company-page').click();
+      await app.getByTestId('visit-ok-visit-stone').click();
+      await app.getByTestId('company-visit-visit-stone').getByText('Confirmed', { exact: true }).waitFor();
+      await app.getByTestId('back').last().click();
       await app.getByTestId('back').last().click();
       await app.getByText('Schedule', { exact: true }).first().waitFor();
       await app.getByTestId('back').last().click();
@@ -860,6 +936,8 @@ async function main(): Promise<void> {
       await app.getByText('Mike at SMS Carpentry commented on Adjust cabinet door', { exact: true }).first().waitFor();
       await app.getByText('Kitchen 109. Hinges are on the truck.', { exact: true }).waitFor();
       await app.getByText('Jake Ross added a Ross Built only note on Adjust cabinet door', { exact: true }).waitFor();
+      await app.getByText('Mike at SMS Carpentry asked to move its visit', { exact: true }).first().waitFor();
+      await app.getByText('Volcano Stone confirmed its visit', { exact: true }).first().waitFor();
       await settle(500);
       await shot('38d-activity-comments');
       await app.getByTestId('back').last().click();

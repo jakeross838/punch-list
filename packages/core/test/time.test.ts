@@ -33,9 +33,9 @@ import {
 } from '../src/index';
 
 const rooms: Location[] = [
-  { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true },
-  { id: 'b', jobId: 'j', name: 'Bathroom', number: '207', label: 'Bathroom 207', floor: 'Level 2', kind: 'room', sortOrder: 2, active: true },
-  { id: 'r', jobId: 'j', name: 'Roof', number: null, label: 'Roof', floor: null, kind: 'shared', sortOrder: 3, active: true },
+  { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true, walkedAt: null },
+  { id: 'b', jobId: 'j', name: 'Bathroom', number: '207', label: 'Bathroom 207', floor: 'Level 2', kind: 'room', sortOrder: 2, active: true, walkedAt: null },
+  { id: 'r', jobId: 'j', name: 'Roof', number: null, label: 'Roof', floor: null, kind: 'shared', sortOrder: 3, active: true, walkedAt: null },
 ];
 const lookups = {
   locations: rooms,
@@ -96,8 +96,8 @@ describe('estimated time', () => {
 
   it('fills a title from the standard list, or from the same work on this job', () => {
     const library: StandardTitle[] = [
-      { id: 's1', title: 'Touch up paint', tradeId: 't-paint', uses: 40, approved: true, hours: 0.5 },
-      { id: 's2', title: 'Hang door', tradeId: 't-carp', uses: 5, approved: true, hours: null },
+      { id: 's1', title: 'Touch up paint', tradeId: 't-paint', uses: 40, approved: true, hours: 0.5, rooms: [] },
+      { id: 's2', title: 'Hang door', tradeId: 't-carp', uses: 5, approved: true, hours: null, rooms: [] },
     ];
     const job = [item({ title: 'Hang door', hours: 2 }), item({ title: 'Hang door', hours: 2 }), item({ title: 'Hang door', hours: 3 }), item({ title: 'Hang door', hours: 9, status: 'removed' })];
     expect(hoursForTitle('touch up paint', library)).toBe(0.5);
@@ -135,8 +135,8 @@ describe('groups add up their time', () => {
 
 describe('filters', () => {
   const visits: Visit[] = [
-    { id: 'v-old', jobId: 'j', companyId: 'c-hhh', start: '2026-10-19', days: 2, confirmed: true, note: '', removed: false, createdBy: 'jake', createdAt: '', updatedAt: '' },
-    { id: 'v-next', jobId: 'j', companyId: 'c-sms', start: '2026-11-03', days: 1, confirmed: false, note: '', removed: false, createdBy: 'jake', createdAt: '', updatedAt: '' },
+    { id: 'v-old', jobId: 'j', companyId: 'c-hhh', start: '2026-10-19', days: 2, confirmed: true, note: '', removed: false, askedStart: null, askedDays: null, askedName: null, askedAt: null, createdBy: 'jake', createdAt: '', updatedAt: '' },
+    { id: 'v-next', jobId: 'j', companyId: 'c-sms', start: '2026-11-03', days: 1, confirmed: false, note: '', removed: false, askedStart: null, askedDays: null, askedName: null, askedAt: null, createdBy: 'jake', createdAt: '', updatedAt: '' },
   ];
   const items = [
     item({ id: 'a', hours: 1, companyId: 'c-sms', locationId: 'k', kind: 'deficiency' }),

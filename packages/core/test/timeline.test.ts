@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { buildTimeline, lookAheadPrintout, timelineRows, workingIndex, type Item, type Location, type Visit } from '../src/index';
+import {
+  addWorkingDays,
+  buildTimeline,
+  earliestStart,
+  holidayGroups,
+  holidaysBetween,
+  holidaysOf,
+  isWorkingDay,
+  lookAheadPrintout,
+  timelineRows,
+  visitEnd,
+  workingIndex,
+  type Item,
+  type Location,
+  type Visit,
+} from '../src/index';
 
 let n = 0;
 function item(over: Partial<Item>): Item {
@@ -13,7 +28,7 @@ function item(over: Partial<Item>): Item {
 }
 function visit(over: Partial<Visit>): Visit {
   return {
-    id: 'v1', jobId: 'j', companyId: 'sms', start: '2026-11-03', days: 1, confirmed: false, note: '', removed: false,
+    id: 'v1', jobId: 'j', companyId: 'sms', start: '2026-11-03', days: 1, confirmed: false, note: '', removed: false, askedStart: null, askedDays: null, askedName: null, askedAt: null,
     createdBy: 'p1', createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
   };
 }
@@ -48,13 +63,53 @@ describe('the schedule the list builds', () => {
     const stone = item({ id: 'stone', companyId: 'vs', hours: 4 });
     const uppers = item({ id: 'uppers', ready: false, waitingOnItems: ['stone'], hours: 4 });
     const paint = item({ id: 'paint', companyId: 'hhh', ready: false, waitingOnItems: ['uppers'], hours: 3 });
-    const t = buildTimeline([paint, uppers, stone], [], rooms, friday);
+    const t = buildTimeline([paint, uppers, stone, item({ id: 'other', companyId: 'gator', hours: 2 })], [], rooms, friday);
     expect(shape(t.bars)).toEqual([
+      ['gator', 'auto', '2026-11-03', 1, ['other']],
       ['vs', 'auto', '2026-11-03', 1, ['stone']],
       ['sms', 'auto', '2026-11-04', 1, ['uppers']],
       ['hhh', 'auto', '2026-11-05', 1, ['paint']],
     ]);
     expect(t.finish).toBe('2026-11-05');
+    // The painting sets the finish date, after the cabinets, after the stone; the plumber does not.
+    expect(t.critical.map((b) => b.companyId)).toEqual(['vs', 'sms', 'hhh']);
+  });
+
+  it('never puts work on a holiday, and a visit counts working days past one', () => {
+    expect(holidaysOf(2026).map((h) => h.day)).toEqual(['2026-01-01', '2026-05-25', '2026-07-03', '2026-09-07', '2026-11-26', '2026-11-27', '2026-12-25']);
+    // New Year's Day 2028 is a Saturday: taken on Friday, December 31, 2027.
+    expect(isWorkingDay('2027-12-31')).toBe(false);
+    expect(isWorkingDay('2026-11-26')).toBe(false);
+    expect(addWorkingDays('2026-11-25', 1)).toBe('2026-11-30');
+    expect(earliestStart('2026-11-24')).toBe('2026-11-30');
+    // Three days from the Wednesday before Thanksgiving run to the Tuesday after; one booked on the holiday keeps its day.
+    expect(visitEnd({ start: '2026-11-25', days: 3 })).toBe('2026-12-01');
+    expect(visitEnd({ start: '2026-11-26', days: 1 })).toBe('2026-11-26');
+    const t = buildTimeline([item({ id: 'big', hours: 24 })], [], rooms, '2026-11-23');
+    expect(shape(t.bars)).toEqual([['sms', 'auto', '2026-11-25', 3, ['big']]]);
+    expect(t.bars[0]!.end).toBe('2026-12-01');
+    expect(holidayGroups(holidaysBetween('2026-11-23', '2026-12-31')).map((h) => [h.name, h.days])).toEqual([
+      ['Thanksgiving', ['2026-11-26', '2026-11-27']],
+      ['Christmas Day', ['2026-12-25']],
+    ]);
+  });
+
+  it('shades the holidays on the look ahead and says them under the chart', () => {
+    const t = buildTimeline([item({ id: 'big', hours: 24 })], [], rooms, '2026-11-20');
+    const page = lookAheadPrintout(t, { locations: [{ id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true, walkedAt: null }], companies: [{ id: 'sms', name: 'SMS Carpentry', defaultTradeId: null, phone: null, email: null, active: true }] }, { job: { name: 'Fish', address: '' }, date: new Date(2026, 10, 20) }, '2026-11-20');
+    expect(page.body.match(/<th class="rb-g-day rb-g-off">/g)?.length).toBe(2);
+    expect(page.body).toMatch(/No work on Thanksgiving, Thursday, November.26 and Friday, November.27\./);
+    expect(page.body).toContain('That date is set by SMS Carpentry.');
+  });
+
+  it('counts drafts with a company only when asked, for the finish date on a walk', () => {
+    const work = [item({ id: 'done', hours: 8 }), item({ id: 'draft', companyId: 'hhh', unfinished: true, hours: 8, ready: true }), item({ id: 'blank', companyId: null, unfinished: true })];
+    expect(buildTimeline(work, [], rooms, friday).finish).toBe('2026-11-03');
+    const walk = buildTimeline(work, [], rooms, friday, { drafts: true });
+    expect(shape(walk.bars)).toEqual([
+      ['hhh', 'auto', '2026-11-03', 1, ['draft']],
+      ['sms', 'auto', '2026-11-03', 1, ['done']],
+    ]);
   });
 
   it('keeps what is on the schedule where it is, and works around it', () => {
@@ -115,9 +170,9 @@ describe('the schedule the list builds', () => {
     const t = buildTimeline(work, [booked], rooms, friday);
     const lookups = {
       locations: [
-        { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room' as const, sortOrder: 1, active: true },
-        { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room' as const, sortOrder: 2, active: true },
-        { id: 'm', jobId: 'j', name: 'Master Bathroom', number: '207', label: 'Master Bathroom 207', floor: 'Level 2', kind: 'room' as const, sortOrder: 3, active: true },
+        { id: 'a', jobId: 'j', name: 'Living', number: '107', label: 'Living 107', floor: 'Level 1', kind: 'room' as const, sortOrder: 1, active: true, walkedAt: null },
+        { id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room' as const, sortOrder: 2, active: true, walkedAt: null },
+        { id: 'm', jobId: 'j', name: 'Master Bathroom', number: '207', label: 'Master Bathroom 207', floor: 'Level 2', kind: 'room' as const, sortOrder: 3, active: true, walkedAt: null },
       ],
       trades: [],
       companies: [
@@ -133,7 +188,7 @@ describe('the schedule the list builds', () => {
     expect(page.body).toContain('Week of November\u00a02');
     expect(page.body).toContain('Everything with a date is done by Wednesday, November\u00a04.');
     // Triple H confirmed for two days from Tuesday; SMS Carpentry our best guess on Tuesday.
-    expect(page.body).toContain('<td class="rb-g-name">Triple H Painting</td><td class="rb-g-cell rb-g-wk"></td><td colspan="2" class="rb-g-cell"><div class="rb-g-bar rb-g-ok"></div></td>');
+    expect(page.body).toContain('<td class="rb-g-name">Triple H Painting</td><td class="rb-g-cell rb-g-wk"></td><td colspan="2" class="rb-g-cell"><div class="rb-g-bar rb-g-ok rb-g-sets"></div></td>');
     expect(page.body).toContain('<td class="rb-g-name">SMS Carpentry</td><td class="rb-g-cell rb-g-wk"></td><td colspan="1" class="rb-g-cell"><div class="rb-g-bar"></div></td>');
     expect(page.body).toContain('<b>Install shoe molding</b>, Living 107');
     expect(page.body).toContain('2 days, confirmed');

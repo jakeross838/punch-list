@@ -35,13 +35,15 @@ export type ItemFields = Pick<
 
 /**
  * Everything that stops an item from saving, in plain words. An empty list means it saves. An
- * unfinished item may still be missing its title and company; the other rules still hold. The
- * trade is not asked for: it follows the company's trade on the job.
+ * unfinished item may still be missing its title, location and company; the other rules still
+ * hold. The trade is not asked for: it follows the company's trade on the job.
  */
-export function checkItem(item: ItemFields): Problem[] {
+export function checkItem(item: ItemFields & { locationId?: string }): Problem[] {
   const problems: Problem[] = [];
   const title = item.title.trim();
   if (title === '' && !item.unfinished) problems.push({ field: 'title', message: 'Give it a title' });
+  // A photo saves before a location is picked; a finished item needs one.
+  if (item.locationId !== undefined && item.locationId === '' && !item.unfinished) problems.push({ field: 'locationId', message: 'Pick the location' });
   if (title.length > TITLE_MAX) problems.push({ field: 'title', message: `Keep the title under ${TITLE_MAX} characters` });
   if (!item.companyId && !item.unfinished) problems.push({ field: 'companyId', message: 'Pick the company' });
   if (!item.ready && item.waitingOn.every((w) => w.trim() === '') && item.waitingOnItems.length === 0) {
@@ -63,15 +65,16 @@ export function checkItem(item: ItemFields): Problem[] {
 }
 
 /** What an unfinished item still needs, in the order the form asks for it. */
-export function missingDetails(item: Pick<ItemFields, 'title' | 'companyId'>): ('title' | 'company')[] {
-  const out: ('title' | 'company')[] = [];
+export function missingDetails(item: Pick<ItemFields, 'title' | 'companyId'> & { locationId?: string }): ('title' | 'location' | 'company')[] {
+  const out: ('title' | 'location' | 'company')[] = [];
   if (item.title.trim() === '') out.push('title');
+  if (item.locationId === '') out.push('location');
   if (!item.companyId) out.push('company');
   return out;
 }
 
-/** "Needs a title and company." */
-export function missingText(item: Pick<ItemFields, 'title' | 'companyId'>): string {
+/** "Needs a title, location and company." */
+export function missingText(item: Pick<ItemFields, 'title' | 'companyId'> & { locationId?: string }): string {
   const words = missingDetails(item);
   if (words.length === 0) return '';
   const list = words.length === 1 ? words[0]! : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
