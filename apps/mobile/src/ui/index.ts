@@ -1,7 +1,7 @@
 export { BarButtonView, type BarButtonProps } from './BarButton';
 export { CompleteCircle } from './CompleteCircle';
 export { DateField } from './DateField';
-export { dayOf, isBeforeToday, longDate, shortDate, weekdayDate } from './dates';
+export { dayHeading, dayOf, isBeforeToday, longDate, shortDate, timeOf, weekdayDate, whenOf } from './dates';
 export { FeedbackProvider, useFeedback } from './Feedback';
 export { haptic } from './haptics';
 export { Icon } from './Icon';

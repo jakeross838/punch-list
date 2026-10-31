@@ -217,6 +217,13 @@ const GLYPHS: Record<IconName, Draw> = {
   'arrow.up.right': (c, w) => line('M5.5 18.5L18.5 5.5M9.5 5.5h9v9', c, w * 1.9),
   circle: (c, w) => <ellipse cx={12} cy={12} rx={8.5} ry={7} stroke={c} strokeWidth={w * 1.8} fill="none" />,
   square: (c, w) => <rect x={4.5} y={6} width={15} height={12} rx={1.5} stroke={c} strokeWidth={w * 1.8} fill="none" />,
+  clock: (c, w) => (
+    <>
+      {line('M4.6 13.6A7.6 7.6 0 1 0 6.2 7.2', c, w * 1.7)}
+      {line('M3.4 4.6l2.8 2.6 3-1.9', c, w * 1.7)}
+      {line('M12 8.4V12.6l2.9 1.8', c, w * 1.7)}
+    </>
+  ),
   ruler: (c, w) => (
     <>
       <rect x={2.5} y={7.5} width={19} height={9} rx={1.5} stroke={c} strokeWidth={w * 1.7} fill="none" />

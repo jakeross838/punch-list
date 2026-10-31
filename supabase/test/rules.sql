@@ -261,6 +261,85 @@ begin
   end;
 end $$;
 
+-- ---------- activity: who did what ----------
+do $$
+declare
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  j uuid := (select id from public.jobs where name = 'Fish');
+  t uuid := (select id from public.trades where name = 'Plumbing');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  loc uuid; i uuid; p uuid; v uuid; n integer;
+begin
+  -- Items: a row for adding one and a row for each field changed, each with who did it.
+  insert into public.locations (job_id, name, number, label, kind, sort_order) values (j, 'Office', '302', 'Office 302', 'room', 9) returning id into loc;
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready) values (j, loc, 'Patch drywall', t, c, true) returning id into i;
+  update public.items set description = 'Two screw holes.', ready = false, waiting_on = array['Owner'] where id = i;
+  if (select count(*) from public.item_history where item_id = i and field = 'created' and person_id = jake) <> 1 then
+    raise exception 'FAIL: adding an item was not logged with who did it';
+  end if;
+  if (select count(*) from public.item_history where item_id = i and field in ('description', 'ready', 'waiting_on') and person_id = jake) <> 3 then
+    raise exception 'FAIL: item changes were not logged field by field';
+  end if;
+
+  -- Photos: added, marked up and removed. An upload finishing is not activity.
+  insert into public.photos (job_id, item_id, width, height) values (j, i, 1200, 1600) returning id into p;
+  update public.photos set marks = '[{"tool":"number","color":"red","at":[0.5,0.5],"n":1}]' where id = p;
+  update public.photos set storage_path = 'fish/photo.jpg' where id = p;
+  update public.photos set removed = true where id = p;
+  select count(*) into n from public.job_activity where item_id = i and person_id = jake and kind in ('photo_added', 'photo_marked', 'photo_removed');
+  if n <> 3 then raise exception 'FAIL: photo activity has % rows, not 3', n; end if;
+
+  -- Visits: scheduled, confirmed and removed, keeping what changed. A note alone is not activity.
+  insert into public.visits (job_id, company_id, start_date, days) values (j, c, '2026-11-10', 1) returning id into v;
+  update public.visits set confirmed = true where id = v;
+  update public.visits set note = 'Gate code at the office' where id = v;
+  update public.visits set removed = true where id = v;
+  if (select count(*) from public.job_activity where detail ->> 'visit_id' = v::text and person_id = jake) <> 3 then
+    raise exception 'FAIL: visit activity was not logged';
+  end if;
+  if (select detail ->> 'was_confirmed' from public.job_activity where detail ->> 'visit_id' = v::text and kind = 'visit_changed') <> 'false' then
+    raise exception 'FAIL: a visit change did not keep what it was before';
+  end if;
+
+  -- Lists sent and taken back (the list sent above).
+  if (select count(*) from public.job_activity where job_id = j and kind = 'list_sent' and person_id = jake) <> 1
+     or (select count(*) from public.job_activity where job_id = j and kind = 'list_undone') <> 1 then
+    raise exception 'FAIL: sending and taking back a list was not logged';
+  end if;
+
+  -- Setup: a location renamed and removed, a company's name, the job's address.
+  update public.locations set name = 'Home Office', label = 'Home Office 302' where id = loc;
+  update public.locations set active = false where id = loc;
+  update public.job_companies set trade_id = t where job_id = j and company_id = c;
+  update public.companies set name = 'Gator Plumbing and Gas' where id = c;
+  update public.jobs set address = '715 North Shore Drive, Anna Maria' where id = j;
+  if (select count(*) from public.job_activity where detail ->> 'location_id' = loc::text and kind in ('location_added', 'location_renamed', 'location_removed')) <> 3 then
+    raise exception 'FAIL: location activity was not logged';
+  end if;
+  if (select count(*) from public.job_activity where job_id = j and kind = 'company_trade_changed') <> 0 then
+    raise exception 'FAIL: a trade that did not change was logged';
+  end if;
+  if (select detail ->> 'to' from public.job_activity where job_id = j and kind = 'company_renamed') <> 'Gator Plumbing and Gas' then
+    raise exception 'FAIL: a company''s new name was not logged on its job';
+  end if;
+  if (select count(*) from public.job_activity where job_id = j and kind = 'job_address_changed' and person_id = jake) <> 1 then
+    raise exception 'FAIL: the job''s new address was not logged';
+  end if;
+  update public.companies set name = 'Gator Plumbing' where id = c;
+
+  -- The app only reads the log.
+  begin
+    insert into public.job_activity (job_id, kind) values (j, 'job_renamed');
+    raise exception 'FAIL: the app wrote to the activity log';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.job_activity where job_id = j;
+    raise exception 'FAIL: the app deleted activity';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
 reset role;
 
 -- ---------- another active person ----------
@@ -269,11 +348,14 @@ set request.jwt.claims = '{"email":"andrew@rossbuilt.com"}';
 
 do $$
 begin
-  if (select count(*) from public.photos) <> 1 or (select count(*) from public.custom_fields) <> 1 then
+  if (select count(*) from public.photos) <> 2 or (select count(*) from public.custom_fields) <> 1 then
     raise exception 'FAIL: photos and added fields are not shared with the team';
   end if;
   if (select count(*) from public.person_settings) <> 0 then
     raise exception 'FAIL: one person can see another''s settings';
+  end if;
+  if (select count(*) from public.job_activity) = 0 then
+    raise exception 'FAIL: activity is not shared with the team';
   end if;
   update public.person_settings set job_view = '{"groupBy": "company"}';
 end $$;
@@ -290,7 +372,7 @@ begin
      + (select count(*) from public.locations) + (select count(*) from public.companies) + (select count(*) from public.trades)
      + (select count(*) from public.item_history) + (select count(*) from public.job_companies)
      + (select count(*) from public.photos) + (select count(*) from public.custom_fields)
-     + (select count(*) from public.person_settings) <> 0 then
+     + (select count(*) from public.person_settings) + (select count(*) from public.job_activity) <> 0 then
     raise exception 'FAIL: an uninvited account can see data';
   end if;
   begin
@@ -336,6 +418,11 @@ begin
   begin
     delete from public.items;
     raise exception 'FAIL: an item was deleted with full rights';
+  exception when restrict_violation then null;
+  end;
+  begin
+    update public.job_activity set kind = 'job_renamed';
+    raise exception 'FAIL: activity was changed with full rights';
   exception when restrict_violation then null;
   end;
   if (select count(*) from public.items i join public.jobs j on j.id = i.job_id where j.name = 'Test Job (generated)') <> 600 then

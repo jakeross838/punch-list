@@ -3,7 +3,7 @@
 // as it is made. Mark Complete is the big button; only Ross Built marks items complete, and removing
 // never deletes. A draft says what it still needs (or that Claude is filling it in from the photo)
 // and steps to the next one, for checking them sitting down after a walk: Next puts a draft that has
-// everything it needs on the lists.
+// everything it needs on the lists. History at the bottom shows who added and changed it, and when.
 
 import {
   checkItem,
@@ -28,6 +28,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityRow, useActivityLines } from '@/components/ActivityRow';
 import { draftFill, isFilling, useDraftFill } from '@/components/draftFill';
 import { ItemEditor, type EditorSet } from '@/components/ItemEditor';
 import { EDITABLE, fieldsOf, sameValue, type ItemDraft } from '@/components/ItemForm';
@@ -37,7 +38,27 @@ import { useRelease } from '@/components/useItemActions';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
-import { croppedHeight, dayOf, EmptyState, haptic, Icon, ListRow, ListSection, Page, PhotoView, PhotoViewer, shortDate, Text, Touchable, useFeedback, type IconName } from '@/ui';
+import {
+  croppedHeight,
+  dayOf,
+  EmptyState,
+  haptic,
+  Icon,
+  ListRow,
+  ListSection,
+  Page,
+  PhotoView,
+  PhotoViewer,
+  shortDate,
+  Text,
+  Touchable,
+  useFeedback,
+  whenOf,
+  type IconName,
+} from '@/ui';
+
+/** History shows the newest few; Show All has the rest. */
+const HISTORY_SHOWN = 6;
 
 export default function ItemScreen() {
   const { jobId, itemId, from } = useLocalSearchParams<{ jobId: string; itemId: string; from?: string }>();
@@ -133,6 +154,9 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   const filler = useFillIn(jobId);
   const fill = useDraftFill();
   const filling = item.unfinished && isFilling(fill, item.id);
+  const people = data.usePeople();
+  const history = useActivityLines(jobId, item.id);
+  const [allHistory, setAllHistory] = useState(false);
   const [shown, setShown] = useState(0);
   const [viewing, setViewing] = useState<Photo | null>(null);
   const [marking, setMarking] = useState<Photo | null>(null);
@@ -205,7 +229,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
     if (item.companyId) router.push({ pathname: '/jobs/[jobId]/plan/[companyId]', params: { jobId, companyId: item.companyId } });
   };
 
-  const who = me && item.completedBy === me.id ? me.name : 'Ross Built';
+  const who = people.find((p) => p.id === item.completedBy)?.name ?? 'Ross Built';
   function draftDetail() {
     if (filling) return 'Claude is filling it in from the photo.';
     const missing = missingText(live.value);
@@ -330,6 +354,22 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
                 onPress={openPlan}
                 testID="item-visit"
               />
+            </ListSection>
+          ) : null}
+          {history.length > 0 ? (
+            <ListSection header="History" testID="item-history">
+              {(allHistory ? history : history.slice(0, HISTORY_SHOWN)).map((line, i, shown) => (
+                <ActivityRow
+                  key={line.key}
+                  line={line}
+                  time={whenOf(line.at)}
+                  timeBelow
+                  last={i === shown.length - 1 && (allHistory || history.length <= HISTORY_SHOWN)}
+                />
+              ))}
+              {!allHistory && history.length > HISTORY_SHOWN ? (
+                <ListRow title={`Show All ${history.length}`} tone="tint" onPress={() => setAllHistory(true)} testID="history-all" />
+              ) : null}
             </ListSection>
           ) : null}
           {item.status !== 'removed' ? (

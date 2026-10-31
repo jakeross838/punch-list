@@ -23,6 +23,8 @@
 
 **Job Setup** (on the job's menu) has the job's name and address at the top, changed right where they are, then three tabs. **Locations** come from pasting the room list from the plans; tap one to rename it, or remove it from the job once it has no open items (with Undo; pasting it again brings it back). **Companies** are added with the trade they do on this job; tap one to rename it (on every job, and anything waiting on it keeps waiting on it), change its trade on this job (its items move with it), or remove it from the job once it has no open items there (with Undo). **Waiting On** adds the job's own extra choices.
 
+**Activity** (on the job's menu) shows who added, changed, completed, photographed, scheduled or sent what on the job, newest first, a day at a time: "Sam Rivera completed Grout shower floor", "Jake Ross scheduled Triple H Painting". Several changes one person makes to one item within a few minutes read as one line, and the items put on a visit count on the visit's line. Tap a line about an item to open it. Each item's **History**, at the bottom of the item, shows the same for that item. The database keeps the log, stamped with whoever was signed in, so it is the same on every phone and nobody can change it.
+
 ## What gets built
 
 | Piece | Where | What it does |
@@ -65,6 +67,7 @@ On the iPhone these are the system's own: the native navigation bar, SF Symbols,
 | visits | A company's trip to the job for a batch of items: first day, working days, confirmed or our best guess. An item goes only on its own company's visit. Never deleted; removing sets removed. |
 | list_sends | Each list that went out: which list, the items on it, when and by whom, so the next one marks what is new. Undo sets removed. |
 | item_history | Every change to an item: who, when, field, before, after, source. Written by the database, not the app. |
+| job_activity | Everything else that happens on a job: photos added, marked up or removed, visits scheduled, changed or removed, lists sent or taken back, and setup (locations, companies, the job's name and address). Who, when, what kind, and what it was about. Written by the database, never changed or deleted. |
 | title_library | Standard titles by trade, how often used, approved or not. Picking one fills in the trade and the company. |
 | photos | An item's photos: size, order, where it is in storage once uploaded, and the marks drawn on it. Never deleted; removing sets removed. The picture itself is in the private photos bucket. |
 | custom_fields | The fields Ross Built adds to the item form: name, kind (text, list, yes or no, date) and the choices for a list. |

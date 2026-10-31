@@ -128,6 +128,7 @@ export default function JobScreen() {
   const openSetup = () => router.push({ pathname: '/jobs/[jobId]/setup', params: { jobId } });
   const openSend = () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId } });
   const openSchedule = () => router.push({ pathname: '/jobs/[jobId]/schedule', params: { jobId } });
+  const openActivity = () => router.push({ pathname: '/jobs/[jobId]/activity', params: { jobId } });
   const openDrafts = () => {
     // Any draft the walk could not fill in (no signal, say) gets filled in now.
     if (canFill) {
@@ -183,6 +184,7 @@ export default function JobScreen() {
     groups: [
       {
         actions: [
+          { label: 'Activity', icon: 'clock', onPress: openActivity, testID: 'activity' },
           { label: 'Job Setup', icon: 'slider', onPress: openSetup, testID: 'job-setup' },
           { label: 'Item Form', icon: 'list.bullet', onPress: () => router.push('/settings/item-form'), testID: 'item-form' },
         ],

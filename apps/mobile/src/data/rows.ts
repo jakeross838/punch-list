@@ -1,6 +1,6 @@
 // Database rows (snake_case, booleans as 0 or 1 on the phone) to and from the app's records.
 
-import type { Company, CustomField, Item, ItemFields, Job, JobCompany, ListSend, Location, Mark, Person, Photo, StandardTitle, Trade, Visit } from '@punch/core';
+import type { Activity, ActivityDetail, ActivityKind, Company, CustomField, Item, ItemFields, Job, JobCompany, ListSend, Location, Mark, Person, Photo, StandardTitle, Trade, Visit } from '@punch/core';
 import type { ItemPatch } from './api';
 
 type Row = Record<string, unknown>;
@@ -159,6 +159,31 @@ export const rowToVisit = (r: Row): Visit => ({
   createdBy: text(r.created_by),
   createdAt: text(r.created_at),
   updatedAt: text(r.updated_at),
+});
+
+/** A row of item_history: an item added, or one of its fields changed. */
+export const rowToItemHistory = (r: Row): Activity => ({
+  id: text(r.id),
+  jobId: text(r.job_id),
+  itemId: textOrNull(r.item_id),
+  personId: textOrNull(r.person_id),
+  at: text(r.at),
+  kind: r.field === 'created' ? 'item_created' : 'item_changed',
+  field: text(r.field),
+  before: textOrNull(r.before),
+  after: textOrNull(r.after),
+  imported: r.source === 'import',
+});
+
+/** A row of job_activity: a photo, a visit, a list sent or a change to the job's setup. */
+export const rowToJobActivity = (r: Row): Activity => ({
+  id: text(r.id),
+  jobId: text(r.job_id),
+  itemId: textOrNull(r.item_id),
+  personId: textOrNull(r.person_id),
+  at: text(r.at),
+  kind: text(r.kind) as ActivityKind,
+  detail: json<ActivityDetail>(r.detail, {}),
 });
 
 export const rowToListSend = (r: Row): ListSend => ({

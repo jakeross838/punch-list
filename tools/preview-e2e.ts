@@ -484,6 +484,36 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
+    await step('Activity shows who added or changed what, and each item its History', async () => {
+      await menu('activity');
+      await app.getByText('Who added or changed what on the job.').waitFor();
+      // The newest first: the sample job has a Patch drywall of its own from days ago.
+      await app.getByText('Jake Ross added Patch drywall', { exact: true }).first().waitFor();
+      await settle(500);
+      await shot('28a-activity');
+      await app.getByText('Jake Ross added Patch drywall', { exact: true }).first().click();
+      await app.getByTestId('item-history').getByText('Jake Ross added it', { exact: true }).waitFor();
+      await app.getByTestId('item-history').scrollIntoViewIfNeeded();
+      await settle(400);
+      await shot('28b-item-history');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+      // The draft Sam snapped and Jake checked over reads as both.
+      await app.getByTestId('group-room-1').click();
+      await app.getByText('Install towel bar').first().click();
+      const history = app.getByTestId('item-history');
+      await history.getByText('Sam Rivera added it', { exact: true }).waitFor();
+      await history.getByText('Jake Ross put it on the lists', { exact: true }).waitFor();
+      await history.scrollIntoViewIfNeeded();
+      await settle(400);
+      await shot('28c-draft-history');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
     await step('finishing a company in a location offers to free what waited on it', async () => {
       await app.getByTestId('group-room-7').click();
       await app.getByTestId('check-item-18').click();

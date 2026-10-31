@@ -13,3 +13,4 @@ export * from './schedule';
 export * from './holdups';
 export * from './sends';
 export * from './suggest';
+export * from './activity';

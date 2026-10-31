@@ -22,6 +22,7 @@ streams:
       - SELECT * FROM job_waiting_on WHERE org IN my_org
       - SELECT * FROM items WHERE org IN my_org
       - SELECT * FROM item_history WHERE org IN my_org
+      - SELECT * FROM job_activity WHERE org IN my_org
       - SELECT * FROM title_library WHERE org IN my_org
       - SELECT * FROM custom_fields WHERE org IN my_org
       - SELECT * FROM photos WHERE org IN my_org

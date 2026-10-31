@@ -1,5 +1,6 @@
 // Sample data for the preview link only. Real company names make the screens easy to judge;
-// the rooms, items and photos are made up and are not the real Fish list.
+// the rooms, items, photos, the second person and the history are made up and are not the real
+// Fish list.
 
 import {
   addDays,
@@ -9,6 +10,7 @@ import {
   earliestStart,
   mondayOf,
   parseRoomList,
+  type Activity,
   type Company,
   type CustomField,
   type FormSettings,
@@ -28,6 +30,10 @@ import { RANGE_WALL, RANGE_WALL_NO_UPPERS, SAMPLE_PHOTO_SIZE } from './samplePho
 
 export interface SampleState {
   me: Person;
+  /** Everyone at Ross Built, for who did what. */
+  people: Person[];
+  /** Who did what, the way the database logs it. */
+  activity: Activity[];
   jobs: Job[];
   locations: Location[];
   trades: Trade[];
@@ -225,8 +231,77 @@ export function sampleState(): SampleState {
     { id: 'field-found-by', label: 'Found By', kind: 'list', options: ['Owner', 'Architect', 'Designer', 'Ross Built'], sortOrder: 1, active: true },
   ];
 
+  // Who did what so far, over the last two weeks, for Activity and each item's History.
+  const sam: Person = { id: 'person-sam', email: 'sam@rossbuilt.com', name: 'Sam Rivera', active: true };
+  const ago = (days: number, hour: number, minute = 0) => {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    d.setHours(hour, minute, 0, 0);
+    // Never later than now, when the preview is opened early in the day.
+    return new Date(Math.min(d.getTime(), Date.now() - 60_000)).toISOString();
+  };
+  let seq = 0;
+  const activity: Activity[] = [];
+  const log = (personId: string, at: string, entry: Omit<Activity, 'id' | 'jobId' | 'personId' | 'at'>) =>
+    activity.push({ id: `activity-${String(++seq).padStart(4, '0')}`, jobId: job.id, personId, at, ...entry });
+
+  for (const l of locations) log(me.id, ago(13, 8, 10), { kind: 'location_added', itemId: null, detail: { location_id: l.id, label: l.label } });
+  const added: Record<number, [string, number, number, number]> = {
+    1: [me.id, 9, 9, 0], 2: [me.id, 9, 9, 12], 3: [me.id, 9, 9, 25], 4: [me.id, 9, 9, 40], 5: [me.id, 9, 10, 5], 6: [me.id, 9, 10, 20],
+    7: [sam.id, 6, 10, 0], 8: [sam.id, 6, 10, 14], 9: [sam.id, 6, 10, 31], 10: [sam.id, 6, 10, 45], 11: [sam.id, 6, 11, 2], 12: [sam.id, 6, 11, 20],
+    13: [me.id, 4, 14, 0], 14: [me.id, 4, 14, 18], 15: [me.id, 4, 14, 35], 16: [me.id, 1, 15, 20], 17: [sam.id, 0, 8, 5], 18: [sam.id, 2, 9, 30],
+  };
+  for (const it of items) {
+    const [who, days, hour, minute] = added[it.number ?? 0] ?? [me.id, 9, 9, 0];
+    const when = ago(days, hour, minute);
+    Object.assign(it, { createdBy: who, createdAt: when, updatedAt: when });
+    log(who, when, { kind: 'item_created', itemId: it.id, field: 'created', before: null, after: it.title });
+    const p = photos.find((x) => x.itemId === it.id);
+    if (p) {
+      Object.assign(p, { createdBy: who, createdAt: when });
+      log(who, ago(days, hour, minute + 1), { kind: 'photo_added', itemId: it.id, detail: { photo_id: p.id } });
+      if (p.marks.length > 0) log(who, ago(days, hour, minute + 2), { kind: 'photo_marked', itemId: it.id, detail: { photo_id: p.id } });
+    }
+  }
+  const change = (who: string, at: string, it: Item | undefined, fields: [string, string | null, string | null][]) => {
+    if (it) for (const [field, before, after] of fields) log(who, at, { kind: 'item_changed', itemId: it.id, field, before, after });
+  };
+  const byNumber = (no: number) => items.find((x) => x.number === no);
+  const vanity = byNumber(11);
+  change(sam.id, ago(5, 11, 0), vanity, [
+    ['ready', 'true', 'false'],
+    ['waiting_on', null, JSON.stringify(vanity?.waitingOn ?? [])],
+    ['ready_by', null, vanity?.readyBy ?? null],
+  ]);
+  change(me.id, ago(3, 13, 15), byNumber(13), [['ready_by', null, byNumber(13)?.readyBy ?? null]]);
+  const grout = byNumber(7);
+  if (grout) {
+    const when = ago(2, 16, 0);
+    Object.assign(grout, { completedBy: sam.id, completedAt: when, updatedAt: when });
+    change(sam.id, when, grout, [
+      ['status', 'open', 'complete'],
+      ['completed_by', null, sam.id],
+      ['completed_at', null, when],
+    ]);
+  }
+  const scheduled = (who: string, at: string, v: Visit, confirmed: boolean) => {
+    Object.assign(v, { createdBy: who, createdAt: at, updatedAt: at });
+    log(who, at, { kind: 'visit_added', itemId: null, detail: { visit_id: v.id, company_id: v.companyId, start: v.start, days: v.days, confirmed } });
+    for (const it of items.filter((x) => x.visitId === v.id)) log(who, at, { kind: 'item_changed', itemId: it.id, field: 'visit_id', before: null, after: v.id });
+  };
+  const [paint, tile] = visits;
+  if (tile) scheduled(me.id, ago(9, 16, 0), tile, true);
+  if (paint) {
+    scheduled(me.id, ago(2, 11, 0), paint, false);
+    const d = { visit_id: paint.id, company_id: paint.companyId, start: paint.start, days: paint.days };
+    log(me.id, ago(1, 9, 10), { kind: 'visit_changed', itemId: null, detail: { ...d, confirmed: true, was_start: paint.start, was_days: paint.days, was_confirmed: false } });
+  }
+  for (const s of sends) log(s.sentBy, s.sentAt, { kind: 'list_sent', itemId: null, detail: { list: s.list, items: s.itemIds.length } });
+
   return {
     me,
+    people: [me, sam],
+    activity,
     jobs: [job],
     locations,
     trades,

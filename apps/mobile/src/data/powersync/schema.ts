@@ -105,6 +105,21 @@ const item_history = new Table(
   { indexes: { item: ['item_id'] } },
 );
 
+/** Who did what on a job besides changing items: photos, visits, lists sent and setup. Read only. */
+const job_activity = new Table(
+  {
+    org: column.text,
+    job_id: column.text,
+    item_id: column.text,
+    person_id: column.text,
+    kind: column.text,
+    /** JSON */
+    detail: column.text,
+    at: column.text,
+  },
+  { indexes: { job: ['job_id'], item: ['item_id'] } },
+);
+
 const title_library = new Table({
   org: column.text,
   title: column.text,
@@ -210,6 +225,7 @@ export const AppSchema = new Schema({
   job_waiting_on,
   items,
   item_history,
+  job_activity,
   title_library,
   custom_fields,
   photos,

@@ -51,6 +51,30 @@ export function dayOf(isoTime: string): string {
   return shortDate(isoFromDate(new Date(isoTime)));
 }
 
+/** "9:42 AM" from an ISO time. */
+export function timeOf(isoTime: string): string {
+  const d = new Date(isoTime);
+  const h = d.getHours();
+  return `${h % 12 || 12}:${pad(d.getMinutes())} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/** "Today", "Yesterday", or "Thursday, October 29", for the day of an ISO time. */
+export function dayHeading(isoTime: string, today: Date = new Date()): string {
+  const day = isoFromDate(new Date(isoTime));
+  if (day === isoFromDate(today)) return 'Today';
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (day === isoFromDate(yesterday)) return 'Yesterday';
+  return weekdayDate(day, today);
+}
+
+/** "Today at 9:42 AM", "October 29 at 4:05 PM". */
+export function whenOf(isoTime: string, today: Date = new Date()): string {
+  const heading = dayHeading(isoTime, today);
+  const day = heading === 'Today' || heading === 'Yesterday' ? heading : shortDate(isoFromDate(new Date(isoTime)), today);
+  return `${day} at ${timeOf(isoTime)}`;
+}
+
 export function isBeforeToday(iso: string, today: Date = new Date()): boolean {
   return iso < isoFromDate(today);
 }

@@ -4,6 +4,7 @@
 
 import { createContext, useContext } from 'react';
 import type {
+  Activity,
   Company,
   CustomField,
   FormSettings,
@@ -62,6 +63,8 @@ export interface DataApi {
   /** preview: sample data, nothing saved beyond this browser tab. live: the real database. */
   mode: 'preview' | 'live';
   useMe(): Person | null;
+  /** Everyone at Ross Built, for who did what. */
+  usePeople(): Person[];
   useJobs(): Job[];
   useLocations(jobId: string): Location[];
   useItems(jobId: string): Item[];
@@ -83,6 +86,8 @@ export interface DataApi {
   useVisits(jobId: string): Visit[];
   /** The lists that went out on the job, not counting any undone. */
   useSends(jobId: string): ListSend[];
+  /** Who did what on the job: item_history and job_activity together, in no particular order. */
+  useActivity(jobId: string): Activity[];
   createJob(input: { name: string; address: string }): Promise<string>;
   updateJob(id: string, patch: Partial<Pick<Job, 'name' | 'address'>>): Promise<void>;
   /**

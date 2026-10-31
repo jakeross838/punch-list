@@ -50,6 +50,7 @@ export const SF_SYMBOLS = {
   circle: 'circle',
   square: 'square',
   ruler: 'ruler',
+  clock: 'clock.arrow.circlepath',
   '1.circle': '1.circle',
   textformat: 'textformat',
   rooms: 'square.split.2x2',
