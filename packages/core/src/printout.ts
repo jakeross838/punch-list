@@ -7,13 +7,18 @@
 // it takes (one duration per batch, as the schedule bars carry), then additional work that needs a
 // price, then blank lines to add anything missing. Items new since the last list say so. The owner's
 // list says what Ross Built needs from them and by when. The whole job list goes location by
-// location with the trade and company on every line.
+// location with the trade and company on every line. A list made to order takes any filters,
+// groups by location, trade, company or what it waits on, shows the details picked on every line,
+// and totals each group's estimated time.
 // Plain HTML, so the phone turns it into a PDF and the preview page shows the very same thing.
 
 import { dayOfDate, daysBetween, isDay, visitEnd } from './dates';
+import { KIND_LABELS } from './forms';
 import type { CompanyList, ListLine } from './lists';
 import { markShapes, type MarkShape } from './marks';
-import type { Mark, Visit } from './types';
+import { isPriced } from './rules';
+import { daysText, hoursText, totalText, totalTime } from './time';
+import type { Item, Mark, Visit } from './types';
 import { itemNumberLabel } from './views';
 import { waitingOnText } from './waitingOn';
 
@@ -359,6 +364,204 @@ export function jobPrintout(lines: ListLine[], settings: PrintSettings): Printou
   };
 }
 
+// ---------- a list made to order ----------
+
+export type ListGroupBy = 'location' | 'trade' | 'company' | 'waiting';
+export type ListDetail = 'description' | 'location' | 'company' | 'trade' | 'type' | 'status' | 'time' | 'photo';
+
+export const LIST_GROUP_LABELS: Record<ListGroupBy, string> = { location: 'Location', trade: 'Trade', company: 'Company', waiting: 'Waiting On' };
+
+/** What each line can show, in the order the sheet offers them. */
+export const LIST_DETAILS: { detail: ListDetail; label: string }[] = [
+  { detail: 'description', label: 'Description' },
+  { detail: 'location', label: 'Location' },
+  { detail: 'company', label: 'Company' },
+  { detail: 'trade', label: 'Trade' },
+  { detail: 'type', label: 'Type' },
+  { detail: 'status', label: 'Ready or Waiting' },
+  { detail: 'time', label: 'Estimated Time' },
+  { detail: 'photo', label: 'Photo' },
+];
+
+/** How a list made to order is laid out. */
+export interface ListDesign {
+  /** The title on the page; empty for the one the filters suggest. */
+  title: string;
+  groupBy: ListGroupBy;
+  /** What each line shows, besides the item number and the title. */
+  details: ListDetail[];
+  /** A line under each group for the company to write how many days it takes. */
+  daysLines: boolean;
+  /** Blank lines under each group, to add anything missing. */
+  blankLines: boolean;
+}
+
+export const DEFAULT_LIST_DESIGN: ListDesign = {
+  title: '',
+  groupBy: 'location',
+  details: ['description', 'company', 'trade', 'type', 'status', 'time', 'photo'],
+  daysLines: false,
+  blankLines: false,
+};
+
+export interface CustomPrintSettings extends PrintSettings {
+  /** The filters the list was made with, in words: "Ready", "SMS Carpentry". */
+  filters?: string[];
+}
+
+/** The type of work in words: "Deficiency", "Additional, CO-14", "Additional, needs a price". */
+function kindWords(item: Pick<Item, 'kind' | 'poOrCo'>): string {
+  if (item.kind !== 'added_scope') return KIND_LABELS[item.kind];
+  return isPriced(item) ? `Additional, ${item.poOrCo}` : 'Additional, needs a price';
+}
+
+interface LineGroup {
+  label: string;
+  /** The level, when grouped by location. */
+  floor?: string;
+  lines: ListLine[];
+}
+
+/** Open items first, then completed ones, each in the order given. */
+const openFirst = (lines: ListLine[]) => [...lines.filter((l) => l.item.status !== 'complete'), ...lines.filter((l) => l.item.status === 'complete')];
+
+function groupLines(lines: ListLine[], by: ListGroupBy): LineGroup[] {
+  const groups = new Map<string, LineGroup & { readyBy?: string | null; order: number }>();
+  const add = (key: string, label: string, line: ListLine, order: number, extra: Partial<LineGroup & { readyBy: string | null }> = {}) => {
+    const group = groups.get(key) ?? { label, lines: [], order, ...extra };
+    group.lines.push(line);
+    if (extra.readyBy && (!group.readyBy || extra.readyBy < group.readyBy)) group.readyBy = extra.readyBy;
+    groups.set(key, group);
+  };
+  for (const line of lines) {
+    const { item } = line;
+    switch (by) {
+      case 'location':
+        add(item.locationId, line.room, line, 0, { floor: line.floor });
+        break;
+      case 'trade':
+        add(line.trade, line.trade, line, line.trade === 'Not set' ? 1 : 0);
+        break;
+      case 'company':
+        add(line.company, line.company, line, line.company === 'Not set' ? 1 : 0);
+        break;
+      case 'waiting': {
+        if (item.status === 'complete') add('complete', 'Completed', line, 4);
+        else if (!isPriced(item)) add('price', 'Needs a Price', line, 3);
+        else if (item.ready) add('ready', 'Ready', line, 0);
+        else {
+          const on = waitingOnText(item.waitingOn) || 'something not named';
+          add(`waiting:${on.toLowerCase()}`, `Waiting on ${on}`, line, 1, { readyBy: isDay(item.readyBy) ? item.readyBy : null });
+        }
+        break;
+      }
+    }
+  }
+  const list = [...groups.values()];
+  if (by === 'trade' || by === 'company') list.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+  if (by === 'waiting') {
+    list.sort(
+      (a, b) => a.order - b.order || (a.readyBy ?? '9999').localeCompare(b.readyBy ?? '9999') || b.lines.length - a.lines.length || a.label.localeCompare(b.label),
+    );
+  }
+  return list.map((g) => ({ label: g.label, floor: g.floor, lines: openFirst(g.lines) }));
+}
+
+/** A list made to order: the items given (filtered already, in floor order), laid out as designed. */
+export function customPrintout(lines: ListLine[], design: ListDesign, settings: CustomPrintSettings): Printout {
+  const has = (d: ListDetail) => design.details.includes(d);
+  const today = settings.date;
+  const work = (line: ListLine) => {
+    const { item } = line;
+    const parts = [`<div class="rb-work">${esc(item.title)}</div>`];
+    if (has('description') && item.description) parts.push(`<div class="rb-desc">${esc(item.description)}</div>`);
+    const meta = [has('location') ? line.room : null, has('company') ? line.company : null, has('trade') ? line.trade : null, has('type') ? kindWords(item) : null]
+      .filter((x): x is string => !!x)
+      .join(' \u00b7 ');
+    if (meta) parts.push(`<div class="rb-meta">${esc(meta)}</div>`);
+    // Whether additional work is priced always shows: it decides whether it can be scheduled.
+    if (!has('type') && item.kind === 'added_scope') parts.push(`<div class="rb-note">${esc(kindWords(item))}</div>`);
+    return parts.join('');
+  };
+  const status = (line: ListLine) =>
+    line.item.status === 'complete' && line.item.completedAt ? esc(`Completed ${dayText(line.item.completedAt.slice(0, 10), today)}`) : readyCell(line, today);
+  const time = (line: ListLine) => (line.item.hours !== null ? esc(hoursText(line.item.hours)) : '<span class="rb-quiet">Not estimated</span>');
+  const columns: Column[] = [
+    { label: 'Item', width: '0.5in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
+    { label: 'Work', cell: work },
+    ...(has('status') ? [{ label: 'Ready', width: '1.45in', cell: status, className: 'rb-small' }] : []),
+    ...(has('time') ? [{ label: 'Time', width: '0.85in', cell: time, className: 'rb-small' }] : []),
+    ...(has('photo') ? photoColumn(settings) : []),
+  ];
+  const span = columns.length;
+  const openOf = (list: ListLine[]) => list.filter((l) => l.item.status === 'open');
+  const bandText = (group: LineGroup) => {
+    const parts = [group.label, plural(group.lines.length, 'item')];
+    const t = totalTime(openOf(group.lines).map((l) => l.item));
+    if (has('time') && t.timed + t.untimed > 0) parts.push(totalText(t));
+    return parts.join(' \u00b7 ');
+  };
+  const groupBody = (group: LineGroup) => {
+    const open = openOf(group.lines).length;
+    return (
+      band(span, bandText(group)) +
+      rows(columns, group.lines) +
+      (design.daysLines && open > 0 ? daysLine(span, open) : '') +
+      (design.blankLines ? blanks(span, 2) : '')
+    );
+  };
+
+  const title = design.title.trim() || 'Whole Job';
+  const open = openOf(lines);
+  const done = lines.length - open.length;
+  const places = new Set(lines.map((l) => l.item.locationId)).size;
+  const price = open.filter((l) => !isPriced(l.item)).length;
+  const ready = open.filter((l) => l.item.ready && isPriced(l.item)).length;
+  const waiting = open.length - ready - price;
+  const t = totalTime(open.map((l) => l.item));
+  const counts = [
+    ready > 0 ? `${ready} ready now` : '',
+    waiting > 0 ? `${waiting} waiting` : '',
+    price > 0 ? `${price} ${price === 1 ? 'that needs' : 'that need'} a price` : '',
+  ].filter(Boolean);
+  const sentences: string[] = [];
+  if (lines.length === 0) sentences.push('Nothing matches right now.');
+  else if (open.length > 0) sentences.push(`${plural(open.length, 'open item')} in ${plural(places, 'location')}: ${andList(counts)}.`);
+  else sentences.push(`${plural(done, 'completed item')} in ${plural(places, 'location')}.`);
+  if (has('time') && t.timed > 0) {
+    sentences.push(`About ${hoursText(t.hours)} of work, or ${daysText(t.hours)}${t.untimed > 0 ? `, with ${t.untimed} not estimated` : ''}.`);
+  }
+  if (done > 0 && open.length > 0) sentences.push(`Also ${plural(done, 'completed item')}.`);
+  const parts = [header(settings, 'Completion List', title, sentences.join(' '))];
+  if (settings.filters && settings.filters.length > 0) parts.push(`<p class="rb-filters">Filters: ${esc(settings.filters.join(', '))}.</p>`);
+
+  const groups = groupLines(lines, design.groupBy);
+  if (design.groupBy === 'location') {
+    // Level by level, as the job lists them.
+    const floors: { floor: string; groups: LineGroup[] }[] = [];
+    for (const g of groups) {
+      const floor = g.floor ?? '';
+      const last = floors[floors.length - 1];
+      if (last && last.floor === floor) last.groups.push(g);
+      else floors.push({ floor, groups: [g] });
+    }
+    for (const f of floors) {
+      if (f.floor) parts.push(`<h2 class="rb-section">${esc(f.floor)}</h2>`);
+      parts.push(table(columns, f.groups.map(groupBody).join('')));
+    }
+  } else if (groups.length > 0) {
+    parts.push(`<h2 class="rb-section">By ${esc(LIST_GROUP_LABELS[design.groupBy])}</h2>`);
+    parts.push(table(columns, groups.map(groupBody).join('')));
+  }
+
+  return {
+    title,
+    kind: 'Completion List',
+    fileName: `${safeName(`${settings.job.name} ${title}, ${printDate(settings.date).replace(',', '')}`)}.pdf`,
+    body: parts.join(''),
+  };
+}
+
 const FONT = "'Nunito Sans', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
 /** The house look, kept to the class rb-doc so the preview page can show it beside the app. */
@@ -393,6 +596,9 @@ export const PRINT_CSS = `
 .rb-work{font-weight:700}
 .rb-desc{margin-top:1pt}
 .rb-note{margin-top:2pt;font-size:9pt;color:#4E7A8C}
+.rb-meta{margin-top:2pt;font-size:9pt;color:#4E7A8C}
+.rb-quiet{color:#5B8699}
+.rb-filters{margin:4pt 0 0;font-size:9pt;color:#4E7A8C}
 .rb-ph{position:relative;width:${PHOTO_WIDTH}in;overflow:hidden;border-radius:3pt;background:#F7F5EC}
 .rb-ph img{display:block;width:100%;height:100%;object-fit:cover}
 .rb-ph svg{position:absolute;left:0;top:0;width:100%;height:100%;font-family:${FONT}}

@@ -191,7 +191,7 @@ export default function GroupScreen() {
           ListHeaderComponent={
             <View>
               {scroll.header}
-              {due || drafts ? null : <FilterBar filters={filters} onChange={(next) => setView({ ...view, filters: next })} />}
+              {due || drafts ? null : <FilterBar jobId={jobId} filters={filters} onChange={(next) => setView({ ...view, filters: next })} />}
               {holdup && heldUp.length > 0 ? (
                 <View style={styles.holdup}>
                   <View style={styles.holdupRow}>

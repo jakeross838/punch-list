@@ -224,7 +224,7 @@ export default function JobScreen() {
     ) : (
       <EmptyState icon="checkmark.circle.fill" title="Nothing Open" message="Every item on this job is complete." />
     );
-  const filterBar = <FilterBar filters={filters} onChange={(next) => setView({ ...view, filters: next })} onOpen={() => setSheet(true)} />;
+  const filterBar = <FilterBar jobId={jobId} filters={filters} onChange={(next) => setView({ ...view, filters: next })} onOpen={() => setSheet(true)} />;
 
   return (
     <>

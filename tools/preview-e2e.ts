@@ -731,6 +731,54 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
+    await step('Make a List: any filters, grouped and laid out as picked', async () => {
+      await app.getByTestId('send').last().click();
+      await app.getByTestId('make-list').click();
+      const sheet = app.getByTestId('export-sheet');
+      await sheet.waitFor();
+      await settle(700);
+      await shot('41b-make-a-list');
+      // SMS Carpentry's ready work on Level 1, by location, with a line for the days and no photos.
+      await app.getByTestId('export-filters-toggle').click();
+      await app.getByTestId('export-filter-state-ready').click();
+      await app.getByTestId('export-filter-company-company-4').click();
+      await app.getByTestId('export-filter-floor-Level 1').click();
+      await app.getByTestId('export-days').click();
+      await app.getByTestId('export-detail-photo').click();
+      await app.getByTestId('export-summary').getByText(/^\d+ items? · [\d.]+ (hours|minutes)/).waitFor();
+      // Folded again, the filters that are on still show, each one off with a tap.
+      await app.getByTestId('export-filters-toggle').click();
+      await app.getByTestId('export-chip-floors:Level 1').waitFor();
+      await settle(300);
+      await shot('41c-make-a-list-filtered');
+      await app.getByTestId('export-preview').click();
+      const doc = app.getByTestId('doc-preview');
+      await doc.getByText('SMS Carpentry', { exact: true }).first().waitFor();
+      await doc.getByText('Filters: Ready, SMS Carpentry, Level 1.', { exact: true }).waitFor();
+      await doc.getByText(/^How many days for (this item|these \d+ items)\?$/).first().waitFor();
+      if ((await doc.getByText('Master Bedroom 206', { exact: false }).count()) !== 0) throw new Error('Level 2 is on a Level 1 list');
+      await settle(800);
+      await shot('41d-made-list');
+      await app.getByTestId('preview-done').click();
+      await app.getByTestId('list-preview').waitFor({ state: 'detached' });
+      // Everything, by what it waits on, with its own title.
+      await app.getByTestId('export-clear').click();
+      await sheet.getByRole('tab', { name: 'Waiting' }).click();
+      await app.getByTestId('export-title').fill('Open Work by Holdup');
+      await app.getByTestId('export-preview').click();
+      await doc.getByText('Open Work by Holdup', { exact: true }).first().waitFor();
+      await doc.getByText(/^Waiting on Owner · \d+ items?/).first().waitFor();
+      await doc.getByText(/^Needs a Price · \d+ items?/).first().waitFor();
+      await settle(800);
+      await shot('41e-made-list-by-waiting');
+      await app.getByTestId('preview-done').click();
+      await app.getByTestId('list-preview').waitFor({ state: 'detached' });
+      await app.getByTestId('export-cancel').click();
+      await sheet.waitFor({ state: 'detached' });
+      await app.getByTestId('send-done').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
     await step('Item Form: fields, an added field and a standard title', async () => {
       await menu('item-form');
       await app.getByTestId('form-kind').waitFor();

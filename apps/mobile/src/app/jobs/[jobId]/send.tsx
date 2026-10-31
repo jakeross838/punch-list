@@ -3,20 +3,31 @@
 // the share button goes straight to sending, and Send All goes through every company in one pass.
 // Each list sent is recorded (with Undo), so the next one marks what is new. The owner and the
 // design team get what Ross Built needs from them; the whole job, location by location, is for Ross Built.
+// Make a List makes any other list: it starts from what the job shows now, takes every filter, and
+// lays the page out as picked.
 
 import {
   companiesWithWork,
   companyList,
   companyPrintout,
+  customPrintout,
+  DEFAULT_LIST_DESIGN,
+  filterChips,
+  filteredLines,
   footerText,
   jobList,
   jobPrintout,
   lastSend,
   LIST_KEYS,
+  listTitle,
   newSince,
   partiesWaitedOn,
   partyList,
   partyPrintout,
+  totalTime,
+  type CustomPrintSettings,
+  type GroupBy,
+  type ListGroupBy,
   type ListLine,
   type Photo,
   type PrintPhoto,
@@ -26,8 +37,11 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { ExportSheet, type ListDraft } from '@/components/ExportSheet';
+import { useFilterNames } from '@/components/FilterBar';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
+import { useFilterContext, useJobView } from '@/data/view';
 import { DocPreview } from '@/export/DocPreview';
 import { makePdf, printFonts, printPhoto, sharePdf, showPdf } from '@/export/printing';
 import { Button, EmptyState, haptic, Icon, ListRow, ListSection, ListSwitchRow, Page, shortDate, Sheet, Text, Touchable, useFeedback } from '@/ui';
@@ -38,12 +52,15 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 /** One list that can go out. */
 interface Target {
-  /** The list key: "job", "company:<id>", "party:<name>". */
+  /** The list key: "job", "company:<id>", "party:<name>"; "custom" for one made to order. */
   list: string;
   name: string;
-  kind: 'company' | 'party' | 'job';
+  kind: 'company' | 'party' | 'job' | 'custom';
   companyId?: string;
 }
+
+/** How the job is grouped on screen, as a list made to order groups it. */
+const LIST_GROUP: Record<GroupBy, ListGroupBy> = { room: 'location', trade: 'trade', company: 'company', waiting: 'waiting' };
 
 interface Made {
   target: Target;
@@ -67,6 +84,10 @@ export default function SendScreen() {
   const [withPhotos, setWithPhotos] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ made: Made; fontCss: string } | null>(null);
+  const [view] = useJobView(jobId, data.useViewSettings());
+  const context = useFilterContext(jobId);
+  const names = useFilterNames(jobId);
+  const [draft, setDraft] = useState<ListDraft | null>(null);
 
   const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
   const rows = useMemo(() => companiesWithWork(items, lookups), [items, lookups]);
@@ -79,6 +100,19 @@ export default function SendScreen() {
     for (const p of photos) if (!map.has(p.itemId)) map.set(p.itemId, p);
     return map;
   }, [photos]);
+
+  // The list being made to order: what it holds right now.
+  const customLines = useMemo(
+    () => (draft ? filteredLines(items, draft.filters, lookups, { context, completed: draft.completed }) : []),
+    [draft, items, lookups, context],
+  );
+  const customTitle = draft ? draft.design.title.trim() || listTitle(draft.filters, names) : '';
+  const customTime = totalTime(customLines.filter((l) => l.item.status === 'open').map((l) => l.item));
+  /** Make a List starts from what the job shows now. */
+  const startList = () => {
+    haptic.tap();
+    setDraft({ filters: view.filters, completed: view.showCompleted, design: { ...DEFAULT_LIST_DESIGN, groupBy: LIST_GROUP[view.groupBy] } });
+  };
 
   /** The items on a list right now, in its order. */
   function linesOf(target: Target): ListLine[] {
@@ -140,6 +174,41 @@ export default function SendScreen() {
           ? partyPrintout(target.name, lines, settings)
           : jobPrintout(lines, settings);
     return { target, printout, itemIds, footer: footerText(printout, settings) };
+  }
+
+  /** The list made to order, as a page: the filters it was made with said under the title. */
+  async function makeCustom(list: ListDraft): Promise<Made> {
+    const itemIds = customLines.map((l) => l.item.id);
+    const prepared = list.design.details.includes('photo') ? await printPhotos(itemIds) : null;
+    const settings: CustomPrintSettings = {
+      job: { name: job?.name ?? 'Job', address: job?.address ?? '' },
+      date: new Date(),
+      photo: prepared ? (id) => prepared.get(id) : undefined,
+      filters: filterChips(list.filters, names).map((c) => c.label),
+    };
+    const printout = customPrintout(customLines, { ...list.design, title: customTitle }, settings);
+    return { target: { list: 'custom', name: customTitle, kind: 'custom' }, printout, itemIds, footer: footerText(printout, settings) };
+  }
+
+  async function openCustom(send = false) {
+    if (!draft || busy) return;
+    haptic.tap();
+    setBusy('custom');
+    try {
+      const made = await makeCustom(draft);
+      if (!ON_THE_PHONE) {
+        setPreview({ made, fontCss: await printFonts() });
+        return;
+      }
+      const file = await makePdf(made.printout, made.footer);
+      if (send) await sharePdf(file, made.printout.title);
+      else await showPdf(file, made.printout.title);
+    } catch {
+      haptic.warning();
+      feedback.toast({ message: 'That list did not come out. Try again.' });
+    } finally {
+      setBusy(null);
+    }
   }
 
   /** Keeps a record that the list went out, with Undo for a share that was cancelled. */
@@ -224,6 +293,16 @@ export default function SendScreen() {
 
   return (
     <Page title="Send Lists" sheet right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: () => router.back(), testID: 'send-done' }]}>
+      <ListSection footer="Any filters, grouped your way, with the details you pick on every line. It starts from what the job shows now.">
+        <ListRow
+          title="Make a List"
+          icon="doc"
+          accessory="chevron"
+          onPress={startList}
+          right={busy === 'custom' ? <ActivityIndicator color={colors.secondary} /> : undefined}
+          testID="make-list"
+        />
+      </ListSection>
       {rows.length === 0 && parties.length === 0 ? (
         <EmptyState icon="checkmark.circle.fill" title="Nothing to Send" message="Every item on this job is complete." />
       ) : (
@@ -295,6 +374,18 @@ export default function SendScreen() {
         </>
       )}
 
+      <ExportSheet
+        jobId={jobId}
+        draft={draft}
+        onChange={setDraft}
+        onClose={() => setDraft(null)}
+        onPreview={() => void openCustom()}
+        onSend={() => void openCustom(true)}
+        busy={busy === 'custom'}
+        suggestedTitle={draft ? listTitle(draft.filters, names) : ''}
+        matching={{ items: customLines.length, time: customTime }}
+      />
+
       {ON_THE_PHONE ? null : (
         <Sheet
           visible={!!preview}
@@ -309,7 +400,7 @@ export default function SendScreen() {
               <Text variant="footnote" color={colors.secondary} align="center">
                 On the iPhone this opens as a PDF with page numbers, ready to send by email or text.
               </Text>
-              {preview ? (
+              {preview && preview.made.target.kind !== 'custom' ? (
                 <Touchable
                   feedback="opacity"
                   onPress={() => {

@@ -3,6 +3,7 @@
 // what is ready now, then what is waiting, grouped by what it waits on and soonest first, then
 // added scope that needs a price, so the work can be scheduled in batches and in the right order.
 
+import { matchesFilters, type FilterContext, type ItemFilters } from './filters';
 import { isPriced } from './rules';
 import type { Company, Item, Location, Trade } from './types';
 import { waitingOnText } from './waitingOn';
@@ -159,4 +160,20 @@ export function jobList(items: Item[], lookups: ListLookups): ListLine[] {
   return lines.sort(
     (a, b) => (order.get(a.item.locationId) ?? 1e9) - (order.get(b.item.locationId) ?? 1e9) || a.trade.localeCompare(b.trade),
   );
+}
+
+/**
+ * The items that pass the filters, as lines in floor order: open and finished, and completed ones
+ * too when asked. What a list made to order prints.
+ */
+export function filteredLines(
+  items: Item[],
+  filters: ItemFilters,
+  lookups: ListLookups,
+  options: { context?: FilterContext; completed?: boolean } = {},
+): ListLine[] {
+  const chosen = items.filter(
+    (i) => !i.unfinished && (i.status === 'open' || (options.completed === true && i.status === 'complete')) && matchesFilters(i, filters, options.context),
+  );
+  return inFloorOrder(chosen, lookups).map((i) => lineFor(i, lookups));
 }

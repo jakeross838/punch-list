@@ -30,6 +30,8 @@ export interface ItemFilters {
   tradeIds: string[];
   /** Levels, as the job lists them: "Level 1", "Outside and Whole House". */
   floors: string[];
+  /** Single locations. */
+  locationIds: string[];
   /** What items wait on, as written. */
   waitingOn: string[];
   /** Who added it. */
@@ -48,6 +50,7 @@ export const NO_FILTERS: ItemFilters = {
   companyIds: [],
   tradeIds: [],
   floors: [],
+  locationIds: [],
   waitingOn: [],
   addedBy: [],
   photo: null,
@@ -56,10 +59,10 @@ export const NO_FILTERS: ItemFilters = {
 };
 
 /** The lists in ItemFilters, for the filters that take several values. */
-export type ListFacet = 'states' | 'kinds' | 'companyIds' | 'tradeIds' | 'floors' | 'waitingOn' | 'addedBy';
+export type ListFacet = 'states' | 'kinds' | 'companyIds' | 'tradeIds' | 'floors' | 'locationIds' | 'waitingOn' | 'addedBy';
 export type YesNoFacet = 'photo' | 'scheduled' | 'estimated';
 
-const LIST_FACETS: ListFacet[] = ['states', 'kinds', 'companyIds', 'tradeIds', 'floors', 'waitingOn', 'addedBy'];
+const LIST_FACETS: ListFacet[] = ['states', 'kinds', 'companyIds', 'tradeIds', 'floors', 'locationIds', 'waitingOn', 'addedBy'];
 const YES_NO_FACETS: YesNoFacet[] = ['photo', 'scheduled', 'estimated'];
 
 export const YES_NO_LABELS: Record<YesNoFacet, [yes: string, no: string]> = {
@@ -135,6 +138,7 @@ export function matchesFilters(item: Item, f: ItemFilters, ctx?: FilterContext):
     const level = location ? floorOf(location) : NO_FLOOR;
     if (!f.floors.some((x) => same(x, level))) return false;
   }
+  if (f.locationIds.length > 0 && !f.locationIds.includes(item.locationId)) return false;
   if (f.waitingOn.length > 0 && (item.ready || !item.waitingOn.some((w) => f.waitingOn.some((x) => same(x, w))))) return false;
   if (f.addedBy.length > 0 && !f.addedBy.includes(item.createdBy)) return false;
   if (f.photo !== null && (ctx?.photoItemIds.has(item.id) ?? false) !== f.photo) return false;
@@ -150,6 +154,8 @@ export interface FilterNames {
   companies: Map<string, string>;
   trades: Map<string, string>;
   people: Map<string, string>;
+  /** Location labels, "Kitchen 109". */
+  locations?: Map<string, string>;
 }
 
 export interface FilterChip {
@@ -170,6 +176,7 @@ export function filterChips(f: ItemFilters, names: FilterNames): FilterChip[] {
   list('companyIds', (id) => names.companies.get(id) ?? 'A company');
   list('tradeIds', (id) => names.trades.get(id) ?? 'A trade');
   list('floors', (x) => x);
+  list('locationIds', (id) => names.locations?.get(id) ?? 'A location');
   list('waitingOn', (w) => `Waiting on ${w}`);
   list('addedBy', (id) => `Added by ${names.people.get(id) ?? 'someone'}`);
   for (const facet of YES_NO_FACETS) {
@@ -177,6 +184,24 @@ export function filterChips(f: ItemFilters, names: FilterNames): FilterChip[] {
     if (v !== null) chips.push({ key: facet, label: YES_NO_LABELS[facet][v ? 0 : 1], without: { ...f, [facet]: null } });
   }
   return chips;
+}
+
+/**
+ * A title for a list made with these filters: the companies, else the trades, else the locations,
+ * else the levels it is narrowed to (one or two), else Whole Job.
+ */
+export function listTitle(f: ItemFilters, names: FilterNames): string {
+  const pick = (ids: string[], map: Map<string, string> | undefined) => {
+    const words = ids.map((id) => map?.get(id) ?? id);
+    return words.length === 0 || words.length > 2 ? null : words.join(' and ');
+  };
+  return (
+    pick(f.companyIds, names.companies) ??
+    pick(f.tradeIds, names.trades) ??
+    pick(f.locationIds, names.locations) ??
+    (f.floors.length > 0 && f.floors.length <= 2 ? f.floors.join(' and ') : null) ??
+    'Whole Job'
+  );
 }
 
 /** The kinds in form order, for the filter. */
@@ -194,6 +219,7 @@ export function readFilters(raw: unknown): ItemFilters {
     companyIds: strings(r.companyIds),
     tradeIds: strings(r.tradeIds),
     floors: strings(r.floors),
+    locationIds: strings(r.locationIds),
     waitingOn: strings(r.waitingOn),
     addedBy: strings(r.addedBy),
     photo: yesNo(r.photo),
