@@ -26,6 +26,7 @@ export function OptionPicker({
   onSelect,
   onClose,
   footer,
+  search,
 }: {
   visible: boolean;
   title: string;
@@ -34,6 +35,8 @@ export function OptionPicker({
   onSelect: (value: string) => void;
   onClose: () => void;
   footer?: string;
+  /** Search the choices: on by default for a long list. */
+  search?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const shown = useMemo(() => {
@@ -59,7 +62,7 @@ export function OptionPicker({
   return (
     <Sheet visible={visible} onClose={close} title={title} left={{ label: 'Cancel', onPress: close, testID: 'picker-cancel' }} testID="picker">
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} style={{ flex: 1 }}>
-        {options.length >= SEARCH_FROM ? (
+        {(search ?? options.length >= SEARCH_FROM) ? (
           <View style={styles.search}>
             <SearchField value={query} onChangeText={setQuery} />
           </View>

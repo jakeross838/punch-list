@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
   statusIcon: { alignSelf: 'flex-start', marginTop: 2 },
   editor: { marginTop: 14 },
   remove: { alignSelf: 'flex-start', height: 44, justifyContent: 'center', marginHorizontal: layout.inset, marginTop: -8 },
-  footer: { paddingTop: 10, paddingHorizontal: layout.margin, backgroundColor: 'rgba(245, 245, 247, 0.96)', borderTopWidth: 1, borderTopColor: colors.rule },
+  footer: { paddingTop: 10, paddingHorizontal: layout.margin, backgroundColor: 'rgba(245, 245, 247, 0.96)', borderTopWidth: layout.hairline, borderTopColor: colors.rule },
   primary: { height: 50, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.tint },
   primaryQuiet: { backgroundColor: colors.cell },
 });

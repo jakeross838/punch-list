@@ -1,8 +1,10 @@
 // The look of the app, as approved on the Punch List App Design canvas: white and light gray,
 // black text, and one accent, Ross Built slate blue, for everything you can tap. Red is only for
-// removing. No other colors: status is said in words, with a small gray icon where it helps.
+// removing and for what is late. No other colors: status is said in words, with a small gray icon
+// where it helps. Kept crisp: text a step smaller than the iPhone's default, rows tight, hairlines
+// thin and corners tighter, so a screen holds more of the list and every row says more.
 
-import type { TextStyle } from 'react-native';
+import { StyleSheet, type TextStyle } from 'react-native';
 
 export const brand = {
   slate: '#3E5964',
@@ -28,12 +30,16 @@ export const colors = {
   circle: '#AEAEB2',
   quiet: '#8E8E93',
 
-  separator: '#EDEDF0',
-  rule: '#E8E8ED',
+  /** Hairlines between rows: thin, so a little darker. */
+  separator: '#E3E3E8',
+  rule: '#DEDEE3',
   track: '#E5E5EA',
   trackOnWhite: '#EDEDF0',
   progressTrack: '#E1E1E6',
   highlight: '#ECECEF',
+  /** A quiet label or chip on white. */
+  chip: '#F0F0F3',
+  chipOn: '#E3E9EC',
 
   destructive: '#D70015',
   white: '#FFFFFF',
@@ -47,18 +53,18 @@ export const colors = {
   darkChipOn: 'rgba(255, 255, 255, 0.28)',
 } as const;
 
-/** Apple's text styles at the default text size. */
+/** Apple's text styles one step under the default text size (the Small setting): crisper, more on screen. */
 export const type = {
-  largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700', letterSpacing: -0.4 },
-  title1: { fontSize: 28, lineHeight: 32, fontWeight: '600', letterSpacing: -0.4 },
-  title2: { fontSize: 22, lineHeight: 28, fontWeight: '600', letterSpacing: -0.2 },
-  title3: { fontSize: 20, lineHeight: 25, fontWeight: '600' },
-  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
-  body: { fontSize: 17, lineHeight: 22, fontWeight: '400' },
-  callout: { fontSize: 16, lineHeight: 21, fontWeight: '400' },
-  subheadline: { fontSize: 15, lineHeight: 20, fontWeight: '400' },
-  footnote: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
-  caption1: { fontSize: 12, lineHeight: 16, fontWeight: '400' },
+  largeTitle: { fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.5 },
+  title1: { fontSize: 26, lineHeight: 31, fontWeight: '700', letterSpacing: -0.4 },
+  title2: { fontSize: 20, lineHeight: 25, fontWeight: '600', letterSpacing: -0.3 },
+  title3: { fontSize: 18, lineHeight: 23, fontWeight: '600', letterSpacing: -0.2 },
+  headline: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  body: { fontSize: 15, lineHeight: 20, fontWeight: '400' },
+  callout: { fontSize: 14, lineHeight: 19, fontWeight: '400' },
+  subheadline: { fontSize: 13, lineHeight: 17, fontWeight: '400' },
+  footnote: { fontSize: 12, lineHeight: 16, fontWeight: '400' },
+  caption1: { fontSize: 11, lineHeight: 13, fontWeight: '400' },
 } as const satisfies Record<string, TextStyle>;
 
 export type TypeVariant = keyof typeof type;
@@ -66,11 +72,13 @@ export type TypeVariant = keyof typeof type;
 /** Layout: margins, row sizes, corner radii. */
 export const layout = {
   margin: 16,
-  inset: 20,
-  rowPadding: 16,
-  rowMinHeight: 50,
-  radius: 18,
+  inset: 16,
+  rowPadding: 14,
+  rowMinHeight: 44,
+  radius: 12,
   barHeight: 44,
+  /** A thin line: a third of a point on the iPhone, half a pixel on the preview. */
+  hairline: StyleSheet.hairlineWidth < 1 ? StyleSheet.hairlineWidth : 0.5,
 } as const;
 
 /** Motion: one curve for most things, Apple's sheet curve for sheets. Durations stay short. */

@@ -45,7 +45,7 @@ function item(over: Partial<Item>): Item {
   return {
     id: `i${n}`, jobId: 'j', locationId: 'k', number: n, title: `Item ${n}`, description: '', tradeId: 't-carp',
     companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], readyBy: null, boughtOut: true, poOrCo: null,
-    status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null,
+    status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null, hours: null,
     btExternalId: null, createdBy: 'p1', createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
   };
 }
@@ -133,8 +133,8 @@ describe('each company plan', () => {
     expect(plan.noDate.map((g) => [g.on, g.lines.length])).toEqual([['Owner', 1]]);
     expect(plan.needsPrice.map((l) => l.item.id)).toEqual(['p1']);
     expect(notBooked(items, [visit({})], lookups, TODAY)).toEqual([
-      { companyId: 'c-sms', company: 'SMS Carpentry', readyNow: 2, nextFree: '2026-11-05', comingFree: 2, needsPrice: 1 },
-      { companyId: 'c-vs', company: 'Volcano Stone', readyNow: 1, nextFree: null, comingFree: 0, needsPrice: 0 },
+      { companyId: 'c-sms', company: 'SMS Carpentry', readyNow: 2, readyTime: { hours: 0, timed: 0, untimed: 2 }, nextFree: '2026-11-05', comingFree: 2, needsPrice: 1 },
+      { companyId: 'c-vs', company: 'Volcano Stone', readyNow: 1, readyTime: { hours: 0, timed: 0, untimed: 1 }, nextFree: null, comingFree: 0, needsPrice: 0 },
     ]);
   });
 });
@@ -219,8 +219,8 @@ describe('filling in from the photo', () => {
   const ctx: SuggestContext = {
     room: 'Kitchen 109',
     titles: [
-      { title: 'Adjust cabinet door', trade: 'Carpentry' },
-      { title: 'Touch up paint', trade: 'Painting' },
+      { title: 'Adjust cabinet door', trade: 'Carpentry', hours: 0.5 },
+      { title: 'Touch up paint', trade: 'Painting', hours: null },
     ],
     companies: [
       { name: 'SMS Carpentry', trade: 'Carpentry' },
@@ -234,7 +234,9 @@ describe('filling in from the photo', () => {
     expect(describeMarks(ctx.marks)).toEqual(['A red circle around the area from 20% to 60% across and 15% to 50% down.']);
     const prompt = suggestPrompt(ctx);
     expect(prompt).toContain('The photo was taken in Kitchen 109.');
-    expect(prompt).toContain('- Adjust cabinet door (Carpentry)');
+    expect(prompt).toContain('- Adjust cabinet door (Carpentry, usually 30 minutes)');
+    expect(prompt).toContain('- Touch up paint (Painting)');
+    expect(prompt).toContain('- hours: about how long the work takes');
     expect(prompt).toContain('- Triple H Painting (Painting)');
     expect(prompt).toContain('Reply with only JSON');
     expect(prompt).not.toContain('numbered spots');
@@ -262,18 +264,22 @@ describe('filling in from the photo', () => {
   });
 
   it('reads the answer back: standard titles word for word, only trades and companies on the job', () => {
-    expect(readSuggestion({ title: 'adjust cabinet door', description: ' Upper  left door rubs. ', trade: null, company: null }, ctx)).toEqual({
+    // A standard title's usual time wins over Claude's guess.
+    expect(readSuggestion({ title: 'adjust cabinet door', description: ' Upper  left door rubs. ', trade: null, company: null, hours: 2 }, ctx)).toEqual({
       title: 'Adjust cabinet door',
       description: 'Upper left door rubs.',
       trade: 'Carpentry',
       company: 'SMS Carpentry',
+      hours: 0.5,
     });
-    expect(readSuggestion({ title: 'Patch drywall', description: '', trade: 'Drywall', company: 'Someone New' }, ctx)).toEqual({
+    expect(readSuggestion({ title: 'Patch drywall', description: '', trade: 'Drywall', company: 'Someone New', hours: '1.3' }, ctx)).toEqual({
       title: 'Patch drywall',
       description: '',
       trade: null,
       company: null,
+      hours: 1.25,
     });
+    expect(readSuggestion({ title: 'Touch up paint', hours: -1 }, ctx)?.hours).toBeNull();
     expect(readSuggestion({ title: 'Touch up paint', trade: 'painting' }, ctx)?.company).toBe('Triple H Painting');
     expect(readSuggestion({ nope: true }, ctx)).toBeNull();
   });
@@ -290,9 +296,9 @@ describe('filling in from the photo', () => {
     const built = suggestContext({
       location: 'Kitchen 109',
       titles: [
-        { id: 'a', title: 'Touch up paint', tradeId: 't2', uses: 1, approved: true },
-        { id: 'b', title: 'Adjust cabinet door', tradeId: 't1', uses: 5, approved: true },
-        { id: 'c', title: 'Not approved', tradeId: null, uses: 9, approved: false },
+        { id: 'a', title: 'Touch up paint', tradeId: 't2', uses: 1, approved: true, hours: null },
+        { id: 'b', title: 'Adjust cabinet door', tradeId: 't1', uses: 5, approved: true, hours: 0.5 },
+        { id: 'c', title: 'Not approved', tradeId: null, uses: 9, approved: false, hours: null },
       ],
       trades,
       companies,
@@ -301,12 +307,19 @@ describe('filling in from the photo', () => {
     });
     expect(built.room).toBe('Kitchen 109');
     expect(built.titles.map((t) => t.title)).toEqual(['Adjust cabinet door', 'Touch up paint']);
+    expect(built.titles[0]?.hours).toBe(0.5);
     expect(built.companies).toEqual([{ name: 'SMS Carpentry', trade: 'Carpentry' }]);
-    const s = { title: 'Adjust cabinet door', description: 'Upper left door rubs.', trade: 'Carpentry', company: 'SMS Carpentry' };
-    const blank = { title: '', description: '', companyId: null, tradeId: null };
-    expect(suggestionPatch(s, blank, trades, companies)).toEqual({ title: 'Adjust cabinet door', description: 'Upper left door rubs.', companyId: 'c1', tradeId: 't1' });
-    // What was typed stays.
-    expect(suggestionPatch(s, { ...blank, title: 'Fix door', companyId: 'c2', tradeId: 't2' }, trades, companies)).toEqual({ description: 'Upper left door rubs.' });
+    const s = { title: 'Adjust cabinet door', description: 'Upper left door rubs.', trade: 'Carpentry', company: 'SMS Carpentry', hours: 0.5 };
+    const blank = { title: '', description: '', companyId: null, tradeId: null, hours: null };
+    expect(suggestionPatch(s, blank, trades, companies)).toEqual({
+      title: 'Adjust cabinet door',
+      description: 'Upper left door rubs.',
+      companyId: 'c1',
+      tradeId: 't1',
+      hours: 0.5,
+    });
+    // What was typed stays, the estimate too.
+    expect(suggestionPatch(s, { ...blank, title: 'Fix door', companyId: 'c2', tradeId: 't2', hours: 2 }, trades, companies)).toEqual({ description: 'Upper left door rubs.' });
   });
 });
 

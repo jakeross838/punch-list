@@ -6,7 +6,8 @@
 import { isPriced } from './rules';
 import type { Company, Item, Location, Trade } from './types';
 import { waitingOnText } from './waitingOn';
-import { floorOf, NO_FLOOR, sortItems } from './views';
+import { floorOf, NO_FLOOR } from './rooms';
+import { sortItems } from './views';
 
 export interface ListLookups {
   locations: Location[];

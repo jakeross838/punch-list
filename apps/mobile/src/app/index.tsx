@@ -1,7 +1,7 @@
 // Jobs: the first screen. Each job is a card with how many items are open and how much of the
 // list is complete.
 
-import type { Job } from '@punch/core';
+import { totalText, totalTime, type Job } from '@punch/core';
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -57,8 +57,10 @@ function JobCard({ job }: { job: Job }) {
   const items = useData()
     .useItems(job.id)
     .filter((i) => i.status !== 'removed');
-  const open = items.filter((i) => i.status === 'open');
+  // Drafts wait in Drafts until they are filled in, so they are not counted here, as on the job.
+  const open = items.filter((i) => i.status === 'open' && !i.unfinished);
   const done = items.filter((i) => i.status === 'complete').length;
+  const time = totalText(totalTime(open));
   const share = items.length > 0 ? Math.max(done / items.length, done > 0 ? 0.02 : 0) : 0;
   return (
     <Touchable
@@ -84,7 +86,7 @@ function JobCard({ job }: { job: Job }) {
         <View style={[styles.fill, { width: `${share * 100}%` }]} />
       </View>
       <Text variant="subheadline" color={colors.secondary} tabular>
-        {open.length} open
+        {[`${open.length} open`, time].filter(Boolean).join(' · ')}
       </Text>
     </Touchable>
   );
@@ -92,10 +94,10 @@ function JobCard({ job }: { job: Job }) {
 
 const styles = StyleSheet.create({
   cards: { gap: 12, paddingHorizontal: layout.margin, paddingTop: 6 },
-  card: { borderRadius: layout.radius, backgroundColor: colors.surface, paddingTop: 20, paddingBottom: 18, paddingLeft: 20, paddingRight: 18, gap: 16 },
+  card: { borderRadius: layout.radius, backgroundColor: colors.surface, paddingTop: 16, paddingBottom: 14, paddingLeft: 16, paddingRight: 14, gap: 12 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   cardTitle: { flex: 1, gap: 2 },
-  chevron: { marginTop: 7 },
+  chevron: { marginTop: 5 },
   track: { height: 4, borderRadius: 2, backgroundColor: colors.progressTrack, overflow: 'hidden' },
   fill: { height: 4, borderRadius: 2, backgroundColor: colors.tint },
   actions: { flexDirection: 'row', paddingHorizontal: layout.inset, paddingTop: 10 },

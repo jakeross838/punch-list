@@ -10,10 +10,9 @@
 // location with the trade and company on every line.
 // Plain HTML, so the phone turns it into a PDF and the preview page shows the very same thing.
 
-import { dayOfDate, daysBetween, isDay } from './dates';
+import { dayOfDate, daysBetween, isDay, visitEnd } from './dates';
 import type { CompanyList, ListLine } from './lists';
 import { markShapes, type MarkShape } from './marks';
-import { visitEnd } from './schedule';
 import type { Mark, Visit } from './types';
 import { itemNumberLabel } from './views';
 import { waitingOnText } from './waitingOn';

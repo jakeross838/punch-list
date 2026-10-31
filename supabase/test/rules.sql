@@ -340,6 +340,45 @@ begin
   end;
 end $$;
 
+-- ---------- estimated time ----------
+do $$
+declare
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  j uuid := (select id from public.jobs where name = 'Fish');
+  t uuid := (select id from public.trades where name = 'Plumbing');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  loc uuid := (select id from public.locations where job_id = j order by sort_order limit 1);
+  i uuid;
+begin
+  -- An estimate in hours, changed like any field and logged with who changed it.
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready, hours) values (j, loc, 'Install hose bib', t, c, true, 1.5) returning id into i;
+  update public.items set hours = 2 where id = i;
+  if (select after from public.item_history where item_id = i and field = 'hours' and person_id = jake) is distinct from '2.00' then
+    raise exception 'FAIL: an estimate change was not logged';
+  end if;
+  update public.items set hours = null where id = i;
+  begin
+    update public.items set hours = 0 where id = i;
+    raise exception 'FAIL: an estimate of nothing was kept';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.items set hours = 250 where id = i;
+    raise exception 'FAIL: an estimate over 200 hours was kept';
+  exception when check_violation then null;
+  end;
+  -- The standard titles keep how long the work usually takes.
+  insert into public.title_library (title, trade_id, approved, hours) values ('Install hose bib', t, true, 1);
+  if (select hours from public.title_library where title = 'Install hose bib') <> 1 then
+    raise exception 'FAIL: a standard title did not keep its usual time';
+  end if;
+  begin
+    update public.title_library set hours = -1 where title = 'Install hose bib';
+    raise exception 'FAIL: a negative usual time was kept';
+  exception when check_violation then null;
+  end;
+end $$;
+
 reset role;
 
 -- ---------- another active person ----------

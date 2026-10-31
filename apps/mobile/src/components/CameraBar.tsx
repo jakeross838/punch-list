@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '@/constants/theme';
+import { colors, layout } from '@/constants/theme';
 import { Icon, Text, Touchable, type IconName } from '@/ui';
 
 export const CAMERA_BAR_HEIGHT = 72;
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingHorizontal: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderTopWidth: 1,
+    borderTopWidth: layout.hairline,
     borderTopColor: colors.separator,
     ...(Platform.OS === 'web' ? { backdropFilter: 'blur(20px) saturate(180%)' } : null),
   },

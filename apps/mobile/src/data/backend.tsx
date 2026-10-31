@@ -344,9 +344,9 @@ const api: DataApi = {
   async setWaitingOnExtras(jobId, labels) {
     setState({ ...state, waitingOn: { ...state.waitingOn, [jobId]: labels } });
   },
-  async addTitle({ title, tradeId }) {
+  async addTitle({ title, tradeId, hours }) {
     const id = randomUUID();
-    setState({ ...state, titles: [...state.titles, { id, title, tradeId, uses: 0, approved: true }] });
+    setState({ ...state, titles: [...state.titles, { id, title, tradeId, uses: 0, approved: true, hours: hours ?? null }] });
     return id;
   },
   async updateTitle(id, patch) {

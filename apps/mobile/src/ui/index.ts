@@ -32,3 +32,4 @@ export { MarkLayer } from './MarkLayer';
 export { croppedHeight, fitPhoto, PhotoView, type PhotoLike } from './PhotoView';
 export { PhotoViewer } from './PhotoViewer';
 export { Checkbox } from './Checkbox';
+export { Chip } from './Chip';

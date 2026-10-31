@@ -1,21 +1,24 @@
-// One location's items (or one trade's, company's or what they wait on), kept calm: the circle,
-// the title, an hourglass when it is not ready, and the photo, or an empty photo slot to take it.
-// Completed items wait under their own heading. In a location, New Item under the list types one in
-// with no camera, and the bottom bar steps to the one before or after, with the camera between.
+// One location's items (or one trade's, company's or what they wait on): each with its time, who does
+// it and its type, what it waits on, and its photo or an empty slot to take it. The heading says how
+// many are open and how long they take, and the filters that are on show as chips. Completed items
+// wait under their own heading. In a location, New Item under the list types one in with no camera,
+// and the bottom bar steps to the one before or after, with the camera between.
 // Past Due lists everything late, the latest first, with the days. Drafts lists what was saved to
 // finish later, filling in from the photos while it shows. A Waiting On list can stop the wait for all its items at once, or move their Ready By
 // together.
 
 import {
   clearHoldup,
-  dayOfDate,
   GROUP_LABELS,
   groupItems,
+  isFiltered,
   neighborRooms,
   pastDue,
   pastDueText,
   SHARED_GROUP,
   sortItems,
+  totalText,
+  totalTime,
   type GroupBy,
   type Item,
   type Photo,
@@ -25,13 +28,13 @@ import { useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
 import { CAMERA_BAR_HEIGHT, CameraBar, RoomStep } from '@/components/CameraBar';
 import { isFilling, useDraftFill } from '@/components/draftFill';
+import { FilterBar } from '@/components/FilterBar';
 import { ItemRow } from '@/components/ItemRow';
 import { useItemActions } from '@/components/useItemActions';
-import { SHOW_WORDS } from '@/components/ViewSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
-import { useJobView } from '@/data/view';
+import { useFilterContext, useJobView } from '@/data/view';
 import { DateField, EmptyState, haptic, Icon, Page, Text, Touchable, useFeedback } from '@/ui';
 
 interface Section {
@@ -49,24 +52,23 @@ export default function GroupScreen() {
   const data = useData();
   const feedback = useFeedback();
   const visits = data.useVisits(jobId);
-  const today = dayOfDate(new Date());
+  const context = useFilterContext(jobId);
+  const today = context.today;
   const job = data.useJobs().find((j) => j.id === jobId);
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId);
   const locations = data.useLocations(jobId);
   const trades = data.useTrades();
   const companies = data.useCompanies();
-  const [view] = useJobView(jobId, data.useViewSettings());
+  const [view, setView] = useJobView(jobId, data.useViewSettings());
   const [showDone, setShowDone] = useState(false);
   const actions = useItemActions(jobId);
   const fill = useDraftFill();
 
+  const filters = view.filters;
   const group = useMemo(
-    () =>
-      groupItems(items, by, view.filter, { locations, trades, companies }, { showCompleted: true, tradeId: view.tradeId, companyId: view.companyId }).find(
-        (g) => g.key === key,
-      ),
-    [items, by, key, view.filter, view.tradeId, view.companyId, locations, trades, companies],
+    () => groupItems(items, by, { locations, trades, companies }, { filters, showCompleted: true, context }).find((g) => g.key === key),
+    [items, by, key, filters, context, locations, trades, companies],
   );
   const late = useMemo(() => (due ? pastDue(items, visits, today) : []), [due, items, visits, today]);
   const lateBy = useMemo(() => new Map(late.map((p) => [p.item.id, p])), [late]);
@@ -76,6 +78,7 @@ export default function GroupScreen() {
     return map;
   }, [photos]);
   const roomName = useMemo(() => new Map(locations.map((l) => [l.id, l.label])), [locations]);
+  const companyName = useMemo(() => new Map(companies.map((c) => [c.id, c.name])), [companies]);
 
   const listed = due
     ? late.map((p) => p.item)
@@ -94,17 +97,15 @@ export default function GroupScreen() {
   const { previous, next } = room ? neighborRooms(locations, room.id) : { previous: null, next: null };
   const holdup = by === 'waiting' && group && key.startsWith('waiting:') ? group.label : null;
   const title = due ? 'Past Due' : drafts ? 'Drafts' : (room?.label ?? (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
-  const subtitle = due
-    ? `${open.length} open`
-    : drafts
-      ? `${open.length} ${open.length === 1 ? 'draft' : 'drafts'}. ${open.some((i) => isFilling(fill, i.id)) ? 'Filling in from the photos.' : 'Tap one to finish it.'}`
-      : `${open.length} ${SHOW_WORDS[view.filter]}`;
-  const contextFor = (item: Item) => {
-    if (by === 'room' && !due && !drafts) return undefined;
-    const where = roomName.get(item.locationId);
-    if (drafts && isFilling(fill, item.id)) return where ? `${where}, filling in from the photo` : 'Filling in from the photo';
-    return where;
-  };
+  const openTime = totalText(totalTime(open.filter((i) => i.status === 'open')));
+  const subtitle = drafts
+    ? `${open.length} ${open.length === 1 ? 'draft' : 'drafts'}. ${open.some((i) => isFilling(fill, i.id)) ? 'Filling in from the photos.' : 'Tap one to finish it.'}`
+    : [`${open.length} open`, openTime].filter(Boolean).join(' · ');
+  // Each row says what the list does not already: the location outside a location's list, the company outside a company's.
+  const inRoom = by === 'room' && !due && !drafts;
+  const locationFor = (item: Item) => (inRoom ? undefined : roomName.get(item.locationId));
+  const companyFor = (item: Item) => (drafts || (by === 'company' && !due) ? undefined : (companyName.get(item.companyId ?? '') ?? undefined));
+  const noteFor = (item: Item) => (drafts && isFilling(fill, item.id) ? 'Filling in from the photo' : undefined);
   const lateFor = (item: Item) => {
     const p = lateBy.get(item.id);
     if (!p) return undefined;
@@ -190,6 +191,7 @@ export default function GroupScreen() {
           ListHeaderComponent={
             <View>
               {scroll.header}
+              {due || drafts ? null : <FilterBar filters={filters} onChange={(next) => setView({ ...view, filters: next })} />}
               {holdup && heldUp.length > 0 ? (
                 <View style={styles.holdup}>
                   <View style={styles.holdupRow}>
@@ -226,15 +228,19 @@ export default function GroupScreen() {
                       drafts
                         ? 'Photos taken in Draft mode wait here to be filled in.'
                         : room
-                          ? 'Take a photo, or tap New Item to type one in.'
-                          : `No ${SHOW_WORDS[view.filter]} items here right now.`
+                          ? isFiltered(filters)
+                            ? 'Nothing here fits the filters. Take a photo, or tap New Item to type one in.'
+                            : 'Take a photo, or tap New Item to type one in.'
+                          : 'No open items here right now.'
                     }
                   />
                 ) : null}
                 {room && !due && !drafts ? (
                   <Touchable feedback="highlight" onPress={newItem} accessibilityRole="button" testID="new-item-row" style={styles.newItem}>
-                    <Icon name="plus.circle.fill" size={26} color={colors.tint} />
-                    <Text color={colors.tint}>New Item</Text>
+                    <Icon name="plus.circle.fill" size={24} color={colors.tint} />
+                    <Text color={colors.tint} weight="500">
+                      New Item
+                    </Text>
                   </Touchable>
                 ) : null}
                 {done.length > 0 && !doneShown ? (
@@ -251,7 +257,9 @@ export default function GroupScreen() {
             <ItemRow
               item={item}
               photo={firstPhoto.get(item.id)}
-              context={contextFor(item)}
+              location={locationFor(item)}
+              company={companyFor(item)}
+              note={noteFor(item)}
               lateText={lateFor(item)}
               last={index === section.data.length - 1}
               checking={actions.checking.has(item.id)}
@@ -271,8 +279,8 @@ export default function GroupScreen() {
 const styles = StyleSheet.create({
   holdup: { marginHorizontal: layout.margin, marginTop: 6, marginBottom: 8, borderRadius: layout.radius, backgroundColor: colors.surface, overflow: 'hidden' },
   holdupRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
-  holdupRule: { borderTopWidth: 1, borderTopColor: colors.rule },
-  header: { paddingHorizontal: layout.inset, paddingTop: 30, paddingBottom: 6, backgroundColor: colors.background },
-  showDone: { height: 44, justifyContent: 'center', paddingHorizontal: layout.inset, marginTop: 10, alignSelf: 'flex-start' },
-  newItem: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 14, paddingLeft: layout.inset - 1, paddingRight: layout.inset },
+  holdupRule: { borderTopWidth: layout.hairline, borderTopColor: colors.rule },
+  header: { paddingHorizontal: layout.inset, paddingTop: 24, paddingBottom: 4, backgroundColor: colors.background },
+  showDone: { height: 40, justifyContent: 'center', paddingHorizontal: layout.inset, marginTop: 8, alignSelf: 'flex-start' },
+  newItem: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: layout.inset - 1, paddingRight: layout.inset },
 });

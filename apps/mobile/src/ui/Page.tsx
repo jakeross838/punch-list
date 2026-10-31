@@ -5,7 +5,7 @@
 import { Stack } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, layout } from '@/constants/theme';
+import { colors, layout, type as typeScale } from '@/constants/theme';
 import { SF_SYMBOLS } from './icons';
 import type { BarButton, BarItem, PageProps, PageScroll } from './page-types';
 import { Text } from './Text';
@@ -93,6 +93,9 @@ export function Page({
           title,
           headerLargeTitleEnabled: !!large && !sheet,
           headerLargeTitleShadowVisible: false,
+          // A step under the system's sizes, like the rest of the app's text.
+          headerLargeTitleStyle: { fontSize: typeScale.largeTitle.fontSize, fontWeight: '700' },
+          headerTitleStyle: { fontSize: 16, fontWeight: '600' },
           headerTintColor: colors.tint,
           gestureEnabled: dismissible,
           contentStyle: { backgroundColor: bg },
@@ -137,6 +140,6 @@ export function Page({
 }
 
 const styles = StyleSheet.create({
-  subtitle: { marginHorizontal: layout.margin + 4, marginBottom: 14 },
+  subtitle: { marginHorizontal: layout.inset, marginBottom: 12 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 });

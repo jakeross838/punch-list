@@ -230,7 +230,7 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
 }
 
 const styles = StyleSheet.create({
-  footer: { paddingTop: 10, paddingHorizontal: layout.margin, backgroundColor: 'rgba(245, 245, 247, 0.96)', borderTopWidth: 1, borderTopColor: colors.rule },
+  footer: { paddingTop: 10, paddingHorizontal: layout.margin, backgroundColor: 'rgba(245, 245, 247, 0.96)', borderTopWidth: layout.hairline, borderTopColor: colors.rule },
   saveNext: { height: 50, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.tint },
   saved: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: layout.inset, marginBottom: 10 },
 });

@@ -38,7 +38,7 @@ function item(over: Partial<ItemFields> = {}): ItemFields {
     completedAt: null,
     extra: {},
     unfinished: false,
-    visitId: null,
+    visitId: null, hours: null,
     ...over,
   };
 }

@@ -114,8 +114,8 @@ export interface DataApi {
   /** Takes a company off the job for that trade. Its items stay as they are. */
   removeCompanyFromJob(jobId: string, companyId: string, tradeId: string): Promise<void>;
   setWaitingOnExtras(jobId: string, labels: string[]): Promise<void>;
-  addTitle(input: { title: string; tradeId: string | null }): Promise<string>;
-  updateTitle(id: string, patch: Partial<Pick<StandardTitle, 'title' | 'tradeId' | 'approved'>>): Promise<void>;
+  addTitle(input: { title: string; tradeId: string | null; hours?: number | null }): Promise<string>;
+  updateTitle(id: string, patch: Partial<Pick<StandardTitle, 'title' | 'tradeId' | 'approved' | 'hours'>>): Promise<void>;
   addCustomField(input: Pick<CustomField, 'label' | 'kind' | 'options'>): Promise<string>;
   updateCustomField(id: string, patch: Partial<Pick<CustomField, 'label' | 'options' | 'active'>>): Promise<void>;
   addVisit(visit: NewVisit): Promise<string>;

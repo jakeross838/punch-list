@@ -131,7 +131,7 @@ export function Page({
         <View style={[styles.barRow, sheet ? styles.sheetBarRow : null]}>
           <View style={styles.side}>{leftItems.map(barItem)}</View>
           <Animated.View pointerEvents="none" style={[styles.barTitle, { opacity: titleOpacity }]}>
-            <Text variant="headline" numberOfLines={1}>
+            <Text variant="headline" numberOfLines={1} style={styles.barTitleText}>
               {title}
             </Text>
           </Animated.View>
@@ -169,11 +169,12 @@ const styles = StyleSheet.create({
   side: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
   right: { justifyContent: 'flex-end' },
   barTitle: { position: 'absolute', left: 110, right: 110, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  edge: { height: 1, backgroundColor: colors.rule },
+  edge: { height: 0, borderBottomWidth: layout.hairline, borderBottomColor: colors.rule },
   body: { flex: 1 },
-  large: { paddingHorizontal: layout.inset, paddingTop: 2, paddingBottom: 16, gap: 2 },
+  barTitleText: { fontSize: 16, lineHeight: 21 },
+  large: { paddingHorizontal: layout.inset, paddingTop: 2, paddingBottom: 14, gap: 2 },
   eyebrow: { marginBottom: 2 },
-  subtitle: { marginHorizontal: layout.inset, marginBottom: 14 },
+  subtitle: { marginHorizontal: layout.inset, marginBottom: 12 },
   search: { paddingHorizontal: layout.margin, paddingBottom: 14 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 8 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 5 },
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderTopWidth: 1,
+    borderTopWidth: layout.hairline,
     borderTopColor: colors.separator,
   },
 });

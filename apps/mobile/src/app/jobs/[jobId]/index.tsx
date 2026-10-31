@@ -1,15 +1,20 @@
-// A job: its levels and locations with how many items are open in each, calm and quick to scan.
-// Tap a location for its items. Drafts sit on their own at the top when there are any; anything past
-// due shows as a red count on Schedule. View and Filter switches to trades, companies, what items wait on or status and
-// narrows what counts; the camera in the bottom bar starts a walk; Schedule is each company's
-// visits; Send Lists makes each company's list to send.
+// A job: its levels and locations, each with how much is open, how much is ready, what is past due
+// and how long the open work takes, and each level with its own totals. Tap a location for its
+// items. Drafts sit on their own at the top when there are any; anything past due shows as a red
+// count on Schedule. View and Filter groups by trade, company or what items wait on, and narrows
+// the list to exactly the work in question; the filters that are on show as chips under the title.
+// The camera in the bottom bar starts a walk; Schedule is each company's visits; Send Lists makes
+// each company's list to send.
 
 import {
   byFloor,
-  dayOfDate,
   GROUP_LABELS,
   groupItems,
+  isFiltered,
+  NO_FILTERS,
   pastDue,
+  totalText,
+  totalTime,
   type GroupBy,
   type Item,
   type ItemGroup,
@@ -22,28 +27,31 @@ import { SectionList, StyleSheet, View } from 'react-native';
 import { useCanSuggest } from '@/ai/suggest';
 import { BarTool, CAMERA_BAR_HEIGHT, CameraBar } from '@/components/CameraBar';
 import { draftFill } from '@/components/draftFill';
+import { FilterBar } from '@/components/FilterBar';
 import { ItemRow } from '@/components/ItemRow';
 import { useItemActions } from '@/components/useItemActions';
-import { SHOW_WORDS, ViewSheet } from '@/components/ViewSheet';
+import { ViewSheet } from '@/components/ViewSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
-import { useJobView } from '@/data/view';
+import { useFilterContext, useJobView } from '@/data/view';
 import { Button, EmptyState, Icon, Page, Text, Touchable, type BarMenu, type IconName } from '@/ui';
 
 const GROUP_ICONS: Record<GroupBy, IconName> = { room: 'rooms', trade: 'wrench', company: 'person.2.fill', waiting: 'hourglass' };
 
 interface Row {
   group: ItemGroup;
-  /** Items that count under the filter, not counting completed ones. */
-  count: number;
 }
 
 interface Section {
   key: string;
   title: string | null;
+  /** The level's open items and their time, said at the right of its heading. */
+  totals: string;
   data: Row[];
 }
+
+const openWords = (n: number) => `${n} open`;
 
 function matchesQuery(item: Item, q: string, name: (id: string | null) => string): boolean {
   const hay = [item.title, item.description, item.waitingOn.join(' '), item.poOrCo ?? '', String(item.number ?? ''), name(item.companyId), name(item.tradeId), name(item.locationId)]
@@ -70,7 +78,8 @@ export default function JobScreen() {
   const titles = data.useTitles();
   const canFill = useCanSuggest();
   const saved = data.useViewSettings();
-  const today = dayOfDate(new Date());
+  const context = useFilterContext(jobId);
+  const today = context.today;
   const [view, setView] = useJobView(jobId, saved);
   const [query, setQuery] = useState('');
   const [sheet, setSheet] = useState(false);
@@ -90,38 +99,45 @@ export default function JobScreen() {
   }, [photos]);
   const locationById = useMemo(() => new Map(locations.map((l) => [l.id, l])), [locations]);
 
-  const narrowed = view.filter !== 'open' || !!view.tradeId || !!view.companyId;
-  const groups = useMemo(
-    () => groupItems(items, view.groupBy, view.filter, { locations, trades, companies }, { tradeId: view.tradeId, companyId: view.companyId, today }),
-    [items, view.groupBy, view.filter, view.tradeId, view.companyId, locations, trades, companies, today],
-  );
+  const filters = view.filters;
+  const narrowed = isFiltered(filters);
+  const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
+  const groups = useMemo(() => groupItems(items, view.groupBy, lookups, { filters, context }), [items, view.groupBy, lookups, filters, context]);
   const draftItems = items.filter((i) => i.unfinished && i.status === 'open');
   const drafts = draftItems.length;
   const late = useMemo(() => pastDue(items, visits, today).length, [items, visits, today]);
-  const rows: Row[] = groups
-    .map((group) => ({ group, count: group.items.filter((i) => i.status !== 'complete').length }))
-    .filter((r) => r.count > 0 || (view.groupBy === 'room' && !narrowed));
+  const rows: Row[] = groups.map((group) => ({ group })).filter((r) => r.group.open > 0 || (view.groupBy === 'room' && !narrowed));
+
   // An item waiting on two things shows under both, but counts once.
-  const total = new Set(rows.flatMap((r) => r.group.items.filter((i) => i.status !== 'complete').map((i) => i.id))).size;
+  const openItems = (list: Row[]) => {
+    const seen = new Map<string, Item>();
+    for (const r of list) for (const i of r.group.items) if (i.status === 'open') seen.set(i.id, i);
+    return [...seen.values()];
+  };
+  const allOpen = openItems(rows);
+  const total = allOpen.length;
+  const totalTimeText = totalText(totalTime(allOpen));
 
   const sections = useMemo<Section[]>(() => {
-    if (view.groupBy !== 'room') return [{ key: 'all', title: null, data: rows }];
-    return byFloor(rows, (r) => locationById.get(r.group.key)).map((f) => ({ key: f.floor, title: f.floor, data: f.rows }));
+    const totalsOf = (list: Row[]) => {
+      const open = list.flatMap((r) => r.group.items.filter((i) => i.status === 'open'));
+      if (open.length === 0) return '';
+      return [openWords(open.length), totalText(totalTime(open))].filter(Boolean).join(' · ');
+    };
+    if (view.groupBy !== 'room') return [{ key: 'all', title: null, totals: '', data: rows }];
+    return byFloor(rows, (r) => locationById.get(r.group.key)).map((f) => ({ key: f.floor, title: f.floor, totals: totalsOf(f.rows), data: f.rows }));
   }, [rows, view.groupBy, locationById]);
 
   const q = query.trim();
   const found = useMemo(() => {
     if (!q) return [];
     const hits = items.filter((i) => i.status !== 'removed' && matchesQuery(i, q, names));
-    return groupItems(hits, 'room', 'all', { locations, trades, companies }, { tradeId: view.tradeId, companyId: view.companyId })
+    return groupItems(hits, 'room', lookups, { filters, context, showCompleted: true })
       .filter((g) => g.items.length > 0)
       .map((g) => ({ key: g.key, title: g.label, data: g.items }));
-  }, [q, items, names, locations, trades, companies, view.tradeId, view.companyId]);
+  }, [q, items, names, lookups, filters, context]);
 
-  const scopeName = [names(view.tradeId), names(view.companyId)].filter(Boolean).join(', ');
-  const subtitle = `${total} ${SHOW_WORDS[view.filter]}${scopeName ? `, ${scopeName}` : ''}`;
-  const jobTrades = trades.filter((t) => jobCompanies.some((jc) => jc.tradeId === t.id));
-  const jobCompanyList = companies.filter((c) => jobCompanies.some((jc) => jc.companyId === c.id)).sort((a, b) => a.name.localeCompare(b.name));
+  const subtitle = [openWords(total), totalTimeText].filter(Boolean).join(' · ');
 
   const openGroup = (key: string) =>
     router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: view.groupBy, key } });
@@ -199,9 +215,16 @@ export default function JobScreen() {
           <Button label="Set Up the Job" variant="tinted" onPress={openSetup} />
         </View>
       </EmptyState>
+    ) : narrowed ? (
+      <EmptyState icon="filter" title="Nothing Matches" message="No open items match the filters.">
+        <View style={{ marginTop: 14 }}>
+          <Button label="Clear the Filters" variant="tinted" onPress={() => setView({ ...view, filters: NO_FILTERS })} />
+        </View>
+      </EmptyState>
     ) : (
-      <EmptyState icon="checkmark.circle.fill" title="Nothing Here" message={`No ${SHOW_WORDS[view.filter]} items${scopeName ? ` for ${scopeName}` : ''} right now.`} />
+      <EmptyState icon="checkmark.circle.fill" title="Nothing Open" message="Every item on this job is complete." />
     );
+  const filterBar = <FilterBar filters={filters} onChange={(next) => setView({ ...view, filters: next })} onOpen={() => setSheet(true)} />;
 
   return (
     <>
@@ -241,8 +264,13 @@ export default function JobScreen() {
               keyExtractor={(item) => item.id}
               stickySectionHeadersEnabled
               contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
-              ListHeaderComponent={<View>{scroll.header}</View>}
-              ListEmptyComponent={<EmptyState icon="magnifyingglass" title="No Results" message={`No items match “${q}”.`} />}
+              ListHeaderComponent={
+                <View>
+                  {scroll.header}
+                  {filterBar}
+                </View>
+              }
+              ListEmptyComponent={<EmptyState icon="magnifyingglass" title="No Results" message={`No items${narrowed ? ' that fit the filters' : ''} match “${q}”.`} />}
               renderSectionHeader={({ section }) => (
                 <View style={styles.header}>
                   <Text variant="subheadline" weight="600" color={colors.secondary}>
@@ -254,6 +282,7 @@ export default function JobScreen() {
                 <ItemRow
                   item={item}
                   photo={firstPhoto.get(item.id)}
+                  company={names(item.companyId) || undefined}
                   last={index === section.data.length - 1}
                   checking={actions.checking.has(item.id)}
                   onOpen={actions.onOpen}
@@ -275,6 +304,7 @@ export default function JobScreen() {
               ListHeaderComponent={
                 <View>
                   {scroll.header}
+                  {filterBar}
                   {draftsRow}
                 </View>
               }
@@ -282,21 +312,27 @@ export default function JobScreen() {
               renderSectionHeader={({ section }) =>
                 section.title ? (
                   <View style={styles.header}>
-                    <Text variant="subheadline" weight="600" color={colors.secondary}>
+                    <Text variant="subheadline" weight="600" color={colors.secondary} style={{ flex: 1 }} numberOfLines={1}>
                       {section.title}
                     </Text>
+                    {section.totals ? (
+                      <Text variant="footnote" color={colors.secondary} tabular testID={`floor-totals-${section.key}`}>
+                        {section.totals}
+                      </Text>
+                    ) : null}
                   </View>
                 ) : (
-                  <View style={{ height: 8 }} />
+                  <View style={{ height: 4 }} />
                 )
               }
-              renderSectionFooter={() => <View style={{ height: 14 }} />}
+              renderSectionFooter={() => <View style={{ height: 10 }} />}
               renderItem={({ item: row, index, section }) => (
                 <GroupRow
                   row={row}
                   by={view.groupBy}
                   location={locationById.get(row.group.key)}
                   last={index === section.data.length - 1}
+                  sayReady={view.groupBy !== 'waiting' && !(filters.states.length === 1 && (filters.states[0] === 'ready' || filters.states[0] === 'not_ready'))}
                   onPress={() => openGroup(row.group.key)}
                 />
               )}
@@ -305,23 +341,45 @@ export default function JobScreen() {
         }
       />
       <ViewSheet
+        jobId={jobId}
         visible={sheet}
         onClose={() => setSheet(false)}
         view={view}
         onChange={setView}
         saved={saved}
         onSaveDefault={() => void data.setViewSettings(view)}
-        trades={jobTrades}
-        companies={jobCompanyList}
+        matching={total}
       />
     </>
   );
 }
 
-function GroupRow({ row, by, location, last, onPress }: { row: Row; by: GroupBy; location?: Location; last: boolean; onPress: () => void }) {
-  const { group, count } = row;
-  const nothingOpen = group.open === 0;
+function GroupRow({
+  row,
+  by,
+  location,
+  last,
+  sayReady,
+  onPress,
+}: {
+  row: Row;
+  by: GroupBy;
+  location?: Location;
+  last: boolean;
+  /** How many are ready, unless the grouping or the filters say it already. */
+  sayReady: boolean;
+  onPress: () => void;
+}) {
+  const { group } = row;
+  const count = group.open;
   const label = by === 'room' && location ? location.label : group.label;
+  const time = totalText(group.time);
+  const ready = !sayReady || count === 0 ? '' : group.ready === count ? 'All ready' : group.ready === 0 ? 'None ready' : `${group.ready} ready`;
+  const meta = [ready, time].filter(Boolean).join(' · ');
+  const lateDays = group.late > 0 ? `${group.late} ${group.late === 1 ? 'day' : 'days'} past due` : '';
+  const lateCount = !lateDays && group.pastDue > 0 ? `${group.pastDue} past due` : '';
+  const red = lateDays || lateCount;
+  const said = [label, count === 0 ? 'nothing open' : `${count} open`, meta, red].filter(Boolean).join(', ');
   return (
     <View style={styles.rowWrap}>
       <Touchable
@@ -329,27 +387,35 @@ function GroupRow({ row, by, location, last, onPress }: { row: Row; by: GroupBy;
         pressDelay={40}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`${label}, ${nothingOpen ? 'nothing open' : `${count}`}`}
+        accessibilityLabel={said}
         testID={`group-${group.key}`}
         style={styles.row}
       >
         <View style={[styles.rowBody, last ? null : styles.divider]}>
-          <Text numberOfLines={1} style={{ flex: 1 }}>
-            {label}
-          </Text>
-          {group.late > 0 ? (
-            <Text variant="footnote" weight="600" color={colors.destructive} tabular>
-              {group.late} {group.late === 1 ? 'day' : 'days'} past due
+          <View style={styles.rowText}>
+            <Text numberOfLines={1} weight="500">
+              {label}
             </Text>
-          ) : null}
-          {nothingOpen ? (
-            <Icon name="checkmark" size={17} color={colors.circle} weight="semibold" />
-          ) : count > 0 ? (
-            <Text color={colors.secondary} tabular>
+            {meta || red ? (
+              <Text variant="subheadline" color={colors.secondary} numberOfLines={1} testID={`group-meta-${group.key}`}>
+                {meta}
+                {meta && red ? ' · ' : ''}
+                {red ? (
+                  <Text variant="subheadline" weight="600" color={colors.destructive}>
+                    {red}
+                  </Text>
+                ) : null}
+              </Text>
+            ) : null}
+          </View>
+          {count === 0 ? (
+            <Icon name="checkmark" size={15} color={colors.circle} weight="semibold" />
+          ) : (
+            <Text color={colors.secondary} tabular weight="500">
               {count}
             </Text>
-          ) : null}
-          <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" />
+          )}
+          <Icon name="chevron.right" size={12} color={colors.chevron} weight="bold" />
         </View>
       </Touchable>
     </View>
@@ -358,21 +424,22 @@ function GroupRow({ row, by, location, last, onPress }: { row: Row; by: GroupBy;
 
 const styles = StyleSheet.create({
   drafts: {
-    minHeight: 52,
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     marginHorizontal: layout.margin,
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: layout.radius,
     backgroundColor: colors.surface,
   },
-  header: { paddingHorizontal: layout.inset, paddingTop: 18, paddingBottom: 6, backgroundColor: colors.background },
+  header: { flexDirection: 'row', alignItems: 'baseline', gap: 12, paddingHorizontal: layout.inset, paddingTop: 16, paddingBottom: 4, backgroundColor: colors.background },
   rowWrap: { backgroundColor: colors.background },
   row: { paddingLeft: layout.inset, backgroundColor: colors.background },
-  rowBody: { height: 54, flexDirection: 'row', alignItems: 'center', gap: 12, paddingRight: layout.inset },
-  divider: { borderBottomWidth: 1, borderBottomColor: colors.separator },
+  rowBody: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingRight: layout.inset },
+  rowText: { flex: 1, gap: 1 },
+  divider: { borderBottomWidth: layout.hairline, borderBottomColor: colors.separator },
 });

@@ -1,16 +1,22 @@
 // One company's plan: its visits, what is ready now and not scheduled, what comes free and when,
-// what is waiting with no date yet, and additional work that needs a price. Schedule a visit for the
-// ready work, or for a batch as soon as what it waits on is done (with a day of handoff and fair
-// notice).
+// what is waiting with no date yet, and additional work that needs a price, each with its estimated
+// time. Ready work longer than a day splits into full working days, location by location, so each
+// day can be scheduled on its own, or all of it at once. A batch that comes free schedules as soon
+// as what it waits on is done (with a day of handoff and fair notice), for the days its time needs.
 
 import {
   companyPlan,
   dayOfDate,
+  daysFor,
+  daysText,
   earliestStart,
+  hoursText,
   startAfter,
+  totalText,
   visitEnd,
   waitingKey,
   type ListLine,
+  type TimeTotal,
   type Visit,
 } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -45,7 +51,7 @@ export default function PlanScreen() {
   const choicesFor = (visit: Visit | null): ListLine[] => [...(visit ? (plan.visits.find((p) => p.visit.id === visit.id)?.lines ?? []) : []), ...loose];
   const sheetLines = draft ? choicesFor(draft.visit) : [];
 
-  const book = (itemIds: string[], start: string) => setDraft({ visit: null, companyId, start, days: 1, confirmed: false, itemIds });
+  const book = (itemIds: string[], start: string, days = 1) => setDraft({ visit: null, companyId, start, days, confirmed: false, itemIds });
   const edit = (visit: Visit, itemIds: string[]) =>
     setDraft({ visit, companyId, start: visit.start, days: visit.days, confirmed: visit.confirmed, itemIds });
   const openItem = (id: string) => router.push({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: id } });
@@ -53,7 +59,14 @@ export default function PlanScreen() {
 
   const open = plan.visits.reduce((n, v) => n + v.lines.length, 0) + loose.length + plan.needsPrice.length;
   const subtitle =
-    open === 0 ? 'Nothing open' : [plural(open, 'open item'), plan.readyNow.length > 0 ? `${plan.readyNow.length} ready to schedule` : ''].filter(Boolean).join(', ');
+    open === 0
+      ? 'Nothing open'
+      : [
+          plural(open, 'open item'),
+          plan.readyNow.length > 0 ? `${plan.readyNow.length} ready to schedule${plan.readyTime.timed > 0 ? `, about ${daysText(plan.readyTime.hours)} of work` : ''}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · ');
 
   const itemRows = (lines: ListLine[], note?: (l: ListLine) => string | undefined) =>
     lines.map((l) => (
@@ -61,11 +74,16 @@ export default function PlanScreen() {
         key={l.item.id}
         title={l.item.title}
         subtitle={[l.room, note?.(l)].filter(Boolean).join(', ')}
+        value={l.item.hours !== null ? hoursText(l.item.hours) : undefined}
         accessory="chevron"
         onPress={() => openItem(l.item.id)}
         testID={`plan-item-${l.item.id}`}
       />
     ));
+  const byId = new Map(plan.readyNow.map((l) => [l.item.id, l]));
+  const untimedReady = plan.readyNow.filter((l) => l.item.hours === null);
+  const allReady = plan.readyNow.map((l) => l.item.id);
+  const readyDays = Math.max(1, plan.readyDays.length);
 
   return (
     <Page title={plan.company} large subtitle={subtitle} backLabel="Schedule" background="grouped">
@@ -76,7 +94,15 @@ export default function PlanScreen() {
           {plan.visits.map((p) => {
             const end = visitEnd(p.visit);
             const when = p.visit.days > 1 ? `${weekdayDate(p.visit.start)} to ${weekdayDate(end)}` : weekdayDate(p.visit.start);
-            const what = [p.visit.days > 1 ? plural(p.visit.days, 'day') : '', plural(p.lines.length, 'item'), p.done > 0 ? `${p.done} done` : ''].filter(Boolean).join(', ');
+            const what = [
+              p.visit.days > 1 ? plural(p.visit.days, 'day') : '',
+              plural(p.lines.length, 'item'),
+              totalText(p.time),
+              p.done > 0 ? `${p.done} done` : '',
+            ]
+              .filter(Boolean)
+              .join(', ');
+            const over = p.time.hours > p.visit.days * 8;
             return (
               <Touchable
                 key={p.visit.id}
@@ -92,6 +118,11 @@ export default function PlanScreen() {
                   <Text variant="subheadline" color={p.pastDue ? colors.destructive : colors.secondary}>
                     {p.pastDue ? `Ended with work open. ${what}` : what}
                   </Text>
+                  {over && !p.pastDue ? (
+                    <Text variant="subheadline" color={colors.destructive}>
+                      More work than {plural(p.visit.days, 'day')}: about {daysText(p.time.hours)}
+                    </Text>
+                  ) : null}
                 </View>
                 <VisitStatus confirmed={p.visit.confirmed} />
                 <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" />
@@ -101,14 +132,43 @@ export default function PlanScreen() {
         </ListSection>
       ) : null}
 
-      {plan.readyNow.length > 0 ? (
-        <ListSection header={`Ready (${plan.readyNow.length})`}>
+      {plan.readyNow.length > 0 && plan.readyDays.length > 1 ? (
+        <>
+          <ListSection header="Ready to Schedule" headerRight={<TimeNote time={plan.readyTime} />} footer="Full working days of 8 hours, location by location. Schedule a day on its own, or all of it at once.">
+            <ListRow
+              title={`Schedule All ${plan.readyNow.length}, ${readyDays} Days`}
+              tone="tint"
+              icon="calendar"
+              onPress={() => book(allReady, earliestStart(today), readyDays)}
+              testID="book-ready"
+            />
+          </ListSection>
+          {plan.readyDays.map((day, i) => (
+            <ListSection key={`day-${i}`} header={`Day ${i + 1}`} headerRight={<Text variant="footnote" color={colors.secondary} tabular>{hoursText(day.hours)}</Text>} testID={`ready-day-${i + 1}`}>
+              {itemRows(day.items.map((id) => byId.get(id)).filter((l): l is ListLine => !!l))}
+              <ListRow
+                title={`Schedule Day ${i + 1}`}
+                tone="tint"
+                icon="calendar.badge.clock"
+                onPress={() => book(day.items, earliestStart(today), daysFor(day.hours))}
+                testID={`book-day-${i + 1}`}
+              />
+            </ListSection>
+          ))}
+          {untimedReady.length > 0 ? (
+            <ListSection header={`Not Estimated (${untimedReady.length})`} footer="Give each one an estimated time to plan it into a day.">
+              {itemRows(untimedReady)}
+            </ListSection>
+          ) : null}
+        </>
+      ) : plan.readyNow.length > 0 ? (
+        <ListSection header={`Ready (${plan.readyNow.length})`} headerRight={<TimeNote time={plan.readyTime} />}>
           {itemRows(plan.readyNow)}
           <ListRow
             title={plan.readyNow.length === 1 ? 'Schedule This One' : `Schedule These ${plan.readyNow.length}`}
             tone="tint"
             icon="calendar"
-            onPress={() => book(plan.readyNow.map((l) => l.item.id), earliestStart(today))}
+            onPress={() => book(allReady, earliestStart(today))}
             testID="book-ready"
           />
         </ListSection>
@@ -119,9 +179,10 @@ export default function PlanScreen() {
           {itemRows(g.lines)}
           <ListRow
             title={`Schedule for ${shortDate(startAfter(g.date, today))}`}
+            subtitle={g.time.timed > 0 ? `${totalText(g.time)}, about ${daysText(g.time.hours)} of work` : undefined}
             tone="tint"
             icon="calendar"
-            onPress={() => book(g.lines.map((l) => l.item.id), startAfter(g.date, today))}
+            onPress={() => book(g.lines.map((l) => l.item.id), startAfter(g.date, today), daysFor(g.time.hours))}
             testID={`book-${g.date}`}
           />
         </ListSection>
@@ -145,6 +206,16 @@ export default function PlanScreen() {
   );
 }
 
+/** "13.75 hours, 2 not estimated" at the right of a heading. */
+function TimeNote({ time }: { time: TimeTotal }) {
+  const text = totalText(time);
+  return text ? (
+    <Text variant="footnote" color={colors.secondary} tabular>
+      {text}
+    </Text>
+  ) : null;
+}
+
 const styles = StyleSheet.create({
-  visit: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: layout.rowPadding, paddingVertical: 8, backgroundColor: colors.cell },
+  visit: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: layout.rowPadding, paddingVertical: 8, backgroundColor: colors.cell },
 });

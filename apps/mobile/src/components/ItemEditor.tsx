@@ -1,15 +1,18 @@
 // One simple form for an item, the same when making one and when looking at one later: the title
-// (typing offers the standard titles, and picking one fills in the trade and the company), the
-// details, the location, company and trade, Ready as a checkbox, and the type: Deficiency,
-// Incomplete or Additional, with the order number only for additional work. Added fields wait
-// under More Details. On an item that already exists, every change saves as it is made. Fill In From Photo
-// asks Claude for what is still blank; the same title already in the location is pointed out.
+// (typing offers the standard titles, and picking one fills in the trade, the company and the usual
+// time), the details, the location, company and trade, the estimated time, Ready as a checkbox, and
+// the type: Deficiency, Incomplete or Additional, with the order number only for additional work.
+// Added fields wait under More Details. On an item that already exists, every change saves as it is
+// made. Fill In From Photo asks Claude for what is still blank; the same title already in the
+// location is pointed out.
 
 import {
   companyForTrade,
   DEFAULT_WAITING_ON_EXTRAS,
   duplicatesOf,
   formShows,
+  hoursForTitle,
+  hoursText,
   itemNumberLabel,
   KIND_HINTS,
   KIND_LABELS,
@@ -41,6 +44,7 @@ import {
   Text,
   Touchable,
 } from '@/ui';
+import { EstimateField } from './EstimateField';
 import { ExtraFields, useFormOptions, type ItemDraft } from './ItemForm';
 import { ReadyRow } from './ReadyRow';
 
@@ -104,6 +108,8 @@ export function ItemEditor({
   const [picker, setPicker] = useState<'room' | 'company' | 'trade' | null>(null);
   const [titleFocused, setTitleFocused] = useState(false);
   const [filled, setFilled] = useState(false);
+  // The estimate came from the title: a different title brings its own.
+  const [timeFromTitle, setTimeFromTitle] = useState(false);
   const [more, setMore] = useState(false);
 
   const shows = (field: FormField) => formShows(settings, field);
@@ -125,9 +131,16 @@ export function ItemEditor({
     return { tradeId, companyId: companyId ?? (value.tradeId === tradeId ? value.companyId : null) };
   }
 
+  /** The title's usual time, unless a time was given some other way. */
+  function timeFor(hours: number | null): Partial<ItemDraft> {
+    if (hours === null || (value.hours !== null && !timeFromTitle)) return {};
+    setTimeFromTitle(true);
+    return { hours };
+  }
+
   function pickTitle(s: TitleSuggestion) {
     haptic.selection();
-    set({ title: s.title, ...fillFrom(s.tradeId) });
+    set({ title: s.title, ...fillFrom(s.tradeId), ...timeFor(s.hours) });
     setTitleFocused(false);
     Keyboard.dismiss();
   }
@@ -136,14 +149,18 @@ export function ItemEditor({
     // Let a tap on a suggestion land before the list closes.
     setTimeout(() => setTitleFocused(false), 160);
     const title = tidyTitle(value.title);
-    set({ title, ...(!value.companyId && !value.tradeId ? fillFrom(tradeForTitle(title, titles)) : {}) });
+    set({
+      title,
+      ...(!value.companyId && !value.tradeId ? fillFrom(tradeForTitle(title, titles)) : {}),
+      ...timeFor(hoursForTitle(title, titles, items)),
+    });
   }
 
   const whereProblem = problem('locationId') ?? problem('companyId') ?? problem('tradeId');
   const titleProblem = problem('title');
   const first = photos?.[0];
   const twin = !titleFocused && value.title.trim() ? duplicatesOf(value.title, value.locationId, items, itemId)[0] : undefined;
-  const blanks = !value.title.trim() || !value.companyId;
+  const blanks = !value.title.trim() || !value.companyId || (shows('hours') && value.hours === null);
 
   return (
     <>
@@ -152,7 +169,7 @@ export function ItemEditor({
           <View style={styles.photoColumn}>
             {first ? (
               <Touchable feedback="scale" onPress={() => onPhotoPress?.(first.key)} accessibilityRole="button" accessibilityLabel="Change the markup" testID="photo-edit">
-                <PhotoView photo={first} width={76} height={76} radius={12} />
+                <PhotoView photo={first} width={72} height={72} radius={8} />
                 {photos.length > 1 ? (
                   <View style={styles.badge}>
                     <Text variant="caption1" weight="600" color={colors.white}>
@@ -259,9 +276,9 @@ export function ItemEditor({
               <Text numberOfLines={1} style={{ flex: 1 }}>
                 {s.title}
               </Text>
-              {s.tradeId ? (
+              {s.tradeId || s.hours ? (
                 <Text variant="subheadline" color={colors.secondary} numberOfLines={1}>
-                  {options.tradeName(s.tradeId)}
+                  {[options.tradeName(s.tradeId), s.hours ? hoursText(s.hours) : null].filter(Boolean).join(' · ')}
                 </Text>
               ) : null}
             </Touchable>
@@ -303,6 +320,17 @@ export function ItemEditor({
           />
         ) : null}
       </ListSection>
+
+      {shows('hours') || value.hours !== null ? (
+        <EstimateField
+          value={value.hours}
+          onChange={(hours) => {
+            setTimeFromTitle(false);
+            set({ hours });
+          }}
+          note={timeFromTitle && value.hours !== null ? 'The usual time for this title. Change it if this one is different.' : undefined}
+        />
+      ) : null}
 
       {showReady && (shows('ready') || !value.ready) ? (
         <ListSection footer={sentence(problem('waitingOn') ?? problem('readyBy'))} footerTone="danger">
@@ -388,21 +416,21 @@ export function ItemEditor({
 }
 
 const styles = StyleSheet.create({
-  card: { marginHorizontal: layout.margin, padding: 16, borderRadius: layout.radius, backgroundColor: colors.cell, flexDirection: 'row', gap: 14 },
-  photoColumn: { width: 76, gap: 4 },
-  noPhoto: { width: 76, height: 76, borderRadius: 12, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  card: { marginHorizontal: layout.margin, padding: 14, borderRadius: layout.radius, backgroundColor: colors.cell, flexDirection: 'row', gap: 12 },
+  photoColumn: { width: 72, gap: 4 },
+  noPhoto: { width: 72, height: 72, borderRadius: 8, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', right: 4, bottom: 4, minWidth: 24, height: 20, paddingHorizontal: 6, borderRadius: 10, backgroundColor: 'rgba(0, 0, 0, 0.55)', alignItems: 'center', justifyContent: 'center' },
   addPhoto: { height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   textColumn: { flex: 1, minWidth: 0 },
-  title: { ...typeScale.title2, minHeight: 30, padding: 0, color: colors.label, outlineWidth: 0 },
+  title: { ...typeScale.title3, minHeight: 26, padding: 0, color: colors.label, outlineWidth: 0 },
   titleProblem: { color: colors.destructive },
-  rule: { height: 1, backgroundColor: colors.separator, marginTop: 10, marginBottom: 9 },
-  description: { ...typeScale.body, minHeight: 66, padding: 0, color: colors.label, textAlignVertical: 'top', outlineWidth: 0 },
+  rule: { height: 0, borderBottomWidth: layout.hairline, borderBottomColor: colors.separator, marginTop: 10, marginBottom: 9 },
+  description: { ...typeScale.body, minHeight: 60, padding: 0, color: colors.label, textAlignVertical: 'top', outlineWidth: 0 },
   note: { marginHorizontal: layout.margin + layout.rowPadding, marginTop: 8 },
   suggestions: { marginHorizontal: layout.margin, marginTop: 8, borderRadius: layout.radius, backgroundColor: colors.cell, overflow: 'hidden' },
-  suggestion: { height: 50, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, backgroundColor: colors.cell },
-  suggestionRule: { borderTopWidth: 1, borderTopColor: colors.separator },
-  section: { marginTop: 20 },
+  suggestion: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, backgroundColor: colors.cell },
+  suggestionRule: { borderTopWidth: layout.hairline, borderTopColor: colors.separator },
+  section: { marginTop: 18 },
   fillIn: { alignSelf: 'flex-start', height: 40, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6, marginHorizontal: layout.margin + layout.rowPadding },
   kind: { padding: 8, backgroundColor: colors.cell },
 });

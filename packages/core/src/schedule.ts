@@ -1,11 +1,13 @@
 // The schedule the list builds: each company's trips to the job (visits), what is past due and by
 // how many days, and each company's plan: what is ready now, what comes free and when, what has no
 // date yet, and what needs a price. Work goes as soon as it is ready, with a day of handoff
-// buffer, and new starts get more than a day's notice.
+// buffer, and new starts get more than a day's notice. Estimated times add up for each visit and
+// each batch, and the ready work splits into full working days, location by location.
 
-import { addWorkingDays, daysBetween, isDay, mondayOf, workingDayOnOrAfter } from './dates';
+import { addWorkingDays, daysBetween, isDay, mondayOf, visitEnd, workingDayOnOrAfter } from './dates';
 import { lineFor, type ListLine, type ListLookups } from './lists';
 import { isPriced } from './rules';
+import { NO_TIME, totalTime, workDays, type TimeTotal, type WorkDay } from './time';
 import type { Item, Visit } from './types';
 import { sortItems } from './views';
 import { waitingOnText } from './waitingOn';
@@ -14,11 +16,6 @@ import { waitingOnText } from './waitingOn';
 export const NOTICE_DAYS = 2;
 /** Working days between one company finishing and the next starting. */
 export const HANDOFF_DAYS = 1;
-
-/** The last working day of a visit. */
-export function visitEnd(visit: Pick<Visit, 'start' | 'days'>): string {
-  return addWorkingDays(workingDayOnOrAfter(visit.start), Math.max(1, visit.days) - 1);
-}
 
 /** The first day a new visit can start with fair notice. */
 export function earliestStart(today: string): string {
@@ -77,6 +74,8 @@ export interface PlannedVisit {
   done: number;
   /** Its last day has passed and work is still open. */
   pastDue: boolean;
+  /** Its open items' estimated time. */
+  time: TimeTotal;
 }
 
 export interface ComingFree {
@@ -85,6 +84,7 @@ export interface ComingFree {
   /** What they wait on: "Owner and Volcano Stone". */
   on: string;
   lines: ListLine[];
+  time: TimeTotal;
 }
 
 export interface CompanyPlan {
@@ -93,6 +93,9 @@ export interface CompanyPlan {
   visits: PlannedVisit[];
   /** Ready, priced and not booked yet. */
   readyNow: ListLine[];
+  readyTime: TimeTotal;
+  /** The ready work split into full working days, location by location. Items with no estimate are not in a day. */
+  readyDays: WorkDay[];
   /** Waiting, with a date, soonest first. */
   comingFree: ComingFree[];
   /** Waiting with no date yet. */
@@ -118,7 +121,14 @@ export function companyPlan(companyId: string, items: Item[], visits: Visit[], l
     const inIt = mine.filter((i) => i.visitId === visit.id);
     const open = inIt.filter((i) => i.status === 'open');
     const end = visitEnd(visit);
-    return { visit, end, lines: open.map((i) => lineFor(i, lookups)), done: inIt.length - open.length, pastDue: open.length > 0 && end < today };
+    return {
+      visit,
+      end,
+      lines: open.map((i) => lineFor(i, lookups)),
+      done: inIt.length - open.length,
+      pastDue: open.length > 0 && end < today,
+      time: open.length > 0 ? totalTime(open) : NO_TIME,
+    };
   });
 
   const loose = mine.filter((i) => i.status === 'open' && !(i.visitId && visitIds.has(i.visitId)));
@@ -132,7 +142,7 @@ export function companyPlan(companyId: string, items: Item[], visits: Visit[], l
     const on = waitingOnText(item.waitingOn) || 'Something not named';
     if (isDay(item.readyBy)) {
       const key = `${item.readyBy}|${on.toLowerCase()}`;
-      const group = coming.get(key) ?? { date: item.readyBy, on, lines: [] };
+      const group = coming.get(key) ?? { date: item.readyBy, on, lines: [], time: NO_TIME };
       group.lines.push(lineFor(item, lookups));
       coming.set(key, group);
     } else {
@@ -147,7 +157,11 @@ export function companyPlan(companyId: string, items: Item[], visits: Visit[], l
     company: lookups.companies.find((c) => c.id === companyId)?.name ?? 'Not set',
     visits: planned,
     readyNow: readyNow.map((i) => lineFor(i, lookups)),
-    comingFree: [...coming.values()].sort((a, b) => a.date.localeCompare(b.date) || b.lines.length - a.lines.length),
+    readyTime: totalTime(readyNow),
+    readyDays: workDays(readyNow),
+    comingFree: [...coming.values()]
+      .map((g) => ({ ...g, time: totalTime(g.lines.map((l) => l.item)) }))
+      .sort((a, b) => a.date.localeCompare(b.date) || b.lines.length - a.lines.length),
     noDate: [...noDate.values()].sort((a, b) => b.lines.length - a.lines.length || a.on.localeCompare(b.on)),
     needsPrice: needsPrice.map((i) => lineFor(i, lookups)),
   };
@@ -171,6 +185,8 @@ export interface NotBooked {
   companyId: string;
   company: string;
   readyNow: number;
+  /** The ready work's estimated time. */
+  readyTime: TimeTotal;
   /** The soonest date more of their work comes free, or null. */
   nextFree: string | null;
   comingFree: number;
@@ -187,6 +203,7 @@ export function notBooked(items: Item[], visits: Visit[], lookups: ListLookups, 
         companyId: id,
         company: plan.company,
         readyNow: plan.readyNow.length,
+        readyTime: plan.readyTime,
         nextFree: plan.comingFree[0]?.date ?? null,
         comingFree: plan.comingFree.reduce((n, g) => n + g.lines.length, 0),
         needsPrice: plan.needsPrice.length,

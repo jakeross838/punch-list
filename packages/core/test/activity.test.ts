@@ -21,7 +21,7 @@ const item = (over: Partial<Item> = {}): Item => ({
   completedAt: null,
   extra: {},
   unfinished: false,
-  visitId: null,
+  visitId: null, hours: null,
   source: 'typed',
   btExternalId: null,
   createdBy: 'jake',

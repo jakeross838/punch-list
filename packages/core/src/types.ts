@@ -88,6 +88,8 @@ export interface Item {
   unfinished: boolean;
   /** The visit it is booked on, when the company's trip is planned. */
   visitId: string | null;
+  /** About how long the work takes, in hours: a quarter hour at the least. Null until someone, the standard title or Claude gives it one. */
+  hours: number | null;
   /** Empty until the Buildertrend connection is turned on. */
   btExternalId: string | null;
   createdBy: string;
@@ -173,6 +175,8 @@ export interface StandardTitle {
   tradeId: string | null;
   uses: number;
   approved: boolean;
+  /** How long the work usually takes, in hours: it fills in the estimate when the title is picked. */
+  hours: number | null;
 }
 
 export type CustomFieldKind = 'text' | 'list' | 'yes_no' | 'date';
@@ -191,7 +195,7 @@ export interface CustomField {
 export type ExtraValue = string | boolean | null;
 
 /** The fields Item Form setup can turn off. Title and room are always on the form. */
-export type FormField = 'description' | 'company' | 'trade' | 'kind' | 'ready' | 'waitingOn' | 'readyBy';
+export type FormField = 'description' | 'company' | 'trade' | 'kind' | 'ready' | 'waitingOn' | 'readyBy' | 'hours';
 
 export interface FormSettings {
   hidden: FormField[];

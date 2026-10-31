@@ -5,6 +5,7 @@
 // field by field does not flood the log.
 
 import { KIND_LABELS } from './forms';
+import { hoursText } from './time';
 import type { Company, CustomField, Item, ItemKind, Location, Person, Trade, Visit } from './types';
 import { waitingOnText } from './waitingOn';
 
@@ -213,6 +214,10 @@ function fieldWords(field: string, before: string | null, after: string | null, 
       return after ? [`Ready by ${dayWords(after, look.today)}`] : [];
     case 'po_or_co':
       return [after ? `Order number: ${after}` : 'Order number cleared'];
+    case 'hours': {
+      const hours = after === null ? NaN : Number(after);
+      return [Number.isFinite(hours) && hours > 0 ? `Estimated time: ${hoursText(hours)}` : 'Estimated time cleared'];
+    }
     case 'visit_id': {
       const visit = after ? look.visits.get(after) : undefined;
       return [after ? (visit ? `On the visit ${dayWords(visit.start, look.today, true)}` : 'On a visit') : 'Off its visit'];

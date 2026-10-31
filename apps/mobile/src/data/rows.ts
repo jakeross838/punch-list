@@ -1,6 +1,6 @@
 // Database rows (snake_case, booleans as 0 or 1 on the phone) to and from the app's records.
 
-import type { Activity, ActivityDetail, ActivityKind, Company, CustomField, Item, ItemFields, Job, JobCompany, ListSend, Location, Mark, Person, Photo, StandardTitle, Trade, Visit } from '@punch/core';
+import { tidyHours, type Activity, type ActivityDetail, type ActivityKind, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type Trade, type Visit } from '@punch/core';
 import type { ItemPatch } from './api';
 
 type Row = Record<string, unknown>;
@@ -79,6 +79,7 @@ export const rowToItem = (r: Row): Item => ({
   extra: json<Item['extra']>(r.extra, {}),
   unfinished: bool(r.unfinished),
   visitId: textOrNull(r.visit_id),
+  hours: tidyHours(r.hours),
   btExternalId: textOrNull(r.bt_external_id),
   createdBy: text(r.created_by),
   createdAt: text(r.created_at),
@@ -103,6 +104,7 @@ const ITEM_COLUMNS: Record<keyof ItemPatch, string> = {
   extra: 'extra',
   unfinished: 'unfinished',
   visitId: 'visit_id',
+  hours: 'hours',
 };
 
 /** An item patch as column and value pairs for the phone database (booleans as 0 or 1). */
@@ -136,6 +138,7 @@ export const rowToStandardTitle = (r: Row): StandardTitle => ({
   tradeId: textOrNull(r.trade_id),
   uses: num(r.uses),
   approved: bool(r.approved),
+  hours: tidyHours(r.hours),
 });
 
 export const rowToCustomField = (r: Row): CustomField => ({

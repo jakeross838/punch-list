@@ -14,6 +14,7 @@ import {
   DEFAULT_FORM,
   formShows,
   groupItems,
+  NO_FILTERS,
   isTooSmall,
   markBounds,
   markShapes,
@@ -38,11 +39,11 @@ import {
 } from '../src/index';
 
 const library: StandardTitle[] = [
-  { id: 's1', title: 'Adjust cabinet door', tradeId: 't-carp', uses: 12, approved: true },
-  { id: 's2', title: 'Adjust closet door', tradeId: 't-carp', uses: 3, approved: true },
-  { id: 's3', title: 'Adjust thermostat', tradeId: 't-ac', uses: 1, approved: true },
-  { id: 's4', title: 'Install cabinet hardware', tradeId: 't-carp', uses: 7, approved: true },
-  { id: 's5', title: 'Touch up paint', tradeId: 't-paint', uses: 40, approved: true },
+  { id: 's1', title: 'Adjust cabinet door', tradeId: 't-carp', uses: 12, approved: true, hours: null },
+  { id: 's2', title: 'Adjust closet door', tradeId: 't-carp', uses: 3, approved: true, hours: null },
+  { id: 's3', title: 'Adjust thermostat', tradeId: 't-ac', uses: 1, approved: true, hours: null },
+  { id: 's4', title: 'Install cabinet hardware', tradeId: 't-carp', uses: 7, approved: true, hours: null },
+  { id: 's5', title: 'Touch up paint', tradeId: 't-paint', uses: 40, approved: true, hours: null },
 ];
 
 const jobCompanies: JobCompany[] = [
@@ -58,7 +59,7 @@ function item(over: Partial<Item>): Item {
   return {
     id: `i${n}`, jobId: 'j', locationId: 'k', number: n, title: `Item ${n}`, description: '', tradeId: 't-carp',
     companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], readyBy: null, boughtOut: true, poOrCo: null,
-    status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null, btExternalId: null, createdBy: 'p1',
+    status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null, hours: null, btExternalId: null, createdBy: 'p1',
     createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
   };
 }
@@ -241,7 +242,7 @@ describe('walking the job', () => {
       item({ kind: 'added_scope', boughtOut: false, ready: false, waitingOn: ['Owner'] }),
     ];
     const lookups = { locations: rooms, trades: [], companies: [] };
-    const groups = groupItems(items, 'waiting', 'open', lookups, { showCompleted: true });
+    const groups = groupItems(items, 'waiting', lookups, { showCompleted: true });
     expect(groups.map((g) => [g.label, g.items.length])).toEqual([
       ['Ready', 2],
       ['Needs a Price', 2],
@@ -251,17 +252,18 @@ describe('walking the job', () => {
     ]);
     // Drafts stay out of every other list until they are filled in.
     for (const by of ['room', 'trade', 'company'] as const) {
-      expect(groupItems(items, by, 'all', lookups).some((g) => g.items.some((i) => i.unfinished))).toBe(false);
+      expect(groupItems(items, by, lookups, { showCompleted: true }).some((g) => g.items.some((i) => i.unfinished))).toBe(false);
     }
     // A holdup past its Ready By goes first, however small.
     const late = [...items, item({ ready: false, waitingOn: ['Gator Plumbing'], readyBy: '2026-10-20' })];
-    const byLate = groupItems(late, 'waiting', 'open', lookups, { today: '2026-10-30' }).filter((g) => g.key.startsWith('waiting:'));
+    const context = { today: '2026-10-30', visits: [], photoItemIds: new Set<string>(), locations: rooms };
+    const byLate = groupItems(late, 'waiting', lookups, { context }).filter((g) => g.key.startsWith('waiting:'));
     expect(byLate.map((g) => [g.label, g.late])).toEqual([
       ['Gator Plumbing', 10],
       ['Owner', 0],
       ['Volcano Stone', 0],
     ]);
-    const painting = groupItems(items, 'room', 'open', lookups, { tradeId: 't-paint' });
+    const painting = groupItems(items, 'room', lookups, { filters: { ...NO_FILTERS, tradeIds: ['t-paint'] } });
     expect(painting.flatMap((g) => g.items).map((i) => i.tradeId)).toEqual(['t-paint']);
   });
 

@@ -1,19 +1,40 @@
-// One item in a list, kept calm: the circle to check it off, the title, a small hourglass when it
-// is not ready, the days in red under the title when it is past due, and its photo. An open item
-// with no photo yet has an empty photo slot: tap it to take the photo. Everything else is one tap
-// in. Swipe left for Ready and Remove. A draft shows a pencil instead of the circle and what it
-// still needs.
+// One item in a list, crisp and complete at a glance: the circle to check it off, the title with
+// its estimated time at the right, then who does it and what type of work it is (and where, in lists
+// that are not one location's), then what it waits on when it is not ready, with the days in red
+// when it is past due. Its photo sits at the end; an open item with no photo yet has an empty slot:
+// tap it to take the photo. Everything else is one tap in. Swipe left for Ready and Remove. A draft
+// shows a pencil instead of the circle and what it still needs.
 
-import { dayOfDate, daysBetween, missingDetails, pastDueText, type Item, type Photo } from '@punch/core';
+import {
+  dayOfDate,
+  daysBetween,
+  hoursText,
+  isPriced,
+  KIND_LABELS,
+  missingDetails,
+  pastDueText,
+  waitingOnText,
+  type Item,
+  type Photo,
+} from '@punch/core';
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
-import { CompleteCircle, Icon, isBeforeToday, PhotoView, SwipeRow, Text, Touchable, type SwipeAction } from '@/ui';
+import { CompleteCircle, Icon, isBeforeToday, PhotoView, shortDate, SwipeRow, Text, Touchable, type SwipeAction } from '@/ui';
+
+const PHOTO = 40;
+
+/** The type of work, in words: "Deficiency", "Additional, needs a price". */
+export function kindText(item: Pick<Item, 'kind' | 'poOrCo'>): string {
+  return item.kind === 'added_scope' && !isPriced(item) ? 'Additional, needs a price' : KIND_LABELS[item.kind];
+}
 
 export const ItemRow = memo(function ItemRow({
   item,
   photo,
-  context,
+  location,
+  company,
+  note,
   lateText,
   last,
   checking,
@@ -26,8 +47,12 @@ export const ItemRow = memo(function ItemRow({
   item: Item;
   /** The item's first photo, shown small at the end of the row. */
   photo?: Photo;
-  /** A second line where the list does not say it already: the location, in a list by trade. */
-  context?: string;
+  /** Where it is, in lists that are not one location's. */
+  location?: string;
+  /** Who does it, in lists that are not one company's. */
+  company?: string;
+  /** For a draft: said in place of what it still needs, like "Filling in from the photo". */
+  note?: string;
   /** Past Due's own words for how late it is, in place of the Ready By days. */
   lateText?: string;
   last: boolean;
@@ -41,23 +66,29 @@ export const ItemRow = memo(function ItemRow({
   onAddPhoto?: (item: Item) => void;
 }) {
   const done = item.status === 'complete' || checking;
-  const notReady = item.status === 'open' && !item.ready && !item.unfinished;
+  const open = item.status === 'open' && !checking;
+  const notReady = open && !item.ready && !item.unfinished;
   const late = notReady && item.readyBy !== null && isBeforeToday(item.readyBy);
   const lateDays = late && item.readyBy ? daysBetween(item.readyBy, dayOfDate(new Date())) : 0;
-  const red = lateText ?? (late ? pastDueText(lateDays) : undefined);
+  const lateWords = lateText ?? (late ? pastDueText(lateDays) : undefined);
+  // On a line of its own it starts with a capital: "Visit ended 3 days ago".
+  const red = lateWords && !notReady ? lateWords.charAt(0).toUpperCase() + lateWords.slice(1) : lateWords;
   const title = item.title || 'No title yet';
-  // In a location, what a draft still needs (a missing title already shows as No title
-  // yet); in other lists, where it is.
-  const needs = item.unfinished && !context ? missingDetails(item).filter((m) => m !== 'title') : [];
-  const second = context ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : '');
-  const actions: SwipeAction[] =
-    item.status === 'open' && !checking
-      ? [
-          ...(item.ready ? [] : [{ label: 'Ready', icon: 'checkmark' as const, color: colors.tint, onPress: () => onReady(item), testID: `ready-${item.id}` }]),
-          { label: 'Remove', icon: 'trash', color: colors.destructive, onPress: () => onRemove(item), testID: `remove-${item.id}` },
-        ]
-      : [];
-  const said = [title, second, notReady ? 'not ready' : null, red].filter(Boolean).join(', ');
+  const time = item.hours !== null ? hoursText(item.hours) : null;
+
+  // What a draft still needs (a missing title already shows as No title yet).
+  const needs = item.unfinished ? missingDetails(item).filter((m) => m !== 'title') : [];
+  const draftNote = note ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : undefined);
+  const meta = (item.unfinished ? [location, draftNote] : [location, company, kindText(item)]).filter(Boolean).join(' · ');
+  const waiting = notReady ? `Waiting on ${waitingOnText(item.waitingOn) || 'something'}${item.readyBy && !late ? `, ready by ${shortDate(item.readyBy)}` : ''}` : undefined;
+
+  const actions: SwipeAction[] = open
+    ? [
+        ...(item.ready ? [] : [{ label: 'Ready', icon: 'checkmark' as const, color: colors.tint, onPress: () => onReady(item), testID: `ready-${item.id}` }]),
+        { label: 'Remove', icon: 'trash', color: colors.destructive, onPress: () => onRemove(item), testID: `remove-${item.id}` },
+      ]
+    : [];
+  const said = [title, time, meta, waiting, red].filter(Boolean).join(', ');
 
   return (
     <SwipeRow actions={actions} style={styles.swipe}>
@@ -70,40 +101,56 @@ export const ItemRow = memo(function ItemRow({
         accessibilityLabel={said}
         testID={`item-${item.id}`}
       >
-        {item.unfinished ? (
-          <View style={styles.draft}>
-            <Icon name="pencil.tip" size={15} color={colors.tint} weight="semibold" />
-          </View>
-        ) : (
-          <CompleteCircle
-            checked={done}
-            animate={checking}
-            onPress={() => onCheck(item)}
-            label={done ? `Reopen ${item.title}` : `Complete ${item.title}`}
-            testID={`check-${item.id}`}
-          />
-        )}
+        <View style={[styles.lead, item.unfinished ? styles.leadDraft : null]}>
+          {item.unfinished ? (
+            <View style={styles.draft}>
+              <Icon name="pencil.tip" size={13} color={colors.tint} weight="semibold" />
+            </View>
+          ) : (
+            <CompleteCircle
+              checked={done}
+              animate={checking}
+              onPress={() => onCheck(item)}
+              label={done ? `Reopen ${item.title}` : `Complete ${item.title}`}
+              testID={`check-${item.id}`}
+            />
+          )}
+        </View>
         <View style={[styles.body, last ? null : styles.divider]}>
           <View style={styles.text}>
-            <Text numberOfLines={2} color={done || !item.title ? colors.secondary : colors.label}>
-              {title}
-            </Text>
-            {second || red ? (
+            <View style={styles.titleLine}>
+              <Text numberOfLines={2} weight="500" color={done || !item.title ? colors.secondary : colors.label} style={styles.title}>
+                {title}
+              </Text>
+              {time ? (
+                <Text variant="footnote" color={colors.secondary} tabular style={styles.time} testID={`time-${item.id}`}>
+                  {time}
+                </Text>
+              ) : null}
+            </View>
+            {meta ? (
               <Text variant="subheadline" color={colors.secondary} numberOfLines={2}>
-                {second}
-                {second && red ? ', ' : ''}
-                {red ? (
-                  <Text variant="subheadline" weight="600" color={colors.destructive}>
-                    {red}
-                  </Text>
-                ) : null}
+                {meta}
               </Text>
             ) : null}
+            {waiting || red ? (
+              <View style={styles.status}>
+                {notReady ? <Icon name="hourglass" size={11} color={late ? colors.destructive : colors.quiet} weight="semibold" style={styles.hourglass} /> : null}
+                <Text variant="subheadline" color={colors.secondary} numberOfLines={2} style={{ flexShrink: 1 }}>
+                  {waiting}
+                  {waiting && red ? ', ' : ''}
+                  {red ? (
+                    <Text variant="subheadline" weight="600" color={colors.destructive}>
+                      {red}
+                    </Text>
+                  ) : null}
+                </Text>
+              </View>
+            ) : null}
           </View>
-          {notReady ? <Icon name="hourglass" size={16} color={colors.quiet} weight="semibold" /> : null}
           {photo ? (
-            <PhotoView photo={photo} width={44} height={44} radius={8} />
-          ) : onAddPhoto && item.status === 'open' && !checking ? (
+            <PhotoView photo={photo} width={PHOTO} height={PHOTO} radius={6} />
+          ) : onAddPhoto && open ? (
             <Touchable
               feedback="scale"
               onPress={() => onAddPhoto(item)}
@@ -113,7 +160,7 @@ export const ItemRow = memo(function ItemRow({
               testID={`add-photo-${item.id}`}
               style={styles.photoSlot}
             >
-              <Icon name="camera" size={18} color={colors.quiet} />
+              <Icon name="camera" size={16} color={colors.quiet} />
             </Touchable>
           ) : null}
         </View>
@@ -124,10 +171,18 @@ export const ItemRow = memo(function ItemRow({
 
 const styles = StyleSheet.create({
   swipe: { backgroundColor: colors.background },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingLeft: layout.inset, backgroundColor: colors.background },
-  body: { flex: 1, minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingRight: layout.inset },
-  divider: { borderBottomWidth: 1, borderBottomColor: colors.separator },
-  text: { flex: 1, gap: 1 },
-  draft: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
-  photoSlot: { width: 44, height: 44, borderRadius: 8, borderWidth: 1.5, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'stretch', gap: 12, paddingLeft: layout.inset, backgroundColor: colors.background },
+  // The circle lines up with the title's first line.
+  lead: { paddingTop: 7 },
+  leadDraft: { paddingTop: 8 },
+  body: { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingRight: layout.inset },
+  divider: { borderBottomWidth: layout.hairline, borderBottomColor: colors.separator },
+  text: { flex: 1, gap: 2 },
+  titleLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  title: { flex: 1 },
+  time: { paddingTop: 2 },
+  status: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  hourglass: { marginTop: 3 },
+  draft: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  photoSlot: { width: PHOTO, height: PHOTO, borderRadius: 6, borderWidth: 1.25, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
 });

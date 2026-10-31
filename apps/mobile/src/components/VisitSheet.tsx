@@ -1,7 +1,9 @@
 // Schedule a company's visit, or change one: the first day, how many working days, whether the
-// company confirmed it (otherwise it is our best guess), and which of its items it covers.
+// company confirmed it (otherwise it is our best guess), and which of its items it covers. The
+// items picked add up, and the sheet says when they need more days or fewer, and can fill the days
+// with more of the company's ready work, location by location.
 
-import { visitEnd, type ListLine, type Visit } from '@punch/core';
+import { DAY_HOURS, daysFor, daysText, fillHours, hoursText, totalText, totalTime, visitEnd, type ListLine, type Visit } from '@punch/core';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -60,6 +62,17 @@ export function VisitSheet({
   const end = v ? visitEnd(v) : null;
   const picked = new Set(v?.itemIds ?? []);
   const set = (patch: Partial<VisitDraft>) => setValue((cur) => (cur ? { ...cur, ...patch } : cur));
+  const pickedTime = totalTime(lines.filter((l) => picked.has(l.item.id)).map((l) => l.item));
+  const need = daysFor(pickedTime.hours);
+  // More ready work that fits in the days left, in floor order.
+  const room = v ? v.days * DAY_HOURS - pickedTime.hours : 0;
+  const more = v ? fillHours(lines.filter((l) => !picked.has(l.item.id) && l.item.ready).map((l) => l.item), room) : [];
+  const fitText =
+    pickedTime.timed === 0
+      ? ''
+      : pickedTime.hours > (v?.days ?? 1) * DAY_HOURS
+        ? `The items picked take ${hoursText(pickedTime.hours)}, about ${daysText(pickedTime.hours)}: more than ${v?.days === 1 ? '1 day' : `${v?.days} days`}.`
+        : `The items picked take ${hoursText(pickedTime.hours)}, about ${daysText(pickedTime.hours)}.`;
 
   async function save() {
     if (!v) return;
@@ -110,7 +123,10 @@ export function VisitSheet({
           <Text variant="subheadline" color={colors.secondary} style={styles.lead}>
             {company}
           </Text>
-          <ListSection footer={end ? `Ends ${weekdayDate(end)}. Weekdays only.` : undefined}>
+          <ListSection
+            footer={end ? [`Ends ${weekdayDate(end)}. Weekdays only.`, fitText].filter(Boolean).join(' ') : undefined}
+            footerTone={pickedTime.hours > v.days * DAY_HOURS ? 'danger' : 'default'}
+          >
             <ListRow title="Starts" titleLines={1} right={<DateField value={v.start} onChange={(start) => start && set({ start })} label="Starts" testID="visit-start" />} />
             <ListRow
               title="Days"
@@ -144,11 +160,35 @@ export function VisitSheet({
                 </View>
               }
             />
+            {pickedTime.timed > 0 && need !== v.days ? (
+              <ListRow title={`Make It ${need === 1 ? '1 Day' : `${need} Days`}`} tone="tint" onPress={() => set({ days: need })} testID="visit-days-fit" />
+            ) : null}
+            {more.length > 0 ? (
+              <ListRow
+                title={`Fill the ${v.days === 1 ? 'Day' : `${v.days} Days`}`}
+                subtitle={`Adds ${more.length === 1 ? '1 more ready item' : `${more.length} more ready items`}, ${hoursText(more.reduce((n, i) => n + (i.hours ?? 0), 0))}`}
+                tone="tint"
+                onPress={() => {
+                  haptic.selection();
+                  set({ itemIds: [...v.itemIds, ...more.map((i) => i.id)] });
+                }}
+                testID="visit-fill"
+              />
+            ) : null}
           </ListSection>
           <ListSection footer={v.confirmed ? 'The company said yes to these dates.' : 'Best guess until the company says yes.'}>
             <ListSwitchRow title="Confirmed" value={v.confirmed} onValueChange={(confirmed) => set({ confirmed })} testID="visit-confirmed" />
           </ListSection>
-          <ListSection header={`Items (${picked.size} of ${lines.length})`}>
+          <ListSection
+            header={`Items (${picked.size} of ${lines.length})`}
+            headerRight={
+              pickedTime.timed + pickedTime.untimed > 0 ? (
+                <Text variant="footnote" color={colors.secondary} tabular testID="visit-time">
+                  {totalText(pickedTime)}
+                </Text>
+              ) : null
+            }
+          >
             {lines.map((l, i) => (
               <Touchable
                 key={l.item.id}
@@ -158,7 +198,7 @@ export function VisitSheet({
                   set({ itemIds: picked.has(l.item.id) ? v.itemIds.filter((id) => id !== l.item.id) : [...v.itemIds, l.item.id] });
                 }}
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked: picked.has(l.item.id) }}
+                aria-checked={picked.has(l.item.id)}
                 accessibilityLabel={`${l.item.title}, ${l.room}`}
                 testID={`visit-item-${l.item.id}`}
                 style={[styles.itemRow, i > 0 ? styles.itemRule : null]}
@@ -171,6 +211,11 @@ export function VisitSheet({
                     {l.item.ready ? '' : ', not ready yet'}
                   </Text>
                 </View>
+                {l.item.hours !== null ? (
+                  <Text variant="footnote" color={colors.secondary} tabular>
+                    {hoursText(l.item.hours)}
+                  </Text>
+                ) : null}
               </Touchable>
             ))}
           </ListSection>
@@ -190,9 +235,9 @@ const styles = StyleSheet.create({
   lead: { marginHorizontal: layout.inset, marginTop: 4, marginBottom: 12 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   step: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  days: { minWidth: 28, textAlign: 'center', fontSize: 17 },
-  itemRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
-  itemRule: { borderTopWidth: 1, borderTopColor: colors.separator },
+  days: { minWidth: 28, textAlign: 'center', fontSize: 16 },
+  itemRow: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
+  itemRule: { borderTopWidth: layout.hairline, borderTopColor: colors.separator },
   remove: { alignSelf: 'flex-start', height: 44, justifyContent: 'center', marginHorizontal: layout.inset },
   status: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 });

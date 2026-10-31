@@ -51,24 +51,33 @@ export interface SampleState {
   counters: Record<string, number>;
 }
 
-/** The standard titles by trade: a verb and the thing, the same words for the same work everywhere. */
-const STANDARD_TITLES: Record<string, [string, number][]> = {
+/**
+ * The standard titles by trade: a verb and the thing, the same words for the same work everywhere,
+ * with how often each is used and how long the work usually takes, in hours.
+ */
+const STANDARD_TITLES: Record<string, [string, number, number][]> = {
   Carpentry: [
-    ['Adjust cabinet door', 14], ['Adjust closet door', 6], ['Adjust door strike', 9], ['Adjust pocket door', 4], ['Hang door', 5],
-    ['Install door stop', 8], ['Install baseboard', 7], ['Install shoe molding', 6], ['Install door casing', 5], ['Install cabinet hardware', 11],
-    ['Install closet system', 3], ['Set upper cabinets', 4], ['Install crown molding', 3], ['Replace damaged trim', 6],
+    ['Adjust cabinet door', 14, 0.5], ['Adjust closet door', 6, 0.5], ['Adjust door strike', 9, 0.5], ['Adjust pocket door', 4, 1], ['Hang door', 5, 2],
+    ['Install door stop', 8, 0.25], ['Install baseboard', 7, 2], ['Install shoe molding', 6, 1.5], ['Install door casing', 5, 1], ['Install cabinet hardware', 11, 2],
+    ['Install closet system', 3, 6], ['Set upper cabinets', 4, 4], ['Install crown molding', 3, 4], ['Replace damaged trim', 6, 1],
   ],
-  Painting: [['Touch up paint', 40], ['Patch drywall', 25], ['Paint door', 8], ['Caulk trim', 12], ['Paint pocket doors', 3], ['Paint ceiling', 4], ['Repaint wall', 5]],
+  Painting: [['Touch up paint', 40, 0.5], ['Patch drywall', 25, 1], ['Paint door', 8, 1.5], ['Caulk trim', 12, 1], ['Paint pocket doors', 3, 3], ['Paint ceiling', 4, 4], ['Repaint wall', 5, 2]],
   Electrical: [
-    ['Install outlet cover', 9], ['Replace outlet cover', 5], ['Install switch plate', 7], ['Install pendant lights', 3], ['Install light fixture', 10],
-    ['Replace light bulb', 4], ['Install smoke detector', 2],
+    ['Install outlet cover', 9, 0.25], ['Replace outlet cover', 5, 0.25], ['Install switch plate', 7, 0.25], ['Install pendant lights', 3, 3], ['Install light fixture', 10, 1],
+    ['Replace light bulb', 4, 0.25], ['Install smoke detector', 2, 0.5],
   ],
-  Plumbing: [['Install toilet', 6], ['Install faucet', 8], ['Install shower head', 5], ['Fix leak', 4], ['Install hose bib', 2], ['Adjust shower valve', 3]],
-  Tile: [['Grout shower floor', 4], ['Caulk tub surround', 5], ['Replace cracked tile', 6], ['Seal grout', 3], ['Caulk shower corner', 4]],
-  Stone: [['Set vanity tops', 3], ['Polish countertop edge', 2], ['Seal countertop', 3], ['Install backsplash', 2]],
-  'Air Conditioning': [['Mount thermostats', 3], ['Adjust thermostat', 2], ['Install dryer vent cover', 2], ['Install return grille', 3], ['Install supply register', 4]],
-  'Ross Built Crew': [['Clean windows', 5], ['Final clean', 3], ['Install towel bar', 6], ['Install toilet paper holder', 4], ['Install mirror', 3], ['Install refrigerator drawers', 1]],
+  Plumbing: [['Install toilet', 6, 2], ['Install faucet', 8, 1.5], ['Install shower head', 5, 0.5], ['Fix leak', 4, 1], ['Install hose bib', 2, 1], ['Adjust shower valve', 3, 1]],
+  Tile: [['Grout shower floor', 4, 3], ['Caulk tub surround', 5, 1], ['Replace cracked tile', 6, 2], ['Seal grout', 3, 2], ['Caulk shower corner', 4, 0.5]],
+  Stone: [['Set vanity tops', 3, 4], ['Polish countertop edge', 2, 1], ['Seal countertop', 3, 1], ['Install backsplash', 2, 6]],
+  'Air Conditioning': [['Mount thermostats', 3, 2], ['Adjust thermostat', 2, 0.5], ['Install dryer vent cover', 2, 0.5], ['Install return grille', 3, 0.5], ['Install supply register', 4, 0.25]],
+  'Ross Built Crew': [
+    ['Clean windows', 5, 8], ['Final clean', 3, 8], ['Install towel bar', 6, 0.5], ['Install toilet paper holder', 4, 0.25], ['Install mirror', 3, 1],
+    ['Install refrigerator drawers', 1, 2],
+  ],
 };
+
+/** How long a standard title usually takes, for the sample items. */
+const usualHours = (title: string) => Object.values(STANDARD_TITLES).flat().find(([t]) => t === title)?.[2] ?? null;
 
 export function sampleState(): SampleState {
   const me: Person = { id: 'person-jake', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true };
@@ -143,6 +152,7 @@ export function sampleState(): SampleState {
       extra: {},
       unfinished: false,
       visitId: null,
+      hours: usualHours(title),
       btExternalId: null,
       createdBy: me.id,
       createdAt: at,
@@ -171,6 +181,13 @@ export function sampleState(): SampleState {
     // Snapped on a walk as a draft, waiting to be filled in.
     item('Kitchen 109', '', '', 'SMS Carpentry', { source: 'walk', unfinished: true, tradeId: null, companyId: null }),
     item('Master Bathroom 207', 'Install shower trim', 'Valve trim and the hand shower.', 'Gator Plumbing'),
+    // SMS Carpentry's smaller work around the house, ready now: about two days with the closet system.
+    item('Guest Bedroom 114', 'Install door stop', 'Behind the bedroom door.', 'SMS Carpentry'),
+    item('Master Bedroom 206', 'Adjust closet door', 'Left door drags on the carpet.', 'SMS Carpentry', { kind: 'deficiency' }),
+    item('Laundry 119', 'Install baseboard', 'Both long walls.', 'SMS Carpentry'),
+    item('Living 107', 'Install shoe molding', 'Along the stone hearth.', 'SMS Carpentry'),
+    item('Foyer 115', 'Replace damaged trim', 'Door casing dented at the closet.', 'SMS Carpentry', { kind: 'deficiency' }),
+    item('Kitchen 109', 'Install cabinet hardware', 'Island and the pantry wall.', 'SMS Carpentry'),
   ];
 
   // The schedule: a confirmed visit next, and one that ended with work still open.
@@ -224,7 +241,7 @@ export function sampleState(): SampleState {
 
   let titleNo = 0;
   const titles: StandardTitle[] = Object.entries(STANDARD_TITLES).flatMap(([trade, list]) =>
-    list.map(([title, uses]) => ({ id: `title-${++titleNo}`, title, tradeId: t(trade), uses, approved: true })),
+    list.map(([title, uses, hours]) => ({ id: `title-${++titleNo}`, title, tradeId: t(trade), uses, approved: true, hours })),
   );
 
   const customFields: CustomField[] = [
@@ -250,6 +267,7 @@ export function sampleState(): SampleState {
     1: [me.id, 9, 9, 0], 2: [me.id, 9, 9, 12], 3: [me.id, 9, 9, 25], 4: [me.id, 9, 9, 40], 5: [me.id, 9, 10, 5], 6: [me.id, 9, 10, 20],
     7: [sam.id, 6, 10, 0], 8: [sam.id, 6, 10, 14], 9: [sam.id, 6, 10, 31], 10: [sam.id, 6, 10, 45], 11: [sam.id, 6, 11, 2], 12: [sam.id, 6, 11, 20],
     13: [me.id, 4, 14, 0], 14: [me.id, 4, 14, 18], 15: [me.id, 4, 14, 35], 16: [me.id, 1, 15, 20], 17: [sam.id, 0, 8, 5], 18: [sam.id, 2, 9, 30],
+    19: [sam.id, 3, 9, 10], 20: [sam.id, 3, 9, 22], 21: [sam.id, 3, 9, 40], 22: [sam.id, 3, 10, 2], 23: [sam.id, 3, 10, 15], 24: [sam.id, 3, 10, 31],
   };
   for (const it of items) {
     const [who, days, hour, minute] = added[it.number ?? 0] ?? [me.id, 9, 9, 0];

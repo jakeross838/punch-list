@@ -65,3 +65,8 @@ export function mondayOf(ymd: string): string {
   const w = weekdayOf(ymd);
   return addDays(ymd, w === 0 ? -6 : 1 - w);
 }
+
+/** The last working day of a company's visit: its first day and how many working days it takes. */
+export function visitEnd(visit: { start: string; days: number }): string {
+  return addWorkingDays(workingDayOnOrAfter(visit.start), Math.max(1, visit.days) - 1);
+}

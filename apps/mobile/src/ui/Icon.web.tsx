@@ -269,6 +269,12 @@ const GLYPHS: Record<IconName, Draw> = {
       {line('M17 15.2V17l1.3 1', c, w * 1.5)}
     </>
   ),
+  timer: (c, w) => (
+    <>
+      {ring(12, 13.2, 7.6, c, w * 1.7)}
+      {line('M12 13.2V9.2M9.8 3.2h4.4M12 3.2v2.4', c, w * 1.7)}
+    </>
+  ),
   doc: (c, w) => (
     <>
       {line('M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z', c, w * 1.7)}

@@ -1,6 +1,7 @@
 // The rules the app enforces on every item, wherever it is written from. Buildertrend could not
 // enforce these; the app can, so it does.
 
+import { MAX_HOURS, tidyHours } from './time';
 import type { Item, ItemKind, Person } from './types';
 
 export const TITLE_MAX = 80;
@@ -28,6 +29,7 @@ export type ItemFields = Pick<
   | 'extra'
   | 'unfinished'
   | 'visitId'
+  | 'hours'
 >;
 
 /**
@@ -52,6 +54,9 @@ export function checkItem(item: ItemFields): Problem[] {
   }
   if (item.status === 'complete' && item.unfinished) {
     problems.push({ field: 'status', message: 'Finish the draft before you mark it complete' });
+  }
+  if (item.hours !== null && !(item.hours > 0 && item.hours <= MAX_HOURS)) {
+    problems.push({ field: 'hours', message: `Keep the estimated time under ${MAX_HOURS} hours` });
   }
   return problems;
 }
@@ -111,6 +116,7 @@ export function tidyItem<T extends ItemFields>(item: T): T {
     waitingOn: tidyWaitingOn(item.waitingOn),
     readyBy: text(item.readyBy),
     poOrCo: text(item.poOrCo),
+    hours: tidyHours(item.hours),
     extra,
   };
   if (out.ready) {

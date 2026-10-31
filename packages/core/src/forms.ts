@@ -27,6 +27,7 @@ export const FORM_FIELDS: { field: FormField; label: string }[] = [
   { field: 'ready', label: 'Ready' },
   { field: 'waitingOn', label: 'Waiting On' },
   { field: 'readyBy', label: 'Ready By' },
+  { field: 'hours', label: 'Estimated Time' },
 ];
 
 export function formShows(settings: FormSettings, field: FormField): boolean {

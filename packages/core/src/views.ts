@@ -1,98 +1,78 @@
-// How the lists are cut: by location (floor order), by trade, by company or by what items wait on, with
-// the filters from the plan. Removed items never show, and drafts stay in Drafts until they are filled
+// How the lists are cut: by location (floor order), by trade, by company or by what items wait on,
+// narrowed by the filters. Removed items never show, and drafts stay in Drafts until they are filled
 // in. Every location shows, even an empty one, so items can be added to it. Show Completed (as in
-// Reminders) adds completed items that fit the filter, after the open ones. By Waiting On shows what
+// Reminders) adds completed items that fit the filters, after the open ones. By Waiting On shows what
 // is ready now and what needs a price, then each thing holding work up with the items it holds up (an
 // item waiting on two things is under both): the late ones first, then the biggest. That is the order
-// to clear them in.
+// to clear them in. Each group carries its totals: how many are open, ready and past due, and their
+// estimated time.
 
-import { isPriced } from './rules';
 import { daysBetween } from './dates';
+import { isPastDue, matchesFilters, NO_FILTERS, readFilters, sameFilters, type FilterContext, type ItemFilters } from './filters';
+import { floorOf, NO_FLOOR } from './rooms';
+import { isPriced } from './rules';
+import { NO_TIME, totalTime, type TimeTotal } from './time';
 import type { Company, Item, Location, Trade } from './types';
 
 export type GroupBy = 'room' | 'trade' | 'company' | 'waiting';
-export type ItemFilter = 'open' | 'ready' | 'not_ready' | 'added_scope' | 'all';
-export type ShowFilter = Exclude<ItemFilter, 'all'>;
 
 /** How a person likes a job to open, saved with Save as My Default. */
 export interface ViewSettings {
   groupBy: GroupBy;
-  filter: ShowFilter;
   showCompleted: boolean;
-  /** Only this trade's items, or every trade. */
-  tradeId: string | null;
-  /** Only this company's items, or every company. */
-  companyId: string | null;
+  filters: ItemFilters;
 }
 
-export const DEFAULT_VIEW: ViewSettings = { groupBy: 'room', filter: 'open', showCompleted: false, tradeId: null, companyId: null };
+export const DEFAULT_VIEW: ViewSettings = { groupBy: 'room', showCompleted: false, filters: NO_FILTERS };
 
 export const GROUP_LABELS: Record<GroupBy, string> = { room: 'Location', trade: 'Trade', company: 'Company', waiting: 'Waiting On' };
+
+const GROUPS: GroupBy[] = ['room', 'trade', 'company', 'waiting'];
+
+/**
+ * A saved view, checked. Views saved before filters took several values said Show (Ready, Not Ready
+ * or Additional) and one trade and one company; those carry over.
+ */
+export function readViewSettings(raw: unknown): ViewSettings {
+  const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const groupBy = GROUPS.includes(r.groupBy as GroupBy) ? (r.groupBy as GroupBy) : 'room';
+  const filters = readFilters(r.filters);
+  if (r.filters === undefined) {
+    if (r.filter === 'ready') filters.states = ['ready'];
+    if (r.filter === 'not_ready') filters.states = ['not_ready'];
+    if (r.filter === 'added_scope') filters.kinds = ['added_scope'];
+    if (typeof r.tradeId === 'string') filters.tradeIds = [r.tradeId];
+    if (typeof r.companyId === 'string') filters.companyIds = [r.companyId];
+  }
+  return { groupBy, showCompleted: r.showCompleted === true, filters };
+}
+
+export function sameView(a: ViewSettings, b: ViewSettings): boolean {
+  return a.groupBy === b.groupBy && a.showCompleted === b.showCompleted && sameFilters(a.filters, b.filters);
+}
 
 /** The group key for one thing an item waits on. */
 export const waitingKey = (label: string) => `waiting:${label.trim().toLowerCase()}`;
 
-export const FILTER_LABELS: Record<ItemFilter, string> = {
-  open: 'Open',
-  ready: 'Ready',
-  not_ready: 'Not Ready',
-  added_scope: 'Additional',
-  all: 'All',
-};
-
-export function matchesFilter(item: Item, filter: ItemFilter): boolean {
-  if (item.status === 'removed') return false;
-  switch (filter) {
-    case 'open':
-      return item.status === 'open';
-    case 'ready':
-      return item.status === 'open' && item.ready;
-    case 'not_ready':
-      return item.status === 'open' && !item.ready;
-    case 'added_scope':
-      return item.status === 'open' && item.kind === 'added_scope';
-    case 'all':
-      return true;
-  }
-}
-
-/** With Show Completed on, a completed item joins the open filters on everything but its status. */
-export function matchesView(item: Item, filter: ItemFilter, showCompleted = false): boolean {
-  if (item.status !== 'complete' || filter === 'all' || !showCompleted) return matchesFilter(item, filter);
-  switch (filter) {
-    case 'open':
-      return true;
-    case 'ready':
-      return item.ready;
-    case 'not_ready':
-      return !item.ready;
-    case 'added_scope':
-      return item.kind === 'added_scope';
-  }
-}
-
 export interface ViewOptions {
+  filters?: ItemFilters;
+  /** Completed items too, after the open ones. */
   showCompleted?: boolean;
-  tradeId?: string | null;
-  companyId?: string | null;
-  /** Today, YYYY-MM-DD: By Waiting On puts late holdups first. */
-  today?: string;
-}
-
-/** The trade and company filters from View: an item passes when it matches every one that is set. */
-export function matchesScope(item: Item, options: ViewOptions): boolean {
-  if (options.tradeId && item.tradeId !== options.tradeId) return false;
-  if (options.companyId && item.companyId !== options.companyId) return false;
-  return true;
+  /** What the filters and the totals need: today, the visits, which items have photos, the locations. */
+  context?: FilterContext;
 }
 
 export interface ItemGroup {
   key: string;
   label: string;
-  /** Items in the group that pass the filter, numbered order. */
+  /** Items in the group that pass the filters, in number order (completed ones after, with Show Completed). */
   items: Item[];
+  /** Of those, how many are open, ready, and past due. */
   open: number;
   ready: number;
+  pastDue: number;
+  /** The open items' estimated time. */
+  time: TimeTotal;
   /** By Waiting On: how many days the latest item in the group is past its Ready By, or 0. */
   late: number;
 }
@@ -103,8 +83,23 @@ export interface Lookups {
   companies: Company[];
 }
 
-export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, lookups: Lookups, options: ViewOptions = {}): ItemGroup[] {
-  const live = items.filter((i) => i.status !== 'removed' && !i.unfinished && matchesScope(i, options));
+/** Totals for a set of items: open, ready, past due and the open work's estimated time. */
+export function itemTotals(items: Item[], context?: FilterContext): Pick<ItemGroup, 'open' | 'ready' | 'pastDue' | 'time'> {
+  const open = items.filter((i) => i.status === 'open');
+  return {
+    open: open.length,
+    ready: open.filter((i) => i.ready).length,
+    pastDue: context ? open.filter((i) => isPastDue(i, context.visits, context.today)).length : 0,
+    time: open.length > 0 ? totalTime(open) : NO_TIME,
+  };
+}
+
+export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options: ViewOptions = {}): ItemGroup[] {
+  const filters = options.filters ?? NO_FILTERS;
+  const context = options.context;
+  const live = items.filter(
+    (i) => i.status !== 'removed' && !i.unfinished && (i.status === 'open' || options.showCompleted) && matchesFilters(i, filters, context),
+  );
   const keysOf = (i: Item): string[] => {
     switch (by) {
       case 'room':
@@ -121,8 +116,8 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
       }
     }
   };
-  const lateBy = (i: Item) =>
-    options.today && i.status === 'open' && !i.ready && i.readyBy && i.readyBy < options.today ? daysBetween(i.readyBy, options.today) : 0;
+  const today = context?.today;
+  const lateBy = (i: Item) => (today && i.status === 'open' && !i.ready && i.readyBy && i.readyBy < today ? daysBetween(i.readyBy, today) : 0);
   const groups = new Map<string, Item[]>();
   const waitingLabels = new Map<string, string>();
   for (const item of live) {
@@ -165,9 +160,8 @@ export function groupItems(items: Item[], by: GroupBy, filter: ItemFilter, looku
     return {
       key,
       label,
-      items: arrange(all.filter((i) => matchesView(i, filter, options.showCompleted)), filter, options),
-      open: all.filter((i) => i.status === 'open').length,
-      ready: all.filter((i) => i.status === 'open' && i.ready).length,
+      items: arrange(all),
+      ...itemTotals(all, context),
       late: by === 'waiting' ? Math.max(0, ...all.map(lateBy)) : 0,
     };
   });
@@ -183,21 +177,10 @@ export function sortItems(items: Item[]): Item[] {
   });
 }
 
-/** Number order. With Show Completed on, the open items come first and the completed ones after. */
-function arrange(items: Item[], filter: ItemFilter, options: ViewOptions): Item[] {
+/** Number order, the open items first and any completed ones after. */
+function arrange(items: Item[]): Item[] {
   const sorted = sortItems(items);
-  if (!options.showCompleted || filter === 'all') return sorted;
   return [...sorted.filter((i) => i.status !== 'complete'), ...sorted.filter((i) => i.status === 'complete')];
-}
-
-/** The group for the elevations, roof, pool, driveway, site and Whole House on every job. */
-export const SHARED_GROUP = 'Outside and Whole House';
-/** The group for locations pasted without a level. */
-export const NO_FLOOR = 'Locations';
-
-/** What a location is listed under on the job: its level, Outside and Whole House, or Locations when it has no level. */
-export function floorOf(location: Pick<Location, 'kind' | 'floor'>): string {
-  return location.kind === 'shared' ? SHARED_GROUP : (location.floor ?? NO_FLOOR);
 }
 
 /** Rows gathered under their floor, floors in the order they first appear. */

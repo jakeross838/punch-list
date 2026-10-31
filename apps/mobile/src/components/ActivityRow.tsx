@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingLeft: layout.inset },
   avatar: { width: 32, height: 32, borderRadius: 16, marginTop: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#CBD8DB' },
   body: { flex: 1, gap: 2, paddingTop: 10, paddingBottom: 11, paddingRight: layout.inset },
-  divider: { borderBottomWidth: 1, borderBottomColor: colors.separator },
+  divider: { borderBottomWidth: layout.hairline, borderBottomColor: colors.separator },
   top: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   what: { flex: 1 },
   time: { marginTop: 2 },

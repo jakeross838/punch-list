@@ -202,7 +202,10 @@ async function main(): Promise<void> {
       await settle(300);
       await shot('09-not-ready-box');
       await app.getByTestId('not-ready-done').click();
-      await app.getByText('Waiting on Owner and Volcano Stone, ready by November 5').waitFor();
+      await app.getByText('Waiting on Owner and Volcano Stone, ready by November 5').last().waitFor();
+      // The estimate: one tap on a usual time.
+      await app.getByTestId('estimate-2').click();
+      if ((await app.getByTestId('estimate-2').getAttribute('aria-checked')) !== 'true') throw new Error('The estimate did not take');
       await app.getByTestId('field-description').fill('Range wall, both sides of the hood, after the stone is set.');
       await app.getByTestId('field-description').blur();
       await settle(300);
@@ -215,12 +218,15 @@ async function main(): Promise<void> {
       await shot('09d-additional');
       await app.getByRole('tab', { name: 'Incomplete' }).click();
       await app.getByTestId('field-po').waitFor({ state: 'detached' });
-      // Leave and come back: the changes were saved as they were made.
+      // Leave and come back: the changes were saved as they were made, and the row says them.
       await app.getByTestId('back').last().click();
       await app.getByTestId('item-item-16').waitFor();
+      await app.getByTestId('time-item-1').getByText('2 hours', { exact: true }).waitFor();
+      await app.getByTestId('item-item-1').getByText('SMS Carpentry · Incomplete', { exact: true }).waitFor();
       await settle();
+      await shot('09e-row-with-time');
       await app.getByTestId('item-item-1').click();
-      await app.getByText('Waiting on Owner and Volcano Stone, ready by November 5').waitFor();
+      await app.getByText('Waiting on Owner and Volcano Stone, ready by November 5').last().waitFor();
       if ((await app.getByTestId('field-description').inputValue()) !== 'Range wall, both sides of the hood, after the stone is set.') {
         throw new Error('The description did not save');
       }
@@ -293,6 +299,8 @@ async function main(): Promise<void> {
       await app.getByTestId('suggestion-0').click();
       await app.getByText('Company and trade filled in from the title.').waitFor();
       await app.getByText('SMS Carpentry').last().waitFor();
+      if ((await app.getByTestId('estimate-0.5').last().getAttribute('aria-checked')) !== 'true') throw new Error('The title did not fill in its usual time');
+      await app.getByText('The usual time for this title. Change it if this one is different.').waitFor();
       await settle(300);
       await shot('15-filled-in');
     });
@@ -324,7 +332,7 @@ async function main(): Promise<void> {
       await settle(300);
       await shot('18-waiting-on');
       await app.getByTestId('not-ready-done').click();
-      await app.getByText('Waiting on Coastal Mirror and Owner, ready by November 5').waitFor();
+      await app.getByText('Waiting on Coastal Mirror and Owner, ready by November 5').last().waitFor();
       await settle(300);
       await app.getByTestId('save').click();
       await app.getByTestId('item-item-16').waitFor();
@@ -377,7 +385,7 @@ async function main(): Promise<void> {
     await step('check them sitting down: each is filled in, Mark Up, then Next puts it on the lists', async () => {
       await app.getByTestId('open-unfinished').click();
       await app.getByText('3 drafts. Filling in from the photos.').waitFor();
-      await app.getByText(/, filling in from the photo$/).first().waitFor();
+      await app.getByText(/ · Filling in from the photo$/).first().waitFor();
       await settle(300);
       await shot('23-drafts-filling');
       await app.getByText('3 drafts. Tap one to finish it.').waitFor({ timeout: 20000 });
@@ -531,8 +539,10 @@ async function main(): Promise<void> {
       await app.getByTestId('schedule').click();
       await app.getByTestId('schedule-past-due').click();
       await app.getByText('Hang front door').waitFor();
-      await app.getByText(/Foyer 115, \d+ days? past due/).waitFor();
-      await app.getByText(/Bathroom 116, visit ended \d+ days? ago/).waitFor();
+      await app.getByText('Foyer 115 · SMS Carpentry · Incomplete', { exact: true }).waitFor();
+      await app.getByText(/^Waiting on Owner, \d+ days? past due$/).waitFor();
+      await app.getByText('Bathroom 116 · Rangel Custom Tile · Deficiency', { exact: true }).waitFor();
+      await app.getByText(/^Visit ended \d+ days? ago$/).first().waitFor();
       await settle();
       await shot('28-past-due');
       await app.getByTestId('back').last().click();
@@ -547,18 +557,51 @@ async function main(): Promise<void> {
       await settle(600);
       await shot('29-view');
       await app.getByRole('tab', { name: 'Trade' }).click();
-      await app.getByTestId('show-not_ready').click();
+      await app.getByTestId('filter-state-not_ready').click();
       await settle(300);
       await app.getByTestId('save-default').click();
       await app.getByText('Saved as My Default').waitFor();
       await app.getByTestId('view-done').click();
       await app.getByText('Carpentry', { exact: true }).first().waitFor();
+      await app.getByTestId('chip-states:not_ready').waitFor();
       await settle(600);
       await shot('29b-by-trade-not-ready');
       await app.getByTestId('filter').click();
       await app.getByTestId('view-standard').click();
       await app.getByTestId('save-default').click();
       await app.getByTestId('view-done').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
+    await step('filters take several values, show as chips, and come off with a tap', async () => {
+      await app.getByTestId('filter').click();
+      await app.getByTestId('view-done').waitFor();
+      await settle(600);
+      await app.getByTestId('filter-state-ready').click();
+      await app.getByTestId('filter-company-company-4').click();
+      await app.getByTestId('filter-company-company-2').click();
+      await app.getByText(/^3 filters, \d+ open items$/).waitFor();
+      await settle(300);
+      await shot('29c-filters');
+      await app.getByTestId('view-done').click();
+      await app.getByTestId('chip-companyIds:company-4').waitFor();
+      // The job's own totals (the Jobs screen underneath says its totals too).
+      await app.getByText(/^\d+ open · [\d.]+ (hours|minutes)/).filter({ visible: true }).first().waitFor();
+      await settle(600);
+      await shot('29d-filtered');
+      // Only the ready work of the two companies: nothing waits.
+      if ((await app.getByTestId(/^group-meta-/).filter({ hasText: 'None ready' }).count()) !== 0) throw new Error('A filtered location shows work that is not ready');
+      await app.getByTestId('chip-companyIds:company-2').click();
+      await app.getByTestId('chip-companyIds:company-2').waitFor({ state: 'detached' });
+      // Inside a location the chips still say the list is filtered.
+      await app.getByTestId('group-room-1').click();
+      await app.getByTestId('chip-states:ready').last().waitFor();
+      if ((await app.getByTestId('item-item-2').count()) !== 0) throw new Error('A filtered location shows another company');
+      await settle(500);
+      await shot('29e-filtered-location');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('filter-clear').last().click();
+      await app.getByTestId('filter-bar').waitFor({ state: 'detached' });
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
@@ -607,13 +650,29 @@ async function main(): Promise<void> {
       await shot('33-schedule');
       await app.getByTestId('schedule-company-company-4').click();
       await app.getByTestId('book-ready').waitFor();
+      // The ready work splits into full days, each one to schedule on its own.
+      await app.getByTestId('ready-day-2').waitFor();
       await settle();
       await shot('34-plan');
-      await app.getByTestId('book-ready').click();
+      await app.getByTestId('ready-day-2').scrollIntoViewIfNeeded();
+      await settle(300);
+      await shot('34b-plan-days');
+      await app.getByTestId('book-day-2').click();
       await app.getByTestId('visit-save').waitFor();
       await settle(600);
+      // Take the baseboard off the day, then Fill the Day tops it back up with small ready work.
+      const baseboard = app.getByTestId('visit-item-item-21');
+      if ((await baseboard.getAttribute('aria-checked')) === 'true') await baseboard.click();
+      await app.getByTestId('visit-fill').click();
+      await app.getByTestId('visit-time').getByText('8 hours', { exact: true }).waitFor();
+      await app.getByTestId('visit-fill').waitFor({ state: 'detached' });
+      // Two days is more than the work needs.
       await app.getByTestId('visit-days-more').click();
+      await app.getByTestId('visit-days-fit').waitFor();
+      await settle(300);
       await shot('35-book-visit');
+      await app.getByTestId('visit-days-fit').click();
+      await app.getByTestId('visit-days-fit').waitFor({ state: 'detached' });
       await app.getByTestId('visit-save').click();
       await app.getByTestId('visit-sheet').waitFor({ state: 'detached' });
       // The new visit on the plan (the schedule underneath shows visits too).
@@ -689,8 +748,11 @@ async function main(): Promise<void> {
       await app.getByTestId('title-trade').click();
       await app.getByRole('button', { name: 'Carpentry', exact: true }).click();
       await settle(400);
+      await app.getByTestId('title-hours').click();
+      await app.getByRole('button', { name: '30 minutes', exact: true }).click();
+      await settle(400);
       await app.getByTestId('title-add').click();
-      await app.getByText('Adjust cabinet hinge').waitFor();
+      await app.getByRole('button', { name: 'Adjust cabinet hinge, 30 minutes', exact: true }).waitFor();
       await settle(300);
       await shot('44-standard-titles');
       await app.getByTestId('titles-done').click();

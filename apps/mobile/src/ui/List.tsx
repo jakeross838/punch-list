@@ -344,7 +344,8 @@ const styles = StyleSheet.create({
   plainHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 12, paddingHorizontal: layout.inset, paddingTop: 22, paddingBottom: 4 },
   plainRows: { marginLeft: layout.inset },
   plainFooter: { paddingHorizontal: layout.inset, paddingTop: 8 },
-  separator: { position: 'absolute', right: 0, bottom: 0, height: 1, backgroundColor: colors.separator },
+  // A border, not a filled box: borders snap to the screen's pixels, so the line stays sharp.
+  separator: { position: 'absolute', right: 0, bottom: 0, height: 0, borderBottomWidth: layout.hairline, borderBottomColor: colors.separator },
   row: {
     minHeight: layout.rowMinHeight,
     flexDirection: 'row',

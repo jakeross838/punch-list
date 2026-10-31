@@ -131,3 +131,13 @@ function tidyName(name: string): string {
     })
     .join(' ');
 }
+
+/** The group for the elevations, roof, pool, driveway, site and Whole House on every job. */
+export const SHARED_GROUP = 'Outside and Whole House';
+/** The group for locations pasted without a level. */
+export const NO_FLOOR = 'Locations';
+
+/** What a location is listed under on the job: its level, Outside and Whole House, or Locations when it has no level. */
+export function floorOf(location: Pick<Location, 'kind' | 'floor'>): string {
+  return location.kind === 'shared' ? SHARED_GROUP : (location.floor ?? NO_FLOOR);
+}

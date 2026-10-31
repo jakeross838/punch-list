@@ -82,6 +82,8 @@ const items = new Table(
     /** 1 while it waits for its title, company or trade. */
     unfinished: column.integer,
     visit_id: column.text,
+    /** Estimated time, in hours. */
+    hours: column.real,
     bt_external_id: column.text,
     created_by: column.text,
     created_at: column.text,
@@ -126,6 +128,8 @@ const title_library = new Table({
   trade_id: column.text,
   uses: column.integer,
   approved: column.integer,
+  /** How long the work usually takes, in hours. */
+  hours: column.real,
   created_at: column.text,
 });
 

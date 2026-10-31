@@ -1,15 +1,17 @@
-// Filling in an item from its photo. Claude is told the room, the job's standard titles, the
-// companies on the job and what the marks point at, and asked for the item the way Ross Built
-// writes them. Its answer only fills in the form; the person checks it before it is kept.
+// Filling in an item from its photo. Claude is told the room, the job's standard titles (with how
+// long each usually takes), the companies on the job and what the marks point at, and asked for the
+// item the way Ross Built writes them, with about how long it takes. Its answer only fills in the
+// form; the person checks it before it is kept.
 
 import { TITLE_MAX } from './rules';
+import { hoursText, tidyHours } from './time';
 import { tidyTitle } from './titles';
 import type { Company, Item, JobCompany, Mark, MarkColor, StandardTitle, Trade } from './types';
 
 export interface SuggestContext {
   room: string;
-  /** The standard titles with their trade, most used first. */
-  titles: { title: string; trade: string | null }[];
+  /** The standard titles with their trade and usual time, most used first. */
+  titles: { title: string; trade: string | null; hours: number | null }[];
   /** The companies on the job and the trade each does here. */
   companies: { name: string; trade: string }[];
   trades: string[];
@@ -23,6 +25,8 @@ export interface ItemSuggestion {
   trade: string | null;
   /** A company on the job, or null. */
   company: string | null;
+  /** About how long it takes, in hours, or null. */
+  hours: number | null;
 }
 
 const COLOR: Record<MarkColor, string> = { red: 'red', yellow: 'yellow', white: 'white', black: 'black' };
@@ -84,16 +88,17 @@ export function suggestPrompt(ctx: SuggestContext): string {
     ...(sized ? ['- A size marked on the photo goes in the description as it is written, like "24 inches left of the vanity."'] : []),
     '- trade: one of the trades below, or null when unsure.',
     '- company: the company on this job for that trade, from the list below, or null when unsure.',
+    '- hours: about how long the work takes the company once it is on site, in hours, counting setup and cleanup: 0.25 for 15 minutes, 0.5 for 30 minutes, 8 for a full working day. When the standard title you use lists a usual time, use that time. Null when you cannot tell.',
     '',
-    'Standard titles (title, trade):',
-    ...ctx.titles.slice(0, 150).map((t) => `- ${t.title}${t.trade ? ` (${t.trade})` : ''}`),
+    'Standard titles (title, trade, usual time):',
+    ...ctx.titles.slice(0, 150).map((t) => `- ${t.title}${t.trade || t.hours ? ` (${[t.trade, t.hours ? `usually ${hoursText(t.hours)}` : null].filter(Boolean).join(', ')})` : ''}`),
     '',
     `Trades: ${ctx.trades.join(', ')}`,
     '',
     'Companies on this job (company, trade):',
     ...ctx.companies.map((c) => `- ${c.name} (${c.trade})`),
     '',
-    'Reply with only JSON, like {"title": "Touch up paint", "description": "Ceiling at the hood soffit.", "trade": "Painting", "company": "Triple H Painting"}.',
+    'Reply with only JSON, like {"title": "Touch up paint", "description": "Ceiling at the hood soffit.", "trade": "Painting", "company": "Triple H Painting", "hours": 0.5}.',
   ].join('\n');
 }
 
@@ -122,7 +127,8 @@ export function readSuggestion(raw: unknown, ctx: SuggestContext): ItemSuggestio
     // A company that does a different trade on this job: keep the company and its own trade.
     trade = ctx.companies.find((c) => c.name === company)?.trade ?? trade;
   }
-  return { title, description, trade, company };
+  const hours = standard?.hours ?? tidyHours(r.hours);
+  return { title, description, trade, company, hours };
 }
 
 /** What Claude is told about the job for one photo: the location, the standard titles, the companies on the job and the marks. */
@@ -140,7 +146,7 @@ export function suggestContext(input: {
     titles: [...input.titles]
       .filter((t) => t.approved)
       .sort((a, b) => b.uses - a.uses)
-      .map((t) => ({ title: t.title, trade: tradeName(t.tradeId) })),
+      .map((t) => ({ title: t.title, trade: tradeName(t.tradeId), hours: t.hours })),
     companies: input.jobCompanies
       .map((jc) => ({ name: input.companies.find((c) => c.id === jc.companyId)?.name ?? '', trade: tradeName(jc.tradeId) ?? '' }))
       .filter((c) => c.name && c.trade),
@@ -149,21 +155,19 @@ export function suggestContext(input: {
   };
 }
 
+type Fillable = Pick<Item, 'title' | 'description' | 'companyId' | 'tradeId' | 'hours'>;
+
 /** What a suggestion fills in: only what is still blank, never what was typed. Empty when there is nothing to fill. */
-export function suggestionPatch(
-  s: ItemSuggestion,
-  value: Pick<Item, 'title' | 'description' | 'companyId' | 'tradeId'>,
-  trades: Trade[],
-  companies: Company[],
-): Partial<Pick<Item, 'title' | 'description' | 'companyId' | 'tradeId'>> {
+export function suggestionPatch(s: ItemSuggestion, value: Fillable, trades: Trade[], companies: Company[]): Partial<Fillable> {
   const tradeId = trades.find((t) => t.name === s.trade)?.id ?? null;
   const companyId = companies.find((c) => c.name === s.company)?.id ?? null;
-  const patch: Partial<Pick<Item, 'title' | 'description' | 'companyId' | 'tradeId'>> = {};
+  const patch: Partial<Fillable> = {};
   if (!value.title.trim()) patch.title = s.title;
   if (!value.description.trim() && s.description) patch.description = s.description;
   if (!value.companyId && !value.tradeId && companyId && tradeId) {
     patch.companyId = companyId;
     patch.tradeId = tradeId;
   } else if (!value.tradeId && tradeId) patch.tradeId = tradeId;
+  if (value.hours === null && s.hours !== null) patch.hours = s.hours;
   return patch;
 }

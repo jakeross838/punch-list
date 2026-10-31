@@ -60,6 +60,7 @@ export const SF_SYMBOLS = {
   doc: 'doc.text',
   sparkles: 'sparkles',
   'calendar.badge.clock': 'calendar.badge.clock',
+  timer: 'timer',
 } as const satisfies Record<string, SFSymbolName>;
 
 export type IconName = keyof typeof SF_SYMBOLS;

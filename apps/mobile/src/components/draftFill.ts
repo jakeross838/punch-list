@@ -21,7 +21,7 @@ export interface FillJob {
 
 /** One draft as it was when it was queued, with its first photo. */
 export interface FillTask {
-  item: Pick<Item, 'id' | 'locationId' | 'title' | 'description' | 'companyId' | 'tradeId' | 'unfinished'>;
+  item: Pick<Item, 'id' | 'locationId' | 'title' | 'description' | 'companyId' | 'tradeId' | 'unfinished' | 'hours'>;
   photo: { uri: string; marks: Mark[] };
 }
 
