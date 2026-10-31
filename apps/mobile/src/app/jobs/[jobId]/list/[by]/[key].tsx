@@ -9,6 +9,7 @@
 
 import {
   clearHoldup,
+  holdNames,
   commentCounts,
   GROUP_LABELS,
   groupItems,
@@ -35,7 +36,7 @@ import { useItemActions } from '@/components/useItemActions';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
-import { useFilterContext, useJobView } from '@/data/view';
+import { useFilterContext, useHolds, useJobView } from '@/data/view';
 import { DateField, EmptyState, haptic, Icon, Page, Text, Touchable, useFeedback } from '@/ui';
 
 interface Section {
@@ -65,6 +66,7 @@ export default function GroupScreen() {
   const [showDone, setShowDone] = useState(false);
   const actions = useItemActions(jobId);
   const commentsOn = commentCounts(data.useComments(jobId));
+  const holds = useHolds(jobId);
   const fill = useDraftFill();
 
   const filters = view.filters;
@@ -119,7 +121,7 @@ export default function GroupScreen() {
   function clearAll() {
     if (!holdup || heldUp.length === 0) return;
     const count = heldUp.length === 1 ? '1 item' : `${heldUp.length} items`;
-    const both = heldUp.filter((i) => i.waitingOn.length > 1).length;
+    const both = heldUp.filter((i) => holdNames(i, holds).length > 1).length;
     feedback.actionSheet({
       title: `Stop waiting on ${holdup}?`,
       message: `${heldUp.length === 1 ? 'It' : `All ${heldUp.length}`} will be marked ready.${
@@ -130,8 +132,8 @@ export default function GroupScreen() {
           label: `Mark ${count} Ready`,
           onPress: () => {
             haptic.success();
-            const before = heldUp.map((i) => ({ id: i.id, patch: { ready: i.ready, waitingOn: i.waitingOn, readyBy: i.readyBy } }));
-            void data.updateItems(heldUp.map((i) => ({ id: i.id, patch: clearHoldup(i, holdup) })));
+            const before = heldUp.map((i) => ({ id: i.id, patch: { ready: i.ready, waitingOn: i.waitingOn, waitingOnItems: i.waitingOnItems, readyBy: i.readyBy } }));
+            void data.updateItems(heldUp.map((i) => ({ id: i.id, patch: clearHoldup(i, holdup, holds) })));
             feedback.toast({ message: `No longer waiting on ${holdup}`, action: { label: 'Undo', onPress: () => void data.updateItems(before) } });
             router.back();
           },
@@ -260,6 +262,7 @@ export default function GroupScreen() {
               item={item}
               photo={firstPhoto.get(item.id)}
               comments={commentsOn.get(item.id)}
+              holds={holds}
               location={locationFor(item)}
               company={companyFor(item)}
               note={noteFor(item)}

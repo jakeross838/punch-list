@@ -4,6 +4,7 @@
 
 import {
   addDays,
+  addWorkingDays,
   dayOfDate,
   DEFAULT_FORM,
   DEFAULT_VIEW,
@@ -145,6 +146,7 @@ export function sampleState(): SampleState {
       kind: 'completion',
       ready: true,
       waitingOn: [],
+      waitingOnItems: [],
       readyBy: null,
       boughtOut: true,
       poOrCo: null,
@@ -165,7 +167,8 @@ export function sampleState(): SampleState {
   };
 
   const items: Item[] = [
-    item('Kitchen 109', 'Set upper cabinets', 'Range wall, both sides of the hood.', 'SMS Carpentry', { ready: false, waitingOn: ['Volcano Stone'], readyBy: '2026-11-02' }),
+    // Waits on the range backsplash going in first (the last item), and comes free when its visit is done.
+    item('Kitchen 109', 'Set upper cabinets', 'Range wall, both sides of the hood.', 'SMS Carpentry', { ready: false, waitingOnItems: ['item-25'] }),
     item('Kitchen 109', 'Install pendant lights', 'Over the island, three fixtures.', 'Metro Electric', { ready: false, waitingOn: ['Owner'] }),
     item('Kitchen 109', 'Touch up paint', 'Ceiling at the hood soffit.', 'Triple H Painting', { kind: 'deficiency' }),
     item('Living 107', 'Install refrigerator drawers', 'Bar under the stair.', 'Ross Built', { kind: 'added_scope', boughtOut: false }),
@@ -174,8 +177,9 @@ export function sampleState(): SampleState {
     item('Bathroom 116', 'Grout shower floor', '', 'Rangel Custom Tile', { status: 'complete', completedBy: me.id, completedAt: at }),
     item('Bathroom 116', 'Caulk tub surround', 'Corner at the shower valve wall.', 'Rangel Custom Tile', { kind: 'deficiency' }),
     item('Laundry 119', 'Install dryer vent cover', 'Exterior wall above the washer.', 'Climatic'),
-    item('Master Bathroom 207', 'Paint pocket doors', 'Both doors, after the hardware.', 'Triple H Painting', { ready: false, waitingOn: ['SMS Carpentry'] }),
-    item('Master Bathroom 207', 'Set vanity tops', 'Double vanity, east wall.', 'Volcano Stone', { ready: false, waitingOn: ['Owner', 'Gator Plumbing'], readyBy: '2026-11-09' }),
+    // Waits on SMS Carpentry's pocket door hardware (the very last item).
+    item('Master Bathroom 207', 'Paint pocket doors', 'Both doors, after the hardware.', 'Triple H Painting', { ready: false, waitingOnItems: ['item-26'] }),
+    item('Master Bathroom 207', 'Set vanity tops', 'Double vanity, east wall.', 'Volcano Stone', { ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09' }),
     item('Whole House', 'Mount thermostats', 'All zones, at the end of the job.', 'Climatic', { ready: false, waitingOn: ['Ross Built'] }),
     item('Foyer 115', 'Hang front door', 'Pivot door at the entry. Set the hardware after paint.', 'SMS Carpentry', { ready: false, waitingOn: ['Owner'], readyBy: '2026-10-26' }),
     item('Master Bedroom 206', 'Install closet system', 'Walk in closet, both long walls.', 'SMS Carpentry', { kind: 'added_scope', boughtOut: true, poOrCo: 'CO-14' }),
@@ -191,6 +195,9 @@ export function sampleState(): SampleState {
     item('Living 107', 'Install shoe molding', 'Along the stone hearth.', 'SMS Carpentry'),
     item('Foyer 115', 'Replace damaged trim', 'Door casing dented at the closet.', 'SMS Carpentry', { kind: 'deficiency' }),
     item('Kitchen 109', 'Install cabinet hardware', 'Island and the pantry wall.', 'SMS Carpentry'),
+    // What other work waits on: the stone behind the range, on a visit, and the pocket door hardware.
+    item('Kitchen 109', 'Install range backsplash', 'Full height slab behind the range.', 'Volcano Stone', { hours: 4 }),
+    item('Master Bathroom 207', 'Install pocket door hardware', 'Both pocket doors.', 'SMS Carpentry', { hours: 1 }),
   ];
 
   // The schedule: a confirmed visit next, and one that ended with work still open.
@@ -205,6 +212,7 @@ export function sampleState(): SampleState {
   const visits: Visit[] = [
     visit('visit-paint', 'Triple H Painting', earliestStart(today), 2, true, [3, 15]),
     visit('visit-tile', 'Rangel Custom Tile', addDays(mondayOf(today), -7), 1, true, [8]),
+    visit('visit-stone', 'Volcano Stone', addWorkingDays(earliestStart(today), 2), 1, false, [25]),
   ];
   // SMS Carpentry's list went out last week, before the cabinet door was found.
   const sends: ListSend[] = [

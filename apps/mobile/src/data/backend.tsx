@@ -5,7 +5,19 @@
 
 import { randomUUID } from 'expo-crypto';
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
-import { itemChanges, renamedHoldups, tidyComment, tidyName, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Item, type Photo } from '@punch/core';
+import {
+  itemChanges,
+  releasedBy,
+  renamedHoldups,
+  tidyComment,
+  tidyName,
+  type Activity,
+  type ActivityDetail,
+  type ActivityKind,
+  type Comment,
+  type Item,
+  type Photo,
+} from '@punch/core';
 import { DataContext, type DataApi, type ItemPatch, type NewItem } from './api';
 import { keepPhoto } from './photoFiles';
 import { sampleState, type SampleState } from './sample';
@@ -47,6 +59,22 @@ const nextId = () => `activity-live-${String(++seq).padStart(6, '0')}`;
  * Saves a change and logs it: every item added or changed, field by field, the way the database
  * does, and the other things that happened, all as the signed-in person, now.
  */
+/**
+ * What the database does on every item write: a ready item waits on nothing, and a task done or
+ * removed frees what waited on it (an item with nothing left to wait on is ready).
+ */
+function settle(before: Item[], after: Item[]): Item[] {
+  let items = after.map((i) =>
+    i.ready && (i.waitingOn.length > 0 || i.waitingOnItems.length > 0 || i.readyBy !== null) ? { ...i, waitingOn: [], waitingOnItems: [], readyBy: null } : i,
+  );
+  const wasOpen = new Set(before.filter((i) => i.status === 'open').map((i) => i.id));
+  for (const done of items.filter((i) => wasOpen.has(i.id) && i.status !== 'open')) {
+    const freed = new Map(releasedBy(done.id, items).map((r) => [r.item.id, r.patch]));
+    if (freed.size > 0) items = items.map((i) => (freed.has(i.id) ? { ...i, ...freed.get(i.id)!, updatedAt: now() } : i));
+  }
+  return items;
+}
+
 function commit(next: Partial<SampleState>, happened: Happened[] = []): void {
   const at = now();
   const personId = state.me.id;
@@ -198,11 +226,11 @@ const api: DataApi = {
     return id;
   },
   async updateItem(id: string, patch: ItemPatch) {
-    commit({ items: state.items.map((i) => (i.id === id ? { ...i, ...patch, updatedAt: now() } : i)) });
+    commit({ items: settle(state.items, state.items.map((i) => (i.id === id ? { ...i, ...patch, updatedAt: now() } : i))) });
   },
   async updateItems(changes) {
     const byId = new Map(changes.map((c) => [c.id, c.patch]));
-    commit({ items: state.items.map((i) => (byId.has(i.id) ? { ...i, ...byId.get(i.id), updatedAt: now() } : i)) });
+    commit({ items: settle(state.items, state.items.map((i) => (byId.has(i.id) ? { ...i, ...byId.get(i.id), updatedAt: now() } : i))) });
   },
   async addVisit({ itemIds, note, ...input }) {
     const id = randomUUID();

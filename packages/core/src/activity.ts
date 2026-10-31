@@ -215,6 +215,10 @@ function fieldWords(field: string, before: string | null, after: string | null, 
       const list = parseList(after);
       return list.length > 0 ? [`Waiting on ${waitingOnText(list)}`] : [];
     }
+    case 'waiting_on_items': {
+      const titles = parseList(after).map((id) => look.items.get(id)?.title.trim() || 'another item');
+      return titles.length > 0 ? [`Waiting on ${waitingOnText(titles)}`] : [];
+    }
     case 'ready_by':
       return after ? [`Ready by ${dayWords(after, look.today)}`] : [];
     case 'po_or_co':
@@ -408,7 +412,7 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
       return done(`put ${title} on the lists`, [where, ...wordsOf(fields.filter((f) => f !== 'unfinished')), ...photoWords]);
     }
     const only = (...names: string[]) => fields.every((f) => names.includes(f));
-    if (only('ready', 'waiting_on', 'ready_by') && net.has('ready')) {
+    if (only('ready', 'waiting_on', 'waiting_on_items', 'ready_by') && net.has('ready')) {
       const ready = net.get('ready')!.after === 'true';
       const rest = ready ? [] : wordsOf(fields.filter((f) => f !== 'ready'));
       return done(`marked ${title} ${ready ? 'ready' : 'not ready'}`, [where, ...rest, ...photoWords]);

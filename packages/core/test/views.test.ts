@@ -12,7 +12,7 @@ function item(over: Partial<Item>): Item {
   n += 1;
   return {
     id: `i${n}`, jobId: 'j', locationId: 'l1', number: n, title: `Item ${n}`, description: '',
-    tradeId: 't1', companyId: 'c1', kind: 'deficiency', ready: true, waitingOn: [], readyBy: null,
+    tradeId: 't1', companyId: 'c1', kind: 'deficiency', ready: true, waitingOn: [], waitingOnItems: [], readyBy: null,
     boughtOut: true, poOrCo: null, status: 'open', completedBy: null, completedAt: null, source: 'typed',
     extra: {}, unfinished: false, visitId: null, hours: null, btExternalId: null, createdBy: 'p1', createdAt: `2026-10-29T10:00:0${n % 10}Z`, updatedAt: '2026-10-29T10:00:00Z',
     ...over,

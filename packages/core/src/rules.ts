@@ -20,6 +20,7 @@ export type ItemFields = Pick<
   | 'kind'
   | 'ready'
   | 'waitingOn'
+  | 'waitingOnItems'
   | 'readyBy'
   | 'boughtOut'
   | 'poOrCo'
@@ -43,7 +44,7 @@ export function checkItem(item: ItemFields): Problem[] {
   if (title.length > TITLE_MAX) problems.push({ field: 'title', message: `Keep the title under ${TITLE_MAX} characters` });
   if (!item.companyId && !item.unfinished) problems.push({ field: 'companyId', message: 'Pick the company' });
   if (!item.tradeId && !item.unfinished) problems.push({ field: 'tradeId', message: 'Pick the trade' });
-  if (!item.ready && item.waitingOn.every((w) => w.trim() === '')) {
+  if (!item.ready && item.waitingOn.every((w) => w.trim() === '') && item.waitingOnItems.length === 0) {
     problems.push({ field: 'waitingOn', message: 'Pick what it is waiting on' });
   }
   if (item.readyBy !== null && !/^\d{4}-\d{2}-\d{2}$/.test(item.readyBy)) {
@@ -102,8 +103,8 @@ export function tidyWaitingOn(list: string[]): string[] {
 }
 
 /**
- * Tidies an item before it saves: trims text, and a ready item drops its Waiting On and Ready By,
- * which only mean something while it is not ready.
+ * Tidies an item before it saves: trims text, and a ready item drops what it waits on and its Ready
+ * By, which only mean something while it is not ready.
  */
 export function tidyItem<T extends ItemFields>(item: T): T {
   const text = (v: string | null) => (v === null ? null : v.trim() === '' ? null : v.trim());
@@ -114,6 +115,7 @@ export function tidyItem<T extends ItemFields>(item: T): T {
     title: item.title.trim().replace(/\s+/g, ' '),
     description: item.description.trim(),
     waitingOn: tidyWaitingOn(item.waitingOn),
+    waitingOnItems: [...new Set(item.waitingOnItems)],
     readyBy: text(item.readyBy),
     poOrCo: text(item.poOrCo),
     hours: tidyHours(item.hours),
@@ -121,6 +123,7 @@ export function tidyItem<T extends ItemFields>(item: T): T {
   };
   if (out.ready) {
     out.waitingOn = [];
+    out.waitingOnItems = [];
     out.readyBy = null;
   }
   // Bought Out is not asked for: it follows the type and the order number.

@@ -1,16 +1,16 @@
 // The schedule the list builds: each company's trips to the job (visits), what is past due and by
 // how many days, and each company's plan: what is ready now, what comes free and when, what has no
 // date yet, and what needs a price. Work goes as soon as it is ready, with a day of handoff
-// buffer, and new starts get more than a day's notice. Estimated times add up for each visit and
-// each batch, and the ready work splits into full working days, location by location.
+// buffer, and new starts get more than a day's notice. Work that waits on another task comes free
+// when that task's visit is done. Estimated times add up for each visit and each batch, and the
+// ready work splits into full working days, location by location.
 
 import { addWorkingDays, daysBetween, isDay, mondayOf, visitEnd, workingDayOnOrAfter } from './dates';
-import { lineFor, type ListLine, type ListLookups } from './lists';
+import { lineFor, withItems, type ListLine, type ListLookups } from './lists';
 import { isPriced } from './rules';
 import { NO_TIME, totalTime, workDays, type TimeTotal, type WorkDay } from './time';
 import type { Item, Visit } from './types';
 import { sortItems } from './views';
-import { waitingOnText } from './waitingOn';
 
 /** Working days of notice a new start gets: Friday's plan starts Tuesday at the earliest. */
 export const NOTICE_DAYS = 2;
@@ -79,9 +79,9 @@ export interface PlannedVisit {
 }
 
 export interface ComingFree {
-  /** The soonest Ready By in the group. */
+  /** The soonest Ready By in the group: set by hand, or the day the tasks they wait on are scheduled to be done. */
   date: string;
-  /** What they wait on: "Owner and Volcano Stone". */
+  /** What they wait on: "Install range backsplash (Volcano Stone, Kitchen 109)", "Owner". */
   on: string;
   lines: ListLine[];
   time: TimeTotal;
@@ -110,6 +110,7 @@ function inFloorOrder(items: Item[], lookups: ListLookups): Item[] {
 }
 
 export function companyPlan(companyId: string, items: Item[], visits: Visit[], lookups: ListLookups, today: string): CompanyPlan {
+  lookups = { ...withItems(lookups, items, visits), today: lookups.today ?? today };
   const mine = inFloorOrder(
     items.filter((i) => i.companyId === companyId && !i.unfinished && i.status !== 'removed'),
     lookups,
@@ -139,15 +140,16 @@ export function companyPlan(companyId: string, items: Item[], visits: Visit[], l
   const coming = new Map<string, ComingFree>();
   const noDate = new Map<string, { on: string; lines: ListLine[] }>();
   for (const item of priced.filter((i) => !i.ready)) {
-    const on = waitingOnText(item.waitingOn) || 'Something not named';
-    if (isDay(item.readyBy)) {
-      const key = `${item.readyBy}|${on.toLowerCase()}`;
-      const group = coming.get(key) ?? { date: item.readyBy, on, lines: [], time: NO_TIME };
-      group.lines.push(lineFor(item, lookups));
+    const line = lineFor(item, lookups);
+    const on = line.waitingGroup || 'Something not named';
+    if (isDay(line.readyBy)) {
+      const key = `${line.readyBy}|${on.toLowerCase()}`;
+      const group = coming.get(key) ?? { date: line.readyBy, on, lines: [], time: NO_TIME };
+      group.lines.push(line);
       coming.set(key, group);
     } else {
       const group = noDate.get(on.toLowerCase()) ?? { on, lines: [] };
-      group.lines.push(lineFor(item, lookups));
+      group.lines.push(line);
       noDate.set(on.toLowerCase(), group);
     }
   }

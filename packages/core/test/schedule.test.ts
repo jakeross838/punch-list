@@ -44,7 +44,7 @@ function item(over: Partial<Item>): Item {
   n += 1;
   return {
     id: `i${n}`, jobId: 'j', locationId: 'k', number: n, title: `Item ${n}`, description: '', tradeId: 't-carp',
-    companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], readyBy: null, boughtOut: true, poOrCo: null,
+    companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], waitingOnItems: [], readyBy: null, boughtOut: true, poOrCo: null,
     status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null, hours: null,
     btExternalId: null, createdBy: 'p1', createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
   };
@@ -141,12 +141,13 @@ describe('each company plan', () => {
 
 describe('keeping the list current', () => {
   it('clears one holdup: ready when nothing else is left', () => {
-    expect(clearHoldup({ ready: false, waitingOn: ['Owner', 'Volcano Stone'], readyBy: '2026-11-02' }, 'owner')).toEqual({
+    expect(clearHoldup({ ready: false, waitingOn: ['Owner', 'Volcano Stone'], waitingOnItems: [], readyBy: '2026-11-02' }, 'owner')).toEqual({
       ready: false,
       waitingOn: ['Volcano Stone'],
+      waitingOnItems: [],
       readyBy: '2026-11-02',
     });
-    expect(clearHoldup({ ready: false, waitingOn: ['Owner'], readyBy: '2026-11-02' }, 'Owner')).toEqual({ ready: true, waitingOn: [], readyBy: null });
+    expect(clearHoldup({ ready: false, waitingOn: ['Owner'], waitingOnItems: [], readyBy: '2026-11-02' }, 'Owner')).toEqual({ ready: true, waitingOn: [], waitingOnItems: [], readyBy: null });
   });
 
   it("frees what waits on a company once its work in the room is done", () => {

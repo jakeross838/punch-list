@@ -11,6 +11,7 @@ export * from './printout';
 export * from './dates';
 export * from './schedule';
 export * from './holdups';
+export * from './holds';
 export * from './sends';
 export * from './suggest';
 export * from './activity';

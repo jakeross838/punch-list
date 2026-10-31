@@ -14,6 +14,7 @@ import {
   daysText,
   earliestStart,
   hoursText,
+  openHolds,
   startAfter,
   totalText,
   visitEnd,
@@ -29,6 +30,7 @@ import { CommentThread } from '@/components/Comments';
 import { VisitSheet, VisitStatus, type VisitDraft } from '@/components/VisitSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
+import { useHolds } from '@/data/view';
 import { EmptyState, Icon, ListRow, ListSection, Page, shortDate, Text, Touchable, weekdayDate } from '@/ui';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -46,6 +48,7 @@ export default function PlanScreen() {
   const thread = listComments(data.useComments(jobId), companyId);
 
   const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
+  const holds = useHolds(jobId);
   const plan = useMemo(() => companyPlan(companyId, items, visits, lookups, today), [companyId, items, visits, lookups, today]);
 
   // What a visit can cover: its own items and the company's work not on another visit.
@@ -214,12 +217,28 @@ export default function PlanScreen() {
         </ListSection>
       ))}
 
-      {plan.noDate.map((g) => (
-        <ListSection key={`none-${g.on}`} header={`Waiting on ${g.on}, no date yet`}>
-          {itemRows(g.lines)}
-          <ListRow title="Add a Ready By Date" tone="tint" icon="hourglass" onPress={() => openHoldup(g.lines[0]?.item.waitingOn[0] ?? g.on)} />
-        </ListSection>
-      ))}
+      {plan.noDate.map((g) => {
+        // Waiting on a task with no visit yet: it gets its date once that company is scheduled.
+        const first = g.lines[0]?.item;
+        const task = first ? openHolds(first, holds).find((t) => t.companyId && !t.visitId) : undefined;
+        const other = task?.companyId;
+        return (
+          <ListSection key={`none-${g.on}`} header={`Waiting on ${g.on}, no date yet`}>
+            {itemRows(g.lines)}
+            {other ? (
+              <ListRow
+                title={`Schedule ${holds.companies.get(other) ?? 'That Company'}`}
+                subtitle="These come free once that visit is done."
+                tone="tint"
+                icon="calendar"
+                onPress={() => router.push({ pathname: '/jobs/[jobId]/plan/[companyId]', params: { jobId, companyId: other } })}
+              />
+            ) : (
+              <ListRow title="Add a Ready By Date" tone="tint" icon="hourglass" onPress={() => openHoldup(first?.waitingOn[0] ?? g.on)} />
+            )}
+          </ListSection>
+        );
+      })}
 
       {plan.needsPrice.length > 0 ? (
         <ListSection header={`Needs a Price (${plan.needsPrice.length})`} footer="Additional work. Add its order number once it is priced.">

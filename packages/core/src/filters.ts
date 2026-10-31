@@ -5,6 +5,7 @@
 
 import { visitEnd } from './dates';
 import { KIND_LABELS, KINDS } from './forms';
+import { holdNames, type HoldLookups } from './holds';
 import { floorOf, NO_FLOOR } from './rooms';
 import { isPriced } from './rules';
 import type { Item, ItemKind, Location, Visit } from './types';
@@ -101,6 +102,8 @@ export interface FilterContext {
   photoItemIds: ReadonlySet<string>;
   /** The job's locations, for the levels. */
   locations: Pick<Location, 'id' | 'kind' | 'floor'>[];
+  /** What items wait on, so Waiting On finds an item by the company doing a task it waits on. */
+  holds?: HoldLookups;
 }
 
 /** Open and late: not ready after its Ready By, or still open after its visit ended. */
@@ -139,7 +142,10 @@ export function matchesFilters(item: Item, f: ItemFilters, ctx?: FilterContext):
     if (!f.floors.some((x) => same(x, level))) return false;
   }
   if (f.locationIds.length > 0 && !f.locationIds.includes(item.locationId)) return false;
-  if (f.waitingOn.length > 0 && (item.ready || !item.waitingOn.some((w) => f.waitingOn.some((x) => same(x, w))))) return false;
+  if (f.waitingOn.length > 0) {
+    const names = ctx?.holds ? holdNames(item, ctx.holds) : item.waitingOn;
+    if (item.ready || !names.some((w) => f.waitingOn.some((x) => same(x, w)))) return false;
+  }
   if (f.addedBy.length > 0 && !f.addedBy.includes(item.createdBy)) return false;
   if (f.photo !== null && (ctx?.photoItemIds.has(item.id) ?? false) !== f.photo) return false;
   if (f.scheduled !== null) {

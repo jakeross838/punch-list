@@ -9,12 +9,15 @@ import {
   commentCountText,
   dayOfDate,
   daysBetween,
+  holdText,
   hoursText,
   isPriced,
   KIND_LABELS,
   missingDetails,
   pastDueText,
+  readyByOf,
   waitingOnText,
+  type HoldLookups,
   type Item,
   type Photo,
 } from '@punch/core';
@@ -38,6 +41,7 @@ export const ItemRow = memo(function ItemRow({
   note,
   lateText,
   comments = 0,
+  holds,
   last,
   checking,
   onOpen,
@@ -59,6 +63,8 @@ export const ItemRow = memo(function ItemRow({
   lateText?: string;
   /** How many comments it has. */
   comments?: number;
+  /** The job's items and visits: to name the tasks it waits on and when they are scheduled. */
+  holds?: HoldLookups;
   last: boolean;
   /** Just checked: shows complete for a moment before it leaves the list. */
   checking: boolean;
@@ -85,7 +91,9 @@ export const ItemRow = memo(function ItemRow({
   const draftNote = note ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : undefined);
   const talk = comments > 0 ? commentCountText(comments) : undefined;
   const meta = (item.unfinished ? [location, draftNote, talk] : [location, company, kindText(item), talk]).filter(Boolean).join(' · ');
-  const waiting = notReady ? `Waiting on ${waitingOnText(item.waitingOn) || 'something'}${item.readyBy && !late ? `, ready by ${shortDate(item.readyBy)}` : ''}` : undefined;
+  const on = holds ? holdText(item, holds) : waitingOnText(item.waitingOn);
+  const by = holds ? readyByOf(item, holds) : item.readyBy;
+  const waiting = notReady ? `Waiting on ${on || 'something'}${by && !late ? `, ready by ${shortDate(by)}` : ''}` : undefined;
 
   const actions: SwipeAction[] = open
     ? [

@@ -4,9 +4,9 @@
 // added scope that needs a price, so the work can be scheduled in batches and in the right order.
 
 import { matchesFilters, type FilterContext, type ItemFilters } from './filters';
+import { holdLookups, holdText, readyByOf, type HoldLookups } from './holds';
 import { isPriced } from './rules';
-import type { Company, Item, Location, Trade } from './types';
-import { waitingOnText } from './waitingOn';
+import type { Company, Item, Location, Trade, Visit } from './types';
 import { floorOf, NO_FLOOR } from './rooms';
 import { sortItems } from './views';
 
@@ -14,6 +14,14 @@ export interface ListLookups {
   locations: Location[];
   trades: Trade[];
   companies: Company[];
+  /**
+   * The job's items and visits. With them a line names the tasks it waits on and, from their
+   * visits, when it should be ready.
+   */
+  items?: Item[];
+  visits?: Visit[];
+  /** Today, for those dates. */
+  today?: string;
 }
 
 export interface ListLine {
@@ -22,7 +30,29 @@ export interface ListLine {
   floor: string;
   trade: string;
   company: string;
+  /** What it waits on, as it reads after "Waiting on"; empty when it is ready. */
+  waiting: string;
+  /** The same, saying where every task is: for a heading over items from several locations. */
+  waitingGroup: string;
+  /** When it should be ready: its own Ready By, or the day the tasks it waits on are scheduled to be done. */
+  readyBy: string | null;
 }
+
+const holdCache = new WeakMap<ListLookups, HoldLookups>();
+
+/** What items wait on, looked up once for each set of list lookups. */
+export function holdsFor(lookups: ListLookups): HoldLookups {
+  let look = holdCache.get(lookups);
+  if (!look) {
+    look = holdLookups({ items: lookups.items ?? [], companies: lookups.companies, locations: lookups.locations, visits: lookups.visits, today: lookups.today });
+    holdCache.set(lookups, look);
+  }
+  return look;
+}
+
+/** The lookups with the job's items (and visits) in them, when they were not there already. */
+export const withItems = (lookups: ListLookups, items: Item[], visits?: Visit[]): ListLookups =>
+  lookups.items && (lookups.visits || !visits) ? lookups : { ...lookups, items: lookups.items ?? items, visits: lookups.visits ?? visits };
 
 export interface WaitingGroup {
   /** What these items wait on, as it reads: "Owner and Volcano Stone". */
@@ -49,12 +79,16 @@ export const onLists = (item: Item) => item.status === 'open' && !item.unfinishe
 
 export function lineFor(item: Item, lookups: ListLookups): ListLine {
   const room = lookups.locations.find((l) => l.id === item.locationId);
+  const look = holdsFor(lookups);
   return {
     item,
     room: room?.label ?? 'Not set',
     floor: room ? floorOf(room) : NO_FLOOR,
     trade: lookups.trades.find((t) => t.id === item.tradeId)?.name ?? 'Not set',
     company: lookups.companies.find((c) => c.id === item.companyId)?.name ?? 'Not set',
+    waiting: item.ready ? '' : holdText(item, look),
+    waitingGroup: item.ready ? '' : holdText(item, look, { everywhere: true }),
+    readyBy: readyByOf(item, look),
   };
 }
 
@@ -66,17 +100,19 @@ function inFloorOrder(items: Item[], lookups: ListLookups): Item[] {
 }
 
 export function companyList(companyId: string, items: Item[], lookups: ListLookups): CompanyList {
+  const look = withItems(lookups, items);
   const open = items.filter((i) => onLists(i) && i.companyId === companyId);
-  const sorted = inFloorOrder(open, lookups);
+  const sorted = inFloorOrder(open, look);
   const priced = sorted.filter((i) => isPriced(i));
-  const ready = priced.filter((i) => i.ready).map((i) => lineFor(i, lookups));
+  const ready = priced.filter((i) => i.ready).map((i) => lineFor(i, look));
   const groups = new Map<string, WaitingGroup>();
   for (const item of priced.filter((i) => !i.ready)) {
-    const on = waitingOnText(item.waitingOn) || 'Something not named';
+    const line = lineFor(item, look);
+    const on = line.waitingGroup || 'Something not named';
     const key = on.toLowerCase();
     const group = groups.get(key) ?? { on, readyBy: null, lines: [] };
-    group.lines.push(lineFor(item, lookups));
-    if (item.readyBy && (!group.readyBy || item.readyBy < group.readyBy)) group.readyBy = item.readyBy;
+    group.lines.push(line);
+    if (line.readyBy && (!group.readyBy || line.readyBy < group.readyBy)) group.readyBy = line.readyBy;
     groups.set(key, group);
   }
   const waiting = [...groups.values()].sort(
@@ -89,7 +125,7 @@ export function companyList(companyId: string, items: Item[], lookups: ListLooku
     trades,
     ready,
     waiting,
-    needsPrice: sorted.filter((i) => !isPriced(i)).map((i) => lineFor(i, lookups)),
+    needsPrice: sorted.filter((i) => !isPriced(i)).map((i) => lineFor(i, look)),
     open: open.length,
   };
 }
@@ -145,17 +181,19 @@ export function partiesWaitedOn(items: Item[], lookups: ListLookups): { party: s
 
 /** The items waiting on one party, the soonest Ready By first, then floor order. */
 export function partyList(party: string, items: Item[], lookups: ListLookups): ListLine[] {
+  const look = withItems(lookups, items);
   const key = party.trim().toLowerCase();
   const waiting = items.filter((i) => onLists(i) && !i.ready && i.waitingOn.some((w) => w.trim().toLowerCase() === key));
-  return inFloorOrder(waiting, lookups)
-    .sort((a, b) => (a.readyBy ?? '9999').localeCompare(b.readyBy ?? '9999'))
-    .map((i) => lineFor(i, lookups));
+  return inFloorOrder(waiting, look)
+    .map((i) => lineFor(i, look))
+    .sort((a, b) => (a.readyBy ?? '9999').localeCompare(b.readyBy ?? '9999'));
 }
 
 /** Every open, finished item on the job, in floor order, then by trade. */
 export function jobList(items: Item[], lookups: ListLookups): ListLine[] {
+  const look = withItems(lookups, items);
   const open = items.filter(onLists);
-  const lines = inFloorOrder(open, lookups).map((i) => lineFor(i, lookups));
+  const lines = inFloorOrder(open, look).map((i) => lineFor(i, look));
   const order = new Map(lookups.locations.map((l) => [l.id, l.sortOrder]));
   return lines.sort(
     (a, b) => (order.get(a.item.locationId) ?? 1e9) - (order.get(b.item.locationId) ?? 1e9) || a.trade.localeCompare(b.trade),
@@ -172,8 +210,9 @@ export function filteredLines(
   lookups: ListLookups,
   options: { context?: FilterContext; completed?: boolean } = {},
 ): ListLine[] {
+  const look = withItems(lookups, items);
   const chosen = items.filter(
     (i) => !i.unfinished && (i.status === 'open' || (options.completed === true && i.status === 'complete')) && matchesFilters(i, filters, options.context),
   );
-  return inFloorOrder(chosen, lookups).map((i) => lineFor(i, lookups));
+  return inFloorOrder(chosen, look).map((i) => lineFor(i, look));
 }

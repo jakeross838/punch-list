@@ -195,7 +195,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
     });
     if (ok) {
       haptic.success();
-      release(item);
+      release(item, () => void setStatus(reopen));
     }
   }
 

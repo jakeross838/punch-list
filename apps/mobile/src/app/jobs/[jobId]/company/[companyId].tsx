@@ -6,12 +6,12 @@
 
 import {
   companyList,
+  dayOfDate,
   isDay,
   isShared,
   itemComments,
   listComments,
   visitEnd,
-  waitingOnText,
   type Comment,
   type ListLine,
   type Photo,
@@ -38,7 +38,8 @@ export default function CompanyPageScreen() {
   const [name, setName] = useState('');
 
   const company = companies.find((c) => c.id === companyId);
-  const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
+  const today = dayOfDate(new Date());
+  const lookups = useMemo(() => ({ locations, trades, companies, items, visits, today }), [locations, trades, companies, items, visits, today]);
   const list = useMemo(() => companyList(companyId, items, lookups), [companyId, items, lookups]);
   const ownVisits = visits.filter((v) => v.companyId === companyId).sort((a, b) => a.start.localeCompare(b.start));
   const shared = comments.filter(isShared);
@@ -118,7 +119,7 @@ export default function CompanyPageScreen() {
 function TradeItem({ line, photo, comments, onPost }: { line: ListLine; photo?: Photo; comments: Comment[]; onPost: (body: string) => void }) {
   const [open, setOpen] = useState(false);
   const { item } = line;
-  const waiting = item.ready ? null : `Waiting on ${waitingOnText(item.waitingOn) || 'something'}${isDay(item.readyBy) ? `, ready by ${shortDate(item.readyBy)}` : ''}`;
+  const waiting = item.ready ? null : `Waiting on ${line.waiting || 'something'}${isDay(line.readyBy) ? `, ready by ${shortDate(line.readyBy)}` : ''}`;
   return (
     <View style={styles.card} testID={`company-item-${item.id}`}>
       <View style={styles.cardTop}>

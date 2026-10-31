@@ -379,6 +379,78 @@ begin
   end;
 end $$;
 
+-- ---------- waiting on other tasks ----------
+do $$
+declare
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  j uuid := (select id from public.jobs where name = 'Fish');
+  j2 uuid := (select id from public.jobs where name = 'Biales');
+  t uuid := (select id from public.trades where name = 'Plumbing');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  loc uuid := (select id from public.locations where job_id = j order by sort_order limit 1);
+  loc2 uuid := (select id from public.locations where job_id = j2 order by sort_order limit 1);
+  stops uuid; sinks uuid; faucets uuid; caulk uuid; away uuid; x uuid; y uuid;
+begin
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready) values (j, loc, 'Set supply stops', t, c, true) returning id into stops;
+  -- A task it waits on is enough to be not ready; each task is kept once.
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready, waiting_on_items)
+    values (j, loc, 'Install vanity sinks', t, c, false, array[stops, stops]) returning id into sinks;
+  if (select waiting_on_items from public.items where id = sinks) <> array[stops] then raise exception 'FAIL: a task it waits on was kept twice'; end if;
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready, waiting_on_items, waiting_on)
+    values (j, loc, 'Install faucets', t, c, false, array[sinks], array['Owner']) returning id into faucets;
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready, waiting_on_items)
+    values (j, loc, 'Caulk vanity sinks', t, c, false, array[faucets]) returning id into caulk;
+
+  -- Never on itself, never in a loop, never on another job's item or one that is not there.
+  begin
+    update public.items set waiting_on_items = array[sinks] where id = sinks;
+    raise exception 'FAIL: an item waited on itself';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.items set ready = false, waiting_on_items = array[caulk] where id = stops;
+    raise exception 'FAIL: items waited on each other in a loop';
+  exception when check_violation then null;
+  end;
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready) values (j2, loc2, 'Paint garage door', t, c, true) returning id into away;
+  begin
+    update public.items set waiting_on_items = array[away] where id = caulk;
+    raise exception 'FAIL: an item waited on another job''s item';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.items set waiting_on_items = array[gen_random_uuid()] where id = caulk;
+    raise exception 'FAIL: an item waited on an item that is not there';
+  exception when check_violation then null;
+  end;
+
+  -- The stops done: the sinks are ready, logged under who finished them. The faucets still wait on the sinks.
+  update public.items set status = 'complete' where id = stops;
+  if not (select ready from public.items where id = sinks) or (select cardinality(waiting_on_items) from public.items where id = sinks) <> 0 then
+    raise exception 'FAIL: finishing a task did not free what waited on it';
+  end if;
+  if not exists (select 1 from public.item_history where item_id = sinks and field = 'ready' and after = 'true' and person_id = jake) then
+    raise exception 'FAIL: freeing an item was not logged under who finished the task';
+  end if;
+  if (select waiting_on_items from public.items where id = faucets) <> array[sinks] then raise exception 'FAIL: the faucets stopped waiting too soon'; end if;
+  -- The sinks done: the faucets still wait on the owner.
+  update public.items set status = 'complete' where id = sinks;
+  if (select ready from public.items where id = faucets) or (select waiting_on from public.items where id = faucets) <> array['Owner']
+     or (select cardinality(waiting_on_items) from public.items where id = faucets) <> 0 then
+    raise exception 'FAIL: an item still waiting on the owner was marked ready';
+  end if;
+
+  -- A removed task frees what waited on it too, and a ready item waits on nothing.
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready) values (j, loc, 'Install shutoff valve', t, c, true) returning id into y;
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready, waiting_on_items)
+    values (j, loc, 'Install water heater', t, c, false, array[y]) returning id into x;
+  update public.items set status = 'removed' where id = y;
+  if not (select ready from public.items where id = x) then raise exception 'FAIL: removing a task did not free what waited on it'; end if;
+  update public.items set ready = false, waiting_on_items = array[caulk] where id = x;
+  update public.items set ready = true where id = x;
+  if (select cardinality(waiting_on_items) from public.items where id = x) <> 0 then raise exception 'FAIL: a ready item still waits on a task'; end if;
+end $$;
+
 -- ---------- comments, and the company's own page ----------
 do $$
 declare
@@ -456,6 +528,13 @@ begin
   if page -> 'company' ->> 'name' <> 'Gator Plumbing' or page -> 'job' ->> 'name' <> 'Fish' then raise exception 'FAIL: the page is for the wrong company or job'; end if;
   if exists (select 1 from jsonb_array_elements(page -> 'items') x where x ->> 'title' = 'Touch up paint') then
     raise exception 'FAIL: the page shows another company''s work';
+  end if;
+  -- What an item waits on: the task, who is doing it and where.
+  if not exists (
+    select 1 from jsonb_array_elements(page -> 'items') x
+    where x ->> 'title' = 'Caulk vanity sinks' and x -> 'waiting_for' -> 0 ->> 'title' = 'Install faucets' and x -> 'waiting_for' -> 0 ->> 'company' = 'Gator Plumbing'
+  ) then
+    raise exception 'FAIL: the page does not say which task an item waits on';
   end if;
   -- Never a Ross Built only note or one taken back.
   select array_agg(x ->> 'body') into shared from jsonb_array_elements(page -> 'comments') x;

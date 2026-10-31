@@ -69,6 +69,7 @@ export const rowToItem = (r: Row): Item => ({
   kind: r.kind === 'added_scope' || r.kind === 'completion' ? r.kind : 'deficiency',
   ready: bool(r.ready),
   waitingOn: waitingList(r.waiting_on),
+  waitingOnItems: waitingList(r.waiting_on_items),
   readyBy: textOrNull(r.ready_by),
   boughtOut: bool(r.bought_out),
   poOrCo: textOrNull(r.po_or_co),
@@ -95,6 +96,7 @@ const ITEM_COLUMNS: Record<keyof ItemPatch, string> = {
   kind: 'kind',
   ready: 'ready',
   waitingOn: 'waiting_on',
+  waitingOnItems: 'waiting_on_items',
   readyBy: 'ready_by',
   boughtOut: 'bought_out',
   poOrCo: 'po_or_co',
@@ -236,7 +238,7 @@ export const BOOLEAN_COLUMNS: Record<string, string[]> = {
 
 /** Columns the server keeps as JSON; the phone stores them as text. */
 export const JSON_COLUMNS: Record<string, string[]> = {
-  items: ['extra', 'waiting_on'],
+  items: ['extra', 'waiting_on', 'waiting_on_items'],
   list_sends: ['item_ids'],
   custom_fields: ['options'],
   photos: ['marks'],

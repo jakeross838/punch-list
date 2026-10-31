@@ -335,9 +335,12 @@ export function ItemEditor({
       {showReady && (shows('ready') || !value.ready) ? (
         <ListSection footer={sentence(problem('waitingOn') ?? problem('readyBy'))} footerTone="danger">
           <ReadyRow
-            value={{ ready: value.ready, waitingOn: value.waitingOn, readyBy: value.readyBy }}
+            jobId={jobId}
+            itemId={itemId}
+            locationId={value.locationId}
+            value={{ ready: value.ready, waitingOn: value.waitingOn, waitingOnItems: value.waitingOnItems, readyBy: value.readyBy }}
             onChange={(next) => set(next)}
-            choices={options.waitingOptions.map((o) => o.label)}
+            extras={extras.length > 0 ? extras : [...DEFAULT_WAITING_ON_EXTRAS]}
             onAddChoice={(label) => void data.setWaitingOnExtras(jobId, [...(extras.length > 0 ? extras : DEFAULT_WAITING_ON_EXTRAS), label])}
           />
         </ListSection>

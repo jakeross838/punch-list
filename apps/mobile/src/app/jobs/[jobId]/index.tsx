@@ -35,7 +35,7 @@ import { ViewSheet } from '@/components/ViewSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
-import { useFilterContext, useJobView } from '@/data/view';
+import { useFilterContext, useHolds, useJobView } from '@/data/view';
 import { Button, EmptyState, Icon, Page, Text, Touchable, type BarMenu, type IconName } from '@/ui';
 
 const GROUP_ICONS: Record<GroupBy, IconName> = { room: 'rooms', trade: 'wrench', company: 'person.2.fill', waiting: 'hourglass' };
@@ -86,6 +86,7 @@ export default function JobScreen() {
   const [sheet, setSheet] = useState(false);
   const actions = useItemActions(jobId);
   const commentsOn = commentCounts(data.useComments(jobId));
+  const holds = useHolds(jobId);
 
   const names = useMemo(() => {
     const map = new Map<string, string>();
@@ -285,6 +286,7 @@ export default function JobScreen() {
                   item={item}
                   photo={firstPhoto.get(item.id)}
                   comments={commentsOn.get(item.id)}
+                  holds={holds}
                   company={names(item.companyId) || undefined}
                   last={index === section.data.length - 1}
                   checking={actions.checking.has(item.id)}

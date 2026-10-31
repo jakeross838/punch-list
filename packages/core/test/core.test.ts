@@ -29,7 +29,7 @@ function item(over: Partial<ItemFields> = {}): ItemFields {
     companyId: 'c-gator',
     kind: 'deficiency',
     ready: true,
-    waitingOn: [],
+    waitingOn: [], waitingOnItems: [],
     readyBy: null,
     boughtOut: true,
     poOrCo: null,
@@ -137,7 +137,7 @@ describe('item rules', () => {
 
   it('drops Waiting On and Ready By once an item is ready', () => {
     const tidied = tidyItem(item({ ready: true, waitingOn: ['Owner'], readyBy: '2026-11-02', title: '  Install   toilet ' }));
-    expect(tidied).toMatchObject({ waitingOn: [], readyBy: null, title: 'Install toilet' });
+    expect(tidied).toMatchObject({ waitingOn: [], waitingOnItems: [], readyBy: null, title: 'Install toilet' });
   });
 
   it('sets Bought Out from the type picked', () => {

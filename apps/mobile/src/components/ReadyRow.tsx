@@ -1,36 +1,48 @@
-// Ready, as a checkbox. Checked: it can be done now. Unchecking opens the Not Ready box to say what
-// it is waiting on and when; tap the line under it to change that later.
+// Ready, as a checkbox. Checked: it can be done now. Unchecking opens Not Ready to say what has to
+// be done first (usually one task) and when; tap the line under it to change that later.
 
-import { dayOfDate, daysBetween, pastDueText, waitingOnText } from '@punch/core';
+import { dayOfDate, daysBetween, holdText, pastDueText, readyByOf } from '@punch/core';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
+import { useHolds } from '@/data/view';
 import { Checkbox, haptic, isBeforeToday, shortDate, Text, Touchable } from '@/ui';
 import { NotReadyBox } from './NotReadyBox';
 
 export interface ReadyState {
   ready: boolean;
   waitingOn: string[];
+  waitingOnItems: string[];
   readyBy: string | null;
 }
 
 export function ReadyRow({
+  jobId,
+  itemId,
+  locationId,
   value,
   onChange,
-  choices,
+  extras,
   onAddChoice,
 }: {
+  jobId: string;
+  /** The item itself; none for a new item. */
+  itemId?: string;
+  locationId: string;
   value: ReadyState;
   onChange: (next: ReadyState) => void;
-  choices: string[];
+  /** Who things can wait on that is not a task: Ross Built, Owner, the design team. */
+  extras: string[];
   onAddChoice: (label: string) => void;
 }) {
+  const holds = useHolds(jobId);
   const [asking, setAsking] = useState(false);
-  const late = !value.ready && value.readyBy !== null && isBeforeToday(value.readyBy);
-  const lateText = late && value.readyBy ? `, ${pastDueText(daysBetween(value.readyBy, dayOfDate(new Date())))}` : '';
-  const summary = value.ready
-    ? 'It can be done now.'
-    : `Waiting on ${waitingOnText(value.waitingOn) || 'something'}${value.readyBy ? `, ready by ${shortDate(value.readyBy)}${lateText}` : ''}`;
+  const own = value.readyBy;
+  const late = !value.ready && own !== null && isBeforeToday(own);
+  const lateText = late && own ? `, ${pastDueText(daysBetween(own, dayOfDate(new Date())))}` : '';
+  const by = value.ready ? null : readyByOf({ ...value }, holds);
+  const on = holdText({ ...value, locationId }, holds);
+  const summary = value.ready ? 'It can be done now.' : `Waiting on ${on || 'something'}${by ? `, ready by ${shortDate(by)}${lateText}` : ''}`;
 
   function tapBox() {
     if (value.ready) {
@@ -38,7 +50,7 @@ export function ReadyRow({
       return;
     }
     haptic.tap();
-    onChange({ ready: true, waitingOn: [], readyBy: null });
+    onChange({ ready: true, waitingOn: [], waitingOnItems: [], readyBy: null });
   }
 
   return (
@@ -59,15 +71,18 @@ export function ReadyRow({
       </Touchable>
       <NotReadyBox
         visible={asking}
-        choices={choices}
-        waitingOn={value.waitingOn}
-        readyBy={value.readyBy}
+        jobId={jobId}
+        itemId={itemId}
+        locationId={locationId}
+        value={value}
+        holds={holds}
+        extras={extras}
         onAddChoice={onAddChoice}
         onCancel={() => setAsking(false)}
-        onDone={(waitingOn, readyBy) => {
+        onDone={(next) => {
           setAsking(false);
           haptic.tap();
-          onChange({ ready: false, waitingOn, readyBy });
+          onChange({ ready: false, ...next });
         }}
       />
     </View>

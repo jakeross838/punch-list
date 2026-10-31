@@ -4,6 +4,7 @@
 
 import {
   floorOf,
+  holdNames,
   KIND_LABELS,
   KINDS,
   setYesNo,
@@ -19,6 +20,7 @@ import { useMemo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
+import { useHolds } from '@/data/view';
 import { Chip, haptic, Text } from '@/ui';
 
 export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter' }: { jobId: string; filters: ItemFilters; onChange: (next: ItemFilters) => void; testPrefix?: string }) {
@@ -29,6 +31,7 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
   const companies = data.useCompanies();
   const trades = data.useTrades();
   const people = data.usePeople();
+  const holds = useHolds(jobId);
   const { companyIds, tradeIds, floors, locationIds, waitingOn, addedBy } = f;
 
   // The choices come from the job: its companies, trades, levels and locations, what its work waits
@@ -47,7 +50,8 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
     }
     const levelNames = levels.map((x) => x.floor);
     const waits = new Map<string, string>();
-    for (const i of live) if (i.status === 'open' && !i.ready) for (const w of i.waitingOn) if (!waits.has(w.toLowerCase())) waits.set(w.toLowerCase(), w);
+    // Who holds work up: the company doing a task it waits on, or the name it waits on.
+    for (const i of live) if (i.status === 'open' && !i.ready) for (const w of holdNames(i, holds)) if (!waits.has(w.toLowerCase())) waits.set(w.toLowerCase(), w);
     const adders = new Set(live.map((i) => i.createdBy));
     return {
       companies: companies.filter((c) => onJob.has(c.id) || companyIds.includes(c.id)).sort((a, b) => a.name.localeCompare(b.name)),
@@ -57,7 +61,7 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
       waiting: [...[...waits.values()].sort((a, b) => a.localeCompare(b)), ...waitingOn.filter((w) => !waits.has(w.toLowerCase()))],
       people: people.filter((p) => adders.has(p.id) || addedBy.includes(p.id)),
     };
-  }, [items, locations, jobCompanies, companies, trades, people, companyIds, tradeIds, floors, locationIds, waitingOn, addedBy]);
+  }, [items, locations, jobCompanies, companies, trades, people, holds, companyIds, tradeIds, floors, locationIds, waitingOn, addedBy]);
 
   const toggle = <K extends ListFacet>(facet: K, value: ItemFilters[K][number]) => {
     haptic.selection();

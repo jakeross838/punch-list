@@ -70,6 +70,8 @@ const items = new Table(
     kind: column.text,
     ready: column.integer,
     waiting_on: column.text,
+    /** JSON: the ids of the tasks that have to be done first. */
+    waiting_on_items: column.text,
     ready_by: column.text,
     bought_out: column.integer,
     po_or_co: column.text,

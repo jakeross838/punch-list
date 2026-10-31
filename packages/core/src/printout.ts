@@ -155,14 +155,14 @@ function workCell(line: ListLine, settings: PrintSettings): string {
   return parts.join('');
 }
 
+/** Ready, or what it waits on and when it should be ready; past due only by its own Ready By. */
 function readyCell(line: ListLine, today: Date): string {
   const { item } = line;
   if (item.ready) return 'Ready';
-  const on = waitingOnText(item.waitingOn) || 'something not named';
-  let text = `Waiting on ${on}`;
-  if (isDay(item.readyBy)) {
-    text += `, ready by ${dayText(item.readyBy, today)}`;
-    const late = daysBetween(item.readyBy, dayOfDate(today));
+  let text = `Waiting on ${line.waiting || 'something not named'}`;
+  if (isDay(line.readyBy)) {
+    text += `, ready by ${dayText(line.readyBy, today)}`;
+    const late = line.readyBy === item.readyBy ? daysBetween(line.readyBy, dayOfDate(today)) : 0;
     if (late > 0) return `${esc(text)}, <span class="rb-late">${late} ${late === 1 ? 'day' : 'days'} past due</span>`;
   }
   return esc(text);
@@ -322,7 +322,7 @@ export function partyPrintout(party: string, lines: ListLine[], settings: PrintS
     { label: 'Item', width: '0.55in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
     { label: 'Location', width: '1.3in', cell: (l) => esc(l.room) },
     { label: 'Work', cell: (l) => workCell(l, settings) },
-    { label: 'Needed By', width: '1.05in', cell: (l) => esc(isDay(l.item.readyBy) ? dayText(l.item.readyBy, settings.date) : 'When you can') },
+    { label: 'Needed By', width: '1.05in', cell: (l) => esc(isDay(l.readyBy) ? dayText(l.readyBy, settings.date) : 'When you can') },
     ...photoColumn(settings),
   ];
   const summary =
@@ -430,8 +430,8 @@ function groupLines(lines: ListLine[], by: ListGroupBy): LineGroup[] {
         else if (!isPriced(item)) add('price', 'Needs a Price', line, 3);
         else if (item.ready) add('ready', 'Ready', line, 0);
         else {
-          const on = waitingOnText(item.waitingOn) || 'something not named';
-          add(`waiting:${on.toLowerCase()}`, `Waiting on ${on}`, line, 1, { readyBy: isDay(item.readyBy) ? item.readyBy : null });
+          const on = line.waitingGroup || 'something not named';
+          add(`waiting:${on.toLowerCase()}`, `Waiting on ${on}`, line, 1, { readyBy: isDay(line.readyBy) ? line.readyBy : null });
         }
         break;
       }

@@ -1,20 +1,30 @@
 // Keeping the list current with less work: a holdup is cleared once for every item it holds up,
 // finished work frees what was waiting on it in that room, and the same item is not written twice.
 
-import { tidyWaitingOn, type ItemFields as Fields } from './rules';
+import { READY, type HoldFields, type HoldLookups } from './holds';
+import { tidyWaitingOn } from './rules';
 import { tidyTitle } from './titles';
 import type { Item } from './types';
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /**
- * One holdup is done: it comes off the item's Waiting On. With nothing else left to wait on, the
- * item is ready.
+ * One holdup is done: it comes off what the item waits on, whether it is a name it waits on or the
+ * company doing a task it waits on (with the lookups to tell). With nothing else left to wait on,
+ * the item is ready.
  */
-export function clearHoldup(item: Pick<Fields, 'ready' | 'waitingOn' | 'readyBy'>, holdup: string): Pick<Fields, 'ready' | 'waitingOn' | 'readyBy'> {
+export function clearHoldup(item: HoldFields, holdup: string, look?: HoldLookups): HoldFields {
   const waitingOn = item.waitingOn.filter((w) => !same(w, holdup));
-  if (waitingOn.length === 0) return { ready: true, waitingOn: [], readyBy: null };
-  return { ready: false, waitingOn, readyBy: item.readyBy };
+  const waitingOnItems = look
+    ? item.waitingOnItems.filter((id) => {
+        const task = look.items.get(id);
+        if (!task || task.status !== 'open') return false;
+        const company = task.companyId ? look.companies.get(task.companyId) : undefined;
+        return !(company && same(company, holdup));
+      })
+    : item.waitingOnItems;
+  if (waitingOn.length === 0 && waitingOnItems.length === 0) return READY;
+  return { ready: false, waitingOn, waitingOnItems, readyBy: item.readyBy };
 }
 
 /**

@@ -32,7 +32,7 @@ const look = { people: new Map([['jake', 'Jake Ross']]), companies: new Map([['c
 
 const door: Item = {
   id: 'door', jobId: 'j', locationId: 'k', number: 16, title: 'Adjust cabinet door', description: 'The right door rubs the hood.', tradeId: 't-carp',
-  companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], readyBy: null, boughtOut: true, poOrCo: null, status: 'open',
+  companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], waitingOnItems: [], readyBy: null, boughtOut: true, poOrCo: null, status: 'open',
   completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null, hours: 0.5, btExternalId: null,
   createdBy: 'jake', createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z',
 };

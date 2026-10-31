@@ -2,7 +2,7 @@
 // opens the way the person saved as their default; changes last until the app closes. Save as My
 // Default keeps the current view for every job.
 
-import { dayOfDate, type FilterContext, type ViewSettings } from '@punch/core';
+import { dayOfDate, holdLookups, type FilterContext, type HoldLookups, type ViewSettings } from '@punch/core';
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { useData } from './api';
 
@@ -28,12 +28,30 @@ export function useJobView(jobId: string, saved: ViewSettings): [ViewSettings, (
   return [view, setView];
 }
 
-/** What the filters and totals need on a job: today, its visits, which items have a photo, its locations. */
+/**
+ * What items on a job wait on, looked up once: the tasks (with who is doing them, where, and their
+ * visits) and today, for the lines that say "Waiting on Install range backsplash (Volcano Stone)".
+ */
+export function useHolds(jobId: string): HoldLookups {
+  const data = useData();
+  const items = data.useItems(jobId);
+  const companies = data.useCompanies();
+  const locations = data.useLocations(jobId);
+  const visits = data.useVisits(jobId);
+  const today = dayOfDate(new Date());
+  return useMemo(() => holdLookups({ items, companies, locations, visits, today }), [items, companies, locations, visits, today]);
+}
+
+/** What the filters and totals need on a job: today, its visits, which items have a photo, its locations, what items wait on. */
 export function useFilterContext(jobId: string): FilterContext {
   const data = useData();
   const visits = data.useVisits(jobId);
   const photos = data.usePhotos(jobId);
   const locations = data.useLocations(jobId);
+  const holds = useHolds(jobId);
   const today = dayOfDate(new Date());
-  return useMemo(() => ({ today, visits, photoItemIds: new Set(photos.map((p) => p.itemId)), locations }), [today, visits, photos, locations]);
+  return useMemo(
+    () => ({ today, visits, photoItemIds: new Set(photos.map((p) => p.itemId)), locations, holds }),
+    [today, visits, photos, locations, holds],
+  );
 }

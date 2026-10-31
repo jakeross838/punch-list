@@ -15,6 +15,7 @@ import {
   companyList,
   companyPrintout,
   customPrintout,
+  dayOfDate,
   DEFAULT_LIST_DESIGN,
   filterChips,
   filteredLines,
@@ -99,7 +100,9 @@ export default function SendScreen() {
   const names = useFilterNames(jobId);
   const [draft, setDraft] = useState<ListDraft | null>(null);
 
-  const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
+  const today = dayOfDate(new Date());
+  // With the items and visits, every list says which tasks an item waits on and when they are scheduled.
+  const lookups = useMemo(() => ({ locations, trades, companies, items, visits, today }), [locations, trades, companies, items, visits, today]);
   const look = useMemo(
     () => ({ people: new Map(people.map((p) => [p.id, p.name])), companies: new Map(companies.map((c) => [c.id, c.name])) }),
     [people, companies],

@@ -12,7 +12,7 @@ const item = (over: Partial<Item> = {}): Item => ({
   companyId: 'triple-h',
   kind: 'deficiency',
   ready: true,
-  waitingOn: [],
+  waitingOn: [], waitingOnItems: [],
   readyBy: null,
   boughtOut: true,
   poOrCo: null,

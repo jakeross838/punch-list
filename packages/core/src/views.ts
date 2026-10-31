@@ -3,12 +3,13 @@
 // in. Every location shows, even an empty one, so items can be added to it. Show Completed (as in
 // Reminders) adds completed items that fit the filters, after the open ones. By Waiting On shows what
 // is ready now and what needs a price, then each thing holding work up with the items it holds up (an
-// item waiting on two things is under both): the late ones first, then the biggest. That is the order
-// to clear them in. Each group carries its totals: how many are open, ready and past due, and their
+// item waiting on two things is under both; a task it waits on counts as the company doing it): the
+// late ones first, then the biggest. That is the order to clear them in. Each group carries its totals: how many are open, ready and past due, and their
 // estimated time.
 
 import { daysBetween } from './dates';
 import { isPastDue, matchesFilters, NO_FILTERS, readFilters, sameFilters, type FilterContext, type ItemFilters } from './filters';
+import { holdLookups, holdNames, type HoldLookups } from './holds';
 import { floorOf, NO_FLOOR } from './rooms';
 import { isPriced } from './rules';
 import { NO_TIME, totalTime, type TimeTotal } from './time';
@@ -100,6 +101,9 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
   const live = items.filter(
     (i) => i.status !== 'removed' && !i.unfinished && (i.status === 'open' || options.showCompleted) && matchesFilters(i, filters, context),
   );
+  // Who holds each item up: the company doing each task it waits on, or the name it waits on.
+  let look: HoldLookups | undefined;
+  const holds = () => (look ??= context?.holds ?? holdLookups({ items, companies: lookups.companies, locations: lookups.locations }));
   const keysOf = (i: Item): string[] => {
     switch (by) {
       case 'room':
@@ -110,7 +114,7 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
         return [i.companyId ?? 'none'];
       case 'waiting': {
         if (i.status === 'complete') return ['complete'];
-        const keys = i.ready || i.waitingOn.length === 0 ? [] : i.waitingOn.map(waitingKey);
+        const keys = i.ready ? [] : holdNames(i, holds()).map(waitingKey);
         if (!isPriced(i)) return ['price', ...keys];
         return keys.length > 0 ? keys : ['ready'];
       }
@@ -126,7 +130,7 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
       list.push(item);
       groups.set(k, list);
     }
-    if (by === 'waiting') for (const w of item.waitingOn) if (!waitingLabels.has(waitingKey(w))) waitingLabels.set(waitingKey(w), w.trim());
+    if (by === 'waiting' && !item.ready) for (const w of holdNames(item, holds())) if (!waitingLabels.has(waitingKey(w))) waitingLabels.set(waitingKey(w), w);
   }
 
   let order: Array<{ key: string; label: string }>;

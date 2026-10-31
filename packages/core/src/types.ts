@@ -68,8 +68,10 @@ export interface Item {
   companyId: string | null;
   kind: ItemKind;
   ready: boolean;
-  /** Everything it is waiting on, one or several: a company on the job, Ross Built, the owner, the design team. */
+  /** Who it waits on, for what is not a task on the list: the owner, the design team, Ross Built, someone else. */
   waitingOn: string[];
+  /** The tasks that have to be done first, usually one: the ids of other items on the job. */
+  waitingOnItems: string[];
   readyBy: string | null;
   /** Follows the type and the order number: additional work is Bought Out once it has one. Kept for Buildertrend. */
   boughtOut: boolean;

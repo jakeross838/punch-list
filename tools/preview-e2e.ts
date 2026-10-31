@@ -185,24 +185,28 @@ async function main(): Promise<void> {
       await app.getByTestId('item-item-16').waitFor();
       await settle();
     });
-    await step('an item edits in place: Ready is a checkbox, Not Ready asks what it waits on', async () => {
+    await step('an item edits in place: Ready is a checkbox, Not Ready picks the task to be done first', async () => {
       await app.getByTestId('item-item-1').click();
       await app.getByTestId('mark-complete').waitFor();
+      // It waits on the range backsplash, so it is ready by the day the backsplash's visit is done.
+      await app.getByText(/^Waiting on Install range backsplash \(Volcano Stone\), ready by [A-Z][a-z]+ \d+$/).last().waitFor();
       await settle();
       await shot('08-item');
       await app.getByTestId('ready-check').click();
       await app.getByText('It can be done now.').waitFor();
       await app.getByTestId('ready-check').click();
       await app.getByTestId('not-ready-box').waitFor();
-      await settle(400);
-      if ((await app.getByTestId('not-ready-done').getAttribute('aria-disabled')) !== 'true') throw new Error('Done should wait for a choice');
+      await settle(700);
+      if ((await app.getByTestId('not-ready-done').last().getAttribute('aria-disabled')) !== 'true') throw new Error('Done should wait for a choice');
+      // This location's tasks come first; the owner is for what is not a task on the list.
+      await app.getByTestId('waiting-task-item-25').click();
       await app.getByTestId('waiting-Owner').click();
-      await app.getByTestId('waiting-Volcano Stone').click();
       await app.getByTestId('not-ready-by').fill('2026-11-05');
       await settle(300);
       await shot('09-not-ready-box');
-      await app.getByTestId('not-ready-done').click();
-      await app.getByText('Waiting on Owner and Volcano Stone, ready by November 5').last().waitFor();
+      await app.getByTestId('not-ready-done').last().click();
+      await app.getByTestId('not-ready-box').waitFor({ state: 'detached' });
+      await app.getByText('Waiting on Install range backsplash (Volcano Stone) and Owner, ready by November 5').last().waitFor();
       // The estimate: one tap on a usual time.
       await app.getByTestId('estimate-2').click();
       if ((await app.getByTestId('estimate-2').getAttribute('aria-checked')) !== 'true') throw new Error('The estimate did not take');
@@ -226,7 +230,7 @@ async function main(): Promise<void> {
       await settle();
       await shot('09e-row-with-time');
       await app.getByTestId('item-item-1').click();
-      await app.getByText('Waiting on Owner and Volcano Stone, ready by November 5').last().waitFor();
+      await app.getByText('Waiting on Install range backsplash (Volcano Stone) and Owner, ready by November 5').last().waitFor();
       if ((await app.getByTestId('field-description').inputValue()) !== 'Range wall, both sides of the hood, after the stone is set.') {
         throw new Error('The description did not save');
       }
@@ -311,7 +315,7 @@ async function main(): Promise<void> {
       await settle(700);
       await shot('16-saved-next');
     });
-    await step('a new item that is not ready says what it waits on', async () => {
+    await step('a new item that is not ready waits on a task added right there, and on the owner', async () => {
       await app.getByTestId('no-photo').click();
       await app.getByTestId('field-title').waitFor();
       await settle(800);
@@ -322,17 +326,23 @@ async function main(): Promise<void> {
       await settle(400);
       await app.getByTestId('ready-check').click();
       await app.getByTestId('not-ready-box').waitFor();
-      await settle(400);
+      await settle(700);
       await shot('17-not-ready-box');
-      await app.getByTestId('waiting-other').click();
-      await app.getByTestId('waiting-new').fill('Coastal Mirror');
-      await app.getByTestId('waiting-add').click();
+      // The wallpaper is not on the list yet: Add a Task puts it there and picks it.
+      await app.getByTestId('waiting-add-task').click();
+      await app.getByTestId('waiting-task-title').fill('Hang wallpaper');
+      await app.getByTestId('waiting-task-company').click();
+      await settle(600);
+      await app.getByRole('button', { name: 'Triple H Painting' }).last().click();
+      await settle(600);
+      await app.getByTestId('waiting-task-save').click();
+      await app.getByTestId('waiting-add-task').waitFor();
       await app.getByTestId('waiting-Owner').click();
-      await app.getByTestId('not-ready-by').fill('2026-11-05');
       await settle(300);
       await shot('18-waiting-on');
-      await app.getByTestId('not-ready-done').click();
-      await app.getByText('Waiting on Coastal Mirror and Owner, ready by November 5').last().waitFor();
+      await app.getByTestId('not-ready-done').last().click();
+      await app.getByTestId('not-ready-box').waitFor({ state: 'detached' });
+      await app.getByText('Waiting on Hang wallpaper (Triple H Painting) and Owner').last().waitFor();
       await settle(300);
       await app.getByTestId('save').click();
       await app.getByTestId('item-item-16').waitFor();
@@ -522,13 +532,17 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('finishing a company in a location offers to free what waited on it', async () => {
+    await step('finishing a task makes what waited on it ready, with Undo for both', async () => {
       await app.getByTestId('group-room-7').click();
-      await app.getByTestId('check-item-18').click();
-      await app.getByText('Set vanity tops was waiting on Gator Plumbing. Ready now?').waitFor();
+      await app.getByText('Waiting on Install pocket door hardware (SMS Carpentry)', { exact: true }).waitFor();
+      await app.getByTestId('check-item-26').click();
+      await app.getByText('Completed Install pocket door hardware. Paint pocket doors is ready now.').waitFor();
+      if ((await app.getByText('Waiting on Install pocket door hardware (SMS Carpentry)', { exact: true }).count()) !== 0) throw new Error('Paint pocket doors still waits');
       await settle(300);
       await shot('27-release');
-      await app.getByRole('button', { name: 'Mark Ready' }).click();
+      await app.getByRole('button', { name: 'Undo' }).click();
+      await app.getByText('Waiting on Install pocket door hardware (SMS Carpentry)', { exact: true }).waitFor();
+      await app.getByTestId('item-item-26').waitFor();
       await settle(500);
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
