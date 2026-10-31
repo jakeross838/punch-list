@@ -1,4 +1,4 @@
-// One location's items (or one trade's, company's or what they wait on): each with its time, who does
+// One location's items (or one company's, or what they wait on): each with its time, who does
 // it and its type, what it waits on, and its photo or an empty slot to take it. The heading says how
 // many are open and how long they take, and the filters that are on show as chips. Completed items
 // wait under their own heading. In a location, New Item under the list types one in with no camera,
@@ -50,7 +50,7 @@ export default function GroupScreen() {
   const { jobId, key } = params;
   const due = params.by === 'due';
   const drafts = params.by === 'drafts';
-  const by: GroupBy = params.by === 'trade' || params.by === 'company' || params.by === 'waiting' ? params.by : 'room';
+  const by: GroupBy = params.by === 'company' || params.by === 'waiting' ? params.by : 'room';
   const data = useData();
   const feedback = useFeedback();
   const visits = data.useVisits(jobId);
@@ -60,7 +60,6 @@ export default function GroupScreen() {
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId);
   const locations = data.useLocations(jobId);
-  const trades = data.useTrades();
   const companies = data.useCompanies();
   const [view, setView] = useJobView(jobId, data.useViewSettings());
   const [showDone, setShowDone] = useState(false);
@@ -71,8 +70,8 @@ export default function GroupScreen() {
 
   const filters = view.filters;
   const group = useMemo(
-    () => groupItems(items, by, { locations, trades, companies }, { filters, showCompleted: true, context }).find((g) => g.key === key),
-    [items, by, key, filters, context, locations, trades, companies],
+    () => groupItems(items, by, { locations, companies }, { filters, showCompleted: true, context }).find((g) => g.key === key),
+    [items, by, key, filters, context, locations, companies],
   );
   const late = useMemo(() => (due ? pastDue(items, visits, today) : []), [due, items, visits, today]);
   const lateBy = useMemo(() => new Map(late.map((p) => [p.item.id, p])), [late]);
@@ -103,7 +102,7 @@ export default function GroupScreen() {
   const title = due ? 'Past Due' : drafts ? 'Drafts' : (room?.label ?? (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
   const openTime = totalText(totalTime(open.filter((i) => i.status === 'open')));
   const subtitle = drafts
-    ? `${open.length} ${open.length === 1 ? 'draft' : 'drafts'}. ${open.some((i) => isFilling(fill, i.id)) ? 'Filling in from the photos.' : 'Tap one to finish it.'}`
+    ? `${open.length} ${open.length === 1 ? 'draft' : 'drafts'}. ${open.some((i) => isFilling(fill, i.id)) ? (open.length === 1 ? 'Filling in from the photo.' : 'Filling in from the photos.') : open.length === 1 ? 'Tap it to finish it.' : 'Tap one to finish it.'}`
     : [`${open.length} open`, openTime].filter(Boolean).join(' · ');
   // Each row says what the list does not already: the location outside a location's list, the company outside a company's.
   const inRoom = by === 'room' && !due && !drafts;

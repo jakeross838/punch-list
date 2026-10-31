@@ -170,12 +170,13 @@ describe('keeping the list current', () => {
 });
 
 describe('unfinished items', () => {
-  it('may wait for a title, company and trade, and finish themselves once they have them', () => {
+  it('may wait for a title and company, and finish themselves once they have them', () => {
     const draft = item({ unfinished: true, title: '', companyId: null, tradeId: null });
     expect(checkItem(draft)).toEqual([]);
-    expect(missingText(draft)).toBe('Needs a title, company and trade');
+    expect(missingText(draft)).toBe('Needs a title and company');
+    expect(missingText({ ...draft, title: 'Install toilet' })).toBe('Needs a company');
     expect(tidyItem({ ...draft, title: 'Install toilet' }).unfinished).toBe(true);
-    expect(tidyItem({ ...draft, title: 'Install toilet', companyId: 'c-sms', tradeId: 't-carp' }).unfinished).toBe(false);
+    expect(tidyItem({ ...draft, title: 'Install toilet', companyId: 'c-sms' }).unfinished).toBe(false);
     expect(() => complete(draft, { id: 'p1', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true })).toThrow(RuleError);
   });
 });

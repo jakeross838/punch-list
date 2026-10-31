@@ -1,8 +1,8 @@
 // Make a List: a list to print or send, made to order, kept simple. It starts from what the job
 // shows now, so most lists are Make a List, then Preview. The filters already on show as chips;
-// Change the Filters opens every filter (status, type, company, trade, level, location, what it
-// waits on, who added it, estimated or not, scheduled or not, photo or not). It groups by location,
-// trade, company or what it waits on, shows the details picked on every line, and can add blank
+// Change the Filters opens every filter (status, type, company, level, location, what it waits on,
+// who added it, estimated or not, scheduled or not, photo or not). It groups by location, company
+// or what it waits on, shows the details picked on every line, and can add blank
 // lines and a line for the days each group takes. The count and the time update as it changes.
 
 import {
@@ -35,7 +35,7 @@ export interface ListDraft {
   design: ListDesign;
 }
 
-const GROUPS: ListGroupBy[] = ['location', 'trade', 'company', 'waiting'];
+const GROUPS: ListGroupBy[] = ['location', 'company', 'waiting'];
 
 export function ExportSheet({
   jobId,

@@ -207,7 +207,8 @@ async function main(): Promise<void> {
       await app.getByTestId('not-ready-done').last().click();
       await app.getByTestId('not-ready-box').waitFor({ state: 'detached' });
       await app.getByText('Waiting on Install range backsplash (Volcano Stone) and Owner, ready by November 5').last().waitFor();
-      // The estimate: one tap on a usual time.
+      // The estimate, the type and the order wait under Details: one tap on a usual time.
+      await app.getByTestId('item-details').click();
       await app.getByTestId('estimate-2').click();
       if ((await app.getByTestId('estimate-2').getAttribute('aria-checked')) !== 'true') throw new Error('The estimate did not take');
       await app.getByTestId('field-description').fill('Range wall, both sides of the hood, after the stone is set.');
@@ -249,12 +250,33 @@ async function main(): Promise<void> {
       await app.getByTestId('camera').last().click();
       await app.getByTestId('shutter').waitFor();
       await app.getByText('Kitchen 109').last().waitFor();
+      await app.getByText('Each photo saves as an item. Claude fills it in.').waitFor();
       await settle(700);
       await shot('10-camera');
     });
-    await step('take a photo and mark it up: a circle, a measurement, numbered spots and a quick note', async () => {
-      await takePhoto();
-      await shot('11-markup');
+    await step('each photo saves as an item in the location straight away', async () => {
+      const chooser = tab.waitForEvent('filechooser');
+      await app.getByTestId('shutter').click();
+      await (await chooser).setFiles(photoPath);
+      await app.getByText('Saved in Kitchen 109').waitFor();
+      await app.getByText('1 saved on this walk. Tap the photo to finish it now.').waitFor();
+      await app.getByTestId('camera-last').waitFor();
+      await settle(400);
+      await shot('11-camera-saved');
+    });
+    await step('tap the last photo to finish it now: Claude filled it in; mark it up with a circle, a measurement, numbered spots and a quick note', async () => {
+      await app.getByTestId('camera-last').click();
+      await app.getByTestId('done-camera').waitFor();
+      // The stand-in for Claude answers after a moment.
+      await app.getByText('Check it over, then tap Done to put it on the lists.').waitFor({ timeout: 20000 });
+      if ((await app.getByTestId('field-title').inputValue()) !== 'Install towel bar') throw new Error('The photo did not fill in its title');
+      await app.getByTestId('pick-company').last().getByText('SMS Carpentry').waitFor();
+      await settle(400);
+      await shot('11b-finish-now');
+      await app.getByTestId('mark-up').click();
+      await app.getByTestId('markup-canvas').waitFor();
+      await settle(500);
+      await shot('11c-markup');
       await app.getByTestId('tool-circle').click();
       await drag([0.2, 0.12], [0.8, 0.45]);
       await app.getByTestId('tool-pen').click();
@@ -291,11 +313,17 @@ async function main(): Promise<void> {
       await app.getByTestId('markup').getByText('Gap', { exact: true }).first().waitFor();
       await settle(300);
       await shot('12c-marked-up');
-    });
-    await step('the form fills in from the title', async () => {
       await app.getByTestId('markup-next').click();
+      await app.getByTestId('markup-canvas').waitFor({ state: 'detached' });
+      await settle(400);
+      // Done puts it on the lists and goes back to the camera.
+      await app.getByTestId('done-camera').click();
+      await app.getByTestId('shutter').waitFor();
+      await settle(500);
+    });
+    await step('Type an Item: the form fills in from the title, the rest under Details', async () => {
+      await app.getByTestId('no-photo').click();
       await app.getByTestId('field-title').waitFor();
-      await app.getByTestId('fill-in').waitFor();
       await settle(800);
       await shot('13-new-item');
       await app.getByTestId('field-title').fill('adj');
@@ -303,8 +331,11 @@ async function main(): Promise<void> {
       await settle(300);
       await shot('14-title-suggestions');
       await app.getByTestId('suggestion-0').click();
-      await app.getByText('Company and trade filled in from the title.').waitFor();
+      await app.getByText('Company filled in from the title.').waitFor();
       await app.getByText('SMS Carpentry').last().waitFor();
+      if ((await app.getByTestId('pick-trade').count()) !== 0) throw new Error('The form still asks for the trade');
+      await app.getByTestId('item-details').getByText('Incomplete · 30 minutes', { exact: true }).waitFor();
+      await app.getByTestId('item-details').click();
       if ((await app.getByTestId('estimate-0.5').last().getAttribute('aria-checked')) !== 'true') throw new Error('The title did not fill in its usual time');
       await app.getByText('The usual time for this title. Change it if this one is different.').waitFor();
       await settle(300);
@@ -350,11 +381,12 @@ async function main(): Promise<void> {
       await app.getByTestId('item-item-16').waitFor();
       await app.getByText('Set mirror').first().waitFor();
       await app.getByText('Adjust cabinet door').nth(1).waitFor();
+      await app.getByText('Install towel bar').first().waitFor();
       await settle(700);
       await shot('19-room-after-walk');
     });
-    await step('the new item keeps its photo and marks', async () => {
-      await app.getByText('Adjust cabinet door').nth(1).click();
+    await step('the item from the walk keeps its photo and marks', async () => {
+      await app.getByText('Install towel bar').first().click();
       await app.getByTestId('item-photo').waitFor();
       await settle();
       await shot('20-new-item-detail');
@@ -370,23 +402,20 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('Draft saves each photo as a draft, and Claude fills it in', async () => {
+    await step('a walk saves each photo to check over later, and Claude fills each in', async () => {
       await app.getByTestId('group-room-4').click();
       await settle();
       await app.getByTestId('camera').last().click();
       await app.getByTestId('shutter').waitFor();
-      await app.getByTestId('mode-quick').click();
-      await app.getByText('Each photo saves as a draft. Claude fills it in.').waitFor();
       await settle(400);
       for (let i = 0; i < 2; i += 1) {
         const chooser = tab.waitForEvent('filechooser');
         await app.getByTestId('shutter').click();
         await (await chooser).setFiles(photoPath);
-        await app.getByText(`${i + 1} ${i === 0 ? 'draft' : 'drafts'} saved.`).waitFor();
+        await app.getByText(`${i + 1} saved on this walk. Tap the photo to finish it now.`).waitFor();
         await settle(500);
       }
       await shot('21-quick-snap');
-      await app.getByTestId('mode-item').click();
       await app.getByTestId('camera-close').click();
       await settle(700);
       await app.getByTestId('back').last().click();
@@ -394,7 +423,7 @@ async function main(): Promise<void> {
       await settle();
       await shot('22-job-unfinished');
     });
-    await step('check them sitting down: each is filled in, Mark Up, then Next puts it on the lists', async () => {
+    await step('check them sitting down: one is on the list already, so its photo goes there; Mark Up, then Next puts one on the lists', async () => {
       await app.getByTestId('open-unfinished').click();
       await app.getByText('3 drafts. Filling in from the photos.').waitFor();
       await app.getByText(/ · Filling in from the photo$/).first().waitFor();
@@ -404,13 +433,21 @@ async function main(): Promise<void> {
       if ((await app.getByText('No title yet').count()) !== 0) throw new Error('A draft did not fill in');
       await settle();
       await shot('23b-drafts-filled');
+      // The one snapped in the kitchen earlier is the towel bar already on the list there.
       await app.getByText('Install towel bar').first().click();
+      await app.getByTestId('duplicate-note').getByText(/^Already on the list in Kitchen 109: item \d+\./).waitFor();
+      await settle(400);
+      await shot('24-draft-twin');
+      await app.getByTestId('twin-add').click();
+      await app.getByText('Added the photo to Install towel bar').waitFor();
+      // On to the next draft.
       await app.getByText('Check it over, then tap Next to put it on the lists.').waitFor();
-      if ((await app.getByTestId('field-title').inputValue()) !== 'Install towel bar') throw new Error('The draft did not fill in its title');
-      await app.getByText('SMS Carpentry').first().waitFor();
+      await settle(700);
+      if ((await app.getByTestId('field-title').last().inputValue()) !== 'Install towel bar') throw new Error('The draft did not fill in its title');
+      await app.getByTestId('pick-company').last().getByText('SMS Carpentry').waitFor();
       if ((await app.getByTestId('fill-in').count()) !== 0) throw new Error('Fill In shows with nothing left to fill');
       await settle(400);
-      await shot('24-draft-filled-in');
+      await shot('24b-draft-filled-in');
       await app.getByTestId('mark-up').click();
       await app.getByTestId('markup-canvas').waitFor();
       await settle(500);
@@ -425,14 +462,14 @@ async function main(): Promise<void> {
       await app.getByText('Draft', { exact: true }).last().waitFor();
       await settle();
       await app.getByTestId('back').last().click();
-      await app.getByText('2 drafts. Tap one to finish it.').waitFor();
+      await app.getByText('1 draft. Tap it to finish it.').waitFor();
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
-      // The one checked over is on the lists now; the two still drafts are not.
+      // The one checked over is on the lists now, with the one from the walk; the last draft is not.
       await app.getByTestId('open-search').click();
       await app.getByTestId('search').last().fill('towel');
       await app.getByText('Install towel bar').first().waitFor();
-      if ((await app.getByText('Install towel bar').count()) !== 1) throw new Error('Next did not put the draft on the lists');
+      if ((await app.getByText('Install towel bar').count()) !== 2) throw new Error('Next did not put the draft on the lists');
       await app.getByTestId('search-cancel').click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
@@ -477,16 +514,21 @@ async function main(): Promise<void> {
       await settle(500);
       await shot('27d-photo-added-later');
     });
-    await step('photo first for an item typed earlier: the camera puts it on that item', async () => {
+    await step('photo first for an item typed earlier: the photo goes on that item, from the last photo', async () => {
       await app.getByTestId('camera').last().click();
-      await takePhoto();
-      await app.getByTestId('markup-next').click();
+      const chooser = tab.waitForEvent('filechooser');
+      await app.getByTestId('shutter').click();
+      await (await chooser).setFiles(photoPath);
+      await app.getByText('Saved in Laundry 119').waitFor();
+      await app.getByTestId('camera-last').click();
       await app.getByTestId('add-to-item').waitFor();
       await settle(700);
       await shot('27e-add-to-item');
       await app.getByTestId('add-to-item').click();
       await app.getByRole('button', { name: 'Touch up paint', exact: true }).click();
       await app.getByText('Added the photo to Touch up paint').waitFor();
+      await app.getByTestId('shutter').waitFor();
+      if ((await app.getByTestId('camera-last').count()) !== 0) throw new Error('The camera still offers the draft that went on another item');
       await settle(300);
       await shot('27f-added-to-item');
       await app.getByTestId('camera-close').click();
@@ -512,6 +554,8 @@ async function main(): Promise<void> {
       await settle(500);
       await shot('28a-activity');
       await app.getByText('Jake Ross added Patch drywall', { exact: true }).first().click();
+      await app.getByTestId('item-history-row').getByText(/^Jake Ross added it, /).waitFor();
+      await app.getByTestId('item-history-row').click();
       await app.getByTestId('item-history').getByText('Jake Ross added it', { exact: true }).waitFor();
       await app.getByTestId('item-history').scrollIntoViewIfNeeded();
       await settle(400);
@@ -520,12 +564,13 @@ async function main(): Promise<void> {
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
-      // The draft Sam snapped and Jake checked over reads as both.
+      // The towel bar from the walk has both photos: its own, and the one from the draft Sam snapped of it.
       await app.getByTestId('group-room-1').click();
       await app.getByText('Install towel bar').first().click();
+      await app.getByTestId('item-history-row').click();
       const history = app.getByTestId('item-history');
-      await history.getByText('Sam Rivera added it', { exact: true }).waitFor();
-      await history.getByText('Jake Ross put it on the lists', { exact: true }).waitFor();
+      await history.getByText('Jake Ross added it', { exact: true }).waitFor();
+      await history.getByText(/With 2 photos|added a photo to it/).first().waitFor();
       await history.scrollIntoViewIfNeeded();
       await settle(400);
       await shot('28c-draft-history');
@@ -567,21 +612,22 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('View and Filter: by trade, saved as the default', async () => {
+    await step('View and Filter: by company, saved as the default', async () => {
       await app.getByTestId('filter').click();
       await app.getByTestId('view-done').waitFor();
       await settle(600);
       await shot('29-view');
-      await app.getByRole('tab', { name: 'Trade' }).click();
+      if ((await app.getByRole('tab', { name: 'Trade' }).count()) !== 0) throw new Error('The lists still group by trade');
+      await app.getByRole('tab', { name: 'Company' }).click();
       await app.getByTestId('filter-state-not_ready').click();
       await settle(300);
       await app.getByTestId('save-default').click();
       await app.getByText('Saved as My Default').waitFor();
       await app.getByTestId('view-done').click();
-      await app.getByText('Carpentry', { exact: true }).first().waitFor();
+      await app.getByText('SMS Carpentry', { exact: true }).first().waitFor();
       await app.getByTestId('chip-states:not_ready').waitFor();
       await settle(600);
-      await shot('29b-by-trade-not-ready');
+      await shot('29b-by-company-not-ready');
       await app.getByTestId('filter').click();
       await app.getByTestId('view-standard').click();
       await app.getByTestId('save-default').click();
@@ -746,6 +792,9 @@ async function main(): Promise<void> {
       // The row says how many comments the item has.
       await app.getByText('SMS Carpentry · Deficiency · 3 comments', { exact: true }).waitFor();
       await app.getByText('Adjust cabinet door').first().click();
+      // Comments fold into one row with the latest in it.
+      await app.getByTestId('item-comments-row').getByText('3', { exact: true }).waitFor();
+      await app.getByTestId('item-comments-row').click();
       const thread = app.getByTestId('item-comments');
       await thread.getByText('Will do. We are bringing new hinges for both.').waitFor();
       await thread.getByText('Mike at SMS Carpentry', { exact: true }).waitFor();

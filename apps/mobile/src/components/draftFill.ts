@@ -1,8 +1,8 @@
 // Drafts fill themselves in. Right after a photo is saved as a draft, and again when Drafts opens
 // (for any that could not be done on the walk, with no signal, say), Claude looks at each draft's
-// photo, one at a time, and fills in its blanks: the title, where exactly, the trade and the
-// company. A draft stays a draft until someone checks it and taps Next. A draft someone is typing
-// in is left to them.
+// photo, one at a time, and fills in its blanks: the title, where exactly and the company (the
+// trade follows the company). A draft stays a draft until someone checks it and taps Next, or Done
+// from the camera. A draft someone is typing in is left to them.
 
 import { suggestContext, suggestionPatch, type Company, type Item, type JobCompany, type Location, type Mark, type StandardTitle, type Trade } from '@punch/core';
 import { useSyncExternalStore } from 'react';

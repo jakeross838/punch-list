@@ -1,4 +1,4 @@
-// How the lists are cut: by location (floor order), by trade, by company or by what items wait on,
+// How the lists are cut: by location (floor order), by company or by what items wait on,
 // narrowed by the filters. Removed items never show, and drafts stay in Drafts until they are filled
 // in. Every location shows, even an empty one, so items can be added to it. Show Completed (as in
 // Reminders) adds completed items that fit the filters, after the open ones. By Waiting On shows what
@@ -13,9 +13,9 @@ import { holdLookups, holdNames, type HoldLookups } from './holds';
 import { floorOf, NO_FLOOR } from './rooms';
 import { isPriced } from './rules';
 import { NO_TIME, totalTime, type TimeTotal } from './time';
-import type { Company, Item, Location, Trade } from './types';
+import type { Company, Item, Location } from './types';
 
-export type GroupBy = 'room' | 'trade' | 'company' | 'waiting';
+export type GroupBy = 'room' | 'company' | 'waiting';
 
 /** How a person likes a job to open, saved with Save as My Default. */
 export interface ViewSettings {
@@ -26,23 +26,23 @@ export interface ViewSettings {
 
 export const DEFAULT_VIEW: ViewSettings = { groupBy: 'room', showCompleted: false, filters: NO_FILTERS };
 
-export const GROUP_LABELS: Record<GroupBy, string> = { room: 'Location', trade: 'Trade', company: 'Company', waiting: 'Waiting On' };
+export const GROUP_LABELS: Record<GroupBy, string> = { room: 'Location', company: 'Company', waiting: 'Waiting On' };
 
-const GROUPS: GroupBy[] = ['room', 'trade', 'company', 'waiting'];
+const GROUPS: GroupBy[] = ['room', 'company', 'waiting'];
 
 /**
  * A saved view, checked. Views saved before filters took several values said Show (Ready, Not Ready
- * or Additional) and one trade and one company; those carry over.
+ * or Additional) and one company; those carry over. A view grouped by trade, from before the trade
+ * was left off the item, is grouped by company: each company does one trade on the job.
  */
 export function readViewSettings(raw: unknown): ViewSettings {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const groupBy = GROUPS.includes(r.groupBy as GroupBy) ? (r.groupBy as GroupBy) : 'room';
+  const groupBy = r.groupBy === 'trade' ? 'company' : GROUPS.includes(r.groupBy as GroupBy) ? (r.groupBy as GroupBy) : 'room';
   const filters = readFilters(r.filters);
   if (r.filters === undefined) {
     if (r.filter === 'ready') filters.states = ['ready'];
     if (r.filter === 'not_ready') filters.states = ['not_ready'];
     if (r.filter === 'added_scope') filters.kinds = ['added_scope'];
-    if (typeof r.tradeId === 'string') filters.tradeIds = [r.tradeId];
     if (typeof r.companyId === 'string') filters.companyIds = [r.companyId];
   }
   return { groupBy, showCompleted: r.showCompleted === true, filters };
@@ -80,7 +80,6 @@ export interface ItemGroup {
 
 export interface Lookups {
   locations: Location[];
-  trades: Trade[];
   companies: Company[];
 }
 
@@ -108,8 +107,6 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
     switch (by) {
       case 'room':
         return [i.locationId];
-      case 'trade':
-        return [i.tradeId ?? 'none'];
       case 'company':
         return [i.companyId ?? 'none'];
       case 'waiting': {
@@ -153,7 +150,7 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
       { key: 'complete', label: 'Completed' },
     ];
   } else {
-    const names = new Map((by === 'trade' ? lookups.trades : lookups.companies).map((x) => [x.id, x.name]));
+    const names = new Map(lookups.companies.map((x) => [x.id, x.name]));
     order = [...groups.keys()]
       .map((key) => ({ key, label: names.get(key) ?? 'Not set' }))
       .sort((a, b) => a.label.localeCompare(b.label));

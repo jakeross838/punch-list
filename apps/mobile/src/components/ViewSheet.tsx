@@ -51,8 +51,7 @@ export function ViewSheet({
         </Text>
         <View style={styles.segment}>
           <Segmented<GroupBy>
-            // Four across: Waiting On is cut to Waiting to fit.
-            options={(['room', 'trade', 'company', 'waiting'] as GroupBy[]).map((g) => [g, g === 'waiting' ? 'Waiting' : GROUP_LABELS[g]])}
+            options={(['room', 'company', 'waiting'] as GroupBy[]).map((g) => [g, GROUP_LABELS[g]])}
             value={view.groupBy}
             onChange={(groupBy) => onChange({ ...view, groupBy })}
             testID="view-group"

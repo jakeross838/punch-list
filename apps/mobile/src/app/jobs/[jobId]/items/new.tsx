@@ -1,18 +1,17 @@
 // New Item, as a sheet. Kept quick: the photo, a title (typing offers the standard titles, and
-// picking one fills in the trade and the company), the location already filled in, Ready as a
-// checkbox, and the type. Added fields wait under More Details. Saving without the company (or the
-// title, with a photo) keeps it as a draft.
+// picking one fills in the company and the usual time), the location already filled in, the
+// company and Ready as a checkbox. The rest waits under Details. Saving without the company (or
+// the title, with a photo) keeps it as a draft.
 //
-// It opens two ways, so an item can start from either end:
-//   Over the camera, with the photo just taken: Save and Next goes straight back to the camera,
-//   Save goes back to the list. The photo can go on an item already on the list instead, one typed
-//   earlier without a photo, say.
+// It opens two ways:
+//   Over the camera, with Type an Item on a walk: Save and Next goes straight back to the camera,
+//   Save goes back to the list. Add Photo takes the camera for this item's photo.
 //   Typed, from New Item in a location or the plus on the job, with no camera: Save and Next starts
 //   the next item right here, Save goes back to the list. Add Photo opens the camera for it.
 
 import { itemNumberLabel, type Item } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { leaveOrConfirm } from '@/components/discard';
@@ -22,7 +21,7 @@ import { useFillIn } from '@/components/useFillIn';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture, useCapture } from '@/data/capture';
-import { haptic, Icon, ListRow, ListSection, OptionPicker, Page, Text, Touchable, useFeedback, type Option } from '@/ui';
+import { haptic, Icon, Page, Text, Touchable, useFeedback } from '@/ui';
 
 export default function NewItemScreen() {
   const { jobId, typed } = useLocalSearchParams<{ jobId: string; typed?: string }>();
@@ -50,37 +49,16 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
   const walk = useCapture();
   const settings = data.useFormSettings();
   const locations = data.useLocations(jobId);
-  const items = data.useItems(jobId);
-  const photos = data.usePhotos(jobId);
   const [initial] = useState<ItemDraft>(() => walk.draft ?? startDraft(walk.roomId ?? '', settings));
   const form = useItemForm(initial);
   const { value } = form;
   const [saving, setSaving] = useState(false);
-  const [picking, setPicking] = useState(false);
   const filler = useFillIn(jobId);
 
   // The photos this form was opened with. They stay put while the sheet slides away after saving.
   const [shots] = useState(() => walk.shots);
   const roomLabel = locations.find((l) => l.id === value.locationId)?.label;
   const hasContent = form.dirty || value.title.trim() !== '' || shots.length > 0;
-
-  // The open items in this location the photo could go on, the ones with no photo yet first.
-  const locationId = value.locationId;
-  const targets = useMemo<Option[]>(() => {
-    if (shots.length === 0) return [];
-    const count = new Map<string, number>();
-    for (const p of photos) count.set(p.itemId, (count.get(p.itemId) ?? 0) + 1);
-    return items
-      .filter((i) => i.locationId === locationId && i.status === 'open')
-      .map((i) => ({ item: i, n: count.get(i.id) ?? 0 }))
-      .sort((a, b) => Number(a.n > 0) - Number(b.n > 0) || (a.item.number ?? 0) - (b.item.number ?? 0))
-      .map(({ item, n }) => ({
-        value: item.id,
-        label: item.title || 'No title yet',
-        hint: `Item ${itemNumberLabel(item)}`,
-        group: n === 0 ? 'No Photo Yet' : 'With a Photo',
-      }));
-  }, [shots.length, photos, items, locationId]);
 
   function set(patch: Partial<ItemDraft>) {
     form.set(patch);
@@ -139,17 +117,13 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
     }
   }
 
-  /**
-   * The photo goes on an item already on the list instead, and the camera is ready for the next
-   * one. From the picker, it waits for the picker to slide away first.
-   */
-  async function addToItem(target: Item, wait = 0) {
+  /** The same thing is on the list already: the photos go on it instead, and the camera is ready for the next one. */
+  async function addToItem(target: Item) {
     if (shots.length === 0) return;
     await data.addPhotos(shots.map((s) => ({ jobId, itemId: target.id, uri: s.uri, width: s.width, height: s.height, marks: s.marks })));
     haptic.success();
     capture.photoAdded(target.title || `item ${itemNumberLabel(target)}`, roomLabel ?? null);
-    if (wait > 0) setTimeout(() => router.back(), wait);
-    else router.back();
+    router.back();
   }
 
   function cancel() {
@@ -191,17 +165,6 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
           </Text>
         </View>
       ) : null}
-      {targets.length > 0 ? (
-        <ListSection footer={`Or put ${shots.length === 1 ? 'this photo' : 'these photos'} on an item already on the list.`}>
-          <ListRow
-            title={`Add to an Item in ${roomLabel ?? 'This Location'}`}
-            icon="plus"
-            accessory="chevron"
-            onPress={() => setPicking(true)}
-            testID="add-to-item"
-          />
-        </ListSection>
-      ) : null}
       <ItemEditor
         jobId={jobId}
         value={value}
@@ -213,17 +176,6 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
         autoFocusTitle={Platform.OS === 'ios' && !initial.title}
         onTwin={shots.length > 0 ? { label: shots.length === 1 ? 'Add the photo to it instead.' : 'Add the photos to it instead.', onPress: (twin) => void addToItem(twin) } : undefined}
         fillIn={filler.can && shots[0] ? { busy: filler.busy, onPress: () => void filler.fillIn(shots[0]!, value, (patch) => set(patch)) } : undefined}
-      />
-      <OptionPicker
-        visible={picking}
-        title="Add to an Item"
-        options={targets}
-        value={null}
-        onSelect={(id) => {
-          const target = items.find((i) => i.id === id);
-          if (target) void addToItem(target, 350);
-        }}
-        onClose={() => setPicking(false)}
       />
     </Page>
   );

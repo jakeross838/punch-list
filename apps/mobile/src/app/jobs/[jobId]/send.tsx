@@ -75,7 +75,7 @@ interface Target {
 const LOOK_AHEAD: Target = { list: 'lookahead', name: 'Three Week Look Ahead', kind: 'lookahead' };
 
 /** How the job is grouped on screen, as a list made to order groups it. */
-const LIST_GROUP: Record<GroupBy, ListGroupBy> = { room: 'location', trade: 'trade', company: 'company', waiting: 'waiting' };
+const LIST_GROUP: Record<GroupBy, ListGroupBy> = { room: 'location', company: 'company', waiting: 'waiting' };
 
 interface Made {
   target: Target;
@@ -94,7 +94,6 @@ export default function SendScreen() {
   const visits = data.useVisits(jobId);
   const sends = data.useSends(jobId);
   const locations = data.useLocations(jobId);
-  const trades = data.useTrades();
   const companies = data.useCompanies();
   const people = data.usePeople();
   const comments = data.useComments(jobId);
@@ -108,7 +107,7 @@ export default function SendScreen() {
 
   const today = dayOfDate(new Date());
   // With the items and visits, every list says which tasks an item waits on and when they are scheduled.
-  const lookups = useMemo(() => ({ locations, trades, companies, items, visits, today }), [locations, trades, companies, items, visits, today]);
+  const lookups = useMemo(() => ({ locations, companies, items, visits, today }), [locations, companies, items, visits, today]);
   const look = useMemo(
     () => ({ people: new Map(people.map((p) => [p.id, p.name])), companies: new Map(companies.map((c) => [c.id, c.name])) }),
     [people, companies],
@@ -405,7 +404,7 @@ export default function SendScreen() {
             </ListSection>
           ) : null}
 
-          <ListSection header="Ross Built" footer="Every open item by location, with the trade and company on every line.">
+          <ListSection header="Ross Built" footer="Every open item by location, with the company on every line.">
             <ListRow
               title="Whole Job"
               subtitle={`${plural(open.length, 'item')} in ${plural(rooms, 'location')}, ${open.filter((i) => i.ready).length} ready now`}

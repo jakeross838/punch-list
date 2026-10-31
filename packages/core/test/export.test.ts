@@ -75,7 +75,7 @@ describe('a list made to order', () => {
   it('suggests a title from the filters', () => {
     expect(listTitle({ ...NO_FILTERS, companyIds: ['c-sms'], states: ['ready'] }, names)).toBe('SMS Carpentry');
     expect(listTitle({ ...NO_FILTERS, companyIds: ['c-sms', 'c-hhh'] }, names)).toBe('SMS Carpentry and Triple H Painting');
-    expect(listTitle({ ...NO_FILTERS, tradeIds: ['t-paint'], floors: ['Level 1'] }, names)).toBe('Painting');
+    expect(listTitle({ ...NO_FILTERS, floors: ['Level 1'] }, names)).toBe('Level 1');
     expect(listTitle({ ...NO_FILTERS, locationIds: ['k'] }, names)).toBe('Kitchen 109');
     expect(listTitle({ ...NO_FILTERS, floors: ['Level 2'] }, names)).toBe('Level 2');
     expect(listTitle({ ...NO_FILTERS, states: ['ready'] }, names)).toBe('Whole Job');
@@ -94,10 +94,10 @@ describe('a list made to order', () => {
     expect(body).toContain('<h2 class="rb-section">Level 1</h2>');
     expect(body).toContain('Kitchen 109 · 2 items · 4.5 hours');
     expect(body).toContain('Bathroom 207 · 3 items · 2 hours, 1 not estimated');
-    // The company, trade and type on every line, never only on the first one of a group.
-    expect(body.match(/SMS Carpentry · Carpentry · Incomplete/g)?.length).toBe(3);
-    expect(body).toContain('Triple H Painting · Painting · Deficiency');
-    expect(body).toContain('SMS Carpentry · Carpentry · Additional, to be quoted');
+    // The company and type on every line, never only on the first one of a group.
+    expect(body.match(/SMS Carpentry · Incomplete/g)?.length).toBe(3);
+    expect(body).toContain('Triple H Painting · Deficiency');
+    expect(body).toContain('SMS Carpentry · Additional, to be quoted');
     expect(body).toContain('Waiting on Volcano Stone, ready by November\u00a02');
     expect(body).toContain('Completed October\u00a028');
     expect(body).toContain('<span class="rb-quiet">Not estimated</span>');
@@ -119,11 +119,8 @@ describe('a list made to order', () => {
     expect(customPrintout(lines, design(), settings).title).toBe('Whole Job');
   });
 
-  it('groups by trade, company or what it waits on, with lines for the days and to add items', () => {
+  it('groups by company or what it waits on, with lines for the days and to add items', () => {
     const lines = filteredLines(items, NO_FILTERS, lookups, { completed: true });
-    const byTrade = customPrintout(lines, design({ groupBy: 'trade' }), settings).body;
-    expect(byTrade).toContain('<h2 class="rb-section">By Trade</h2>');
-    expect(byTrade.indexOf('Carpentry · 4 items')).toBeLessThan(byTrade.indexOf('Painting · 1 item'));
     const byCompany = customPrintout(lines, design({ groupBy: 'company', daysLines: true, blankLines: true }), settings).body;
     expect(byCompany).toContain('SMS Carpentry · 4 items');
     expect(byCompany).toContain('How many days for these 3 items?');

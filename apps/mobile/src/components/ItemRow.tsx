@@ -11,10 +11,8 @@ import {
   daysBetween,
   holdText,
   hoursText,
-  isPriced,
-  KIND_LABELS,
+  kindText,
   missingDetails,
-  orderText,
   pastDueText,
   readyByOf,
   waitingOnText,
@@ -29,11 +27,6 @@ import { CompleteCircle, Icon, isBeforeToday, PhotoView, shortDate, SwipeRow, Te
 
 const PHOTO = 40;
 
-/** The type of work, in words: "Deficiency", "Additional, Change Order 14", "Additional, to be quoted". */
-export function kindText(item: Pick<Item, 'kind' | 'poOrCo'>): string {
-  if (item.kind !== 'added_scope') return KIND_LABELS[item.kind];
-  return isPriced(item) ? `Additional, ${orderText(item.poOrCo)}` : 'Additional, to be quoted';
-}
 
 export const ItemRow = memo(function ItemRow({
   item,

@@ -28,7 +28,6 @@ export interface ItemFilters {
   states: StateFilter[];
   kinds: ItemKind[];
   companyIds: string[];
-  tradeIds: string[];
   /** Levels, as the job lists them: "Level 1", "Outside and Whole House". */
   floors: string[];
   /** Single locations. */
@@ -49,7 +48,6 @@ export const NO_FILTERS: ItemFilters = {
   states: [],
   kinds: [],
   companyIds: [],
-  tradeIds: [],
   floors: [],
   locationIds: [],
   waitingOn: [],
@@ -60,10 +58,10 @@ export const NO_FILTERS: ItemFilters = {
 };
 
 /** The lists in ItemFilters, for the filters that take several values. */
-export type ListFacet = 'states' | 'kinds' | 'companyIds' | 'tradeIds' | 'floors' | 'locationIds' | 'waitingOn' | 'addedBy';
+export type ListFacet = 'states' | 'kinds' | 'companyIds' | 'floors' | 'locationIds' | 'waitingOn' | 'addedBy';
 export type YesNoFacet = 'photo' | 'scheduled' | 'estimated';
 
-const LIST_FACETS: ListFacet[] = ['states', 'kinds', 'companyIds', 'tradeIds', 'floors', 'locationIds', 'waitingOn', 'addedBy'];
+const LIST_FACETS: ListFacet[] = ['states', 'kinds', 'companyIds', 'floors', 'locationIds', 'waitingOn', 'addedBy'];
 const YES_NO_FACETS: YesNoFacet[] = ['photo', 'scheduled', 'estimated'];
 
 export const YES_NO_LABELS: Record<YesNoFacet, [yes: string, no: string]> = {
@@ -135,7 +133,6 @@ export function matchesFilters(item: Item, f: ItemFilters, ctx?: FilterContext):
   if (f.states.length > 0 && item.status === 'open' && !f.states.some((s) => matchesState(item, s, ctx))) return false;
   if (f.kinds.length > 0 && !f.kinds.includes(item.kind)) return false;
   if (f.companyIds.length > 0 && !(item.companyId && f.companyIds.includes(item.companyId))) return false;
-  if (f.tradeIds.length > 0 && !(item.tradeId && f.tradeIds.includes(item.tradeId))) return false;
   if (f.floors.length > 0) {
     const location = ctx?.locations.find((l) => l.id === item.locationId);
     const level = location ? floorOf(location) : NO_FLOOR;
@@ -158,7 +155,6 @@ export function matchesFilters(item: Item, f: ItemFilters, ctx?: FilterContext):
 
 export interface FilterNames {
   companies: Map<string, string>;
-  trades: Map<string, string>;
   people: Map<string, string>;
   /** Location labels, "Kitchen 109". */
   locations?: Map<string, string>;
@@ -180,7 +176,6 @@ export function filterChips(f: ItemFilters, names: FilterNames): FilterChip[] {
   list('states', (s) => STATE_LABELS[s]);
   list('kinds', (k) => KIND_LABELS[k]);
   list('companyIds', (id) => names.companies.get(id) ?? 'A company');
-  list('tradeIds', (id) => names.trades.get(id) ?? 'A trade');
   list('floors', (x) => x);
   list('locationIds', (id) => names.locations?.get(id) ?? 'A location');
   list('waitingOn', (w) => `Waiting on ${w}`);
@@ -193,7 +188,7 @@ export function filterChips(f: ItemFilters, names: FilterNames): FilterChip[] {
 }
 
 /**
- * A title for a list made with these filters: the companies, else the trades, else the locations,
+ * A title for a list made with these filters: the companies, else the locations,
  * else the levels it is narrowed to (one or two), else Whole Job.
  */
 export function listTitle(f: ItemFilters, names: FilterNames): string {
@@ -203,7 +198,6 @@ export function listTitle(f: ItemFilters, names: FilterNames): string {
   };
   return (
     pick(f.companyIds, names.companies) ??
-    pick(f.tradeIds, names.trades) ??
     pick(f.locationIds, names.locations) ??
     (f.floors.length > 0 && f.floors.length <= 2 ? f.floors.join(' and ') : null) ??
     'Whole Job'
@@ -216,14 +210,13 @@ export const FILTER_KINDS: ItemKind[] = KINDS;
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 const yesNo = (v: unknown): YesNo => (typeof v === 'boolean' ? v : null);
 
-/** Filters as saved, checked: anything that is not a filter is dropped. */
+/** Filters as saved, checked: anything that is not a filter is dropped (trades, from before the trade was left off the item). */
 export function readFilters(raw: unknown): ItemFilters {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   return {
     states: strings(r.states).filter((s): s is StateFilter => (STATES as string[]).includes(s)),
     kinds: strings(r.kinds).filter((k): k is ItemKind => (KINDS as string[]).includes(k)),
     companyIds: strings(r.companyIds),
-    tradeIds: strings(r.tradeIds),
     floors: strings(r.floors),
     locationIds: strings(r.locationIds),
     waitingOn: strings(r.waitingOn),

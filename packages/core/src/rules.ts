@@ -35,7 +35,8 @@ export type ItemFields = Pick<
 
 /**
  * Everything that stops an item from saving, in plain words. An empty list means it saves. An
- * unfinished item may still be missing its title, company and trade; the other rules still hold.
+ * unfinished item may still be missing its title and company; the other rules still hold. The
+ * trade is not asked for: it follows the company's trade on the job.
  */
 export function checkItem(item: ItemFields): Problem[] {
   const problems: Problem[] = [];
@@ -43,7 +44,6 @@ export function checkItem(item: ItemFields): Problem[] {
   if (title === '' && !item.unfinished) problems.push({ field: 'title', message: 'Give it a title' });
   if (title.length > TITLE_MAX) problems.push({ field: 'title', message: `Keep the title under ${TITLE_MAX} characters` });
   if (!item.companyId && !item.unfinished) problems.push({ field: 'companyId', message: 'Pick the company' });
-  if (!item.tradeId && !item.unfinished) problems.push({ field: 'tradeId', message: 'Pick the trade' });
   if (!item.ready && item.waitingOn.every((w) => w.trim() === '') && item.waitingOnItems.length === 0) {
     problems.push({ field: 'waitingOn', message: 'Pick what it is waiting on' });
   }
@@ -63,16 +63,15 @@ export function checkItem(item: ItemFields): Problem[] {
 }
 
 /** What an unfinished item still needs, in the order the form asks for it. */
-export function missingDetails(item: Pick<ItemFields, 'title' | 'companyId' | 'tradeId'>): ('title' | 'company' | 'trade')[] {
-  const out: ('title' | 'company' | 'trade')[] = [];
+export function missingDetails(item: Pick<ItemFields, 'title' | 'companyId'>): ('title' | 'company')[] {
+  const out: ('title' | 'company')[] = [];
   if (item.title.trim() === '') out.push('title');
   if (!item.companyId) out.push('company');
-  if (!item.tradeId) out.push('trade');
   return out;
 }
 
-/** "Needs a title, company and trade." */
-export function missingText(item: Pick<ItemFields, 'title' | 'companyId' | 'tradeId'>): string {
+/** "Needs a title and company." */
+export function missingText(item: Pick<ItemFields, 'title' | 'companyId'>): string {
   const words = missingDetails(item);
   if (words.length === 0) return '';
   const list = words.length === 1 ? words[0]! : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;

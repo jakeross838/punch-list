@@ -1,13 +1,17 @@
 // One item, everything about it in one calm place, and every part of it changes right where it is:
 // tap the title to retype it, tick Ready, pick another location, mark up a photo. Each change saves
-// as it is made. Mark Complete is the big button; only Ross Built marks items complete, and removing
-// never deletes. A draft says what it still needs (or that Claude is filling it in from the photo)
-// and steps to the next one, for checking them sitting down after a walk: Next puts a draft that has
-// everything it needs on the lists. Comments are the back and forth with the company doing it (and
-// Ross Built only notes); History at the bottom shows who added and changed it, and when.
+// as it is made. Up front: the photo, the title, the location, the company and Ready; the time, the
+// type, the order, the added fields and the visit wait under Details, and Comments and History are
+// one tap in, each with its latest in its row. Mark Complete is the big button; only Ross Built
+// marks items complete, and removing never deletes. A draft says what it still needs (or that
+// Claude is filling it in from the photo) and steps to the next one, for checking them sitting
+// down after a walk: Next puts a draft that has everything it needs on the lists. Opened from the
+// camera on a walk, Done goes back to the camera. A draft whose photo is of something already on
+// the list can put the photo on that item instead.
 
 import {
   checkItem,
+  commentAuthor,
   complete,
   dayOfDate,
   itemComments,
@@ -49,6 +53,7 @@ import {
   Icon,
   ListRow,
   ListSection,
+  OptionPicker,
   Page,
   PhotoView,
   PhotoViewer,
@@ -58,6 +63,7 @@ import {
   useFeedback,
   whenOf,
   type IconName,
+  type Option,
 } from '@/ui';
 
 /** History shows the newest few; Show All has the rest. */
@@ -75,7 +81,7 @@ export default function ItemScreen() {
       </Page>
     );
   }
-  return <ItemDetail key={item.id} jobId={jobId} item={item} fromUnfinished={from === 'unfinished'} />;
+  return <ItemDetail key={item.id} jobId={jobId} item={item} from={from === 'unfinished' || from === 'camera' ? from : null} />;
 }
 
 const draftOf = (item: Item): ItemDraft => ({ ...fieldsOf(item), locationId: item.locationId });
@@ -141,7 +147,7 @@ function useLiveItem(item: Item) {
   };
 }
 
-function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item; fromUnfinished: boolean }) {
+function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'unfinished' | 'camera' | null }) {
   const data = useData();
   const feedback = useFeedback();
   const insets = useSafeAreaInsets();
@@ -150,7 +156,8 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId).filter((p) => p.itemId === item.id);
   const room = data.useLocations(jobId).find((l) => l.id === item.locationId);
-  const company = data.useCompanies().find((c) => c.id === item.companyId);
+  const companies = data.useCompanies();
+  const company = companies.find((c) => c.id === item.companyId);
   const visit = data.useVisits(jobId).find((v) => v.id === item.visitId);
   const live = useLiveItem(item);
   const release = useRelease(jobId);
@@ -161,9 +168,13 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   const history = useActivityLines(jobId, item.id);
   const thread = itemComments(data.useComments(jobId), item.id);
   const [allHistory, setAllHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showComments, setShowComments] = useState(false);
   const [shown, setShown] = useState(0);
   const [viewing, setViewing] = useState<Photo | null>(null);
   const [marking, setMarking] = useState<Photo | null>(null);
+  const [moving, setMoving] = useState(false);
+  const fromCamera = from === 'camera';
 
   const photo: Photo | undefined = photos[Math.min(shown, photos.length - 1)];
   const photoWidth = Math.min(screenWidth, 600) - layout.margin * 2;
@@ -174,6 +185,17 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   // Filling in after a walk: the drafts in number order, and the next one after this.
   const unfinished = sortItems(items.filter((i) => i.unfinished && i.status === 'open' && i.id !== item.id));
   const nextUnfinished = unfinished.find((i) => (i.number ?? 0) > (item.number ?? 0)) ?? unfinished[0];
+  const stepping = !fromCamera && (item.unfinished || from === 'unfinished');
+
+  // A draft whose photo belongs on an item already on the list here: the photo can go there instead.
+  const targets: Option[] =
+    item.unfinished && item.status === 'open' && photos.length > 0
+      ? sortItems(items.filter((i) => i.locationId === item.locationId && i.status === 'open' && !i.unfinished && i.id !== item.id)).map((i) => ({
+          value: i.id,
+          label: i.title,
+          hint: `Item ${itemNumberLabel(i)}`,
+        }))
+      : [];
 
   async function setStatus(change: (f: ItemFields) => ItemFields): Promise<boolean> {
     live.flush();
@@ -202,6 +224,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   async function removeItem() {
     if (!(await setStatus(remove))) return;
     haptic.heavy();
+    capture.forget(item.id);
     router.back();
     feedback.toast({
       message: `Removed ${item.title || 'the item'}`,
@@ -209,10 +232,25 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
     });
   }
 
+  /** The draft's photos go on that item instead, and the draft comes off the list (it stays in the history). */
+  async function moveTo(target: Item) {
+    draftFill.touch(item.id);
+    await data.addPhotos(photos.map((p) => ({ jobId, itemId: target.id, uri: p.uri, width: p.width, height: p.height, marks: p.marks })));
+    await data.updateItem(item.id, { status: 'removed' });
+    capture.forget(item.id);
+    haptic.success();
+    const message = `Added the photo to ${target.title || `item ${itemNumberLabel(target)}`}`;
+    if (stepping && nextUnfinished) router.replace({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: nextUnfinished.id, from: 'unfinished' } });
+    else router.back();
+    feedback.toast({ message });
+  }
+
   function addPhoto() {
     live.flush();
     capture.start({ jobId, roomId: item.locationId, itemId: item.id });
-    router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
+    // From the walk, the camera is right behind this screen: back to it for the photo.
+    if (fromCamera) router.back();
+    else router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
   }
 
   function saveMarks(marks: Mark[]) {
@@ -225,7 +263,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
   function goNext() {
     // Checked over: saving tidies the draft, which puts it on the lists once it has everything.
     live.set({});
-    if (nextUnfinished) router.replace({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: nextUnfinished.id, from: 'unfinished' } });
+    if (!fromCamera && nextUnfinished) router.replace({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: nextUnfinished.id, from: 'unfinished' } });
     else router.back();
   }
 
@@ -238,7 +276,7 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
     if (filling) return 'Claude is filling it in from the photo.';
     const missing = missingText(live.value);
     if (missing) return `${missing.replace(/^Needs/, 'Add')} to put it on the lists.`;
-    return `Check it over, then tap ${nextUnfinished ? 'Next' : 'Done'} to put it on the lists.`;
+    return `Check it over, then tap ${stepping && nextUnfinished ? 'Next' : 'Done'} to put it on the lists.`;
   }
   const status: { icon: IconName; color: string; line: string; detail?: string } | null =
     item.status === 'complete'
@@ -249,26 +287,33 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
           ? { icon: 'pencil.tip', color: colors.tint, line: 'Draft', detail: draftDetail() }
           : null;
 
-  const stepping = item.unfinished || fromUnfinished;
-  const primary = stepping
-    ? nextUnfinished
-      ? { label: `Next (${unfinished.length} more)`, icon: 'chevron.right' as IconName, onPress: goNext, testID: 'next-unfinished', quiet: false }
-      : { label: 'Done', icon: 'checkmark' as IconName, onPress: goNext, testID: 'done-unfinished', quiet: false }
-    : item.status === 'open'
-      ? { label: 'Mark Complete', icon: 'checkmark' as IconName, onPress: () => void markComplete(), testID: 'mark-complete', quiet: false }
-      : item.status === 'complete'
-        ? { label: 'Reopen', icon: 'undo' as IconName, onPress: () => void setStatus(reopen), testID: 'reopen', quiet: true }
-        : { label: 'Restore to List', icon: 'undo' as IconName, onPress: () => void setStatus(restore), testID: 'restore', quiet: true };
+  const primary = fromCamera
+    ? { label: 'Done', icon: 'checkmark' as IconName, onPress: goNext, testID: 'done-camera', quiet: false }
+    : stepping
+      ? nextUnfinished
+        ? { label: `Next (${unfinished.length} more)`, icon: 'chevron.right' as IconName, onPress: goNext, testID: 'next-unfinished', quiet: false }
+        : { label: 'Done', icon: 'checkmark' as IconName, onPress: goNext, testID: 'done-unfinished', quiet: false }
+      : item.status === 'open'
+        ? { label: 'Mark Complete', icon: 'checkmark' as IconName, onPress: () => void markComplete(), testID: 'mark-complete', quiet: false }
+        : item.status === 'complete'
+          ? { label: 'Reopen', icon: 'undo' as IconName, onPress: () => void setStatus(reopen), testID: 'reopen', quiet: true }
+          : { label: 'Restore to List', icon: 'undo' as IconName, onPress: () => void setStatus(restore), testID: 'restore', quiet: true };
 
   const today = dayOfDate(new Date());
+  const scheduled = item.status === 'open' && !item.unfinished && !!company;
   const visitText = visit
     ? `${shortDate(visit.start)}${visit.days > 1 ? ` to ${shortDate(visitEnd(visit))}` : ''}, ${visit.confirmed ? 'confirmed' : 'best guess'}${visitEnd(visit) < today && item.status === 'open' ? ', past due' : ''}`
     : 'Not scheduled';
 
+  // Comments and History each fold into one row with the latest in it; a tap opens them.
+  const look = { people: new Map(people.map((p) => [p.id, p.name])), companies: new Map(companies.map((c) => [c.id, c.name])) };
+  const latest = thread[thread.length - 1];
+  const newest = history[0];
+
   return (
     <Page
       title={item.number === null ? 'New Item' : `Item ${itemNumberLabel(item)}`}
-      backLabel={room?.label}
+      backLabel={fromCamera ? 'Camera' : room?.label}
       footerHeight={66}
       footer={
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
@@ -347,24 +392,35 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
           problem={live.problem}
           showReady={item.status === 'open'}
           fillIn={filler.can && photo && !filling ? { busy: filler.busy, onPress: () => void filler.fillIn(photo, live.value, (patch) => live.set(patch)) } : undefined}
+          onTwin={item.unfinished && item.status === 'open' && photos.length > 0 ? { label: 'Add the photo to it instead.', onPress: (twin) => void moveTo(twin) } : undefined}
+          detailWords={scheduled ? [visit ? `Visit ${shortDate(visit.start)}` : 'Not scheduled'] : undefined}
+          details={
+            scheduled ? (
+              <ListSection header="Visit">
+                <ListRow title="Visit" value={visitText} valueColor={visit ? colors.secondary : colors.tint} accessory="chevron" onPress={openPlan} testID="item-visit" />
+              </ListSection>
+            ) : null
+          }
         >
-          {item.status === 'open' && !item.unfinished && company ? (
-            <ListSection>
-              <ListRow
-                title="Visit"
-                value={visitText}
-                valueColor={visit ? colors.secondary : colors.tint}
-                accessory="chevron"
-                onPress={openPlan}
-                testID="item-visit"
-              />
+          {targets.length > 0 ? (
+            <ListSection footer="When this photo is of something already on the list, it goes on that item and this draft comes off the list.">
+              <ListRow title={`Add to an Item in ${room?.label ?? 'This Location'}`} icon="plus" accessory="chevron" onPress={() => setMoving(true)} testID="add-to-item" />
             </ListSection>
           ) : null}
           {item.status !== 'removed' ? (
+            <ListSection>
+              <ListRow
+                title="Comments"
+                subtitle={latest ? `${commentAuthor(latest, look)}: ${latest.body}` : company ? `Back and forth with ${company.name}.` : 'Back and forth with the company.'}
+                value={thread.length > 0 ? String(thread.length) : undefined}
+                onPress={() => setShowComments((v) => !v)}
+                right={<Icon name={showComments ? 'chevron.down' : 'chevron.right'} size={13} color={colors.chevron} weight="bold" />}
+                testID="item-comments-row"
+              />
+            </ListSection>
+          ) : null}
+          {item.status !== 'removed' && showComments ? (
             <View style={styles.comments}>
-              <Text variant="footnote" color={colors.secondary} style={styles.commentsHeader}>
-                Comments
-              </Text>
               <CommentThread
                 comments={thread}
                 onPost={(body, internal) => void data.addComment({ jobId, itemId: item.id, companyId: item.companyId, body, internal })}
@@ -373,16 +429,22 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
               />
             </View>
           ) : null}
-          {history.length > 0 ? (
-            <ListSection header="History" testID="item-history">
-              {(allHistory ? history : history.slice(0, HISTORY_SHOWN)).map((line, i, shown) => (
-                <ActivityRow
-                  key={line.key}
-                  line={line}
-                  time={whenOf(line.at)}
-                  timeBelow
-                  last={i === shown.length - 1 && (allHistory || history.length <= HISTORY_SHOWN)}
-                />
+          {newest ? (
+            <ListSection>
+              <ListRow
+                title="History"
+                subtitle={`${newest.who} ${newest.action}, ${whenOf(newest.at)}`}
+                value={history.length > 1 ? String(history.length) : undefined}
+                onPress={() => setShowHistory((v) => !v)}
+                right={<Icon name={showHistory ? 'chevron.down' : 'chevron.right'} size={13} color={colors.chevron} weight="bold" />}
+                testID="item-history-row"
+              />
+            </ListSection>
+          ) : null}
+          {newest && showHistory ? (
+            <ListSection testID="item-history">
+              {(allHistory ? history : history.slice(0, HISTORY_SHOWN)).map((line, i, list) => (
+                <ActivityRow key={line.key} line={line} time={whenOf(line.at)} timeBelow last={i === list.length - 1 && (allHistory || history.length <= HISTORY_SHOWN)} />
               ))}
               {!allHistory && history.length > HISTORY_SHOWN ? (
                 <ListRow title={`Show All ${history.length}`} tone="tint" onPress={() => setAllHistory(true)} testID="history-all" />
@@ -405,6 +467,19 @@ function ItemDetail({ jobId, item, fromUnfinished }: { jobId: string; item: Item
           </>
         ) : null}
       </Modal>
+      <OptionPicker
+        visible={moving}
+        title="Add to an Item"
+        options={targets}
+        value={null}
+        onSelect={(id) => {
+          const target = items.find((i) => i.id === id);
+          // The picker slides away first.
+          if (target) setTimeout(() => void moveTo(target), 350);
+        }}
+        onClose={() => setMoving(false)}
+        footer="The photo goes on the item you pick, and this draft comes off the list."
+      />
     </Page>
   );
 }
@@ -421,7 +496,6 @@ const styles = StyleSheet.create({
   statusIcon: { alignSelf: 'flex-start', marginTop: 2 },
   editor: { marginTop: 14 },
   comments: { marginBottom: 22 },
-  commentsHeader: { marginHorizontal: layout.margin + layout.rowPadding, marginBottom: 7 },
   remove: { alignSelf: 'flex-start', height: 44, justifyContent: 'center', marginHorizontal: layout.inset, marginTop: -8 },
   footer: { paddingTop: 10, paddingHorizontal: layout.margin, backgroundColor: 'rgba(245, 245, 247, 0.96)', borderTopWidth: layout.hairline, borderTopColor: colors.rule },
   primary: { height: 50, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.tint },

@@ -38,7 +38,6 @@ export default function ScheduleScreen() {
   const items = data.useItems(jobId);
   const visits = data.useVisits(jobId);
   const locations = data.useLocations(jobId);
-  const trades = data.useTrades();
   const companies = data.useCompanies();
   const holds = useHolds(jobId);
   const today = dayOfDate(new Date());
@@ -46,7 +45,7 @@ export default function ScheduleScreen() {
   const monday = lookAheadStart(today);
   const [draft, setDraft] = useState<VisitDraft | null>(null);
 
-  const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
+  const lookups = useMemo(() => ({ locations, companies }), [locations, companies]);
   const late = useMemo(() => pastDue(items, visits, today), [items, visits, today]);
   const timeline = useMemo(() => buildTimeline(items, visits, locations, today), [items, visits, locations, today]);
   const rows = useMemo(() => timelineRows(timeline, monday), [timeline, monday]);

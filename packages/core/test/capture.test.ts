@@ -251,7 +251,7 @@ describe('walking the job', () => {
       ['Completed', 1],
     ]);
     // Drafts stay out of every other list until they are filled in.
-    for (const by of ['room', 'trade', 'company'] as const) {
+    for (const by of ['room', 'company'] as const) {
       expect(groupItems(items, by, lookups, { showCompleted: true }).some((g) => g.items.some((i) => i.unfinished))).toBe(false);
     }
     // A holdup past its Ready By goes first, however small.
@@ -263,8 +263,6 @@ describe('walking the job', () => {
       ['Owner', 0],
       ['Volcano Stone', 0],
     ]);
-    const painting = groupItems(items, 'room', lookups, { filters: { ...NO_FILTERS, tradeIds: ['t-paint'] } });
-    expect(painting.flatMap((g) => g.items).map((i) => i.tradeId)).toEqual(['t-paint']);
   });
 
   it('reads a Waiting On list as a sentence, and tidies it', () => {
@@ -308,18 +306,18 @@ describe('the lists that go to the subs', () => {
     ]);
   });
 
-  it('lists the companies with open work, and the whole job by room then trade', () => {
+  it('lists the companies with open work, and the whole job by room then company', () => {
     expect(companiesWithWork(items, lookups)).toEqual([
       { companyId: 'c-sms', name: 'SMS Carpentry', open: 5, ready: 2, needsPrice: 0 },
       { companyId: 'c-hhh', name: 'Triple H Painting', open: 1, ready: 1, needsPrice: 0 },
     ]);
-    expect(jobList(items, lookups).map((l) => [l.room, l.trade, l.item.number])).toEqual([
-      ['Living 107', 'Carpentry', 2],
-      ['Living 107', 'Carpentry', 4],
-      ['Living 107', 'Carpentry', 5],
-      ['Kitchen 109', 'Carpentry', 1],
-      ['Kitchen 109', 'Carpentry', 3],
-      ['Kitchen 109', 'Painting', 7],
+    expect(jobList(items, lookups).map((l) => [l.room, l.company, l.item.number])).toEqual([
+      ['Living 107', 'SMS Carpentry', 2],
+      ['Living 107', 'SMS Carpentry', 4],
+      ['Living 107', 'SMS Carpentry', 5],
+      ['Kitchen 109', 'SMS Carpentry', 1],
+      ['Kitchen 109', 'SMS Carpentry', 3],
+      ['Kitchen 109', 'Triple H Painting', 7],
     ]);
   });
 
@@ -331,7 +329,8 @@ describe('the lists that go to the subs', () => {
     expect(page.title).toBe('SMS Carpentry');
     expect(page.fileName).toBe('Fish Completion List for SMS Carpentry, October 30 2026.pdf');
     expect(page.body).toContain('Fish, 715 North Shore Drive');
-    expect(page.body).toContain('Carpentry: 5 open items, 2 ready now and 3 waiting.');
+    expect(page.body).toContain('5 open items, 2 ready now and 3 waiting.');
+    expect(page.body).not.toContain('Carpentry: ');
     const sections = [...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1]);
     expect(sections).toEqual(['Ready', 'Waiting', 'Anything Missing']);
     // The month and day never break apart on the page.
@@ -393,7 +392,7 @@ describe('the lists that go to the subs', () => {
     expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Ready', 'To Be Quoted', 'Anything Missing']);
   });
 
-  it('prints the whole job floor by floor and room by room, with the trade and company on every line', () => {
+  it('prints the whole job floor by floor and room by room, with the company on every line', () => {
     const page = jobPrintout(jobList(items, lookups), settings);
     expect(page.fileName).toBe('Fish Completion List, October 30 2026.pdf');
     expect(page.body).toContain('6 open items in 2 locations: 3 ready now and 3 waiting.');
@@ -401,7 +400,7 @@ describe('the lists that go to the subs', () => {
     expect([...page.body.matchAll(/<tr class="rb-band"><td colspan="4">(.*?) \u00b7 /g)].map((m) => m[1])).toEqual(['Living 107', 'Kitchen 109']);
     const lines = dataRows(page.body);
     expect(lines).toHaveLength(6);
-    for (const line of lines) expect(line).toMatch(/<div class="rb-meta">(SMS Carpentry \u00b7 Carpentry|Triple H Painting \u00b7 Painting) \u00b7 /);
+    for (const line of lines) expect(line).toMatch(/<div class="rb-meta">(SMS Carpentry|Triple H Painting) \u00b7 /);
     expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November\u00a02');
     expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(4);
     expect(printPage(page)).toMatch(/^<!DOCTYPE html>.*<div class="rb-doc">.*<\/div><\/body><\/html>$/s);

@@ -7,17 +7,16 @@
 // it takes (one duration per batch, as the schedule bars carry), then additional work that needs a
 // price (to be quoted, with a line for the price), then blank lines to add anything missing. Items new since the last list say so. The owner's
 // list says what Ross Built needs from them and by when. The whole job list goes location by
-// location with the trade and company on every line. A list made to order takes any filters,
-// groups by location, trade, company or what it waits on, shows the details picked on every line,
+// location with the company on every line. A list made to order takes any filters, groups by
+// location, company or what it waits on, shows the details picked on every line,
 // and totals each group's estimated time. The three week look ahead is the schedule for everyone:
 // each company's visits across the next three weeks, green once confirmed and blue for our best
 // guess, what each visit covers, and what has no date yet.
 // Plain HTML, so the phone turns it into a PDF and the preview page shows the very same thing.
 
 import { addDays, dayOfDate, daysBetween, isDay, mondayOf, visitEnd } from './dates';
-import { KIND_LABELS } from './forms';
 import { holdText } from './holds';
-import { orderText } from './orders';
+import { kindText, orderText } from './orders';
 import { holdsFor, type CompanyList, type ListLine, type ListLookups } from './lists';
 import { timelineRows, workingIndex, type Timeline, type TimelineBar } from './timeline';
 import { markShapes, type MarkShape } from './marks';
@@ -25,7 +24,6 @@ import { isPriced } from './rules';
 import { daysText, hoursText, totalText, totalTime } from './time';
 import type { Item, Mark, Visit } from './types';
 import { itemNumberLabel } from './views';
-import { waitingOnText } from './waitingOn';
 
 /** The first photo of an item, ready to print: its picture (a data or file address) and its marks. */
 export interface PrintPhoto {
@@ -257,8 +255,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
         ? `${plural(list.open, 'open item')}, all ready now.`
         : `${plural(list.open, 'open item')}, ${andList(counts)}.`;
   const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-  const trades = list.trades.length > 0 ? `${waitingOnText(list.trades)}: ${summary}` : sentence(summary);
-  const parts = [header(settings, 'Completion List', list.company, trades)];
+  const parts = [header(settings, 'Completion List', list.company, sentence(summary))];
 
   if (settings.listComments && settings.listComments.length > 0) {
     parts.push('<h2 class="rb-section">Comments</h2>');
@@ -356,17 +353,16 @@ export function partyPrintout(party: string, lines: ListLine[], settings: PrintS
 
 // ---------- a list made to order ----------
 
-export type ListGroupBy = 'location' | 'trade' | 'company' | 'waiting';
-export type ListDetail = 'description' | 'location' | 'company' | 'trade' | 'type' | 'status' | 'time' | 'comments' | 'photo';
+export type ListGroupBy = 'location' | 'company' | 'waiting';
+export type ListDetail = 'description' | 'location' | 'company' | 'type' | 'status' | 'time' | 'comments' | 'photo';
 
-export const LIST_GROUP_LABELS: Record<ListGroupBy, string> = { location: 'Location', trade: 'Trade', company: 'Company', waiting: 'Waiting On' };
+export const LIST_GROUP_LABELS: Record<ListGroupBy, string> = { location: 'Location', company: 'Company', waiting: 'Waiting On' };
 
 /** What each line can show, in the order the sheet offers them. */
 export const LIST_DETAILS: { detail: ListDetail; label: string }[] = [
   { detail: 'description', label: 'Description' },
   { detail: 'location', label: 'Location' },
   { detail: 'company', label: 'Company' },
-  { detail: 'trade', label: 'Trade' },
   { detail: 'type', label: 'Type' },
   { detail: 'status', label: 'Ready or Waiting' },
   { detail: 'time', label: 'Estimated Time' },
@@ -390,7 +386,7 @@ export interface ListDesign {
 export const DEFAULT_LIST_DESIGN: ListDesign = {
   title: '',
   groupBy: 'location',
-  details: ['description', 'company', 'trade', 'type', 'status', 'time', 'comments', 'photo'],
+  details: ['description', 'company', 'type', 'status', 'time', 'comments', 'photo'],
   daysLines: false,
   blankLines: false,
 };
@@ -400,11 +396,6 @@ export interface CustomPrintSettings extends PrintSettings {
   filters?: string[];
 }
 
-/** The type of work in words: "Deficiency", "Additional, Change Order 14", "Additional, to be quoted". */
-function kindWords(item: Pick<Item, 'kind' | 'poOrCo'>): string {
-  if (item.kind !== 'added_scope') return KIND_LABELS[item.kind];
-  return isPriced(item) ? `Additional, ${orderText(item.poOrCo)}` : 'Additional, to be quoted';
-}
 
 interface LineGroup {
   label: string;
@@ -430,9 +421,6 @@ function groupLines(lines: ListLine[], by: ListGroupBy): LineGroup[] {
       case 'location':
         add(item.locationId, line.room, line, 0, { floor: line.floor });
         break;
-      case 'trade':
-        add(line.trade, line.trade, line, line.trade === 'Not set' ? 1 : 0);
-        break;
       case 'company':
         add(line.company, line.company, line, line.company === 'Not set' ? 1 : 0);
         break;
@@ -449,7 +437,7 @@ function groupLines(lines: ListLine[], by: ListGroupBy): LineGroup[] {
     }
   }
   const list = [...groups.values()];
-  if (by === 'trade' || by === 'company') list.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+  if (by === 'company') list.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
   if (by === 'waiting') {
     list.sort(
       (a, b) => a.order - b.order || (a.readyBy ?? '9999').localeCompare(b.readyBy ?? '9999') || b.lines.length - a.lines.length || a.label.localeCompare(b.label),
@@ -466,12 +454,12 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
     const { item } = line;
     const parts = [`<div class="rb-work">${esc(item.title)}</div>`];
     if (has('description') && item.description) parts.push(`<div class="rb-desc">${esc(item.description)}</div>`);
-    const meta = [has('location') ? line.room : null, has('company') ? line.company : null, has('trade') ? line.trade : null, has('type') ? kindWords(item) : null]
+    const meta = [has('location') ? line.room : null, has('company') ? line.company : null, has('type') ? kindText(item) : null]
       .filter((x): x is string => !!x)
       .join(' \u00b7 ');
     if (meta) parts.push(`<div class="rb-meta">${esc(meta)}</div>`);
     // Whether additional work is priced always shows: it decides whether it can be scheduled.
-    if (!has('type') && item.kind === 'added_scope') parts.push(`<div class="rb-note">${esc(kindWords(item))}</div>`);
+    if (!has('type') && item.kind === 'added_scope') parts.push(`<div class="rb-note">${esc(kindText(item))}</div>`);
     if (has('comments')) parts.push(commentsHtml(settings.comments?.(item.id), today));
     return parts.join('');
   };
@@ -558,7 +546,7 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
 export const WHOLE_JOB_DESIGN: ListDesign = {
   title: 'Whole Job',
   groupBy: 'location',
-  details: ['description', 'company', 'trade', 'type', 'status', 'time', 'comments', 'photo'],
+  details: ['description', 'company', 'type', 'status', 'time', 'comments', 'photo'],
   daysLines: false,
   blankLines: true,
 };

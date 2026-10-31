@@ -206,8 +206,6 @@ function fieldWords(field: string, before: string | null, after: string | null, 
       return [`Location: ${look.locations.get(after ?? '') ?? 'another location'}`];
     case 'company_id':
       return [after ? `Company: ${look.companies.get(after) ?? 'another company'}` : 'Company cleared'];
-    case 'trade_id':
-      return [after ? `Trade: ${look.trades.get(after) ?? 'another trade'}` : 'Trade cleared'];
     case 'kind':
       return [`Type: ${KIND_LABELS[(after ?? '') as ItemKind] ?? after}`];
     case 'ready':
@@ -250,7 +248,8 @@ function fieldWords(field: string, before: string | null, after: string | null, 
 }
 
 /** Fields that are not worth a line: they follow from others, or the database sets them. */
-const QUIET = new Set(['bought_out', 'number', 'source', 'bt_external_id', 'org', 'completed_by', 'completed_at', 'job_id']);
+// The trade follows the company (the company's trade on the job), so a change to it says nothing new.
+const QUIET = new Set(['bought_out', 'number', 'source', 'bt_external_id', 'org', 'completed_by', 'completed_at', 'job_id', 'trade_id']);
 
 type Kind = 'create' | 'status' | 'change' | 'photo' | 'locations' | 'other';
 

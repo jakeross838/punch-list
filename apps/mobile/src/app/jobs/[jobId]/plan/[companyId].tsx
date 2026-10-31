@@ -41,13 +41,12 @@ export default function PlanScreen() {
   const items = data.useItems(jobId);
   const visits = data.useVisits(jobId);
   const locations = data.useLocations(jobId);
-  const trades = data.useTrades();
   const companies = data.useCompanies();
   const today = dayOfDate(new Date());
   const [draft, setDraft] = useState<VisitDraft | null>(null);
   const thread = listComments(data.useComments(jobId), companyId);
 
-  const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
+  const lookups = useMemo(() => ({ locations, companies }), [locations, companies]);
   const holds = useHolds(jobId);
   const plan = useMemo(() => companyPlan(companyId, items, visits, lookups, today), [companyId, items, visits, lookups, today]);
 

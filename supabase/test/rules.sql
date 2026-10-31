@@ -193,7 +193,8 @@ declare
   c2 uuid; d uuid; v uuid; v2 uuid; s uuid;
   rec record;
 begin
-  -- An unfinished item may wait for its title, company and trade; a finished one may not.
+  -- An unfinished item may wait for its title and company; a finished one may not. The trade is
+  -- never asked for: it follows the company's trade on the job.
   insert into public.items (job_id, location_id, title, ready, unfinished) values (j, loc, '', true, true) returning id into d;
   begin
     insert into public.items (job_id, location_id, title, ready) values (j, loc, '', true);
@@ -202,8 +203,29 @@ begin
   end;
   begin
     insert into public.items (job_id, location_id, title, ready) values (j, loc, 'Install vanity', true);
-    raise exception 'FAIL: a finished item with no company or trade was accepted';
+    raise exception 'FAIL: a finished item with no company was accepted';
   exception when check_violation then null;
+  end;
+  declare
+    x uuid;
+    paint uuid;
+  begin
+    insert into public.items (job_id, location_id, title, company_id, ready) values (j, loc, 'Install faucet', c, true) returning id into x;
+    if (select trade_id from public.items where id = x) is distinct from t then
+      raise exception 'FAIL: the trade did not follow the company on the job';
+    end if;
+    -- A trade the company does not do on the job is put right; another company brings its own.
+    insert into public.trades (name, sort_order) values ('Wallcovering', 9) returning id into paint;
+    update public.items set trade_id = paint where id = x;
+    if (select trade_id from public.items where id = x) is distinct from t then
+      raise exception 'FAIL: a trade the company does not do on the job was kept';
+    end if;
+    insert into public.companies (name, default_trade_id) values ('Bayside Wallcovering', paint) returning id into c2;
+    update public.items set company_id = c2 where id = x;
+    if (select trade_id from public.items where id = x) is distinct from paint then
+      raise exception 'FAIL: a company not on the job did not bring its usual trade';
+    end if;
+    update public.items set status = 'removed' where id = x;
   end;
   -- Every other rule still holds: not ready needs Waiting On, and it cannot be completed.
   begin

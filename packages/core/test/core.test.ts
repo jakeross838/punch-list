@@ -116,8 +116,9 @@ describe('item rules', () => {
     expect(checkItem(item())).toEqual([]);
   });
 
-  it('needs a company and a trade, one each', () => {
-    expect(checkItem(item({ companyId: null, tradeId: null })).map((p) => p.field)).toEqual(['companyId', 'tradeId']);
+  it('needs a company, and not a trade: the trade follows the company', () => {
+    expect(checkItem(item({ companyId: null, tradeId: null })).map((p) => p.field)).toEqual(['companyId']);
+    expect(checkItem(item({ tradeId: null }))).toEqual([]);
   });
 
   it('needs Waiting On when the item is not ready', () => {

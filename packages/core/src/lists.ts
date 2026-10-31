@@ -6,13 +6,12 @@
 import { matchesFilters, type FilterContext, type ItemFilters } from './filters';
 import { holdLookups, holdText, readyByOf, type HoldLookups } from './holds';
 import { isPriced } from './rules';
-import type { Company, Item, Location, Trade, Visit } from './types';
+import type { Company, Item, Location, Visit } from './types';
 import { floorOf, NO_FLOOR } from './rooms';
 import { sortItems } from './views';
 
 export interface ListLookups {
   locations: Location[];
-  trades: Trade[];
   companies: Company[];
   /**
    * The job's items and visits. With them a line names the tasks it waits on and, from their
@@ -28,7 +27,6 @@ export interface ListLine {
   item: Item;
   room: string;
   floor: string;
-  trade: string;
   company: string;
   /** What it waits on, as it reads after "Waiting on"; empty when it is ready. */
   waiting: string;
@@ -65,7 +63,6 @@ export interface WaitingGroup {
 export interface CompanyList {
   companyId: string;
   company: string;
-  trades: string[];
   /** Ready and priced: it can be done now. */
   ready: ListLine[];
   waiting: WaitingGroup[];
@@ -84,7 +81,6 @@ export function lineFor(item: Item, lookups: ListLookups): ListLine {
     item,
     room: room?.label ?? 'Not set',
     floor: room ? floorOf(room) : NO_FLOOR,
-    trade: lookups.trades.find((t) => t.id === item.tradeId)?.name ?? 'Not set',
     company: lookups.companies.find((c) => c.id === item.companyId)?.name ?? 'Not set',
     waiting: item.ready ? '' : holdText(item, look),
     waitingGroup: item.ready ? '' : holdText(item, look, { everywhere: true }),
@@ -118,11 +114,9 @@ export function companyList(companyId: string, items: Item[], lookups: ListLooku
   const waiting = [...groups.values()].sort(
     (a, b) => (a.readyBy ?? '9999').localeCompare(b.readyBy ?? '9999') || b.lines.length - a.lines.length || a.on.localeCompare(b.on),
   );
-  const trades = [...new Set(open.map((i) => lookups.trades.find((t) => t.id === i.tradeId)?.name).filter((n): n is string => !!n))].sort();
   return {
     companyId,
     company: lookups.companies.find((c) => c.id === companyId)?.name ?? 'Not set',
-    trades,
     ready,
     waiting,
     needsPrice: sorted.filter((i) => !isPriced(i)).map((i) => lineFor(i, look)),
@@ -189,14 +183,14 @@ export function partyList(party: string, items: Item[], lookups: ListLookups): L
     .sort((a, b) => (a.readyBy ?? '9999').localeCompare(b.readyBy ?? '9999'));
 }
 
-/** Every open, finished item on the job, in floor order, then by trade. */
+/** Every open, finished item on the job, in floor order, then by company. */
 export function jobList(items: Item[], lookups: ListLookups): ListLine[] {
   const look = withItems(lookups, items);
   const open = items.filter(onLists);
   const lines = inFloorOrder(open, look).map((i) => lineFor(i, look));
   const order = new Map(lookups.locations.map((l) => [l.id, l.sortOrder]));
   return lines.sort(
-    (a, b) => (order.get(a.item.locationId) ?? 1e9) - (order.get(b.item.locationId) ?? 1e9) || a.trade.localeCompare(b.trade),
+    (a, b) => (order.get(a.item.locationId) ?? 1e9) - (order.get(b.item.locationId) ?? 1e9) || a.company.localeCompare(b.company),
   );
 }
 

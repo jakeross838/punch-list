@@ -1,6 +1,7 @@
 // Fill In From Photo: Claude looks at the photo, with the room, the marks, the standard titles and
-// the companies on the job, and fills in what is still blank: the title, where exactly, the trade
-// and the company. It never overwrites what was already typed. The person checks it over.
+// the companies on the job, and fills in what is still blank: the title, where exactly and the
+// company (the trade follows the company). It never overwrites what was already typed. The person
+// checks it over.
 
 import { suggestContext, suggestionPatch, type ItemSuggestion, type Mark } from '@punch/core';
 import { useState } from 'react';

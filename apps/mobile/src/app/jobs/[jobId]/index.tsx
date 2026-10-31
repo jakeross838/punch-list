@@ -2,7 +2,7 @@
 // and how long the open work takes, and each level with its own totals. Tap a location for its
 // items. Drafts sit on their own at the top when there are any; anything past due shows as a red
 // count on Schedule. Filter, at the top under the title, narrows the list to exactly the work in
-// question and groups it by trade, company or what items wait on; the filters that are on show as
+// question and groups it by location, company or what items wait on; the filters that are on show as
 // chips beside it. The bottom bar is the walk and what comes of it: Schedule (the chart the list
 // builds), the camera in the middle, and Send Lists.
 
@@ -38,7 +38,7 @@ import { capture } from '@/data/capture';
 import { useFilterContext, useHolds, useJobView } from '@/data/view';
 import { Button, EmptyState, Icon, Page, Text, Touchable, type BarMenu, type IconName } from '@/ui';
 
-const GROUP_ICONS: Record<GroupBy, IconName> = { room: 'rooms', trade: 'wrench', company: 'person.2.fill', waiting: 'hourglass' };
+const GROUP_ICONS: Record<GroupBy, IconName> = { room: 'rooms', company: 'person.2.fill', waiting: 'hourglass' };
 
 interface Row {
   group: ItemGroup;
@@ -55,7 +55,7 @@ interface Section {
 const openWords = (n: number) => `${n} open`;
 
 function matchesQuery(item: Item, q: string, name: (id: string | null) => string): boolean {
-  const hay = [item.title, item.description, item.waitingOn.join(' '), item.poOrCo ?? '', String(item.number ?? ''), name(item.companyId), name(item.tradeId), name(item.locationId)]
+  const hay = [item.title, item.description, item.waitingOn.join(' '), item.poOrCo ?? '', String(item.number ?? ''), name(item.companyId), name(item.locationId)]
     .join(' ')
     .toLowerCase();
   return q
@@ -90,11 +90,10 @@ export default function JobScreen() {
 
   const names = useMemo(() => {
     const map = new Map<string, string>();
-    for (const t of trades) map.set(t.id, t.name);
     for (const c of companies) map.set(c.id, c.name);
     for (const l of locations) map.set(l.id, l.label);
     return (id: string | null) => (id ? (map.get(id) ?? '') : '');
-  }, [trades, companies, locations]);
+  }, [companies, locations]);
   const firstPhoto = useMemo(() => {
     const map = new Map<string, Photo>();
     for (const p of photos) if (!map.has(p.itemId)) map.set(p.itemId, p);
@@ -104,7 +103,7 @@ export default function JobScreen() {
 
   const filters = view.filters;
   const narrowed = isFiltered(filters);
-  const lookups = useMemo(() => ({ locations, trades, companies }), [locations, trades, companies]);
+  const lookups = useMemo(() => ({ locations, companies }), [locations, companies]);
   const groups = useMemo(() => groupItems(items, view.groupBy, lookups, { filters, context }), [items, view.groupBy, lookups, filters, context]);
   const draftItems = items.filter((i) => i.unfinished && i.status === 'open');
   const drafts = draftItems.length;

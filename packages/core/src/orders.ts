@@ -3,6 +3,10 @@
 // Until it has one, additional work is to be quoted. Kept as one short reference, "CO 14", the way
 // Buildertrend writes it, and always said in full on screen and on paper: "Change Order 14".
 
+import { KIND_LABELS } from './forms';
+import { isPriced } from './rules';
+import type { Item } from './types';
+
 export type OrderType = 'po' | 'vpo' | 'co';
 
 export const ORDER_TYPES: OrderType[] = ['po', 'vpo', 'co'];
@@ -40,4 +44,10 @@ export function orderText(text: string | null | undefined): string {
   const { type, number } = readOrder(text);
   if (!type) return number;
   return number ? `${ORDER_LABELS[type]} ${number}` : ORDER_LABELS[type];
+}
+
+/** The type of work in words: "Deficiency", "Additional, Change Order 14", "Additional, to be quoted". */
+export function kindText(item: Pick<Item, 'kind' | 'poOrCo'>): string {
+  if (item.kind !== 'added_scope') return KIND_LABELS[item.kind];
+  return isPriced(item) ? `Additional, ${orderText(item.poOrCo)}` : 'Additional, to be quoted';
 }

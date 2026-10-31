@@ -152,7 +152,6 @@ describe('filters', () => {
     expect(pick({ companyIds: ['c-sms', 'c-hhh'] })).toEqual(['a', 'b', 'c', 'd']);
     expect(pick({ companyIds: ['c-sms'], floors: ['Level 2'] })).toEqual(['d']);
     expect(pick({ floors: ['Outside and Whole House'] })).toEqual(['c']);
-    expect(pick({ tradeIds: ['t-paint'] })).toEqual(['b']);
     expect(pick({ kinds: ['deficiency', 'added_scope'] })).toEqual(['a', 'd']);
     expect(pick({ waitingOn: ['volcano stone'] })).toEqual(['c']);
     expect(pick({ addedBy: ['sam'] })).toEqual(['b']);

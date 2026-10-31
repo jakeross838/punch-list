@@ -87,7 +87,7 @@ export default function ItemFormScreen() {
         <ListRow title="Add a Field" tone="tint" onPress={() => setFieldSheet({ field: null })} testID="add-field" />
       </ListSection>
 
-      <ListSection header="Titles" footer="Picking a title fills in its trade, its company and how long it usually takes.">
+      <ListSection header="Titles" footer="Picking a title fills in its company and how long it usually takes. The company comes from the title's trade, from the companies on the job.">
         <ListRow title="Standard Titles" value={String(titles.length)} accessory="chevron" onPress={() => setTitlesOpen(true)} testID="standard-titles" />
       </ListSection>
 

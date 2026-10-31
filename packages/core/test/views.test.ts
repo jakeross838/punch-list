@@ -62,8 +62,8 @@ describe('list views', () => {
     expect(kitchen.items.map(itemNumberLabel)).toEqual(['3', 'New']);
   });
 
-  it('groups by trade or company, alphabetically', () => {
-    expect(groupItems(items, 'trade', lookups).map((g) => g.label)).toEqual(['Electrical', 'Plumbing']);
+  it('groups by company, alphabetically, and reads a view grouped by trade as by company', () => {
+    expect(readViewSettings({ groupBy: 'trade' }).groupBy).toBe('company');
     expect(groupItems(items, 'company', lookups).map((g) => g.label)).toEqual(['Gator Plumbing', 'Metro Electric']);
   });
 
@@ -80,9 +80,9 @@ describe('list views', () => {
 
   it('reads a saved view, and carries over one saved before filters took several values', () => {
     expect(readViewSettings({ groupBy: 'trade', filter: 'not_ready', tradeId: 't1', companyId: null, showCompleted: true })).toEqual({
-      groupBy: 'trade',
+      groupBy: 'company',
       showCompleted: true,
-      filters: { ...NO_FILTERS, states: ['not_ready'], tradeIds: ['t1'] },
+      filters: { ...NO_FILTERS, states: ['not_ready'] },
     });
     expect(readViewSettings({ groupBy: 'company', filter: 'added_scope' }).filters.kinds).toEqual(['added_scope']);
     expect(readViewSettings({ groupBy: 'sideways', filters: { states: ['ready', 'later'], photo: 'yes', estimated: false } })).toEqual({

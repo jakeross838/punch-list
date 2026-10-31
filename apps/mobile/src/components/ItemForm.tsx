@@ -68,7 +68,7 @@ export interface ItemFormState {
   /** Marks the form tried and returns the tidied draft when it can save, or null. */
   submit: () => ItemDraft | null;
   /**
-   * Save now, finish later: the draft as an unfinished item when only its title, company or trade is
+   * Save now, finish later: the draft as an unfinished item when only its title or company is
    * missing, or null when something else stops it.
    */
   submitUnfinished: () => ItemDraft | null;
@@ -161,25 +161,22 @@ export function useFormOptions(jobId: string, locationId: string) {
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [jobCompanies, companies, trades]);
-  const tradeOptions = useMemo<Option[]>(() => trades.map((t) => ({ value: t.id, label: t.name })), [trades]);
   const waitingOptions = useMemo<Option[]>(
     () => waitingOnChoices(jobCompanies, companies, extras.length > 0 ? extras : undefined).map((name) => ({ value: name, label: name })),
     [jobCompanies, companies, extras],
   );
 
-  /** Picking a company fills in the trade it does on this job. */
+  /** The trade follows the company: the trade it does on this job. */
   const tradeFor = (companyId: string, current: string | null) =>
     tradeForCompany(companyId, jobCompanies) ?? companies.find((c) => c.id === companyId)?.defaultTradeId ?? current;
 
   return {
     roomOptions,
     companyOptions,
-    tradeOptions,
     waitingOptions,
     jobCompanies,
     roomLabel: (id: string) => locations.find((l) => l.id === id)?.label,
     companyName: (id: string | null) => companies.find((c) => c.id === id)?.name,
-    tradeName: (id: string | null) => trades.find((t) => t.id === id)?.name,
     tradeFor,
   };
 }

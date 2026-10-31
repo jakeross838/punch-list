@@ -60,11 +60,27 @@ const nextId = () => `activity-live-${String(++seq).padStart(6, '0')}`;
  * does, and the other things that happened, all as the signed-in person, now.
  */
 /**
- * What the database does on every item write: a ready item waits on nothing, and a task done or
- * removed frees what waited on it (an item with nothing left to wait on is ready).
+ * The trade follows the company, as the database has it: a trade the company does on the job stays,
+ * otherwise the first one it does there, or its usual trade.
+ */
+function tradeFollows(item: Item): Item {
+  if (!item.companyId) return item;
+  const onJob = state.jobCompanies.filter((jc) => jc.jobId === item.jobId && jc.companyId === item.companyId);
+  if (item.tradeId && onJob.some((jc) => jc.tradeId === item.tradeId)) return item;
+  const order = (id: string) => state.trades.find((t) => t.id === id);
+  const first = [...onJob].sort((a, b) => (order(a.tradeId)?.sortOrder ?? 0) - (order(b.tradeId)?.sortOrder ?? 0))[0]?.tradeId;
+  const tradeId = first ?? state.companies.find((c) => c.id === item.companyId)?.defaultTradeId ?? item.tradeId;
+  return tradeId === item.tradeId ? item : { ...item, tradeId };
+}
+
+/**
+ * What the database does on every item write: the trade follows the company, a ready item waits
+ * on nothing, and a task done or removed frees what waited on it (an item with nothing left to
+ * wait on is ready).
  */
 function settle(before: Item[], after: Item[]): Item[] {
-  let items = after.map((i) =>
+  const was = new Map(before.map((i) => [i.id, i]));
+  let items = after.map((i) => (was.get(i.id) === i ? i : tradeFollows(i))).map((i) =>
     i.ready && (i.waitingOn.length > 0 || i.waitingOnItems.length > 0 || i.readyBy !== null) ? { ...i, waitingOn: [], waitingOnItems: [], readyBy: null } : i,
   );
   const wasOpen = new Set(before.filter((i) => i.status === 'open').map((i) => i.id));
@@ -222,7 +238,7 @@ const api: DataApi = {
     // A standard title used again moves up the suggestions.
     const key = item.title.toLowerCase();
     const titles = state.titles.map((t) => (t.title.toLowerCase() === key ? { ...t, uses: t.uses + 1 } : t));
-    commit({ items: [...state.items, item], titles, counters: { ...state.counters, [input.jobId]: number } });
+    commit({ items: [...state.items, tradeFollows(item)], titles, counters: { ...state.counters, [input.jobId]: number } });
     return id;
   },
   async updateItem(id: string, patch: ItemPatch) {

@@ -1,7 +1,11 @@
-// A walk with the camera: the room photos are going to, the photos taken for the item being made,
-// and that item's form while the camera takes another photo for it. Kept in memory across the
-// camera, markup and New Item screens; cleared when the walk ends. Draft saves each photo
-// straight away as an item in the location, to mark up and fill in later.
+// A walk with the camera: the location photos are going to, the last item saved, and how many
+// were saved. Each photo saves straight away as an item in the location, a draft until someone
+// checks it, and Claude fills it in. Kept in memory across the camera, item and New Item screens;
+// cleared when the walk ends.
+//
+// The camera also takes a photo for one item (Add Photo on an item), or for the New Item form
+// (the photos taken for it, and its form while the camera is open). A walk open on the job carries
+// on once that photo is on its item.
 
 import { randomUUID } from 'expo-crypto';
 import { useSyncExternalStore } from 'react';
@@ -18,27 +22,40 @@ export interface Shot {
 
 export interface CaptureState {
   jobId: string | null;
-  /** The room new photos and items go to. */
+  /** The location new photos and items go to. */
   roomId: string | null;
   /** Adding photos to this item instead of making a new one. */
   itemId: string | null;
-  /** The photos taken for the item being made. */
+  /** The photos taken for the item being made in the New Item form. */
   shots: Shot[];
-  /** The New Item form, kept while the camera takes another photo for it. */
+  /** The New Item form, kept while the camera takes a photo for it. */
   draft: ItemDraft | null;
   /** A photo of the item being made whose marks are being changed. */
   editing: string | null;
   /** Items saved on this walk. */
   saved: number;
-  /** The item just saved with Save and Next, or the item a photo was just added to, for the camera to confirm. */
+  /** What was just saved, for the camera to confirm over the viewfinder. */
   lastSaved: { title: string; room: string | null; at: number; text?: string } | null;
-  /** Draft: every photo is saved as a draft as it is taken. Kept from walk to walk. */
-  quick: boolean;
+  /** The last photo saved as an item on this walk, to finish now. */
+  last: { itemId: string; uri: string; width: number; height: number } | null;
+  /** The walk to carry on with once the photo is on its item. */
+  resume: CaptureState | null;
 }
 
-const EMPTY: CaptureState = { jobId: null, roomId: null, itemId: null, shots: [], draft: null, editing: null, saved: 0, lastSaved: null, quick: false };
+const EMPTY: CaptureState = {
+  jobId: null,
+  roomId: null,
+  itemId: null,
+  shots: [],
+  draft: null,
+  editing: null,
+  saved: 0,
+  lastSaved: null,
+  last: null,
+  resume: null,
+};
 
-/** The last room photos went to on each job, so the next walk starts there. */
+/** The last location photos went to on each job, so the next walk starts there. */
 const lastRooms = new Map<string, string>();
 
 let state: CaptureState = EMPTY;
@@ -62,23 +79,36 @@ export function captureState(): CaptureState {
   return state;
 }
 
+const note = (text: string, room: string | null = null) => ({ title: '', room, at: Date.now(), text });
+
 export const capture = {
-  /** Starts a walk, or carries on the one open on this job. */
+  /** Starts a walk, or carries on the one open on this job. With an item, the photo goes on that item. */
   start(input: { jobId: string; roomId: string | null; itemId?: string | null }): void {
     const roomId = input.roomId ?? lastRooms.get(input.jobId) ?? null;
+    const walking = state.jobId === input.jobId && !state.itemId;
+    if (input.itemId) {
+      set({ ...EMPTY, jobId: input.jobId, roomId, itemId: input.itemId, resume: walking ? state : null });
+      return;
+    }
     if (input.roomId) lastRooms.set(input.jobId, input.roomId);
-    if (state.jobId === input.jobId && !input.itemId && !state.itemId) {
+    if (walking) {
       set({ ...state, roomId: roomId ?? state.roomId });
       return;
     }
-    set({ ...EMPTY, jobId: input.jobId, roomId, itemId: input.itemId ?? null, quick: input.itemId ? false : state.quick });
-  },
-  setQuick(quick: boolean): void {
-    set({ ...state, quick });
+    set({ ...EMPTY, jobId: input.jobId, roomId });
   },
   setRoom(roomId: string): void {
     if (state.jobId) lastRooms.set(state.jobId, roomId);
     set({ ...state, roomId, draft: state.draft ? { ...state.draft, locationId: roomId } : null });
+  },
+  /** A photo saved as an item on the walk. */
+  snapped(itemId: string, photo: { uri: string; width: number; height: number }, room: string | null): void {
+    set({
+      ...state,
+      saved: state.saved + 1,
+      last: { itemId, uri: photo.uri, width: photo.width, height: photo.height },
+      lastSaved: note(room ? `Saved in ${room}` : 'Saved', room),
+    });
   },
   /** Opens markup again on one of the item's photos, from the New Item form. */
   editShot(key: string | null): void {
@@ -99,22 +129,34 @@ export const capture = {
     if (state.jobId && draft?.locationId) lastRooms.set(state.jobId, draft.locationId);
     set({ ...state, draft, roomId: draft?.locationId || state.roomId });
   },
-  /** The item is saved: clear its photos and form, keep the room for the next one. */
+  /** The New Item form saved its item: clear its photos and form, keep the location for the next one. */
   itemSaved(title: string, room: string | null): void {
     set({ ...state, shots: [], draft: null, editing: null, saved: state.saved + 1, lastSaved: { title, room, at: Date.now() } });
   },
-  /** The photos went on an item already on the list: clear them and the form, keep the room. */
+  /** The New Item form's photos went on an item already on the list: clear them and the form, keep the location. */
   photoAdded(title: string, room: string | null): void {
-    set({ ...state, shots: [], draft: null, editing: null, lastSaved: { title, room, at: Date.now(), text: `Added the photo to ${title}` } });
+    set({ ...state, shots: [], draft: null, editing: null, lastSaved: note(`Added the photo to ${title}`, room) });
+  },
+  /**
+   * The photo is on its item, or was not taken after all: back to the walk that was open, with a
+   * note of what happened, or the camera is done.
+   */
+  doneAdding(text?: string): void {
+    const back = state.resume;
+    set(back ? { ...back, lastSaved: text ? note(text) : back.lastSaved } : EMPTY);
+  },
+  /** The walk's last item is gone (put on another item, or removed): the camera stops offering it. */
+  forget(itemId: string): void {
+    if (state.last?.itemId === itemId) set({ ...state, last: null });
   },
   clearSaved(): void {
     if (state.lastSaved) set({ ...state, lastSaved: null });
   },
-  /** Throws away the item being made, keeping the walk. */
+  /** Throws away the item being made in the New Item form, keeping the walk. */
   discardItem(): void {
     set({ ...state, shots: [], draft: null, editing: null });
   },
   end(): void {
-    set({ ...EMPTY, quick: state.quick });
+    set(EMPTY);
   },
 };

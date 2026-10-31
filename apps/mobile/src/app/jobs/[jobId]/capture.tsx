@@ -1,12 +1,11 @@
 // The camera, for walking the job. The location the photos go to sits at the top; tap it to
-// change it. Item: take the photo, mark it up or leave it as is, then fill in the item, or add the
-// photo to an item already on the list. Save and Next comes straight back here for the next one.
-// Skip Photo makes an item without one. Opened from a form to add its photo, closing goes back to
-// the form.
+// change it. Each photo saves straight away as an item in that location, a draft until someone
+// checks it, and Claude starts filling it in from the photo. The last one shows by the shutter: tap
+// it to finish it now (mark it up, fix the title). Type an Item makes one without a photo. After a
+// walk, Drafts on the job has everything saved on it, to check over sitting down.
 //
-// Draft is for going around fast: each photo saves as it is taken, as a draft in the location at
-// the top, and Claude starts filling it in from the photo straight away; sitting down, check each
-// one and tap Next (Drafts on the job).
+// Opened for one item (Add Photo on an item), the photo is marked up and goes on that item. Opened
+// from the New Item form for its photo, the photo is marked up and goes back to the form.
 
 import { floorOf } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -24,7 +23,7 @@ import { Viewfinder, type ViewfinderHandle } from '@/components/Viewfinder';
 import { colors } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture, useCapture } from '@/data/capture';
-import { haptic, Icon, OptionPicker, Text, Touchable, useFeedback, type Option } from '@/ui';
+import { haptic, Icon, OptionPicker, PhotoView, Text, Touchable, useFeedback, type Option } from '@/ui';
 
 export default function CaptureScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
@@ -33,6 +32,8 @@ export default function CaptureScreen() {
   const insets = useSafeAreaInsets();
   const walk = useCapture();
   const locations = data.useLocations(jobId);
+  const items = data.useItems(jobId);
+  const photos = data.usePhotos(jobId);
   const formSettings = data.useFormSettings();
   const canFill = useCanSuggest();
   const titles = data.useTitles();
@@ -63,14 +64,17 @@ export default function CaptureScreen() {
     return () => clearTimeout(t);
   }, [saved]);
   const editing = walk.editing ? walk.shots.find((s) => s.key === walk.editing) : undefined;
-  const addingTo = walk.itemId;
-
-  const quick = walk.quick && !addingTo;
+  const addingTo = walk.itemId ? items.find((i) => i.id === walk.itemId) : undefined;
+  // Each photo saves as an item, unless this photo is for one item or for the New Item form.
+  const walking = !walk.itemId && !walk.draft;
+  // The last one saved, while it is still a draft or on the list, with its photo as it is now.
+  const lastItem = walking && walk.last ? items.find((i) => i.id === walk.last!.itemId && i.status === 'open') : undefined;
+  const lastPhoto = lastItem ? (photos.find((p) => p.itemId === lastItem.id) ?? { ...walk.last!, marks: [] }) : undefined;
 
   async function grab(how: 'take' | 'pick') {
     if (busy) return;
-    if (quick && !walk.roomId) {
-      // Draft needs to know where the photos go before the first one.
+    if (walking && !walk.roomId) {
+      // The walk needs to know where the photos go before the first one.
       setPicker(true);
       return;
     }
@@ -78,7 +82,7 @@ export default function CaptureScreen() {
     setBusy(true);
     try {
       const photo = await (how === 'take' ? finder.current?.take() : finder.current?.pick());
-      if (photo && quick) await saveQuick(photo);
+      if (photo && walking) await saveSnap(photo);
       else if (photo) setShot({ ...photo, marks: [] });
     } catch {
       feedback.toast({ message: 'The photo did not come through. Try again.' });
@@ -87,8 +91,8 @@ export default function CaptureScreen() {
     }
   }
 
-  /** Draft: the photo becomes a draft in the location, and Claude starts filling it in. */
-  async function saveQuick(photo: { uri: string; width: number; height: number }) {
+  /** The photo becomes an item in the location, a draft for now, and Claude starts filling it in. */
+  async function saveSnap(photo: { uri: string; width: number; height: number }) {
     if (!walk.roomId) return;
     const { locationId, ...fields } = startDraft(walk.roomId, formSettings);
     const id = await data.createItem({ ...fields, unfinished: true, jobId, locationId, source: 'walk' });
@@ -105,11 +109,17 @@ export default function CaptureScreen() {
         locations,
       });
     }
-    capture.itemSaved('', room?.label ?? null);
+    capture.snapped(id, photo, room?.label ?? null);
   }
 
   function openForm() {
     router.push({ pathname: '/jobs/[jobId]/items/new', params: { jobId } });
+  }
+
+  function openLast() {
+    if (!lastItem) return;
+    haptic.selection();
+    router.push({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId, itemId: lastItem.id, from: 'camera' } });
   }
 
   async function keep(marks: MarkupShot['marks']) {
@@ -120,11 +130,14 @@ export default function CaptureScreen() {
       return;
     }
     if (!shot) return;
-    if (addingTo) {
-      await data.addPhotos([{ jobId, itemId: addingTo, uri: shot.uri, width: shot.width, height: shot.height, marks }]);
+    if (walk.itemId) {
+      await data.addPhotos([{ jobId, itemId: walk.itemId, uri: shot.uri, width: shot.width, height: shot.height, marks }]);
       haptic.success();
-      capture.end();
-      router.back();
+      setShot(null);
+      // Back to the walk this came from, or to where the camera was opened.
+      const back = !!walk.resume;
+      capture.doneAdding(back ? `Added the photo to ${addingTo?.title || 'the item'}` : undefined);
+      if (!back) router.back();
       return;
     }
     capture.addShot({ ...shot, marks });
@@ -138,9 +151,13 @@ export default function CaptureScreen() {
       openForm();
       return;
     }
-    const pending = !!shot || walk.shots.length > 0;
+    // A photo for an item, from the walk: no photo after all, and the walk carries on.
+    if (walk.itemId && walk.resume && !shot) {
+      capture.doneAdding();
+      return;
+    }
     leaveOrConfirm(
-      pending,
+      !!shot || walk.shots.length > 0,
       feedback,
       () => {
         capture.end();
@@ -159,7 +176,7 @@ export default function CaptureScreen() {
           key={editing?.key ?? current.uri}
           shot={current}
           retakeLabel={editing ? 'Cancel' : 'Retake'}
-          doneLabel={editing ? 'Done' : addingTo ? 'Add' : 'Next'}
+          doneLabel={editing ? 'Done' : walk.itemId ? 'Add' : 'Next'}
           onRetake={() => {
             if (editing) {
               capture.editShot(null);
@@ -172,6 +189,16 @@ export default function CaptureScreen() {
     );
   }
 
+  const hint = walk.itemId
+    ? `The photo goes on ${addingTo?.title || 'the item'}.`
+    : walk.draft
+      ? 'The photo goes on the new item.'
+      : walk.saved > 0
+        ? `${walk.saved} saved on this walk.${lastItem ? ' Tap the photo to finish it now.' : ''}`
+        : canFill
+          ? 'Each photo saves as an item. Claude fills it in.'
+          : 'Each photo saves as an item.';
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]} testID="capture">
       <StatusBar style="light" />
@@ -182,6 +209,7 @@ export default function CaptureScreen() {
         <Touchable
           feedback="scale"
           onPress={() => setPicker(true)}
+          disabled={!!walk.itemId}
           accessibilityRole="button"
           accessibilityLabel={room ? `Location, ${room.label}. Change the location` : 'Choose the location'}
           testID="camera-room"
@@ -190,7 +218,7 @@ export default function CaptureScreen() {
           <Text variant="subheadline" weight="600" color={colors.onDark} numberOfLines={1}>
             {room?.label ?? 'Choose Location'}
           </Text>
-          <Icon name="chevron.down" size={12} color={colors.onDark} weight="bold" />
+          {walk.itemId ? null : <Icon name="chevron.down" size={12} color={colors.onDark} weight="bold" />}
         </Touchable>
         <Touchable
           feedback="opacity"
@@ -216,42 +244,19 @@ export default function CaptureScreen() {
         ) : null}
       </View>
 
-      {addingTo ? null : (
-        <View style={styles.modes} accessibilityRole="tablist">
-          {(
-            [
-              [false, 'Item'],
-              [true, 'Draft'],
-            ] as const
-          ).map(([on, label]) => (
-            <Touchable
-              key={label}
-              feedback="opacity"
-              onPress={() => {
-                haptic.selection();
-                capture.setQuick(on);
-              }}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: walk.quick === on }}
-              testID={on ? 'mode-quick' : 'mode-item'}
-              style={styles.mode}
-            >
-              <Text variant="footnote" weight="700" color={walk.quick === on ? colors.onDark : colors.onDarkQuiet} style={styles.modeText}>
-                {label.toUpperCase()}
-              </Text>
-            </Touchable>
-          ))}
-        </View>
-      )}
-      {quick ? (
-        <Text variant="footnote" color={colors.onDarkQuiet} align="center" style={styles.modeHint}>
-          {walk.saved > 0
-            ? `${walk.saved} ${walk.saved === 1 ? 'draft' : 'drafts'} saved.`
-            : canFill
-              ? 'Each photo saves as a draft. Claude fills it in.'
-              : 'Each photo saves as a draft.'}
-        </Text>
-      ) : null}
+      <View style={styles.strip}>
+        {walking ? (
+          <Touchable feedback="opacity" onPress={openForm} accessibilityRole="button" testID="no-photo" style={styles.stripButton}>
+            <Icon name="textformat" size={16} color={colors.onDark} />
+            <Text variant="subheadline" weight="600" color={colors.onDark}>
+              Type an Item
+            </Text>
+          </Touchable>
+        ) : null}
+      </View>
+      <Text variant="footnote" color={colors.onDarkQuiet} align="center" style={styles.hint} testID="camera-hint">
+        {hint}
+      </Text>
 
       <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
         <View style={styles.side}>
@@ -263,13 +268,19 @@ export default function CaptureScreen() {
           <View style={styles.shutterInner} />
         </Touchable>
         <View style={[styles.side, styles.sideRight]}>
-          {addingTo || quick ? null : (
-            <Touchable feedback="opacity" onPress={openForm} accessibilityRole="button" testID="no-photo" style={styles.noPhoto}>
-              <Text variant="subheadline" weight="600" color={colors.onDark}>
-                Skip Photo
-              </Text>
+          {lastPhoto ? (
+            <Touchable
+              key={lastItem!.id}
+              feedback="scale"
+              onPress={openLast}
+              accessibilityRole="button"
+              accessibilityLabel={`Finish ${lastItem!.title || 'the last item'} now`}
+              testID="camera-last"
+              style={styles.last}
+            >
+              <PhotoView photo={lastPhoto} width={44} height={44} radius={9} />
             </Touchable>
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -296,13 +307,12 @@ const styles = StyleSheet.create({
   side: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   sideRight: { justifyContent: 'flex-end' },
   library: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.darkChip },
+  last: { width: 48, height: 48, borderRadius: 11, borderWidth: 2, borderColor: colors.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   shutter: { width: 78, height: 78, borderRadius: 39, borderWidth: 4, borderColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   shutterInner: { width: 62, height: 62, borderRadius: 31, backgroundColor: colors.white },
-  noPhoto: { height: 44, justifyContent: 'center' },
-  modes: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingTop: 12 },
-  mode: { height: 32, paddingHorizontal: 12, justifyContent: 'center' },
-  modeText: { letterSpacing: 1.2 },
-  modeHint: { paddingHorizontal: 32, marginTop: 2 },
+  strip: { height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 16, marginTop: 8 },
+  stripButton: { height: 32, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 16, backgroundColor: colors.darkChip },
+  hint: { paddingHorizontal: 32, marginTop: 2 },
   saved: {
     position: 'absolute',
     top: 14,

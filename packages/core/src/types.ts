@@ -223,7 +223,7 @@ export interface CustomField {
 export type ExtraValue = string | boolean | null;
 
 /** The fields Item Form setup can turn off. Title and room are always on the form. */
-export type FormField = 'description' | 'company' | 'trade' | 'kind' | 'ready' | 'waitingOn' | 'readyBy' | 'hours';
+export type FormField = 'description' | 'company' | 'kind' | 'ready' | 'waitingOn' | 'readyBy' | 'hours';
 
 export interface FormSettings {
   hidden: FormField[];

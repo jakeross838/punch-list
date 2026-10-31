@@ -29,17 +29,15 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
   const locations = data.useLocations(jobId);
   const jobCompanies = data.useJobCompanies(jobId);
   const companies = data.useCompanies();
-  const trades = data.useTrades();
   const people = data.usePeople();
   const holds = useHolds(jobId);
-  const { companyIds, tradeIds, floors, locationIds, waitingOn, addedBy } = f;
+  const { companyIds, floors, locationIds, waitingOn, addedBy } = f;
 
-  // The choices come from the job: its companies, trades, levels and locations, what its work waits
+  // The choices come from the job: its companies, levels and locations, what its work waits
   // on and who added it. A value picked earlier stays offered, so it can be switched off.
   const choices = useMemo(() => {
     const live = items.filter((i) => i.status !== 'removed' && !i.unfinished);
     const onJob = new Set(jobCompanies.map((jc) => jc.companyId));
-    const tradesOnJob = new Set([...jobCompanies.map((jc) => jc.tradeId), ...live.map((i) => i.tradeId)]);
     const shown = [...locations].filter((l) => l.active || locationIds.includes(l.id)).sort((a, b) => a.sortOrder - b.sortOrder);
     const levels: { floor: string; locations: typeof shown }[] = [];
     for (const l of shown) {
@@ -55,13 +53,12 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
     const adders = new Set(live.map((i) => i.createdBy));
     return {
       companies: companies.filter((c) => onJob.has(c.id) || companyIds.includes(c.id)).sort((a, b) => a.name.localeCompare(b.name)),
-      trades: trades.filter((t) => tradesOnJob.has(t.id) || tradeIds.includes(t.id)).sort((a, b) => a.sortOrder - b.sortOrder),
       floors: [...levelNames, ...floors.filter((x) => !levelNames.includes(x))],
       levels,
       waiting: [...[...waits.values()].sort((a, b) => a.localeCompare(b)), ...waitingOn.filter((w) => !waits.has(w.toLowerCase()))],
       people: people.filter((p) => adders.has(p.id) || addedBy.includes(p.id)),
     };
-  }, [items, locations, jobCompanies, companies, trades, people, holds, companyIds, tradeIds, floors, locationIds, waitingOn, addedBy]);
+  }, [items, locations, jobCompanies, companies, people, holds, companyIds, floors, locationIds, waitingOn, addedBy]);
 
   const toggle = <K extends ListFacet>(facet: K, value: ItemFilters[K][number]) => {
     haptic.selection();
@@ -98,11 +95,6 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
       <Facet title="Company">
         {choices.companies.map((c) => (
           <Chip key={c.id} label={c.name} on={companyIds.includes(c.id)} onPress={() => toggle('companyIds', c.id)} testID={id(`company-${c.id}`)} />
-        ))}
-      </Facet>
-      <Facet title="Trade">
-        {choices.trades.map((t) => (
-          <Chip key={t.id} label={t.name} on={tradeIds.includes(t.id)} onPress={() => toggle('tradeIds', t.id)} testID={id(`trade-${t.id}`)} />
         ))}
       </Facet>
       {choices.floors.length > 1 ? (
