@@ -362,7 +362,7 @@ export default function SendScreen() {
               const counts = [
                 plural(r.open, 'item'),
                 r.ready > 0 ? `${r.ready} ready now` : '',
-                r.needsPrice > 0 ? `${r.needsPrice} ${r.needsPrice === 1 ? 'needs' : 'need'} a price` : '',
+                r.needsPrice > 0 ? `${r.needsPrice} to be quoted` : '',
               ].filter(Boolean);
               return (
                 <ListRow

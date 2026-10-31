@@ -3,6 +3,9 @@ import {
   checkItem,
   complete,
   isPriced,
+  orderText,
+  readOrder,
+  writeOrder,
   kindDefaults,
   parseRoomList,
   remove,
@@ -120,6 +123,20 @@ describe('item rules', () => {
   it('needs Waiting On when the item is not ready', () => {
     expect(checkItem(item({ ready: false })).map((p) => p.field)).toEqual(['waitingOn']);
     expect(checkItem(item({ ready: false, waitingOn: ['Volcano Stone'] }))).toEqual([]);
+  });
+
+  it('reads and writes the order that covers additional work: purchase order, variance purchase order or change order', () => {
+    expect(readOrder('CO-14')).toEqual({ type: 'co', number: '14' });
+    expect(readOrder('VPO 3')).toEqual({ type: 'vpo', number: '3' });
+    expect(readOrder('P.O. #0090')).toEqual({ type: 'po', number: '0090' });
+    expect(readOrder('Change Order 7')).toEqual({ type: 'co', number: '7' });
+    expect(readOrder('Contract 2')).toEqual({ type: null, number: 'Contract 2' });
+    expect(writeOrder('co', ' 14 ')).toBe('CO 14');
+    expect(writeOrder('vpo', '')).toBeNull();
+    expect(orderText('CO-14')).toBe('Change Order 14');
+    expect(orderText('VPO 3')).toBe('Variance Purchase Order 3');
+    expect(orderText('PO 0090')).toBe('Purchase Order 0090');
+    expect(orderText('2231')).toBe('2231');
   });
 
   it('counts additional work as priced only once it has an order number', () => {

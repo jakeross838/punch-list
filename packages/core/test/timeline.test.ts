@@ -81,7 +81,7 @@ describe('the schedule the list builds', () => {
     expect(t.finish).toBe('2026-11-03');
   });
 
-  it('lists what has no date yet and what needs a price', () => {
+  it('lists what has no date yet and what is to be quoted', () => {
     const owner = item({ id: 'owner', ready: false, waitingOn: ['Owner'] });
     const dated = item({ id: 'dated', ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09' });
     const after = item({ id: 'after', ready: false, waitingOnItems: ['owner'] });

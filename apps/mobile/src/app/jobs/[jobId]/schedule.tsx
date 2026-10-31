@@ -4,7 +4,7 @@
 // a date it will be ready, gets a pale best guess that moves as the list changes: work goes as soon
 // as it can, with notice and a day of handoff after what it waits on, in full days of 8 hours. Save
 // the Best Guess keeps those dates. The headline is when everything with a date is done. Past Due
-// comes first; what has no date yet and what needs a price are listed under the chart. Tap a bar for
+// comes first; what has no date yet and the additional work to be quoted are listed under the chart. Tap a bar for
 // its visit, or a company for its plan.
 
 import {
@@ -162,14 +162,27 @@ export default function ScheduleScreen() {
       ) : null}
 
       {timeline.needsPrice.length > 0 ? (
-        <ListSection footer="Additional work goes on the schedule once it has its order number.">
-          <ListRow
-            title="Needs a Price"
-            value={String(timeline.needsPrice.length)}
-            accessory="chevron"
-            onPress={() => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'waiting', key: 'price' } })}
-            testID="schedule-needs-price"
-          />
+        <ListSection
+          header={`To Be Quoted (${timeline.needsPrice.length})`}
+          footer="Additional work goes on the schedule once it has its purchase order, variance purchase order or change order."
+        >
+          {timeline.needsPrice.map((item, i) => (
+            <Touchable
+              key={item.id}
+              feedback="highlight"
+              onPress={() => openItem(item.id)}
+              accessibilityRole="button"
+              testID={`schedule-quote-${item.id}`}
+              style={[styles.row, i > 0 ? styles.rule : null]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1}>{item.title}</Text>
+                <Text variant="subheadline" color={colors.secondary} numberOfLines={2}>
+                  {[where(item.locationId), item.companyId ? name(item.companyId) : ''].filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+            </Touchable>
+          ))}
         </ListSection>
       ) : null}
 

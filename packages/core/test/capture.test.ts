@@ -228,7 +228,7 @@ describe('walking the job', () => {
     expect(neighborRooms(rooms, 'a').previous).toBeNull();
   });
 
-  it('groups by what items wait on: ready, needs a price, then late holdups and the biggest first, with drafts left in Drafts', () => {
+  it('groups by what items wait on: ready, to be quoted, then late holdups and the biggest first, with drafts left in Drafts', () => {
     const items = [
       item({ ready: false, waitingOn: ['Owner'] }),
       item({ ready: false, waitingOn: ['Volcano Stone', 'owner'] }),
@@ -245,7 +245,7 @@ describe('walking the job', () => {
     const groups = groupItems(items, 'waiting', lookups, { showCompleted: true });
     expect(groups.map((g) => [g.label, g.items.length])).toEqual([
       ['Ready', 2],
-      ['Needs a Price', 2],
+      ['To Be Quoted', 2],
       ['Owner', 3],
       ['Volcano Stone', 3],
       ['Completed', 1],
@@ -377,17 +377,20 @@ describe('the lists that go to the subs', () => {
     expect(page.body).toMatch(/<h2 class="rb-section">Anything Missing<\/h2>.*?<colgroup>(<col[^>]*>){3}<\/colgroup>/);
   });
 
-  it('puts added scope that is not priced yet under Needs a Price, not Ready Now', () => {
+  it('puts added scope that is not priced yet under To Be Quoted, not Ready Now', () => {
     const extra = item({ locationId: 'a', number: 9, kind: 'added_scope', boughtOut: false });
     const priced = item({ locationId: 'a', number: 10, kind: 'added_scope', boughtOut: true, poOrCo: 'CO 12' });
     const list = companyList('c-sms', [extra, priced], lookups);
     expect(list.ready.map((l) => l.item.number)).toEqual([10]);
     expect(list.needsPrice.map((l) => l.item.number)).toEqual([9]);
     const page = companyPrintout(list, settings);
-    expect(page.body).toContain('Additional, needs a price');
-    expect(page.body).toContain('Additional, CO 12');
-    expect(page.body).toContain('2 open items, 1 ready now and 1 that needs a price.');
-    expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Ready', 'Needs a Price', 'Anything Missing']);
+    expect(page.body).toContain('Additional, to be quoted');
+    // The order said in full, and a line for the price on what is to be quoted.
+    expect(page.body).toContain('Additional, Change Order 12');
+    expect(page.body).toContain('<th>Price</th>');
+    expect(page.body).toContain('$<span class="rb-price"></span>');
+    expect(page.body).toContain('2 open items, 1 ready now and 1 to be quoted.');
+    expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Ready', 'To Be Quoted', 'Anything Missing']);
   });
 
   it('prints the whole job floor by floor and room by room, with the trade and company on every line', () => {

@@ -1,5 +1,5 @@
 // A company's own page for a job: what the company sees from the private link sent with its list,
-// with no account. Its scheduled visits, then its open work (ready now, waiting, needs a price)
+// with no account. Its scheduled visits, then its open work (ready now, waiting, to be quoted)
 // with each item's photo and where it is, and comments: on any item, or on the whole list, under
 // the name typed once at the top. Ross Built sees them right away. Ross Built only notes never
 // show here. In the app it opens from the company's plan, to see the page the way the company does.
@@ -110,7 +110,7 @@ export default function CompanyPageScreen() {
       {list.waiting.map((g) =>
         section(`Waiting on ${g.on}${g.readyBy ? `, ready by ${shortDate(g.readyBy)}` : ''}`, null, g.lines, `waiting-${g.on}`),
       )}
-      {section('Needs a Price', 'Extra work we need a price for before it is scheduled.', list.needsPrice, 'price')}
+      {section('To Be Quoted', 'Extra work we would love a price for, item by item. It goes on the schedule once the order is in.', list.needsPrice, 'price')}
     </Page>
   );
 }

@@ -5,6 +5,7 @@
 // field by field does not flood the log.
 
 import { KIND_LABELS } from './forms';
+import { orderText } from './orders';
 import { hoursText } from './time';
 import type { Comment, Company, CustomField, Item, ItemKind, Location, Person, Trade, Visit } from './types';
 import { waitingOnText } from './waitingOn';
@@ -222,7 +223,7 @@ function fieldWords(field: string, before: string | null, after: string | null, 
     case 'ready_by':
       return after ? [`Ready by ${dayWords(after, look.today)}`] : [];
     case 'po_or_co':
-      return [after ? `Order number: ${after}` : 'Order number cleared'];
+      return [after ? `Order: ${orderText(after)}` : 'Order cleared'];
     case 'hours': {
       const hours = after === null ? NaN : Number(after);
       return [Number.isFinite(hours) && hours > 0 ? `Estimated time: ${hoursText(hours)}` : 'Estimated time cleared'];

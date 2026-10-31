@@ -4,7 +4,7 @@
 // that moves with the list: as soon as it can go, with more than a day's notice and a day of
 // handoff after the work it waits on, a company's work packed into full days of 8 hours, location
 // by location, never on a day that company already has a visit. Work that waits on a task follows
-// that task however far back the chain goes. What has no date yet, or needs a price, is listed.
+// that task however far back the chain goes. What has no date yet, or is to be quoted, is listed.
 
 import { addWorkingDays, daysBetween, isDay, mondayOf, visitEnd, weekdayOf, workingDayOnOrAfter } from './dates';
 import { isPriced } from './rules';
@@ -41,7 +41,7 @@ export interface Timeline {
   bars: TimelineBar[];
   /** Open work with no date yet: waiting on someone with no Ready By, or on work that has no date. */
   noDate: Item[];
-  /** Additional work that needs a price before it is scheduled. */
+  /** Additional work to be quoted: it is scheduled once it has its purchase order, variance purchase order or change order. */
   needsPrice: Item[];
   /** The last day with open work on it: when everything with a date is done. */
   finish: string | null;

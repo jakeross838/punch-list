@@ -1,5 +1,5 @@
 // One company's plan: its visits, what is ready now and not scheduled, what comes free and when,
-// what is waiting with no date yet, and additional work that needs a price, each with its estimated
+// what is waiting with no date yet, and additional work to be quoted, each with its estimated
 // time. Ready work longer than a day splits into full working days, location by location, so each
 // day can be scheduled on its own, or all of it at once. A batch that comes free schedules as soon
 // as what it waits on is done (with a day of handoff and fair notice), for the days its time needs.
@@ -241,7 +241,10 @@ export default function PlanScreen() {
       })}
 
       {plan.needsPrice.length > 0 ? (
-        <ListSection header={`Needs a Price (${plan.needsPrice.length})`} footer="Additional work. Add its order number once it is priced.">
+        <ListSection
+          header={`To Be Quoted (${plan.needsPrice.length})`}
+          footer="Additional work. It is scheduled once it has its purchase order, variance purchase order or change order."
+        >
           {itemRows(plan.needsPrice, (l) => (l.item.ready ? undefined : 'not ready'))}
         </ListSection>
       ) : null}

@@ -1,7 +1,7 @@
 // The lists that go out: one per company for the subs, one for the owner and design team, and the
 // whole job for Ross Built. Open, finished items only, the room on every line. A company's list says
 // what is ready now, then what is waiting, grouped by what it waits on and soonest first, then
-// added scope that needs a price, so the work can be scheduled in batches and in the right order.
+// additional work to be quoted, so the work can be scheduled in batches and in the right order.
 
 import { matchesFilters, type FilterContext, type ItemFilters } from './filters';
 import { holdLookups, holdText, readyByOf, type HoldLookups } from './holds';

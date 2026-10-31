@@ -1,7 +1,8 @@
 // One simple form for an item, the same when making one and when looking at one later: the title
 // (typing offers the standard titles, and picking one fills in the trade, the company and the usual
 // time), the details, the location, company and trade, the estimated time, Ready as a checkbox, and
-// the type: Deficiency, Incomplete or Additional, with the order number only for additional work.
+// the type: Deficiency, Incomplete or Additional, with its order (purchase order, variance purchase order
+// or change order, and its number) only for additional work.
 // Added fields wait under More Details. On an item that already exists, every change saves as it is
 // made. Fill In From Photo asks Claude for what is still blank; the same title already in the
 // location is pointed out.
@@ -18,14 +19,19 @@ import {
   KIND_LABELS,
   kindDefaults,
   KINDS,
+  ORDER_LABELS,
+  ORDER_TYPES,
+  readOrder,
   suggestTitles,
   tidyTitle,
   TITLE_MAX,
   tradeForTitle,
+  writeOrder,
   type FormField,
   type Item,
   type ItemKind,
   type Mark,
+  type OrderType,
   type TitleSuggestion,
 } from '@punch/core';
 import { useState, type ReactNode } from 'react';
@@ -121,8 +127,17 @@ export function ItemEditor({
   // A field the rules need always shows, even when Item Form setup turned it off.
   const showCompany = shows('company') || !!problem('companyId');
   const showTrade = shows('trade') || !!problem('tradeId');
-  // The order number is for additional work; one already there always shows, so nothing is hidden.
+  // The order is for additional work; one already there always shows, so nothing is hidden.
   const showPo = value.kind === 'added_scope' || !!value.poOrCo;
+  // The order: a purchase order, variance purchase order or change order, and its number.
+  const order = readOrder(value.poOrCo);
+  const [pickedOrder, setPickedOrder] = useState<OrderType | null>(() => readOrder(value.poOrCo).type);
+  const orderType = order.type ?? pickedOrder;
+  function pickOrder(t: OrderType) {
+    haptic.selection();
+    setPickedOrder(t);
+    if (order.number) set({ poOrCo: writeOrder(t, order.number) });
+  }
 
   function fillFrom(tradeId: string | null): Partial<ItemDraft> {
     if (!tradeId) return {};
@@ -353,18 +368,31 @@ export function ItemEditor({
               <Segmented<ItemKind> options={KINDS.map((k) => [k, KIND_LABELS[k]])} value={value.kind} onChange={(kind) => set(kindDefaults(kind, value))} testID="kind" />
             </View>
           ) : null}
-          {showPo ? (
-            <ListLabeledField
-              label="Order Number"
-              placeholder="Number"
-              value={value.poOrCo ?? ''}
-              onChangeText={(poOrCo) => set({ poOrCo: poOrCo === '' ? null : poOrCo }, true)}
-              onBlur={() => set({ poOrCo: value.poOrCo })}
-              autoCapitalize="characters"
-              invalid={!!problem('poOrCo')}
-              testID="field-po"
+        </ListSection>
+      ) : null}
+
+      {showPo ? (
+        <ListSection header="Order" footer="What covers the extra work once it is priced. Until it has one, it is to be quoted.">
+          {ORDER_TYPES.map((t) => (
+            <ListRow
+              key={t}
+              title={ORDER_LABELS[t]}
+              accessory={orderType === t ? 'checkmark' : 'none'}
+              onPress={() => pickOrder(t)}
+              testID={`order-${t}`}
             />
-          ) : null}
+          ))}
+          <ListLabeledField
+            label="Number"
+            placeholder={orderType ? 'Number' : 'Pick the order first'}
+            value={order.number}
+            editable={!!orderType || order.number !== ''}
+            onChangeText={(n) => set({ poOrCo: writeOrder(orderType, n) }, true)}
+            onBlur={() => set({ poOrCo: value.poOrCo })}
+            autoCapitalize="characters"
+            invalid={!!problem('poOrCo')}
+            testID="field-po"
+          />
         </ListSection>
       ) : null}
 

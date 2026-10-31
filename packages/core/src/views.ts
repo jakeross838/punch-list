@@ -2,7 +2,7 @@
 // narrowed by the filters. Removed items never show, and drafts stay in Drafts until they are filled
 // in. Every location shows, even an empty one, so items can be added to it. Show Completed (as in
 // Reminders) adds completed items that fit the filters, after the open ones. By Waiting On shows what
-// is ready now and what needs a price, then each thing holding work up with the items it holds up (an
+// is ready now and what is to be quoted, then each thing holding work up with the items it holds up (an
 // item waiting on two things is under both; a task it waits on counts as the company doing it): the
 // late ones first, then the biggest. That is the order to clear them in. Each group carries its totals: how many are open, ready and past due, and their
 // estimated time.
@@ -148,7 +148,7 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
       .sort((a, b) => b.late - a.late || b.n - a.n || a.label.localeCompare(b.label));
     order = [
       { key: 'ready', label: 'Ready' },
-      { key: 'price', label: 'Needs a Price' },
+      { key: 'price', label: 'To Be Quoted' },
       ...holding.map(({ key, label }) => ({ key, label })),
       { key: 'complete', label: 'Completed' },
     ];

@@ -214,10 +214,12 @@ async function main(): Promise<void> {
       await app.getByTestId('field-description').blur();
       await settle(300);
       await shot('09b-item-edited');
-      // The type: Additional brings up the order number; back to Incomplete.
+      // The type: Additional brings up its order, a purchase order, variance purchase order or change order; back to Incomplete.
       await app.getByRole('tab', { name: 'Additional' }).click();
       await app.getByTestId('field-po').waitFor();
-      await app.getByText('Extra work. Add the purchase order or change order number once it is priced.').waitFor();
+      await app.getByText('Extra work, to be quoted. It is scheduled once it has its purchase order, variance purchase order or change order.').waitFor();
+      await app.getByTestId('order-co').click();
+      await app.getByTestId('order-vpo').waitFor();
       await settle(300);
       await shot('09d-additional');
       await app.getByRole('tab', { name: 'Incomplete' }).click();
@@ -849,6 +851,9 @@ async function main(): Promise<void> {
       await app.getByTestId('send-job').click();
       await doc.getByText('Whole Job', { exact: true }).waitFor();
       await doc.getByText('Set mirror').waitFor();
+      // Additional work says its order in full, or that it is to be quoted.
+      await doc.getByText(/Additional, Change Order 14/).first().waitFor();
+      await doc.getByText(/Additional, to be quoted/).first().waitFor();
       await settle(800);
       await shot('41-whole-job-list');
       await app.getByTestId('preview-done').click();
@@ -903,7 +908,7 @@ async function main(): Promise<void> {
       await app.getByTestId('export-preview').click();
       await doc.getByText('Open Work by Holdup', { exact: true }).first().waitFor();
       await doc.getByText(/^Waiting on Owner · \d+ items?/).first().waitFor();
-      await doc.getByText(/^Needs a Price · \d+ items?/).first().waitFor();
+      await doc.getByText(/^To Be Quoted · \d+ items?/).first().waitFor();
       await settle(800);
       await shot('41e-made-list-by-waiting');
       await app.getByTestId('preview-done').click();

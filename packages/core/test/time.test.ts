@@ -158,7 +158,7 @@ describe('filters', () => {
     expect(pick({ addedBy: ['sam'] })).toEqual(['b']);
   });
 
-  it('finds past due work, what needs a price, photos, visits and estimates', () => {
+  it('finds past due work, what is to be quoted, photos, visits and estimates', () => {
     expect(pick({ states: ['past_due'] })).toEqual(['b']);
     expect(isPastDue(items[1]!, visits, '2026-10-30')).toBe(true);
     expect(pick({ states: ['needs_price'] })).toEqual(['d']);

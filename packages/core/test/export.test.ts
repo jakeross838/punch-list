@@ -87,7 +87,7 @@ describe('a list made to order', () => {
     expect(page.title).toBe('Fish Open Work');
     expect(page.fileName).toBe('Fish Fish Open Work, October 31 2026.pdf');
     const body = page.body;
-    expect(body).toContain('4 open items in 2 locations: 2 ready now, 1 waiting and 1 that needs a price.');
+    expect(body).toContain('4 open items in 2 locations: 2 ready now, 1 waiting and 1 to be quoted.');
     expect(body).toContain('About 6.5 hours of work, or 1 day, with 1 not estimated.');
     expect(body).toContain('Also 1 completed item.');
     expect(body).toContain('Filters: Ready, SMS Carpentry.');
@@ -97,7 +97,7 @@ describe('a list made to order', () => {
     // The company, trade and type on every line, never only on the first one of a group.
     expect(body.match(/SMS Carpentry · Carpentry · Incomplete/g)?.length).toBe(3);
     expect(body).toContain('Triple H Painting · Painting · Deficiency');
-    expect(body).toContain('SMS Carpentry · Carpentry · Additional, needs a price');
+    expect(body).toContain('SMS Carpentry · Carpentry · Additional, to be quoted');
     expect(body).toContain('Waiting on Volcano Stone, ready by November\u00a02');
     expect(body).toContain('Completed October\u00a028');
     expect(body).toContain('<span class="rb-quiet">Not estimated</span>');
@@ -115,7 +115,7 @@ describe('a list made to order', () => {
     expect(body).not.toContain('About ');
     expect(body).toContain('<div class="rb-meta">Kitchen 109</div>');
     // Additional work always says whether it is priced.
-    expect(body).toContain('<div class="rb-note">Additional, needs a price</div>');
+    expect(body).toContain('<div class="rb-note">Additional, to be quoted</div>');
     expect(customPrintout(lines, design(), settings).title).toBe('Whole Job');
   });
 
@@ -130,7 +130,7 @@ describe('a list made to order', () => {
     expect(byCompany).toContain('How many days for this item?');
     expect(byCompany.match(/rb-blank/g)?.length).toBe(4);
     const byWaiting = customPrintout(lines, design({ groupBy: 'waiting' }), settings).body;
-    const order = ['Ready · 2 items', 'Waiting on Volcano Stone · 1 item', 'Needs a Price · 1 item', 'Completed · 1 item'].map((x) => byWaiting.indexOf(x));
+    const order = ['Ready · 2 items', 'Waiting on Volcano Stone · 1 item', 'To Be Quoted · 1 item', 'Completed · 1 item'].map((x) => byWaiting.indexOf(x));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });

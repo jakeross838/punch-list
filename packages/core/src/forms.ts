@@ -16,7 +16,7 @@ export const KIND_LABELS: Record<ItemKind, string> = { deficiency: 'Deficiency',
 export const KIND_HINTS: Record<ItemKind, string> = {
   deficiency: 'Something wrong or damaged to fix.',
   completion: "The company's own work, not finished yet.",
-  added_scope: 'Extra work. Add the purchase order or change order number once it is priced.',
+  added_scope: 'Extra work, to be quoted. It is scheduled once it has its purchase order, variance purchase order or change order.',
 };
 
 export const FORM_FIELDS: { field: FormField; label: string }[] = [

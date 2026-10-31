@@ -18,7 +18,7 @@ export const STATE_LABELS: Record<StateFilter, string> = {
   ready: 'Ready',
   not_ready: 'Not Ready',
   past_due: 'Past Due',
-  needs_price: 'Needs a Price',
+  needs_price: 'To Be Quoted',
 };
 
 /** Yes or no questions about an item; null is either. */

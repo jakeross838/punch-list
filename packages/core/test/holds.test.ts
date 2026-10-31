@@ -111,7 +111,7 @@ describe('waiting on other tasks', () => {
     const groups = groupItems(jobItems, 'waiting', lookups);
     expect(groups.map((g) => [g.label, g.items.map((i) => i.id)])).toEqual([
       ['Ready', ['stone', 'shoe']],
-      ['Needs a Price', []],
+      ['To Be Quoted', []],
       ['Owner', ['pulls']],
       ['SMS Carpentry', ['pulls']],
       ['Volcano Stone', ['uppers']],

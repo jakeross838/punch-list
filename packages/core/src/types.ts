@@ -2,7 +2,7 @@
 // names in snake_case. Dates are YYYY-MM-DD strings, times are ISO strings.
 
 export type LocationKind = 'room' | 'shared';
-/** Deficiency: wrong or damaged, to fix. Completion (shown as Incomplete): scope completion, their work not done yet. Added scope (shown as Additional): extra work that needs a price. */
+/** Deficiency: wrong or damaged, to fix. Completion (shown as Incomplete): scope completion, their work not done yet. Added scope (shown as Additional): extra work, to be quoted until it has its purchase order, variance purchase order or change order. */
 export type ItemKind = 'deficiency' | 'completion' | 'added_scope';
 export type ItemStatus = 'open' | 'complete' | 'removed';
 export type ItemSource = 'walk' | 'typed' | 'import';

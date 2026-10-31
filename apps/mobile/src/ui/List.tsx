@@ -252,7 +252,7 @@ export function ListTextField({
   );
 }
 
-/** A label on the left and a short text field on the right, like "Order Number". */
+/** A label on the left and a short text field on the right, like the order's "Number". */
 export function ListLabeledField({ label, invalid, ...props }: TextInputProps & { label: string; invalid?: boolean }) {
   const { separator, rowStyle } = useRow(false);
   return (

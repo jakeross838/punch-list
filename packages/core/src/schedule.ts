@@ -1,6 +1,6 @@
 // The schedule the list builds: each company's trips to the job (visits), what is past due and by
 // how many days, and each company's plan: what is ready now, what comes free and when, what has no
-// date yet, and what needs a price. Work goes as soon as it is ready, with a day of handoff
+// date yet, and what is to be quoted. Work goes as soon as it is ready, with a day of handoff
 // buffer, and new starts get more than a day's notice. Work that waits on another task comes free
 // when that task's visit is done. Estimated times add up for each visit and each batch, and the
 // ready work splits into full working days, location by location.

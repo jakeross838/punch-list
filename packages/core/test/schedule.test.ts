@@ -114,7 +114,7 @@ describe('past due', () => {
 });
 
 describe('each company plan', () => {
-  it('splits work into visits, ready now, coming free by date, no date yet and needs a price', () => {
+  it('splits work into visits, ready now, coming free by date, no date yet and to be quoted', () => {
     const items = [
       item({ id: 'r1', locationId: 'k' }),
       item({ id: 'r2', locationId: 'a' }),

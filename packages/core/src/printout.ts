@@ -5,7 +5,7 @@
 // A company's list: each scheduled visit with the items on it, then what is ready now and not
 // scheduled, then what is waiting, grouped by what it waits on, each group with a line for the days
 // it takes (one duration per batch, as the schedule bars carry), then additional work that needs a
-// price, then blank lines to add anything missing. Items new since the last list say so. The owner's
+// price (to be quoted, with a line for the price), then blank lines to add anything missing. Items new since the last list say so. The owner's
 // list says what Ross Built needs from them and by when. The whole job list goes location by
 // location with the trade and company on every line. A list made to order takes any filters,
 // groups by location, trade, company or what it waits on, shows the details picked on every line,
@@ -17,6 +17,7 @@
 import { addDays, dayOfDate, daysBetween, isDay, mondayOf, visitEnd } from './dates';
 import { KIND_LABELS } from './forms';
 import { holdText } from './holds';
+import { orderText } from './orders';
 import { holdsFor, type CompanyList, type ListLine, type ListLookups } from './lists';
 import { timelineRows, workingIndex, type Timeline, type TimelineBar } from './timeline';
 import { markShapes, type MarkShape } from './marks';
@@ -86,7 +87,7 @@ function dayText(ymd: string, today: Date, weekday = false): string {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** "3 ready now, 4 waiting and 1 that needs a price" */
+/** "3 ready now, 4 waiting and 1 to be quoted" */
 function andList(parts: string[]): string {
   if (parts.length <= 1) return parts[0] ?? '';
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
@@ -146,13 +147,13 @@ function commentsHtml(list: PrintComment[] | undefined, today: Date): string {
   return `<div class="rb-comments">${list.map(one).join('')}</div>`;
 }
 
-/** The title, then where exactly, then for additional work its order number or that it needs a price, then its comments. */
+/** The title, then where exactly, then for additional work its order (or that it is to be quoted), then its comments. */
 function workCell(line: ListLine, settings: PrintSettings): string {
   const { item } = line;
   const parts = [`<div class="rb-work">${esc(item.title)}</div>`];
   if (item.description) parts.push(`<div class="rb-desc">${esc(item.description)}</div>`);
   if (item.kind === 'added_scope') {
-    const note = item.poOrCo ? `Additional, ${item.poOrCo}` : 'Additional, needs a price';
+    const note = isPriced(item) ? `Additional, ${orderText(item.poOrCo)}` : 'Additional, to be quoted';
     parts.push(`<div class="rb-note">${esc(note)}</div>`);
   }
   parts.push(commentsHtml(settings.comments?.(item.id), settings.date));
@@ -247,7 +248,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
     booked.size > 0 ? `${booked.size} scheduled` : '',
     ready.length > 0 ? `${ready.length} ready now` : '',
     waitingCount > 0 ? `${waitingCount} waiting` : '',
-    needsPrice.length > 0 ? `${needsPrice.length} ${needsPrice.length === 1 ? 'that needs' : 'that need'} a price` : '',
+    needsPrice.length > 0 ? `${needsPrice.length} to be quoted` : '',
   ].filter(Boolean);
   const summary =
     list.open === 0
@@ -302,9 +303,15 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
   }
 
   if (needsPrice.length > 0) {
-    parts.push('<h2 class="rb-section">Needs a Price</h2>');
-    parts.push('<p class="rb-section-note">Additional work we need a price for before it is scheduled.</p>');
-    parts.push(table(columns, rows(columns, needsPrice)));
+    // A line for the price on each one, to send back.
+    const quoteColumns: Column[] = [
+      ...columns.filter((c) => c.label !== 'Photo'),
+      { label: 'Price', width: '1.05in', cell: () => '$<span class="rb-price"></span>' },
+      ...columns.filter((c) => c.label === 'Photo'),
+    ];
+    parts.push('<h2 class="rb-section">To Be Quoted</h2>');
+    parts.push('<p class="rb-section-note">Extra work we would love a price for, item by item. It goes on the schedule once the order is in.</p>');
+    parts.push(table(quoteColumns, rows(quoteColumns, needsPrice)));
   }
 
   const added = columns.filter((c) => c.label !== 'Photo');
@@ -393,10 +400,10 @@ export interface CustomPrintSettings extends PrintSettings {
   filters?: string[];
 }
 
-/** The type of work in words: "Deficiency", "Additional, CO-14", "Additional, needs a price". */
+/** The type of work in words: "Deficiency", "Additional, Change Order 14", "Additional, to be quoted". */
 function kindWords(item: Pick<Item, 'kind' | 'poOrCo'>): string {
   if (item.kind !== 'added_scope') return KIND_LABELS[item.kind];
-  return isPriced(item) ? `Additional, ${item.poOrCo}` : 'Additional, needs a price';
+  return isPriced(item) ? `Additional, ${orderText(item.poOrCo)}` : 'Additional, to be quoted';
 }
 
 interface LineGroup {
@@ -431,7 +438,7 @@ function groupLines(lines: ListLine[], by: ListGroupBy): LineGroup[] {
         break;
       case 'waiting': {
         if (item.status === 'complete') add('complete', 'Completed', line, 4);
-        else if (!isPriced(item)) add('price', 'Needs a Price', line, 3);
+        else if (!isPriced(item)) add('price', 'To Be Quoted', line, 3);
         else if (item.ready) add('ready', 'Ready', line, 0);
         else {
           const on = line.waitingGroup || 'something not named';
@@ -507,7 +514,7 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
   const counts = [
     ready > 0 ? `${ready} ready now` : '',
     waiting > 0 ? `${waiting} waiting` : '',
-    price > 0 ? `${price} ${price === 1 ? 'that needs' : 'that need'} a price` : '',
+    price > 0 ? `${price} to be quoted` : '',
   ].filter(Boolean);
   const sentences: string[] = [];
   if (lines.length === 0) sentences.push('Nothing matches right now.');
@@ -664,7 +671,16 @@ export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, sett
     parts.push(table(columns, undated));
   }
   if (timeline.needsPrice.length > 0) {
-    parts.push(`<p class="rb-section-note">Also ${plural(timeline.needsPrice.length, 'item')} of additional work that ${timeline.needsPrice.length === 1 ? 'needs' : 'need'} a price before it is scheduled.</p>`);
+    const columns = [{ label: 'Location', width: '1.35in' }, { label: 'Company', width: '1.35in' }, { label: 'Work' }];
+    const quoted = timeline.needsPrice
+      .map(
+        (item, i) =>
+          `<tr class="rb-row${i % 2 === 1 ? ' rb-alt' : ''}"><td>${esc(place(item.locationId))}</td><td>${esc(item.companyId ? company(item.companyId) : 'Not set')}</td><td><div class="rb-work">${esc(item.title)}</div>${item.description ? `<div class="rb-desc">${esc(item.description)}</div>` : ''}</td></tr>`,
+      )
+      .join('');
+    parts.push('<h2 class="rb-section">To Be Quoted</h2>');
+    parts.push('<p class="rb-section-note">Extra work that goes on the schedule once it has its purchase order, variance purchase order or change order.</p>');
+    parts.push(table(columns, quoted));
   }
 
   return {
@@ -702,6 +718,7 @@ export const PRINT_CSS = `
 .rb-table tr.rb-blank td{height:26pt}
 .rb-table tr.rb-days td{text-align:right;font-size:9pt;font-weight:600;color:#4E7A8C;padding:8pt 6pt 9pt}
 .rb-fill{display:inline-block;width:0.9in;margin-left:6pt;border-bottom:0.75pt solid #5B8699;vertical-align:baseline}
+.rb-price{display:inline-block;width:0.72in;margin-left:3pt;border-bottom:0.75pt solid #5B8699;vertical-align:baseline}
 .rb-num{font-weight:700;font-variant-numeric:tabular-nums}
 .rb-new{display:inline-block;margin-top:3pt;padding:0 3pt;border:0.75pt solid #4E7A8C;border-radius:2pt;font-size:7pt;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#4E7A8C}
 .rb-small{font-size:9pt}
