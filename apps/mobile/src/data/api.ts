@@ -19,7 +19,11 @@ import type {
   ParsedLocation,
   Person,
   Photo,
+  Role,
+  Sees,
   StandardTitle,
+  TeamMember,
+  TeamPart,
   Trade,
   ViewSettings,
   Visit,
@@ -58,6 +62,17 @@ export interface NewVisit {
   itemIds: string[];
 }
 
+/** Someone new at Ross Built. They sign in with this email. */
+export interface NewPerson {
+  name: string;
+  email: string;
+  phone: string | null;
+  role: Role;
+  sees: Sees;
+}
+
+export type PersonPatch = Partial<Pick<Person, 'name' | 'email' | 'phone' | 'role' | 'sees' | 'active'>>;
+
 /** A visit's dates, days, confirmation and note. New dates, or confirming it, answer what the company asked for. */
 export type VisitPatch = Partial<Pick<Visit, 'start' | 'days' | 'confirmed' | 'note'>>;
 
@@ -65,9 +80,14 @@ export interface DataApi {
   /** preview: sample data, nothing saved beyond this browser tab. live: the real database. */
   mode: 'preview' | 'live';
   useMe(): Person | null;
-  /** Everyone at Ross Built, for who did what. */
+  /** Everyone at Ross Built, switched off or not: for who did what, and for People. */
   usePeople(): Person[];
+  /** The jobs the signed-in person sees, closed ones included. */
   useJobs(): Job[];
+  /** Who is on each job's team, and as what, on every job the signed-in person sees. */
+  useTeams(): TeamMember[];
+  /** The items assigned to a person, on every job the signed-in person sees. */
+  useAssigned(personId: string): Item[];
   useLocations(jobId: string): Location[];
   useItems(jobId: string): Item[];
   /** The job's photos that are not removed, each item's in order. */
@@ -92,8 +112,18 @@ export interface DataApi {
   useActivity(jobId: string): Activity[];
   /** The job's comments, Ross Built only ones and ones taken back included. */
   useComments(jobId: string): Comment[];
-  createJob(input: { name: string; address: string }): Promise<string>;
-  updateJob(id: string, patch: Partial<Pick<Job, 'name' | 'address'>>): Promise<void>;
+  /** Admins only. The Project Manager, when given, goes on the team. */
+  createJob(input: { name: string; address: string; projectManagerId?: string | null }): Promise<string>;
+  /** Admins only. Closed puts the job away; opening it again brings it back. */
+  updateJob(id: string, patch: Partial<Pick<Job, 'name' | 'address' | 'closed'>>): Promise<void>;
+  /** Admins only. */
+  addPerson(person: NewPerson): Promise<string>;
+  /** Admins only. There is always at least one admin. */
+  updatePerson(id: string, patch: PersonPatch): Promise<void>;
+  /** Admins only. Puts a person on a job's team, changes what they are on it, or takes them off with null. */
+  setTeamMember(jobId: string, personId: string, part: TeamPart | null): Promise<void>;
+  /** Preview only: see the app the way someone else does. */
+  previewAs?(personId: string): void;
   /**
    * Adds locations after the job's existing ones, keeping floor order; one removed before comes
    * back where it was. Returns how many were added.

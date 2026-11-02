@@ -8,6 +8,12 @@ const people = new Table({
   email: column.text,
   name: column.text,
   active: column.integer,
+  /** admin or team. */
+  role: column.text,
+  /** Which jobs they see: all, or assigned (only the jobs they are on). */
+  sees: column.text,
+  phone: column.text,
+  added_by: column.text,
   created_at: column.text,
 });
 
@@ -19,6 +25,12 @@ const jobs = new Table({
   archived: column.integer,
   created_at: column.text,
 });
+
+/** Who is on each job, and as what: project_manager, superintendent or field. */
+const job_team = new Table(
+  { org: column.text, job_id: column.text, person_id: column.text, part: column.text, added_by: column.text, created_at: column.text },
+  { indexes: { job: ['job_id'], person: ['person_id'] } },
+);
 
 const locations = new Table(
   {
@@ -66,6 +78,8 @@ const items = new Table(
     job_id: column.text,
     location_id: column.text,
     number: column.integer,
+    /** The person at Ross Built it is assigned to. */
+    assigned_to: column.text,
     title: column.text,
     description: column.text,
     trade_id: column.text,
@@ -94,7 +108,7 @@ const items = new Table(
     created_at: column.text,
     updated_at: column.text,
   },
-  { indexes: { job: ['job_id'], location: ['location_id'] } },
+  { indexes: { job: ['job_id'], location: ['location_id'], assigned: ['assigned_to'] } },
 );
 
 const item_history = new Table(
@@ -266,6 +280,7 @@ const rejected_changes = new Table(
 export const AppSchema = new Schema({
   people,
   jobs,
+  job_team,
   locations,
   trades,
   companies,

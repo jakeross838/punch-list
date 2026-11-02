@@ -5,6 +5,7 @@ insert into public.people (email, name) values
   ('jake@rossbuilt.com', 'Jake Ross'),
   ('andrew@rossbuilt.com', 'Andrew Ross'),
   ('former@rossbuilt.com', 'Former Employee');
+update public.people set role = 'admin' where email in ('jake@rossbuilt.com', 'andrew@rossbuilt.com');
 update public.people set active = false where email = 'former@rossbuilt.com';
 
 -- ---------- an active person ----------
@@ -116,10 +117,11 @@ begin
     raise exception 'FAIL: the app reset the item counter';
   exception when insufficient_privilege then null;
   end;
+  -- An admin adds people; an email is always lower case.
   begin
-    insert into public.people (email, name) values ('friend@example.com', 'Friend');
-    raise exception 'FAIL: the app added a person';
-  exception when insufficient_privilege then null;
+    insert into public.people (email, name) values ('Friend@Example.com', 'Friend');
+    raise exception 'FAIL: an email in capitals was accepted';
+  exception when check_violation then null;
   end;
 end $$;
 
@@ -728,6 +730,141 @@ end $$;
 
 reset role;
 
+-- ---------- people, roles, job teams and assigning: as an admin ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+
+do $$
+declare
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  j uuid := (select id from public.jobs where name = 'Fish');
+  t uuid := (select id from public.trades where name = 'Plumbing');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  sam uuid; j2 uuid; loc2 uuid; it uuid;
+begin
+  -- An admin adds a person who sees only the jobs they are on.
+  insert into public.people (email, name, role, sees, phone) values ('sam@rossbuilt.com', 'Sam Rivera', 'team', 'assigned', ' 941 555 0100 ') returning id into sam;
+  if (select added_by from public.people where id = sam) is distinct from jake then raise exception 'FAIL: who added the person was not stamped'; end if;
+  if (select phone from public.people where id = sam) <> '941 555 0100' then raise exception 'FAIL: the phone number was not tidied'; end if;
+  insert into public.jobs (name) values ('Gavin Addition') returning id into j2;
+  insert into public.locations (job_id, name, label, sort_order) values (j2, 'Garage', 'Garage', 1) returning id into loc2;
+  if not exists (select 1 from public.job_access where job_id = j2 and person_id = jake) then raise exception 'FAIL: an admin cannot see a new job'; end if;
+  if exists (select 1 from public.job_access where person_id = sam) then raise exception 'FAIL: someone who sees only their jobs sees jobs they are not on'; end if;
+
+  -- On Fish's team: Sam sees Fish.
+  insert into public.job_team (job_id, person_id, part) values (j, sam, 'field');
+  if not exists (select 1 from public.job_access where job_id = j and person_id = sam and email = 'sam@rossbuilt.com') then
+    raise exception 'FAIL: joining the team did not let them see the job';
+  end if;
+  update public.job_team set part = 'superintendent' where job_id = j and person_id = sam;
+  if (select count(*) from public.job_activity where job_id = j and kind in ('team_added', 'team_changed')) <> 2 then
+    raise exception 'FAIL: the team changes are not in Activity';
+  end if;
+
+  -- Assigned an item on another job: Sam joins that job's team, and sees it.
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready)
+    values (j2, loc2, 'Install shelving', t, c, true) returning id into it;
+  update public.items set assigned_to = sam where id = it;
+  if not exists (select 1 from public.job_team where job_id = j2 and person_id = sam and part = 'field') or not exists (select 1 from public.job_access where job_id = j2 and person_id = sam) then
+    raise exception 'FAIL: assigning an item did not put them on the job';
+  end if;
+  if not exists (select 1 from public.item_history where item_id = it and field = 'assigned_to' and after = sam::text) then
+    raise exception 'FAIL: the assignment is not in the history';
+  end if;
+  begin
+    update public.items set assigned_to = (select id from public.people where email = 'former@rossbuilt.com') where id = it;
+    raise exception 'FAIL: an item was assigned to someone switched off';
+  exception when check_violation then null;
+  end;
+  -- Off Gavin Addition's team again: Sam no longer sees it.
+  delete from public.job_team where job_id = j2 and person_id = sam;
+  if exists (select 1 from public.job_access where job_id = j2 and person_id = sam) or (select count(*) from public.job_activity where job_id = j2 and kind = 'team_removed') <> 1 then
+    raise exception 'FAIL: leaving the team did not take the job away';
+  end if;
+
+  -- Closing a job is in Activity.
+  update public.jobs set archived = true where id = j2;
+  update public.jobs set archived = false where id = j2;
+  if (select count(*) from public.job_activity where job_id = j2 and kind in ('job_closed', 'job_reopened')) <> 2 then raise exception 'FAIL: closing a job is not in Activity'; end if;
+
+  -- Ross Built always keeps an admin who can sign in.
+  update public.people set role = 'team' where email = 'andrew@rossbuilt.com';
+  begin
+    update public.people set active = false where id = jake;
+    raise exception 'FAIL: the last admin was switched off';
+  exception when check_violation then null;
+  end;
+  update public.people set role = 'admin' where email = 'andrew@rossbuilt.com';
+  begin
+    delete from public.people where id = sam;
+    raise exception 'FAIL: a person was deleted';
+  exception when insufficient_privilege or restrict_violation then null;
+  end;
+  perform set_config('test.gavin', j2::text, false);
+end $$;
+reset role;
+
+-- ---------- a team member who sees only their jobs ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"sam@rossbuilt.com"}';
+
+do $$
+declare
+  j uuid := (select id from public.jobs where name = 'Fish');
+  loc uuid := (select id from public.locations where job_id = (select id from public.jobs where name = 'Fish') order by sort_order limit 1);
+  t uuid := (select id from public.trades where name = 'Plumbing');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  x uuid;
+begin
+  if (select count(*) from public.jobs) <> 1 or (select name from public.jobs) <> 'Fish' then raise exception 'FAIL: a team member sees jobs they are not on'; end if;
+  if exists (select 1 from public.items where job_id = current_setting('test.gavin')::uuid) or exists (select 1 from public.job_team where job_id = current_setting('test.gavin')::uuid) then
+    raise exception 'FAIL: a team member sees another job''s work';
+  end if;
+  -- The work itself: add an item, mark a location walked, comment.
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready) values (j, loc, 'Install faucet', t, c, true) returning id into x;
+  update public.locations set walked_at = now() where id = loc;
+  insert into public.comments (job_id, item_id, body) values (j, x, 'Faucet is on site.');
+  -- Not the setup: no new job, location, company, title or person, no renaming, no teams.
+  begin
+    insert into public.jobs (name) values ('My Job');
+    raise exception 'FAIL: a team member made a job';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.locations set label = 'Renamed' where id = loc;
+    raise exception 'FAIL: a team member renamed a location';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.locations (job_id, name, label, sort_order) values (j, 'Attic', 'Attic', 99);
+    raise exception 'FAIL: a team member added a location';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.companies (name) values ('My Company');
+    raise exception 'FAIL: a team member added a company';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.title_library (title, trade_id) values ('Install widget', t);
+    raise exception 'FAIL: a team member added a standard title';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.people (email, name) values ('friend@rossbuilt.com', 'Friend');
+    raise exception 'FAIL: a team member added a person';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.job_team (job_id, person_id) values (j, (select id from public.people where email = 'andrew@rossbuilt.com'));
+    raise exception 'FAIL: a team member changed a team';
+  exception when insufficient_privilege then null;
+  end;
+  update public.people set role = 'admin' where email = 'sam@rossbuilt.com';
+  if (select role from public.people where email = 'sam@rossbuilt.com') <> 'team' then raise exception 'FAIL: a team member made themself an admin'; end if;
+end $$;
+reset role;
+
 -- ---------- someone who was never invited ----------
 set role authenticated;
 set request.jwt.claims = '{"email":"stranger@example.com"}';
@@ -739,7 +876,8 @@ begin
      + (select count(*) from public.item_history) + (select count(*) from public.job_companies)
      + (select count(*) from public.photos) + (select count(*) from public.custom_fields)
      + (select count(*) from public.person_settings) + (select count(*) from public.job_activity)
-     + (select count(*) from public.comments) + (select count(*) from public.company_links) <> 0 then
+     + (select count(*) from public.comments) + (select count(*) from public.company_links)
+     + (select count(*) from public.job_team) + (select count(*) from public.job_access) <> 0 then
     raise exception 'FAIL: an uninvited account can see data';
   end if;
   begin

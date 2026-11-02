@@ -25,6 +25,7 @@ import {
   type Person,
   type Photo,
   type StandardTitle,
+  type TeamMember,
   type Trade,
   type ViewSettings,
   type Visit,
@@ -38,6 +39,8 @@ export interface SampleState {
   /** Who did what, the way the database logs it. */
   activity: Activity[];
   jobs: Job[];
+  /** Who is on each job, and as what. */
+  team: TeamMember[];
   locations: Location[];
   trades: Trade[];
   companies: Company[];
@@ -86,8 +89,22 @@ const STANDARD_TITLES: Record<string, [string, number, number][]> = {
 const usualHours = (title: string) => Object.values(STANDARD_TITLES).flat().find(([t]) => t === title)?.[2] ?? null;
 
 export function sampleState(): SampleState {
-  const me: Person = { id: 'person-jake', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true };
-  const job: Job = { id: 'job-preview', name: 'Sample Job', address: 'Sample data, not the real Fish list' };
+  const me: Person = { id: 'person-jake', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true, role: 'admin', sees: 'all', phone: null };
+  // Made up, like the second person below: someone who sees only the jobs they are on, and someone who sees every job.
+  const sam: Person = { id: 'person-sam', email: 'sam@rossbuilt.com', name: 'Sam Rivera', active: true, role: 'team', sees: 'assigned', phone: '(941) 555-0142' };
+  const taylor: Person = { id: 'person-taylor', email: 'taylor@rossbuilt.com', name: 'Taylor Brooks', active: true, role: 'team', sees: 'all', phone: null };
+  const job: Job = { id: 'job-preview', name: 'Sample Job', address: 'Sample data, not the real Fish list', closed: false };
+  // A second job Sam is not on, and one that is done and put away.
+  const bay: Job = { id: 'job-bay', name: 'Bay Drive House', address: 'Sample data, a second job', closed: false };
+  const palm: Job = { id: 'job-palm', name: 'Palm Avenue House', address: 'Sample data, a finished job', closed: true };
+  const team: TeamMember[] = [
+    { id: 'team-1', jobId: job.id, personId: me.id, part: 'project_manager' },
+    { id: 'team-2', jobId: job.id, personId: sam.id, part: 'superintendent' },
+    { id: 'team-3', jobId: job.id, personId: taylor.id, part: 'field' },
+    { id: 'team-4', jobId: bay.id, personId: me.id, part: 'project_manager' },
+    { id: 'team-5', jobId: palm.id, personId: me.id, part: 'project_manager' },
+    { id: 'team-6', jobId: palm.id, personId: sam.id, part: 'superintendent' },
+  ];
 
   const tradeNames = ['Plumbing', 'Electrical', 'Painting', 'Tile', 'Carpentry', 'Stone', 'Air Conditioning', 'Ross Built Crew'];
   const trades: Trade[] = tradeNames.map((name, i) => ({ id: `trade-${i}`, name, sortOrder: i + 1 }));
@@ -141,6 +158,7 @@ export function sampleState(): SampleState {
       jobId: job.id,
       locationId: room(label),
       number: n,
+      assignedTo: null,
       title,
       description,
       tradeId: co.defaultTradeId,
@@ -171,9 +189,9 @@ export function sampleState(): SampleState {
   const items: Item[] = [
     // Waits on the range backsplash going in first (the last item), and comes free when its visit is done.
     item('Kitchen 109', 'Set upper cabinets', 'Range wall, both sides of the hood.', 'SMS Carpentry', { ready: false, waitingOnItems: ['item-25'] }),
-    item('Kitchen 109', 'Install pendant lights', 'Over the island, three fixtures.', 'Metro Electric', { ready: false, waitingOn: ['Owner'] }),
+    item('Kitchen 109', 'Install pendant lights', 'Over the island, three fixtures.', 'Metro Electric', { ready: false, waitingOn: ['Owner'], assignedTo: me.id }),
     item('Kitchen 109', 'Touch up paint', 'Ceiling at the hood soffit.', 'Triple H Painting', { kind: 'deficiency' }),
-    item('Living 107', 'Install refrigerator drawers', 'Bar under the stair.', 'Ross Built', { kind: 'added_scope', boughtOut: false }),
+    item('Living 107', 'Install refrigerator drawers', 'Bar under the stair.', 'Ross Built', { kind: 'added_scope', boughtOut: false, assignedTo: taylor.id }),
     item('Guest Bedroom 114', 'Replace outlet cover', 'North wall, left of the window.', 'Metro Electric', { kind: 'deficiency' }),
     item('Bathroom 116', 'Install toilet', 'Toilet room, left of the vanity.', 'Gator Plumbing'),
     item('Bathroom 116', 'Grout shower floor', '', 'Rangel Custom Tile', { status: 'complete', completedBy: me.id, completedAt: at }),
@@ -181,9 +199,9 @@ export function sampleState(): SampleState {
     item('Laundry 119', 'Install dryer vent cover', 'Exterior wall above the washer.', 'Climatic'),
     // Waits on SMS Carpentry's pocket door hardware (the very last item).
     item('Master Bathroom 207', 'Paint pocket doors', 'Both doors, after the hardware.', 'Triple H Painting', { ready: false, waitingOnItems: ['item-26'] }),
-    item('Master Bathroom 207', 'Set vanity tops', 'Double vanity, east wall.', 'Volcano Stone', { ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09' }),
-    item('Whole House', 'Mount thermostats', 'All zones, at the end of the job.', 'Climatic', { ready: false, waitingOn: ['Ross Built'] }),
-    item('Foyer 115', 'Hang front door', 'Pivot door at the entry. Set the hardware after paint.', 'SMS Carpentry', { ready: false, waitingOn: ['Owner'], readyBy: '2026-10-26' }),
+    item('Master Bathroom 207', 'Set vanity tops', 'Double vanity, east wall.', 'Volcano Stone', { ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09', assignedTo: me.id }),
+    item('Whole House', 'Mount thermostats', 'All zones, at the end of the job.', 'Climatic', { ready: false, waitingOn: ['Ross Built'], assignedTo: sam.id }),
+    item('Foyer 115', 'Hang front door', 'Pivot door at the entry. Set the hardware after paint.', 'SMS Carpentry', { ready: false, waitingOn: ['Owner'], readyBy: '2026-10-26', assignedTo: me.id }),
     item('Master Bedroom 206', 'Install closet system', 'Walk in closet, both long walls.', 'SMS Carpentry', { kind: 'added_scope', boughtOut: true, poOrCo: 'CO 14' }),
     item('Living 107', 'Patch drywall', 'Behind the television mount, two screw holes.', 'Triple H Painting', { kind: 'deficiency' }),
     item('Kitchen 109', 'Adjust cabinet door', 'Upper cabinet left of the hood. The right door rubs the hood.', 'SMS Carpentry', { kind: 'deficiency', source: 'walk' }),
@@ -278,7 +296,6 @@ export function sampleState(): SampleState {
   ];
 
   // Who did what so far, over the last two weeks, for Activity and each item's History.
-  const sam: Person = { id: 'person-sam', email: 'sam@rossbuilt.com', name: 'Sam Rivera', active: true };
   const ago = (days: number, hour: number, minute = 0) => {
     const d = new Date();
     d.setDate(d.getDate() - days);
@@ -384,9 +401,10 @@ export function sampleState(): SampleState {
 
   return {
     me,
-    people: [me, sam],
+    people: [me, sam, taylor],
     activity,
-    jobs: [job],
+    jobs: [job, bay, palm],
+    team,
     locations,
     trades,
     companies,
@@ -401,6 +419,6 @@ export function sampleState(): SampleState {
     customFields,
     formSettings: DEFAULT_FORM,
     viewSettings: DEFAULT_VIEW,
-    counters: { [job.id]: n },
+    counters: { [job.id]: n, [bay.id]: 0, [palm.id]: 0 },
   };
 }

@@ -1,10 +1,11 @@
 // Job Setup, laid out like Settings: the job's name and address at the top, changed in place, then
-// Locations, Companies and Waiting On, one at a time. Locations come from pasting the plan's room
-// list; companies are added with the trade they do on this job. Tap a location or a company to fix
-// it or take it off the job.
+// Locations, Companies, Team and Waiting On, one at a time. Locations come from pasting the plan's
+// room list; companies are added with the trade they do on this job; the team is who works the job
+// and as what. Tap a location, a company or a person to fix it or take it off the job. Admins change
+// the setup and close the job; everyone else sees it as it is.
 
-import { floorOf, parseRoomList, SHARED_GROUP, type Location } from '@punch/core';
-import { useLocalSearchParams } from 'expo-router';
+import { floorOf, isAdmin, parseRoomList, PART_LABELS, SHARED_GROUP, TEAM_PARTS, teamInOrder, type Location, type TeamPart } from '@punch/core';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { colors, layout, type as typeScale } from '@/constants/theme';
@@ -28,7 +29,7 @@ import {
   type Option,
 } from '@/ui';
 
-type Tab = 'rooms' | 'companies' | 'waiting';
+type Tab = 'rooms' | 'companies' | 'team' | 'waiting';
 
 const PASTE_EXAMPLE = 'Level 1:\nGarage 101\nLiving 107\nKitchen 109\nLevel 2:\nMaster Bedroom 206';
 
@@ -36,6 +37,8 @@ export default function SetupScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const data = useData();
   const job = data.useJobs().find((j) => j.id === jobId);
+  const admin = isAdmin(data.useMe());
+  const feedback = useFeedback();
   const [tab, setTab] = useState<Tab>('rooms');
   const [sheet, setSheet] = useState<'rooms' | 'company' | null>(null);
   // The one being fixed stays set while its sheet slides away.
@@ -43,14 +46,15 @@ export default function SetupScreen() {
   const [company, setCompany] = useState<(Pairing & { open: boolean }) | null>(null);
 
   return (
-    <Page title="Job Setup" large backLabel={job?.name} background="plain">
-      {job ? <JobFields key={job.id} job={job} /> : null}
+    <Page title="Job Setup" large backLabel={job?.name} background="plain" subtitle={admin ? undefined : 'Only an admin changes the setup.'}>
+      {job ? <JobFields key={job.id} job={job} editable={admin} /> : null}
       <View style={styles.tabs}>
         <Segmented<Tab>
           track={colors.trackOnWhite}
           options={[
             ['rooms', 'Locations'],
             ['companies', 'Companies'],
+            ['team', 'Team'],
             ['waiting', 'Waiting On'],
           ]}
           value={tab}
@@ -58,11 +62,49 @@ export default function SetupScreen() {
           testID="setup-tabs"
         />
       </View>
-      {tab === 'rooms' ? <RoomsTab jobId={jobId} onPaste={() => setSheet('rooms')} onOpen={(id) => setLocation({ id, open: true })} /> : null}
-      {tab === 'companies' ? (
-        <CompaniesTab jobId={jobId} onAdd={() => setSheet('company')} onOpen={(pairing) => setCompany({ ...pairing, open: true })} />
+      {tab === 'rooms' ? (
+        <RoomsTab jobId={jobId} admin={admin} onPaste={() => setSheet('rooms')} onOpen={(id) => setLocation({ id, open: true })} />
       ) : null}
+      {tab === 'companies' ? (
+        <CompaniesTab jobId={jobId} admin={admin} onAdd={() => setSheet('company')} onOpen={(pairing) => setCompany({ ...pairing, open: true })} />
+      ) : null}
+      {tab === 'team' ? <TeamTab jobId={jobId} admin={admin} /> : null}
       {tab === 'waiting' ? <WaitingTab jobId={jobId} /> : null}
+      {admin && job ? (
+        <View style={styles.closeJob}>
+          <ListSection
+            footer={job.closed ? 'Closed jobs wait at the bottom of Jobs. Opening it puts it back with the others.' : 'Closing puts the job away at the bottom of Jobs. Nothing is deleted, and it can be opened again.'}
+          >
+            <ListRow
+              title={job.closed ? 'Open the Job Again' : 'Close the Job'}
+              tone={job.closed ? 'tint' : 'destructive'}
+              onPress={() => {
+                if (job.closed) {
+                  void data.updateJob(job.id, { closed: false });
+                  feedback.toast({ message: `${job.name} is open again` });
+                  return;
+                }
+                feedback.actionSheet({
+                  title: `Close ${job.name}?`,
+                  message: 'It moves to Closed Jobs at the bottom of Jobs. Nothing is deleted, and you can open it again.',
+                  actions: [
+                    {
+                      label: 'Close the Job',
+                      destructive: true,
+                      onPress: () => {
+                        void data.updateJob(job.id, { closed: true });
+                        router.dismissTo('/');
+                        feedback.toast({ message: `Closed ${job.name}`, action: { label: 'Undo', onPress: () => void data.updateJob(job.id, { closed: false }) } });
+                      },
+                    },
+                  ],
+                });
+              }}
+              testID={job.closed ? 'reopen-job' : 'close-job'}
+            />
+          </ListSection>
+        </View>
+      ) : null}
       <PasteRoomsSheet jobId={jobId} visible={sheet === 'rooms'} onClose={() => setSheet(null)} />
       <AddCompanySheet jobId={jobId} visible={sheet === 'company'} onClose={() => setSheet(null)} />
       <LocationSheet
@@ -92,17 +134,19 @@ function floorsOf(locations: Location[]): { name: string; rooms: Location[] }[] 
   return out;
 }
 
-function RoomsTab({ jobId, onPaste, onOpen }: { jobId: string; onPaste: () => void; onOpen: (id: string) => void }) {
+function RoomsTab({ jobId, admin, onPaste, onOpen }: { jobId: string; admin: boolean; onPaste: () => void; onOpen: (id: string) => void }) {
   const locations = useData().useLocations(jobId);
   const floors = useMemo(() => floorsOf(locations.filter((l) => l.active)), [locations]);
   return (
     <>
-      <View style={styles.action}>
-        <Button variant="tinted" icon="plus" label="Paste Locations" onPress={onPaste} testID="paste-rooms" />
-        <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
-          From the plans, one on each line.
-        </Text>
-      </View>
+      {admin ? (
+        <View style={styles.action}>
+          <Button variant="tinted" icon="plus" label="Paste Locations" onPress={onPaste} testID="paste-rooms" />
+          <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
+            From the plans, one on each line.
+          </Text>
+        </View>
+      ) : null}
       {floors.length === 0 ? <EmptyState icon="door" title="No Locations Yet" message="Paste them from the plans to start." /> : null}
       {floors.map((floor) => (
         <ListSection
@@ -116,7 +160,13 @@ function RoomsTab({ jobId, onPaste, onOpen }: { jobId: string; onPaste: () => vo
           }
         >
           {floor.rooms.map((room) => (
-            <ListRow key={room.id} title={room.label} accessory="chevron" onPress={() => onOpen(room.id)} testID={`setup-location-${room.id}`} />
+            <ListRow
+              key={room.id}
+              title={room.label}
+              accessory={admin ? 'chevron' : 'none'}
+              onPress={admin ? () => onOpen(room.id) : undefined}
+              testID={`setup-location-${room.id}`}
+            />
           ))}
         </ListSection>
       ))}
@@ -124,7 +174,7 @@ function RoomsTab({ jobId, onPaste, onOpen }: { jobId: string; onPaste: () => vo
   );
 }
 
-function CompaniesTab({ jobId, onAdd, onOpen }: { jobId: string; onAdd: () => void; onOpen: (pairing: Pairing) => void }) {
+function CompaniesTab({ jobId, admin, onAdd, onOpen }: { jobId: string; admin: boolean; onAdd: () => void; onOpen: (pairing: Pairing) => void }) {
   const data = useData();
   const jobCompanies = data.useJobCompanies(jobId);
   const companies = data.useCompanies();
@@ -139,12 +189,14 @@ function CompaniesTab({ jobId, onAdd, onOpen }: { jobId: string; onAdd: () => vo
     .sort((a, b) => a.name.localeCompare(b.name));
   return (
     <>
-      <View style={styles.action}>
-        <Button variant="tinted" icon="plus" label="Add Company" onPress={onAdd} testID="add-company" />
-        <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
-          Each company and the trade it does on this job.
-        </Text>
-      </View>
+      {admin ? (
+        <View style={styles.action}>
+          <Button variant="tinted" icon="plus" label="Add Company" onPress={onAdd} testID="add-company" />
+          <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
+            Each company and the trade it does on this job.
+          </Text>
+        </View>
+      ) : null}
       {rows.length === 0 ? (
         <EmptyState icon="person.2.fill" title="No Companies Yet" message="Add the companies doing the work on this job." />
       ) : (
@@ -158,10 +210,104 @@ function CompaniesTab({ jobId, onAdd, onOpen }: { jobId: string; onAdd: () => vo
           }
         >
           {rows.map((r) => (
-            <ListRow key={r.key} title={r.name} subtitle={r.trade} accessory="chevron" onPress={() => onOpen(r.pairing)} testID={`setup-company-${r.key}`} />
+            <ListRow
+              key={r.key}
+              title={r.name}
+              subtitle={r.trade}
+              accessory={admin ? 'chevron' : 'none'}
+              onPress={admin ? () => onOpen(r.pairing) : undefined}
+              testID={`setup-company-${r.key}`}
+            />
           ))}
         </ListSection>
       )}
+    </>
+  );
+}
+
+/** Who works the job, and as what: Project Manager, Superintendent, Field. */
+function TeamTab({ jobId, admin }: { jobId: string; admin: boolean }) {
+  const data = useData();
+  const feedback = useFeedback();
+  const people = data.usePeople();
+  const team = teamInOrder(data.useTeams().filter((t) => t.jobId === jobId), people);
+  const [adding, setAdding] = useState(false);
+  const off = people.filter((p) => p.active && !team.some((t) => t.personId === p.id));
+  const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? 'Someone';
+
+  const choose = (personId: string, current: TeamPart | null) =>
+    feedback.actionSheet({
+      title: nameOf(personId),
+      actions: [
+        ...TEAM_PARTS.filter((p) => p !== current).map((part) => ({
+          label: current ? `Make ${PART_LABELS[part]}` : `Add as ${PART_LABELS[part]}`,
+          onPress: () => {
+            haptic.tap();
+            void data.setTeamMember(jobId, personId, part);
+          },
+        })),
+        ...(current
+          ? [
+              {
+                label: 'Take Off the Team',
+                destructive: true,
+                onPress: () => {
+                  haptic.tap();
+                  void data.setTeamMember(jobId, personId, null);
+                  feedback.toast({ message: `${nameOf(personId)} is off the team`, action: { label: 'Undo', onPress: () => void data.setTeamMember(jobId, personId, current) } });
+                },
+              },
+            ]
+          : []),
+      ],
+    });
+
+  return (
+    <>
+      {admin ? (
+        <View style={styles.action}>
+          <Button variant="tinted" icon="plus" label="Add Person" onPress={() => setAdding(true)} disabled={off.length === 0} testID="add-team" />
+          <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
+            {off.length === 0 ? 'Everyone at Ross Built is on this job.' : 'Assigning an item to someone puts them on the team too.'}
+          </Text>
+        </View>
+      ) : null}
+      {team.length === 0 ? (
+        <EmptyState icon="person.2.fill" title="No Team Yet" message="Add the Project Manager, the Superintendent and anyone in the field." />
+      ) : (
+        <ListSection
+          variant="plain"
+          header="On This Job"
+          headerRight={
+            <Text variant="subheadline" color={colors.secondary} tabular>
+              {team.length === 1 ? '1 person' : `${team.length} people`}
+            </Text>
+          }
+        >
+          {team.map((t) => (
+            <ListRow
+              key={t.id}
+              title={nameOf(t.personId)}
+              subtitle={PART_LABELS[t.part]}
+              accessory={admin ? 'chevron' : 'none'}
+              onPress={admin ? () => choose(t.personId, t.part) : undefined}
+              testID={`team-${t.personId}`}
+            />
+          ))}
+        </ListSection>
+      )}
+      <OptionPicker
+        visible={adding}
+        title="Add Person"
+        options={off.map((p) => ({ value: p.id, label: p.name, hint: p.role === 'admin' ? 'Admin' : null }))}
+        value={null}
+        onSelect={(personId) => {
+          setAdding(false);
+          // The picker closes first, then what they are on the job.
+          setTimeout(() => choose(personId, null), 350);
+        }}
+        onClose={() => setAdding(false)}
+      />
     </>
   );
 }
@@ -398,6 +544,7 @@ const styles = StyleSheet.create({
   action: { marginHorizontal: layout.inset, gap: 8, marginBottom: 6 },
   actionNote: { paddingHorizontal: 4 },
   sheetContent: { paddingTop: 4, paddingBottom: 48 },
+  closeJob: { marginTop: 36 },
   addRow: {
     minHeight: layout.rowMinHeight,
     flexDirection: 'row',

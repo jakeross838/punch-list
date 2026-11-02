@@ -43,7 +43,7 @@ let n = 0;
 function item(over: Partial<Item>): Item {
   n += 1;
   return {
-    id: `i${n}`, jobId: 'j', locationId: 'k', number: n, title: `Item ${n}`, description: '', tradeId: 't-carp',
+    id: `i${n}`, jobId: 'j', locationId: 'k', number: n, assignedTo: null, title: `Item ${n}`, description: '', tradeId: 't-carp',
     companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], waitingOnItems: [], readyBy: null, boughtOut: true, poOrCo: null,
     status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null, hours: null,
     btExternalId: null, createdBy: 'p1', createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
@@ -177,7 +177,7 @@ describe('unfinished items', () => {
     expect(missingText({ ...draft, title: 'Install toilet' })).toBe('Needs a company');
     expect(tidyItem({ ...draft, title: 'Install toilet' }).unfinished).toBe(true);
     expect(tidyItem({ ...draft, title: 'Install toilet', companyId: 'c-sms' }).unfinished).toBe(false);
-    expect(() => complete(draft, { id: 'p1', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true })).toThrow(RuleError);
+    expect(() => complete(draft, { id: 'p1', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true, role: 'admin', sees: 'all', phone: null })).toThrow(RuleError);
   });
 });
 
@@ -328,10 +328,10 @@ describe('filling in from the photo', () => {
 describe('a company list with planned visits', () => {
   it('prints each visit with its items, and keeps them off Ready', () => {
     const items = [
-      item({ id: 'b1', number: 1, visitId: 'v1' }),
-      item({ id: 'b2', number: 2, visitId: 'v1', locationId: 'a' }),
+      item({ id: 'b1', number: 1, assignedTo: null, visitId: 'v1' }),
+      item({ id: 'b2', number: 2, assignedTo: null, visitId: 'v1', locationId: 'a' }),
       item({ id: 'r1', number: 3 }),
-      item({ id: 'w1', number: 4, ready: false, waitingOn: ['Owner'] }),
+      item({ id: 'w1', number: 4, assignedTo: null, ready: false, waitingOn: ['Owner'] }),
     ];
     const page = companyPrintout(companyList('c-sms', items, lookups), {
       job: { name: 'Fish', address: '715 North Shore Drive' },

@@ -1,6 +1,6 @@
 // Database rows (snake_case, booleans as 0 or 1 on the phone) to and from the app's records.
 
-import { tidyHours, tidyRooms, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type Trade, type Visit } from '@punch/core';
+import { tidyHours, tidyRooms, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type TeamMember, type TeamPart, type Trade, type Visit } from '@punch/core';
 import type { ItemPatch } from './api';
 
 type Row = Record<string, unknown>;
@@ -28,9 +28,27 @@ function json<T>(v: unknown, fallback: T): T {
   }
 }
 
-export const rowToPerson = (r: Row): Person => ({ id: text(r.id), email: text(r.email), name: text(r.name), active: bool(r.active) });
+export const rowToPerson = (r: Row): Person => ({
+  id: text(r.id),
+  email: text(r.email),
+  name: text(r.name),
+  active: bool(r.active),
+  role: r.role === 'admin' ? 'admin' : 'team',
+  sees: r.sees === 'assigned' ? 'assigned' : 'all',
+  phone: textOrNull(r.phone),
+});
 
-export const rowToJob = (r: Row): Job => ({ id: text(r.id), name: text(r.name), address: text(r.address) });
+/** A job put away is archived in the database and closed in the app. */
+export const rowToJob = (r: Row): Job => ({ id: text(r.id), name: text(r.name), address: text(r.address), closed: bool(r.archived) });
+
+const PARTS: TeamPart[] = ['project_manager', 'superintendent', 'field'];
+
+export const rowToTeamMember = (r: Row): TeamMember => ({
+  id: text(r.id),
+  jobId: text(r.job_id),
+  personId: text(r.person_id),
+  part: PARTS.includes(r.part as TeamPart) ? (r.part as TeamPart) : 'field',
+});
 
 export const rowToLocation = (r: Row): Location => ({
   id: text(r.id),
@@ -63,6 +81,7 @@ export const rowToItem = (r: Row): Item => ({
   jobId: text(r.job_id),
   locationId: text(r.location_id),
   number: numOrNull(r.number),
+  assignedTo: textOrNull(r.assigned_to),
   title: text(r.title),
   description: text(r.description),
   tradeId: textOrNull(r.trade_id),
@@ -90,6 +109,7 @@ export const rowToItem = (r: Row): Item => ({
 
 const ITEM_COLUMNS: Record<keyof ItemPatch, string> = {
   locationId: 'location_id',
+  assignedTo: 'assigned_to',
   title: 'title',
   description: 'description',
   tradeId: 'trade_id',

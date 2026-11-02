@@ -12,8 +12,8 @@ import { haptic, ListLabeledField, ListRow, ListSection, ListTextField, OptionPi
 const oneLine = (text: string) => text.trim().replace(/\s+/g, ' ');
 const itemCount = (n: number) => `${n} open ${n === 1 ? 'item' : 'items'}`;
 
-/** The job's name and address. Each saves when the field is left. */
-export function JobFields({ job }: { job: Job }) {
+/** The job's name and address. Each saves when the field is left; only an admin changes them. */
+export function JobFields({ job, editable = true }: { job: Job; editable?: boolean }) {
   const data = useData();
   const feedback = useFeedback();
   const [name, setName] = useState(job.name);
@@ -43,6 +43,7 @@ export function JobFields({ job }: { job: Job }) {
         value={name}
         onChangeText={setName}
         onBlur={saveName}
+        editable={editable}
         placeholder="Job Name"
         autoCapitalize="words"
         returnKeyType="done"
@@ -53,6 +54,7 @@ export function JobFields({ job }: { job: Job }) {
         value={address}
         onChangeText={setAddress}
         onBlur={saveAddress}
+        editable={editable}
         placeholder="Street Address"
         autoCapitalize="words"
         returnKeyType="done"

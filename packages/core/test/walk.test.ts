@@ -27,7 +27,7 @@ describe('the walk', () => {
 
   it('saves a photo before a location is picked, and a finished item needs one', () => {
     const draft: ItemFields & { locationId: string } = {
-      locationId: '', title: '', description: '', tradeId: null, companyId: null, kind: 'completion', ready: true, waitingOn: [], waitingOnItems: [], readyBy: null,
+      locationId: '', assignedTo: null, title: '', description: '', tradeId: null, companyId: null, kind: 'completion', ready: true, waitingOn: [], waitingOnItems: [], readyBy: null,
       boughtOut: true, poOrCo: null, status: 'open', completedBy: null, completedAt: null, extra: {}, unfinished: true, visitId: null, hours: null,
     };
     expect(checkItem(draft)).toEqual([]);

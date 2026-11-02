@@ -20,6 +20,7 @@ import {
   type Comment,
   type Item,
   type Location,
+  type Person,
 } from '../src/index';
 
 const rooms: Location[] = [{ id: 'k', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 1, active: true, walkedAt: null }];
@@ -31,7 +32,7 @@ const lookups = {
 const look = { people: new Map([['jake', 'Jake Ross']]), companies: new Map([['c-sms', 'SMS Carpentry']]) };
 
 const door: Item = {
-  id: 'door', jobId: 'j', locationId: 'k', number: 16, title: 'Adjust cabinet door', description: 'The right door rubs the hood.', tradeId: 't-carp',
+  id: 'door', jobId: 'j', locationId: 'k', number: 16, assignedTo: null, title: 'Adjust cabinet door', description: 'The right door rubs the hood.', tradeId: 't-carp',
   companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], waitingOnItems: [], readyBy: null, boughtOut: true, poOrCo: null, status: 'open',
   completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null, hours: 0.5, btExternalId: null,
   createdBy: 'jake', createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z',
@@ -86,7 +87,7 @@ describe('comments', () => {
       { id: 'a2', jobId: 'j', itemId: null, personId: 'jake', at, kind: 'comment_added', detail: { company_id: 'c-sms', from_company: false, author_name: null, internal: false, body: 'Can you come Tuesday?' } },
       { id: 'a3', jobId: 'j', itemId: 'door', personId: 'jake', at, kind: 'comment_added', detail: { company_id: 'c-sms', from_company: false, internal: true, body: 'Check the pantry door' } },
     ];
-    const lookups2 = activityLookups({ people: [{ id: 'jake', email: '', name: 'Jake Ross', active: true }], items: [door], locations: rooms, companies: lookups.companies, trades: [], visits: [], customFields: [] });
+    const lookups2 = activityLookups({ people: [{ id: 'jake', email: '', name: 'Jake Ross', active: true, role: 'admin', sees: 'all', phone: null }], items: [door], locations: rooms, companies: lookups.companies, trades: [], visits: [], customFields: [] });
     const lines = activityLines(entries, lookups2);
     expect(lines.map((l) => `${l.who} ${l.action}`).sort()).toEqual([
       'Jake Ross added a Ross Built only note on Adjust cabinet door',
@@ -110,7 +111,7 @@ describe('comments', () => {
     });
     const kept = { ...comments[0]!, id: 'kept' };
     const gone = { ...comments[0]!, id: 'gone', body: 'Wrong item.', removed: true };
-    const people = [{ id: 'jake', email: '', name: 'Jake Ross', active: true }];
+    const people: Person[] = [{ id: 'jake', email: '', name: 'Jake Ross', active: true, role: 'admin', sees: 'all', phone: null }];
     const look2 = activityLookups({ people, items: [door], locations: rooms, companies: lookups.companies, trades: [], visits: [], customFields: [], comments: [kept, gone] });
     expect(activityLines([said('kept', 'The left one drags too.'), said('gone', 'Wrong item.')], look2).map((l) => l.detail)).toEqual(['Kitchen 109. The left one drags too.']);
   });

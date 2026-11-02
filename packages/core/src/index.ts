@@ -21,3 +21,4 @@ export * from './time';
 export * from './filters';
 export * from './comments';
 export * from './roomTasks';
+export * from './people';

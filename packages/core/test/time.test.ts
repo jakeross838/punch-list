@@ -53,7 +53,7 @@ let n = 0;
 function item(over: Partial<Item>): Item {
   n += 1;
   return {
-    id: `i${n}`, jobId: 'j', locationId: 'k', number: n, title: `Item ${n}`, description: '', tradeId: 't-carp',
+    id: `i${n}`, jobId: 'j', locationId: 'k', number: n, assignedTo: null, title: `Item ${n}`, description: '', tradeId: 't-carp',
     companyId: 'c-sms', kind: 'completion', ready: true, waitingOn: [], waitingOnItems: [], readyBy: null, boughtOut: true, poOrCo: null,
     status: 'open', completedBy: null, completedAt: null, source: 'typed', extra: {}, unfinished: false, visitId: null,
     hours: null, btExternalId: null, createdBy: 'jake', createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
@@ -109,7 +109,7 @@ describe('estimated time', () => {
 
   it('says an estimate change in History', () => {
     const it1 = item({ title: 'Hang door' });
-    const look = activityLookups({ people: [{ id: 'jake', email: '', name: 'Jake Ross', active: true }], items: [it1], locations: rooms, companies: [], trades: [], visits: [], customFields: [] });
+    const look = activityLookups({ people: [{ id: 'jake', email: '', name: 'Jake Ross', active: true, role: 'admin', sees: 'all', phone: null }], items: [it1], locations: rooms, companies: [], trades: [], visits: [], customFields: [] });
     const entry = (before: string | null, after: string | null) => ({ id: 'e', jobId: 'j', itemId: it1.id, personId: 'jake', at: '2026-10-30T10:00:00Z', kind: 'item_changed' as const, field: 'hours', before, after });
     expect(activityLines([entry(null, '2.50')], look, { forItem: true })[0]?.detail).toBe('Estimated time: 2.5 hours.');
     expect(activityLines([entry('2.00', null)], look, { forItem: true })[0]?.detail).toBe('Estimated time cleared.');
@@ -199,13 +199,13 @@ describe('planning full days', () => {
 
   it("splits a company's ready work into days, location by location, and totals each batch", () => {
     const items = [
-      item({ id: 'k1', locationId: 'b', number: 1, hours: 3 }),
-      item({ id: 'k2', locationId: 'k', number: 2, hours: 4 }),
-      item({ id: 'k3', locationId: 'k', number: 3, hours: 2 }),
-      item({ id: 'k4', locationId: 'r', number: 4, hours: 2 }),
-      item({ id: 'k5', locationId: 'k', number: 5, hours: null }),
-      item({ id: 'k6', locationId: 'k', number: 6, hours: 1, ready: false, waitingOn: ['Owner'], readyBy: '2026-11-04' }),
-      item({ id: 'k7', locationId: 'k', number: 7, hours: 0.5, companyId: 'c-hhh' }),
+      item({ id: 'k1', locationId: 'b', number: 1, assignedTo: null, hours: 3 }),
+      item({ id: 'k2', locationId: 'k', number: 2, assignedTo: null, hours: 4 }),
+      item({ id: 'k3', locationId: 'k', number: 3, assignedTo: null, hours: 2 }),
+      item({ id: 'k4', locationId: 'r', number: 4, assignedTo: null, hours: 2 }),
+      item({ id: 'k5', locationId: 'k', number: 5, assignedTo: null, hours: null }),
+      item({ id: 'k6', locationId: 'k', number: 6, assignedTo: null, hours: 1, ready: false, waitingOn: ['Owner'], readyBy: '2026-11-04' }),
+      item({ id: 'k7', locationId: 'k', number: 7, assignedTo: null, hours: 0.5, companyId: 'c-hhh' }),
     ];
     const plan = companyPlan('c-sms', items, [], lookups, '2026-10-30');
     expect(plan.readyNow.map((l) => l.item.id)).toEqual(['k2', 'k3', 'k5', 'k1', 'k4']);

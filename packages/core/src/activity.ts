@@ -7,7 +7,8 @@
 import { KIND_LABELS } from './forms';
 import { orderText } from './orders';
 import { hoursText } from './time';
-import type { Comment, Company, CustomField, Item, ItemKind, Location, Person, Trade, Visit } from './types';
+import { PART_LABELS } from './people';
+import type { Comment, Company, CustomField, Item, ItemKind, Location, Person, TeamPart, Trade, Visit } from './types';
 import { waitingOnText } from './waitingOn';
 
 export type ActivityKind =
@@ -33,6 +34,11 @@ export type ActivityKind =
   | 'company_removed'
   | 'job_renamed'
   | 'job_address_changed'
+  | 'job_closed'
+  | 'job_reopened'
+  | 'team_added'
+  | 'team_changed'
+  | 'team_removed'
   | 'comment_added';
 
 export type ActivityDetail = Record<string, string | number | boolean | null>;
@@ -208,6 +214,8 @@ function fieldWords(field: string, before: string | null, after: string | null, 
       return [`Location: ${look.locations.get(after ?? '') ?? 'another location'}`];
     case 'company_id':
       return [after ? `Company: ${look.companies.get(after) ?? 'another company'}` : 'Company cleared'];
+    case 'assigned_to':
+      return [after ? `Assigned to ${look.people.get(after) ?? 'someone'}` : 'No longer assigned'];
     case 'kind':
       return [`Type: ${KIND_LABELS[(after ?? '') as ItemKind] ?? after}`];
     case 'ready':
@@ -419,6 +427,10 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
       const rest = ready ? [] : wordsOf(fields.filter((f) => f !== 'ready'));
       return done(`marked ${title} ${ready ? 'ready' : 'not ready'}`, [where, ...rest, ...photoWords]);
     }
+    if (only('assigned_to')) {
+      const to = net.get('assigned_to')!.after;
+      return to ? done(`assigned ${title} to ${look.people.get(to) ?? 'someone'}`, [where, ...photoWords]) : done(`unassigned ${title}`, [where, ...photoWords]);
+    }
     if (only('location_id')) {
       return done(`moved ${title} to ${look.locations.get(net.get('location_id')!.after ?? '') ?? 'another location'}`, photoWords);
     }
@@ -456,6 +468,8 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
   const items = put > 0 ? plural(put, 'item') : '';
   const company = (id: unknown) => look.companies.get(String(id ?? '')) ?? 'a company';
   const trade = (id: unknown) => look.trades.get(String(id ?? '')) ?? 'another trade';
+  const person = (id: unknown) => look.people.get(String(id ?? '')) ?? 'someone';
+  const part = (p: unknown) => PART_LABELS[String(p ?? '') as TeamPart] ?? 'Field';
   switch (first.kind) {
     case 'location_added': {
       const labels = g.entries.map((e) => String(e.detail?.label ?? '')).filter(Boolean);
@@ -476,6 +490,16 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
       return done(`changed the trade for ${company(d.company_id)}`, [`Now ${trade(d.to)}`]);
     case 'company_removed':
       return done(`removed ${company(d.company_id)} from the job`, [trade(d.trade_id)]);
+    case 'team_added':
+      return done(`put ${person(d.person_id)} on the team`, [part(d.part)]);
+    case 'team_changed':
+      return done(`made ${person(d.person_id)} the job's ${part(d.part)}`, [`Was ${part(d.was_part)}`]);
+    case 'team_removed':
+      return done(`took ${person(d.person_id)} off the team`);
+    case 'job_closed':
+      return done('closed the job');
+    case 'job_reopened':
+      return done('opened the job again');
     case 'job_renamed':
       return done(`renamed the job to ${String(d.to ?? '')}`);
     case 'job_address_changed':

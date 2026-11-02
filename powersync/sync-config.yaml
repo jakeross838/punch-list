@@ -7,29 +7,43 @@ config:
   edition: 3
 
 streams:
+  # What everyone at Ross Built shares: the people, the companies and trades, the standard titles and the added fields.
   ross_built:
     auto_subscribe: true
     with:
       my_org: SELECT org FROM people WHERE email = auth.parameter('email') AND active = true
-      me: SELECT id FROM people WHERE email = auth.parameter('email') AND active = true
     queries:
       - SELECT * FROM people WHERE org IN my_org
-      - SELECT * FROM jobs WHERE org IN my_org
-      - SELECT * FROM locations WHERE org IN my_org
       - SELECT * FROM trades WHERE org IN my_org
       - SELECT * FROM companies WHERE org IN my_org
-      - SELECT * FROM job_companies WHERE org IN my_org
-      - SELECT * FROM job_waiting_on WHERE org IN my_org
-      - SELECT * FROM items WHERE org IN my_org
-      - SELECT * FROM item_history WHERE org IN my_org
-      - SELECT * FROM job_activity WHERE org IN my_org
       - SELECT * FROM title_library WHERE org IN my_org
       - SELECT * FROM custom_fields WHERE org IN my_org
-      - SELECT * FROM photos WHERE org IN my_org
-      - SELECT * FROM visits WHERE org IN my_org
-      - SELECT * FROM list_sends WHERE org IN my_org
-      - SELECT * FROM comments WHERE org IN my_org
+
+  # Each job the person may see, as job_access has it (every job, or only the jobs they are on), with everything on it.
+  jobs:
+    auto_subscribe: true
+    with:
+      my_jobs: SELECT job_id FROM job_access WHERE email = auth.parameter('email')
+    queries:
+      - SELECT * FROM jobs WHERE id IN my_jobs
+      - SELECT * FROM locations WHERE job_id IN my_jobs
+      - SELECT * FROM job_companies WHERE job_id IN my_jobs
+      - SELECT * FROM job_waiting_on WHERE job_id IN my_jobs
+      - SELECT * FROM job_team WHERE job_id IN my_jobs
+      - SELECT * FROM items WHERE job_id IN my_jobs
+      - SELECT * FROM item_history WHERE job_id IN my_jobs
+      - SELECT * FROM job_activity WHERE job_id IN my_jobs
+      - SELECT * FROM photos WHERE job_id IN my_jobs
+      - SELECT * FROM visits WHERE job_id IN my_jobs
+      - SELECT * FROM list_sends WHERE job_id IN my_jobs
+      - SELECT * FROM comments WHERE job_id IN my_jobs
       # The token is the link and the row's id on the phone.
-      - SELECT token AS id, org, job_id, company_id, created_by, created_at, revoked FROM company_links WHERE org IN my_org
-      # Settings are each person's own: a phone gets only its signed-in person's row.
+      - SELECT token AS id, org, job_id, company_id, created_by, created_at, revoked FROM company_links WHERE job_id IN my_jobs
+
+  # Settings are each person's own: a phone gets only its signed-in person's row.
+  mine:
+    auto_subscribe: true
+    with:
+      me: SELECT id FROM people WHERE email = auth.parameter('email') AND active = true
+    queries:
       - SELECT * FROM person_settings WHERE person_id IN me

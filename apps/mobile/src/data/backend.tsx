@@ -6,17 +6,23 @@
 import { randomUUID } from 'expo-crypto';
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import {
+  isAdmin,
+  isEmail,
   itemChanges,
   releasedBy,
   renamedHoldups,
+  seesJob,
   tidyComment,
+  tidyEmail,
   tidyName,
   type Activity,
   type ActivityDetail,
   type ActivityKind,
   type Comment,
   type Item,
+  type Person,
   type Photo,
+  type TeamMember,
   type Visit,
 } from '@punch/core';
 import { DataContext, type DataApi, type ItemPatch, type NewItem } from './api';
@@ -113,6 +119,39 @@ function commit(next: Partial<SampleState>, happened: Happened[] = []): void {
   setState({ ...state, ...next, activity: entries.length > 0 ? [...state.activity, ...entries] : state.activity });
 }
 
+/** What only an admin may do, refused the way the database refuses it. */
+function adminOnly(): void {
+  if (!isAdmin(state.me)) throw new Error('Only an admin can change that.');
+}
+
+/**
+ * Assigning puts the person on the job's team, as the database does: on it as Field when they were
+ * not on it already.
+ */
+function joinTeams(items: Item[]): { team: TeamMember[]; happened: Happened[] } {
+  let team = state.team;
+  const happened: Happened[] = [];
+  for (const i of items) {
+    if (!i.assignedTo || team.some((t) => t.jobId === i.jobId && t.personId === i.assignedTo)) continue;
+    team = [...team, { id: randomUUID(), jobId: i.jobId, personId: i.assignedTo, part: 'field' }];
+    happened.push({ jobId: i.jobId, kind: 'team_added', detail: { person_id: i.assignedTo, part: 'field' } });
+  }
+  return { team, happened };
+}
+
+/** Saves items, with whoever they are now assigned to on the team. */
+function commitItems(items: Item[], next: Partial<SampleState> = {}, happened: Happened[] = []): void {
+  const joined = joinTeams(items.filter((i) => i.assignedTo && state.items.find((x) => x.id === i.id)?.assignedTo !== i.assignedTo));
+  commit({ ...next, items, team: joined.team }, [...happened, ...joined.happened]);
+}
+
+/** A person as the database keeps them: the email tidied and checked, the name trimmed. */
+function checkPerson(p: Pick<Person, 'name' | 'email'>, id: string | null): void {
+  if (p.name.trim() === '') throw new Error('Give them a name.');
+  if (!isEmail(p.email)) throw new Error('That email does not look right.');
+  if (state.people.some((x) => x.id !== id && x.email === p.email)) throw new Error('Someone already has that email.');
+}
+
 const visitDetail = (v: { id: string; companyId: string; start: string; days: number; confirmed: boolean }): ActivityDetail => ({
   visit_id: v.id,
   company_id: v.companyId,
@@ -135,7 +174,21 @@ const api: DataApi = {
   mode: 'preview',
   useMe: () => useStore().me,
   usePeople: () => useStore().people,
-  useJobs: () => useStore().jobs,
+  useJobs: () => {
+    const s = useStore();
+    return useMemo(() => s.jobs.filter((j) => seesJob(s.me, j.id, s.team)), [s.jobs, s.me, s.team]);
+  },
+  useTeams: () => {
+    const s = useStore();
+    return useMemo(() => s.team.filter((t) => seesJob(s.me, t.jobId, s.team)), [s.team, s.me]);
+  },
+  useAssigned: (personId) => {
+    const s = useStore();
+    return useMemo(
+      () => s.items.filter((i) => i.assignedTo === personId && i.status !== 'removed' && seesJob(s.me, i.jobId, s.team)),
+      [s.items, s.me, s.team, personId],
+    );
+  },
   useLocations: (jobId) => {
     const s = useStore();
     return useMemo(() => s.locations.filter((l) => l.jobId === jobId), [s.locations, jobId]);
@@ -179,20 +232,73 @@ const api: DataApi = {
     return useMemo(() => s.activity.filter((a) => a.jobId === jobId), [s.activity, jobId]);
   },
 
-  async createJob({ name, address }) {
+  async createJob({ name, address, projectManagerId }) {
+    adminOnly();
     const id = randomUUID();
-    setState({ ...state, jobs: [...state.jobs, { id, name, address }], counters: { ...state.counters, [id]: 0 } });
+    const pm = projectManagerId ? state.people.find((p) => p.id === projectManagerId && p.active) : undefined;
+    commit(
+      {
+        jobs: [...state.jobs, { id, name, address, closed: false }],
+        team: pm ? [...state.team, { id: randomUUID(), jobId: id, personId: pm.id, part: 'project_manager' }] : state.team,
+        counters: { ...state.counters, [id]: 0 },
+      },
+      pm ? [{ jobId: id, kind: 'team_added', detail: { person_id: pm.id, part: 'project_manager' } }] : [],
+    );
     return id;
   },
   async updateJob(id, patch) {
+    adminOnly();
     const job = state.jobs.find((j) => j.id === id);
     if (!job) return;
     const happened: Happened[] = [];
     if (patch.name !== undefined && patch.name !== job.name) happened.push({ jobId: id, kind: 'job_renamed', detail: { from: job.name, to: patch.name } });
     if (patch.address !== undefined && patch.address !== job.address) happened.push({ jobId: id, kind: 'job_address_changed', detail: { from: job.address, to: patch.address } });
+    if (patch.closed !== undefined && patch.closed !== job.closed) happened.push({ jobId: id, kind: patch.closed ? 'job_closed' : 'job_reopened' });
     commit({ jobs: state.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)) }, happened);
   },
+  async addPerson(input) {
+    adminOnly();
+    const person: Person = { id: randomUUID(), name: input.name.trim(), email: tidyEmail(input.email), phone: input.phone?.trim() || null, role: input.role, sees: input.sees, active: true };
+    checkPerson(person, null);
+    setState({ ...state, people: [...state.people, person] });
+    return person.id;
+  },
+  async updatePerson(id, patch) {
+    adminOnly();
+    const was = state.people.find((p) => p.id === id);
+    if (!was) return;
+    const next: Person = {
+      ...was,
+      ...patch,
+      name: patch.name !== undefined ? patch.name.trim() : was.name,
+      email: patch.email !== undefined ? tidyEmail(patch.email) : was.email,
+      phone: patch.phone !== undefined ? patch.phone?.trim() || null : was.phone,
+    };
+    checkPerson(next, id);
+    const people = state.people.map((p) => (p.id === id ? next : p));
+    if (!people.some(isAdmin)) throw new Error('Ross Built needs at least one admin. Make someone else an admin first.');
+    setState({ ...state, people, me: state.me.id === id ? next : state.me });
+  },
+  async setTeamMember(jobId, personId, part) {
+    adminOnly();
+    const was = state.team.find((t) => t.jobId === jobId && t.personId === personId);
+    if (part === null) {
+      if (!was) return;
+      commit({ team: state.team.filter((t) => t !== was) }, [{ jobId, kind: 'team_removed', detail: { person_id: personId, part: was.part } }]);
+    } else if (!was) {
+      commit({ team: [...state.team, { id: randomUUID(), jobId, personId, part }] }, [{ jobId, kind: 'team_added', detail: { person_id: personId, part } }]);
+    } else if (was.part !== part) {
+      commit({ team: state.team.map((t) => (t === was ? { ...t, part } : t)) }, [
+        { jobId, kind: 'team_changed', detail: { person_id: personId, part, was_part: was.part } },
+      ]);
+    }
+  },
+  previewAs(personId) {
+    const person = state.people.find((p) => p.id === personId && p.active);
+    if (person) setState({ ...state, me: person });
+  },
   async addLocations(jobId, parsed) {
+    adminOnly();
     const existing = state.locations.filter((l) => l.jobId === jobId);
     const byLabel = new Map(existing.map((l) => [l.label.toLowerCase(), l]));
     // One removed before comes back where it was.
@@ -218,6 +324,7 @@ const api: DataApi = {
     setState({ ...state, locations: state.locations.map((l) => (on.has(l.id) ? { ...l, walkedAt: at } : l)) });
   },
   async updateLocation(id, patch) {
+    adminOnly();
     const was = state.locations.find((l) => l.id === id);
     if (!was) return;
     const happened: Happened[] = [];
@@ -244,15 +351,15 @@ const api: DataApi = {
     // A standard title used again moves up the suggestions.
     const key = item.title.toLowerCase();
     const titles = state.titles.map((t) => (t.title.toLowerCase() === key ? { ...t, uses: t.uses + 1 } : t));
-    commit({ items: [...state.items, tradeFollows(item)], titles, counters: { ...state.counters, [input.jobId]: number } });
+    commitItems([...state.items, tradeFollows(item)], { titles, counters: { ...state.counters, [input.jobId]: number } });
     return id;
   },
   async updateItem(id: string, patch: ItemPatch) {
-    commit({ items: settle(state.items, state.items.map((i) => (i.id === id ? { ...i, ...patch, updatedAt: now() } : i))) });
+    commitItems(settle(state.items, state.items.map((i) => (i.id === id ? { ...i, ...patch, updatedAt: now() } : i))));
   },
   async updateItems(changes) {
     const byId = new Map(changes.map((c) => [c.id, c.patch]));
-    commit({ items: settle(state.items, state.items.map((i) => (byId.has(i.id) ? { ...i, ...byId.get(i.id), updatedAt: now() } : i))) });
+    commitItems(settle(state.items, state.items.map((i) => (byId.has(i.id) ? { ...i, ...byId.get(i.id), updatedAt: now() } : i))));
   },
   async addVisit({ itemIds, note, ...input }) {
     const id = randomUUID();
@@ -435,22 +542,26 @@ const api: DataApi = {
     commit({ photos: state.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)) }, happened);
   },
   async addTrade(name) {
+    adminOnly();
     const id = randomUUID();
     setState({ ...state, trades: [...state.trades, { id, name, sortOrder: state.trades.length + 1 }] });
     return id;
   },
   async addCompany({ name, defaultTradeId }) {
+    adminOnly();
     const id = randomUUID();
     setState({ ...state, companies: [...state.companies, { id, name, defaultTradeId, phone: null, email: null, active: true }] });
     return id;
   },
   async addCompanyToJob(jobId, companyId, tradeId) {
+    adminOnly();
     if (state.jobCompanies.some((jc) => jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) return;
     commit({ jobCompanies: [...state.jobCompanies, { jobId, companyId, tradeId }] }, [
       { jobId, kind: 'company_added', detail: { company_id: companyId, trade_id: tradeId } },
     ]);
   },
   async updateCompany(id, patch) {
+    adminOnly();
     const was = state.companies.find((c) => c.id === id);
     if (!was) return;
     const renamed = patch.name !== undefined && patch.name !== was.name;
@@ -466,6 +577,7 @@ const api: DataApi = {
     );
   },
   async setJobCompanyTrade(jobId, companyId, fromTradeId, toTradeId) {
+    adminOnly();
     if (fromTradeId === toTradeId) return;
     const pair = (tradeId: string) => (jc: { jobId: string; companyId: string; tradeId: string }) =>
       jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId;
@@ -489,6 +601,7 @@ const api: DataApi = {
     );
   },
   async removeCompanyFromJob(jobId, companyId, tradeId) {
+    adminOnly();
     if (!state.jobCompanies.some((jc) => jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) return;
     commit({ jobCompanies: state.jobCompanies.filter((jc) => !(jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) }, [
       { jobId, kind: 'company_removed', detail: { company_id: companyId, trade_id: tradeId } },
@@ -498,20 +611,24 @@ const api: DataApi = {
     setState({ ...state, waitingOn: { ...state.waitingOn, [jobId]: labels } });
   },
   async addTitle({ title, tradeId, hours }) {
+    adminOnly();
     const id = randomUUID();
     setState({ ...state, titles: [...state.titles, { id, title, tradeId, uses: 0, approved: true, hours: hours ?? null, rooms: [] }] });
     return id;
   },
   async updateTitle(id, patch) {
+    adminOnly();
     setState({ ...state, titles: state.titles.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
   },
   async addCustomField({ label, kind, options }) {
+    adminOnly();
     const id = randomUUID();
     const sortOrder = Math.max(0, ...state.customFields.map((f) => f.sortOrder)) + 1;
     setState({ ...state, customFields: [...state.customFields, { id, label, kind, options, sortOrder, active: true }] });
     return id;
   },
   async updateCustomField(id, patch) {
+    adminOnly();
     setState({ ...state, customFields: state.customFields.map((f) => (f.id === id ? { ...f, ...patch } : f)) });
   },
   async setFormSettings(formSettings) {

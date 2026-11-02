@@ -26,14 +26,15 @@ export interface ItemDraft extends ItemFields {
 }
 
 export function fieldsOf(item: Item): ItemFields {
-  const { title, description, tradeId, companyId, kind, ready, waitingOn, waitingOnItems, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra, unfinished, visitId, hours } =
+  const { assignedTo, title, description, tradeId, companyId, kind, ready, waitingOn, waitingOnItems, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra, unfinished, visitId, hours } =
     item;
-  return { title, description, tradeId, companyId, kind, ready, waitingOn, waitingOnItems, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra, unfinished, visitId, hours };
+  return { assignedTo, title, description, tradeId, companyId, kind, ready, waitingOn, waitingOnItems, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra, unfinished, visitId, hours };
 }
 
 export function blankDraft(locationId: string): ItemDraft {
   return {
     locationId,
+    assignedTo: null,
     title: '',
     description: '',
     tradeId: null,
@@ -78,6 +79,7 @@ export interface ItemFormState {
 /** The fields the form edits. Status changes go through Mark Complete and the like instead. */
 export const EDITABLE: (keyof ItemDraft)[] = [
   'locationId',
+  'assignedTo',
   'title',
   'description',
   'tradeId',

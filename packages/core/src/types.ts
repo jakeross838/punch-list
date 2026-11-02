@@ -7,17 +7,39 @@ export type ItemKind = 'deficiency' | 'completion' | 'added_scope';
 export type ItemStatus = 'open' | 'complete' | 'removed';
 export type ItemSource = 'walk' | 'typed' | 'import';
 
+/** admin: adds people, makes and closes jobs, changes the setup. team: walks jobs, adds items, checks them off. */
+export type Role = 'admin' | 'team';
+
+/** Which jobs a person sees: every job, or only the jobs they are on. Admins see every job. */
+export type Sees = 'all' | 'assigned';
+
 export interface Person {
   id: string;
   email: string;
   name: string;
   active: boolean;
+  role: Role;
+  sees: Sees;
+  phone: string | null;
 }
 
 export interface Job {
   id: string;
   name: string;
   address: string;
+  /** Done and put away: off the jobs list until it is opened again. */
+  closed: boolean;
+}
+
+/** What a person is on a job's team. */
+export type TeamPart = 'project_manager' | 'superintendent' | 'field';
+
+/** A person on a job's team. */
+export interface TeamMember {
+  id: string;
+  jobId: string;
+  personId: string;
+  part: TeamPart;
 }
 
 export interface Location {
@@ -65,6 +87,8 @@ export interface Item {
   locationId: string;
   /** Job-wide, assigned by the database on first sync. Null until then. */
   number: number | null;
+  /** The person at Ross Built it is assigned to, if anyone: it shows on their My Items. */
+  assignedTo: string | null;
   title: string;
   description: string;
   tradeId: string | null;
@@ -237,7 +261,7 @@ export interface CustomField {
 export type ExtraValue = string | boolean | null;
 
 /** The fields Item Form setup can turn off. Title and room are always on the form. */
-export type FormField = 'description' | 'company' | 'kind' | 'ready' | 'waitingOn' | 'readyBy' | 'hours';
+export type FormField = 'description' | 'company' | 'assignedTo' | 'kind' | 'ready' | 'waitingOn' | 'readyBy' | 'hours';
 
 export interface FormSettings {
   hidden: FormField[];

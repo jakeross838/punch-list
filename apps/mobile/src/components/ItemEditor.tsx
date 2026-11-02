@@ -22,8 +22,11 @@ import {
   kindText,
   ORDER_LABELS,
   ORDER_TYPES,
+  PART_LABELS,
+  peopleInOrder,
   readOrder,
   suggestTitles,
+  teamInOrder,
   tidyTitle,
   TITLE_MAX,
   tradeForTitle,
@@ -107,7 +110,9 @@ export function ItemEditor({
     .filter((f) => f.active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
   const options = useFormOptions(jobId, value.locationId);
-  const [picker, setPicker] = useState<'room' | 'company' | null>(null);
+  const [picker, setPicker] = useState<'room' | 'company' | 'person' | null>(null);
+  const people = data.usePeople();
+  const team = data.useTeams().filter((t) => t.jobId === jobId);
   const [titleFocused, setTitleFocused] = useState(false);
   const [filled, setFilled] = useState(false);
   // The estimate came from the title: a different title brings its own.
@@ -121,6 +126,18 @@ export function ItemEditor({
 
   // A field the rules need always shows, even when Item Form setup turned it off.
   const showCompany = shows('company') || !!problem('companyId');
+  // Assigned To shows when it is on the form, or when the item is assigned to someone.
+  const showAssigned = shows('assignedTo') || !!value.assignedTo;
+  const assignedName = people.find((p) => p.id === value.assignedTo)?.name ?? null;
+  // The team first, as it reads on the job, then everyone else at Ross Built.
+  const personOptions = [
+    { value: 'none', label: 'No One' },
+    ...teamInOrder(team, people).flatMap((t) => {
+      const p = people.find((x) => x.id === t.personId && x.active);
+      return p ? [{ value: p.id, label: p.name, hint: PART_LABELS[t.part], group: 'On the Team' }] : [];
+    }),
+    ...peopleInOrder(people.filter((p) => p.active && !team.some((t) => t.personId === p.id))).map((p) => ({ value: p.id, label: p.name, group: 'Everyone Else' })),
+  ];
   // The order is for additional work; one already there always shows, so nothing is hidden.
   const showPo = value.kind === 'added_scope' || !!value.poOrCo;
   const showHours = shows('hours') || value.hours !== null;
@@ -331,6 +348,16 @@ export function ItemEditor({
             testID="pick-company"
           />
         ) : null}
+        {showAssigned ? (
+          <ListRow
+            title="Assigned To"
+            value={assignedName ?? 'No One'}
+            valueColor={colors.secondary}
+            accessory="chevron"
+            onPress={() => setPicker('person')}
+            testID="pick-person"
+          />
+        ) : null}
       </ListSection>
 
       {showReady && (shows('ready') || !value.ready) ? (
@@ -434,6 +461,15 @@ export function ItemEditor({
         }}
         onClose={() => setPicker(null)}
         footer="Companies on this job. Add more in Job Setup."
+      />
+      <OptionPicker
+        visible={picker === 'person'}
+        title="Assigned To"
+        options={personOptions}
+        value={value.assignedTo ?? 'none'}
+        onSelect={(v) => set({ assignedTo: v === 'none' ? null : v })}
+        onClose={() => setPicker(null)}
+        footer="It shows on their My Items. Someone not on the team goes on it as Field."
       />
     </>
   );

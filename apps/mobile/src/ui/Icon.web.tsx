@@ -244,6 +244,44 @@ const GLYPHS: Record<IconName, Draw> = {
     </>
   ),
   filter: (c, w) => line('M4 7h16M7 12h10M10 17h4', c, w * 1.8),
+  person: (c) => (
+    <>
+      {dot(12, 7.6, 3.9, c)}
+      {solid('M4.6 19.4c0-4 3.3-6.9 7.4-6.9s7.4 2.9 7.4 6.9c0 .5-.4.9-.9.9H5.5c-.5 0-.9-.4-.9-.9z', c)}
+    </>
+  ),
+  gear: (c, w) => (
+    <>
+      {ring(12, 12, 3.1, c, w * 1.8)}
+      {line('M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.9 1.9M16.6 16.6l1.9 1.9M5.5 18.5l1.9-1.9M16.6 7.4l1.9-1.9', c, w * 1.9)}
+      {ring(12, 12, 6.6, c, w * 1.8)}
+    </>
+  ),
+  copy: (c, w) => (
+    <>
+      <rect x={8.5} y={8.5} width={11} height={12} rx={2} stroke={c} strokeWidth={w * 1.8} fill="none" />
+      {line('M15.5 5.5v-.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h.5', c, w * 1.8)}
+    </>
+  ),
+  move: (c, w) => (
+    <>
+      <rect x={3.5} y={3.5} width={17} height={17} rx={3.5} stroke={c} strokeWidth={w * 1.8} fill="none" />
+      {line('M8 12h8M13 8.5l3.5 3.5-3.5 3.5', c, w * 1.9)}
+    </>
+  ),
+  handle: (c, w) => line('M5 8h14M5 12h14M5 16h14', c, w * 1.7),
+  templates: (c, w) => (
+    <>
+      <rect x={4} y={9} width={16} height={11} rx={2.2} stroke={c} strokeWidth={w * 1.8} fill="none" />
+      {line('M6.5 6h11M9 3.2h6', c, w * 1.8)}
+    </>
+  ),
+  archive: (c, w) => (
+    <>
+      <rect x={3.5} y={4} width={17} height={4.5} rx={1.2} stroke={c} strokeWidth={w * 1.8} fill="none" />
+      {line('M5 8.5v9.5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5M10 12.5h4', c, w * 1.8)}
+    </>
+  ),
   checklist: (c, w) => (
     <>
       {line('M10 6.5h10M10 12h10M10 17.5h10', c, w * 1.8)}

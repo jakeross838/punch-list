@@ -36,6 +36,8 @@ export interface ItemFilters {
   waitingOn: string[];
   /** Who added it. */
   addedBy: string[];
+  /** Who it is assigned to. */
+  assignedTo: string[];
   /** Has a photo, or has none. */
   photo: YesNo;
   /** Booked on a visit, or not. */
@@ -52,16 +54,17 @@ export const NO_FILTERS: ItemFilters = {
   locationIds: [],
   waitingOn: [],
   addedBy: [],
+  assignedTo: [],
   photo: null,
   scheduled: null,
   estimated: null,
 };
 
 /** The lists in ItemFilters, for the filters that take several values. */
-export type ListFacet = 'states' | 'kinds' | 'companyIds' | 'floors' | 'locationIds' | 'waitingOn' | 'addedBy';
+export type ListFacet = 'states' | 'kinds' | 'companyIds' | 'floors' | 'locationIds' | 'waitingOn' | 'addedBy' | 'assignedTo';
 export type YesNoFacet = 'photo' | 'scheduled' | 'estimated';
 
-const LIST_FACETS: ListFacet[] = ['states', 'kinds', 'companyIds', 'floors', 'locationIds', 'waitingOn', 'addedBy'];
+const LIST_FACETS: ListFacet[] = ['states', 'kinds', 'companyIds', 'floors', 'locationIds', 'waitingOn', 'addedBy', 'assignedTo'];
 const YES_NO_FACETS: YesNoFacet[] = ['photo', 'scheduled', 'estimated'];
 
 export const YES_NO_LABELS: Record<YesNoFacet, [yes: string, no: string]> = {
@@ -144,6 +147,7 @@ export function matchesFilters(item: Item, f: ItemFilters, ctx?: FilterContext):
     if (item.ready || !names.some((w) => f.waitingOn.some((x) => same(x, w)))) return false;
   }
   if (f.addedBy.length > 0 && !f.addedBy.includes(item.createdBy)) return false;
+  if (f.assignedTo.length > 0 && !(item.assignedTo && f.assignedTo.includes(item.assignedTo))) return false;
   if (f.photo !== null && (ctx?.photoItemIds.has(item.id) ?? false) !== f.photo) return false;
   if (f.scheduled !== null) {
     const booked = !!item.visitId && (ctx ? ctx.visits.some((v) => v.id === item.visitId && !v.removed) : true);
@@ -180,6 +184,7 @@ export function filterChips(f: ItemFilters, names: FilterNames): FilterChip[] {
   list('locationIds', (id) => names.locations?.get(id) ?? 'A location');
   list('waitingOn', (w) => `Waiting on ${w}`);
   list('addedBy', (id) => `Added by ${names.people.get(id) ?? 'someone'}`);
+  list('assignedTo', (id) => `Assigned to ${names.people.get(id) ?? 'someone'}`);
   for (const facet of YES_NO_FACETS) {
     const v = f[facet];
     if (v !== null) chips.push({ key: facet, label: YES_NO_LABELS[facet][v ? 0 : 1], without: { ...f, [facet]: null } });
@@ -221,6 +226,7 @@ export function readFilters(raw: unknown): ItemFilters {
     locationIds: strings(r.locationIds),
     waitingOn: strings(r.waitingOn),
     addedBy: strings(r.addedBy),
+    assignedTo: strings(r.assignedTo),
     photo: yesNo(r.photo),
     scheduled: yesNo(r.scheduled),
     estimated: yesNo(r.estimated),

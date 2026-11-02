@@ -17,6 +17,9 @@ import { forSheetIOS } from '@/ui/sheetTransition';
 
 const SCREENS = [
   'index',
+  'my',
+  'settings/people/index',
+  'settings/people/[personId]',
   'jobs/[jobId]/index',
   'jobs/[jobId]/setup',
   'jobs/[jobId]/list/[by]/[key]',

@@ -5,7 +5,7 @@ const item = (over: Partial<Item> = {}): Item => ({
   id: 'i1',
   jobId: 'j',
   locationId: 'laundry',
-  number: 21,
+  number: 21, assignedTo: null,
   title: 'Patch drywall',
   description: '',
   tradeId: 'painting',
@@ -32,8 +32,8 @@ const item = (over: Partial<Item> = {}): Item => ({
 
 const look = activityLookups({
   people: [
-    { id: 'jake', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true },
-    { id: 'sam', email: 'sam@rossbuilt.com', name: 'Sam Rivera', active: true },
+    { id: 'jake', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true, role: 'admin', sees: 'all', phone: null },
+    { id: 'sam', email: 'sam@rossbuilt.com', name: 'Sam Rivera', active: true, role: 'admin', sees: 'all', phone: null },
   ],
   items: [item(), item({ id: 'i2', title: 'Install towel bar', locationId: 'bath' })],
   locations: [

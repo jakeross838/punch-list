@@ -1,5 +1,5 @@
-// The filters, each kind with its values as chips to switch on or off: Status, Type, Company, Trade,
-// Level, Location, Waiting On, Added By, Estimated Time, Visit and Photo. The values come from the
+// The filters, each kind with its values as chips to switch on or off: Status, Type, Company,
+// Assigned To, Level, Location, Waiting On, Added By, Estimated Time, Visit and Photo. The values come from the
 // job. Used by View and Filter and by Make a List.
 
 import {
@@ -30,8 +30,9 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
   const jobCompanies = data.useJobCompanies(jobId);
   const companies = data.useCompanies();
   const people = data.usePeople();
+  const team = data.useTeams();
   const holds = useHolds(jobId);
-  const { companyIds, floors, locationIds, waitingOn, addedBy } = f;
+  const { companyIds, floors, locationIds, waitingOn, addedBy, assignedTo } = f;
 
   // The choices come from the job: its companies, levels and locations, what its work waits
   // on and who added it. A value picked earlier stays offered, so it can be switched off.
@@ -51,14 +52,17 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
     // Who holds work up: the company doing a task it waits on, or the name it waits on.
     for (const i of live) if (i.status === 'open' && !i.ready) for (const w of holdNames(i, holds)) if (!waits.has(w.toLowerCase())) waits.set(w.toLowerCase(), w);
     const adders = new Set(live.map((i) => i.createdBy));
+    // Who work can be assigned to here: the job's team and anyone it is assigned to.
+    const assignees = new Set([...team.filter((t) => t.jobId === jobId).map((t) => t.personId), ...live.flatMap((i) => (i.assignedTo ? [i.assignedTo] : []))]);
     return {
       companies: companies.filter((c) => onJob.has(c.id) || companyIds.includes(c.id)).sort((a, b) => a.name.localeCompare(b.name)),
       floors: [...levelNames, ...floors.filter((x) => !levelNames.includes(x))],
       levels,
       waiting: [...[...waits.values()].sort((a, b) => a.localeCompare(b)), ...waitingOn.filter((w) => !waits.has(w.toLowerCase()))],
       people: people.filter((p) => adders.has(p.id) || addedBy.includes(p.id)),
+      assignees: people.filter((p) => assignees.has(p.id) || assignedTo.includes(p.id)).sort((a, b) => a.name.localeCompare(b.name)),
     };
-  }, [items, locations, jobCompanies, companies, people, holds, companyIds, floors, locationIds, waitingOn, addedBy]);
+  }, [items, locations, jobCompanies, companies, people, team, jobId, holds, companyIds, floors, locationIds, waitingOn, addedBy, assignedTo]);
 
   const toggle = <K extends ListFacet>(facet: K, value: ItemFilters[K][number]) => {
     haptic.selection();
@@ -97,6 +101,13 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
           <Chip key={c.id} label={c.name} on={companyIds.includes(c.id)} onPress={() => toggle('companyIds', c.id)} testID={id(`company-${c.id}`)} />
         ))}
       </Facet>
+      {choices.assignees.length > 0 ? (
+        <Facet title="Assigned To">
+          {choices.assignees.map((p) => (
+            <Chip key={p.id} label={p.name} on={assignedTo.includes(p.id)} onPress={() => toggle('assignedTo', p.id)} testID={id(`assigned-${p.id}`)} />
+          ))}
+        </Facet>
+      ) : null}
       {choices.floors.length > 1 ? (
         <Facet title="Level">
           {choices.floors.map((x) => (

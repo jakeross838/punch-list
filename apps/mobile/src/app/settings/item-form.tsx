@@ -7,6 +7,7 @@ import {
   FORM_FIELDS,
   formShows,
   hoursText,
+  isAdmin,
   KIND_LABELS,
   KINDS as ITEM_KINDS,
   PICK_HOURS,
@@ -53,6 +54,8 @@ export default function ItemFormScreen() {
   const [titlesOpen, setTitlesOpen] = useState(false);
   const [roomSheet, setRoomSheet] = useState<RoomKind | null>(null);
   const update = (next: FormSettings) => void data.setFormSettings(next);
+  // The fields, titles and common tasks are Ross Built's setup, changed by admins; the rest is each person's own.
+  const admin = isAdmin(data.useMe());
 
   return (
     <Page title="Item Form" sheet right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: () => router.back(), testID: 'form-done' }]}>
@@ -84,6 +87,8 @@ export default function ItemFormScreen() {
         ))}
       </ListSection>
 
+      {admin ? (
+        <>
       <ListSection header="Your Fields" footer="They show under Details on every item.">
         {fields.map((f) => (
           <ListRow key={f.id} title={f.label} value={customFieldKindLabel(f.kind)} accessory="chevron" onPress={() => setFieldSheet({ field: f })} />
@@ -107,6 +112,10 @@ export default function ItemFormScreen() {
           />
         ))}
       </ListSection>
+        </>
+      ) : (
+        <ListSection footer="The added fields, the standard titles and the common tasks are set up by an admin." />
+      )}
 
       <FieldSheet visible={!!fieldSheet} field={fieldSheet?.field ?? null} onClose={() => setFieldSheet(null)} />
       <TitlesSheet visible={titlesOpen} onClose={() => setTitlesOpen(false)} />

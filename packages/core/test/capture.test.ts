@@ -57,7 +57,7 @@ let n = 0;
 function item(over: Partial<Item>): Item {
   n += 1;
   return {
-    id: `i${n}`, jobId: 'j', locationId: 'k', number: n, title: `Item ${n}`, description: '', tradeId: 't-carp',
+    id: `i${n}`, jobId: 'j', locationId: 'k', number: n, assignedTo: null, title: `Item ${n}`, description: '', tradeId: 't-carp',
     companyId: 'c-sms', kind: 'deficiency', ready: true, waitingOn: [], waitingOnItems: [], readyBy: null, boughtOut: true, poOrCo: null,
     status: 'open', completedBy: null, completedAt: null, source: 'walk', extra: {}, unfinished: false, visitId: null, hours: null, btExternalId: null, createdBy: 'p1',
     createdAt: '2026-10-29T10:00:00Z', updatedAt: '2026-10-29T10:00:00Z', ...over,
@@ -289,11 +289,11 @@ describe('the lists that go to the subs', () => {
   const items = [
     item({ locationId: 'k', number: 1 }),
     item({ locationId: 'a', number: 2 }),
-    item({ locationId: 'k', number: 3, ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09' }),
-    item({ locationId: 'a', number: 4, ready: false, waitingOn: ['Volcano Stone', 'Owner'], readyBy: '2026-11-02' }),
-    item({ locationId: 'a', number: 5, ready: false, waitingOn: ['Owner'] }),
-    item({ locationId: 'k', number: 6, status: 'complete', completedBy: 'p1', completedAt: '2026-10-29T12:00:00Z' }),
-    item({ locationId: 'k', number: 7, tradeId: 't-paint', companyId: 'c-hhh' }),
+    item({ locationId: 'k', number: 3, assignedTo: null, ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09' }),
+    item({ locationId: 'a', number: 4, assignedTo: null, ready: false, waitingOn: ['Volcano Stone', 'Owner'], readyBy: '2026-11-02' }),
+    item({ locationId: 'a', number: 5, assignedTo: null, ready: false, waitingOn: ['Owner'] }),
+    item({ locationId: 'k', number: 6, assignedTo: null, status: 'complete', completedBy: 'p1', completedAt: '2026-10-29T12:00:00Z' }),
+    item({ locationId: 'k', number: 7, assignedTo: null, tradeId: 't-paint', companyId: 'c-hhh' }),
   ];
 
   it('gives each company what is ready now in floor order, then what waits, soonest first', () => {
@@ -349,7 +349,7 @@ describe('the lists that go to the subs', () => {
   });
 
   it('prints each photo with its marks, cropped the same way, and keeps text safe', () => {
-    const odd = item({ locationId: 'k', number: 8, title: 'Fix <trim> & caulk', description: 'Left "returns"' });
+    const odd = item({ locationId: 'k', number: 8, assignedTo: null, title: 'Fix <trim> & caulk', description: 'Left "returns"' });
     const marks: Mark[] = [
       { tool: 'circle', color: 'red', from: [0.2, 0.2], to: [0.6, 0.5] },
       { tool: 'number', color: 'red', at: [0.3, 0.7], n: 1 },
@@ -377,8 +377,8 @@ describe('the lists that go to the subs', () => {
   });
 
   it('puts added scope that is not priced yet under To Be Quoted, not Ready Now', () => {
-    const extra = item({ locationId: 'a', number: 9, kind: 'added_scope', boughtOut: false });
-    const priced = item({ locationId: 'a', number: 10, kind: 'added_scope', boughtOut: true, poOrCo: 'CO 12' });
+    const extra = item({ locationId: 'a', number: 9, assignedTo: null, kind: 'added_scope', boughtOut: false });
+    const priced = item({ locationId: 'a', number: 10, assignedTo: null, kind: 'added_scope', boughtOut: true, poOrCo: 'CO 12' });
     const list = companyList('c-sms', [extra, priced], lookups);
     expect(list.ready.map((l) => l.item.number)).toEqual([10]);
     expect(list.needsPrice.map((l) => l.item.number)).toEqual([9]);

@@ -61,6 +61,13 @@ export const SF_SYMBOLS = {
   sparkles: 'sparkles',
   'calendar.badge.clock': 'calendar.badge.clock',
   timer: 'timer',
+  person: 'person.fill',
+  gear: 'gearshape',
+  copy: 'doc.on.doc',
+  move: 'arrow.right.square',
+  handle: 'line.3.horizontal',
+  templates: 'rectangle.stack',
+  archive: 'archivebox',
 } as const satisfies Record<string, SFSymbolName>;
 
 export type IconName = keyof typeof SF_SYMBOLS;
