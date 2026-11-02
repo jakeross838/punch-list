@@ -1350,7 +1350,12 @@ async function main(): Promise<void> {
       await shot('64-picked');
       await app.getByTestId('picked-move').click();
       await settle(600);
-      await app.getByRole('button', { name: 'Laundry 119', exact: true }).click();
+      // Every drop down searches: a few letters and the search key pick it.
+      await app.getByTestId('picker-search').last().fill('laun');
+      await app.getByRole('button', { name: 'Laundry 119', exact: true }).waitFor();
+      await settle(300);
+      await shot('64b-picker-search');
+      await app.getByTestId('picker-search').last().press('Enter');
       await app.getByText('Moved 2 items to Laundry 119').waitFor();
       await itemRow('Install range backsplash').waitFor({ state: 'detached' });
       await settle(300);

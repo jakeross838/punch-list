@@ -34,3 +34,6 @@ export function useClipboard(): Copied | null {
 
 /** "1 item", "3 items" */
 export const itemsWord = (n: number) => (n === 1 ? '1 item' : `${n} items`);
+
+/** "1 Item", "3 Items", for a title. */
+export const itemsTitle = (n: number) => (n === 1 ? '1 Item' : `${n} Items`);

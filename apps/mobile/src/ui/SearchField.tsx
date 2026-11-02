@@ -10,12 +10,15 @@ export function SearchField({
   onChangeText,
   placeholder = 'Search',
   autoFocus,
+  onSubmit,
   testID,
 }: {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  /** The search key on the keyboard. */
+  onSubmit?: () => void;
   testID?: string;
 }) {
   return (
@@ -32,6 +35,7 @@ export function SearchField({
         autoFocus={autoFocus}
         returnKeyType="search"
         enterKeyHint="search"
+        onSubmitEditing={onSubmit}
         accessibilityLabel={placeholder}
         testID={testID}
         style={styles.input}

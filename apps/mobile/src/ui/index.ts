@@ -18,7 +18,7 @@ export {
   ListTextField,
   Separator,
 } from './List';
-export { OptionPicker, type Option } from './OptionPicker';
+export { matchRank, OptionPicker, type Option } from './OptionPicker';
 export { Page } from './Page';
 export type { BarButton, BarItem, BarMenu, MenuGroup, PageProps, PageScroll } from './page-types';
 export { SearchField } from './SearchField';

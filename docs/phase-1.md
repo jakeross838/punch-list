@@ -128,6 +128,7 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 - In a location, while picking, the lines at the end of each row drag it into order; the other picked items move with it. The order is kept on the item and stays out of its History. Admins drag locations into the walk order in Job Setup (Reorder).
 - Templates hold what always needs doing in a house. Each task says where it goes (the Whole House or another area every job has, like the Roof or the Driveway, or every location of a kind, like every bathroom), its trade (the company doing it on the job gets it), its type, its usual time, and the task in the template it waits on. Add From a Template, on the job menu or in a location, shows first what lands where, what is on the list already and left out, and what goes to Drafts for want of one company doing its trade. Everyone uses templates; admins make them in Templates (the gear on Jobs) or save one from picked items.
 - Activity reads many items added, completed, assigned or moved at once as one line.
+- Every drop down searches: a few letters narrow it, the closest names first, and the search key picks the first match. On a long list the search is ready to type as it opens. Common Tasks searches every standard title too.
 
 ## Status (31 October 2026)
 

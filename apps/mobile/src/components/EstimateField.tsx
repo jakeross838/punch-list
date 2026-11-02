@@ -36,7 +36,7 @@ export function EstimateField({ value, onChange, note }: { value: number | null;
         value={value === null ? NONE : String(value)}
         onSelect={(v) => onChange(v === NONE ? null : Number(v))}
         onClose={() => setPicking(false)}
-        search={false}
+        typeFirst={false}
       />
     </>
   );

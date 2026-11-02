@@ -50,7 +50,7 @@ import { useItemActions } from "@/components/useItemActions";
 import { colors, layout } from "@/constants/theme";
 import { useData } from "@/data/api";
 import { capture } from "@/data/capture";
-import { clipboard, itemsWord, useClipboard } from "@/data/clipboard";
+import { clipboard, itemsTitle, itemsWord, useClipboard } from "@/data/clipboard";
 import { useFilterContext, useHolds, useJobView } from "@/data/view";
 import {
   DateField,
@@ -415,7 +415,7 @@ export default function GroupScreen() {
                   {
                     actions: [
                       { label: "Add From a Template", icon: "templates" as const, onPress: () => setSheet("template"), testID: "list-template" },
-                      ...(copied ? [{ label: `Paste ${itemsWord(copied.items.length)}`, icon: "clipboard" as const, onPress: () => void pasteHere(), testID: "list-paste" }] : []),
+                      ...(copied ? [{ label: `Paste ${itemsTitle(copied.items.length)}`, icon: "clipboard" as const, onPress: () => void pasteHere(), testID: "list-paste" }] : []),
                     ],
                   },
                 ],
@@ -690,7 +690,7 @@ export default function GroupScreen() {
       />
       <OptionPicker
         visible={sheet === "move"}
-        title={`Move ${count} To`}
+        title={`Move ${itemsTitle(pickedItems.length)} To`}
         options={formOptions.roomOptions}
         value={room?.id ?? null}
         onSelect={moveTo}
@@ -698,7 +698,7 @@ export default function GroupScreen() {
       />
       <OptionPicker
         visible={sheet === "assign"}
-        title={`Assign ${count} To`}
+        title={`Assign ${itemsTitle(pickedItems.length)} To`}
         options={personOptions}
         value={null}
         onSelect={(v) => assignTo(v === "none" ? null : v)}

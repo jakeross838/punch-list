@@ -1,5 +1,8 @@
 // Choosing one of a list, the Settings way: a sheet of rows with a checkmark on the current one,
-// grouped (rooms by floor), with search when the list is long. A tap picks and closes.
+// grouped (rooms by floor), and a search at the top of every list. Typing narrows it as you go,
+// the closest names first: "gat" finds Gator Plumbing, "master bath" finds Master Bathroom 207.
+// On a long list the search is ready to type straight away, and the search key picks the first
+// match. A tap picks and closes.
 
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -16,7 +19,21 @@ export interface Option {
   group?: string;
 }
 
-const SEARCH_FROM = 9;
+/** From this many choices on, the search is ready to type when the list opens. */
+const TYPE_FROM = 9;
+
+/** How closely a choice fits what was typed: 0 its name starts with it, 1 a word in its name does, 2 it is in there; null not at all. */
+export function matchRank(option: Option, query: string): number | null {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 2;
+  const label = option.label.toLowerCase();
+  const all = `${label} ${option.hint ?? ''} ${option.group ?? ''}`.toLowerCase();
+  if (!words.every((w) => all.includes(w))) return null;
+  const typed = words.join(' ');
+  if (label.startsWith(typed)) return 0;
+  if (label.split(/[\s,/()-]+/).some((w) => w.startsWith(words[0]!))) return 1;
+  return 2;
+}
 
 export function OptionPicker({
   visible,
@@ -26,7 +43,8 @@ export function OptionPicker({
   onSelect,
   onClose,
   footer,
-  search,
+  search = true,
+  typeFirst,
 }: {
   visible: boolean;
   title: string;
@@ -35,15 +53,24 @@ export function OptionPicker({
   onSelect: (value: string) => void;
   onClose: () => void;
   footer?: string;
-  /** Search the choices: on by default for a long list. */
+  /** Search the choices: on for every list unless turned off. */
   search?: boolean;
+  /** The search ready to type when the list opens: on for a long list unless said otherwise. */
+  typeFirst?: boolean;
 }) {
   const [query, setQuery] = useState('');
+  const searching = query.trim() !== '';
+  // While searching: one list, the closest first, each in the order it had.
   const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q === '' ? options : options.filter((o) => `${o.label} ${o.hint ?? ''} ${o.group ?? ''}`.toLowerCase().includes(q));
-  }, [options, query]);
+    if (!searching) return options;
+    return options
+      .map((o, i) => ({ o, i, rank: matchRank(o, query) }))
+      .filter((x): x is { o: Option; i: number; rank: number } => x.rank !== null)
+      .sort((a, b) => a.rank - b.rank || a.i - b.i)
+      .map((x) => x.o);
+  }, [options, query, searching]);
   const groups = useMemo(() => {
+    if (searching) return [{ name: '', options: shown }];
     const out: { name: string; options: Option[] }[] = [];
     for (const o of shown) {
       const name = o.group ?? '';
@@ -52,40 +79,54 @@ export function OptionPicker({
       else out.push({ name, options: [o] });
     }
     return out;
-  }, [shown]);
+  }, [shown, searching]);
 
   function close() {
     setQuery('');
     onClose();
   }
 
+  function pick(o: Option) {
+    haptic.selection();
+    onSelect(o.value);
+    close();
+  }
+
   return (
     <Sheet visible={visible} onClose={close} title={title} left={{ label: 'Cancel', onPress: close, testID: 'picker-cancel' }} testID="picker">
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} style={{ flex: 1 }}>
-        {(search ?? options.length >= SEARCH_FROM) ? (
+      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={styles.content} style={{ flex: 1 }}>
+        {search ? (
           <View style={styles.search}>
-            <SearchField value={query} onChangeText={setQuery} />
+            <SearchField
+              value={query}
+              onChangeText={setQuery}
+              autoFocus={typeFirst ?? options.length >= TYPE_FROM}
+              onSubmit={() => {
+                const first = shown[0];
+                if (searching && first) pick(first);
+              }}
+              testID="picker-search"
+            />
           </View>
         ) : null}
-        {groups.map((g, gi) => (
-          <ListSection key={`${g.name}-${gi}`} header={g.name || undefined} footer={gi === groups.length - 1 ? footer : undefined}>
-            {g.options.map((o) => (
-              <ListRow
-                key={o.value}
-                title={o.label}
-                subtitle={o.hint ?? undefined}
-                accessory={o.value === value ? 'checkmark' : 'none'}
-                accessibilityLabel={o.label}
-                onPress={() => {
-                  haptic.selection();
-                  onSelect(o.value);
-                  close();
-                }}
-              />
-            ))}
-          </ListSection>
-        ))}
-        {shown.length === 0 ? <EmptyState icon="magnifyingglass" title="No Results" message={`Nothing matches “${query}”.`} /> : null}
+        {shown.length > 0
+          ? groups.map((g, gi) => (
+              <ListSection key={`${g.name}-${gi}`} header={g.name || undefined} footer={gi === groups.length - 1 && !searching ? footer : undefined}>
+                {g.options.map((o) => (
+                  <ListRow
+                    key={o.value}
+                    title={o.label}
+                    // While searching the groups are gone, so a row says its group when it has nothing else to say.
+                    subtitle={o.hint ?? (searching ? o.group : undefined) ?? undefined}
+                    accessory={o.value === value ? 'checkmark' : 'none'}
+                    accessibilityLabel={o.label}
+                    onPress={() => pick(o)}
+                  />
+                ))}
+              </ListSection>
+            ))
+          : null}
+        {shown.length === 0 ? <EmptyState icon="magnifyingglass" title="No Results" message={`Nothing matches “${query.trim()}”.`} /> : null}
       </ScrollView>
     </Sheet>
   );

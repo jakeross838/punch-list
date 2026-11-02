@@ -40,7 +40,7 @@ import { ViewSheet } from '@/components/ViewSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
-import { clipboard, itemsWord, useClipboard } from '@/data/clipboard';
+import { clipboard, itemsTitle, itemsWord, useClipboard } from '@/data/clipboard';
 import { useFilterContext, useHolds, useJobView, useTimeline } from '@/data/view';
 import { Button, EmptyState, haptic, Icon, OptionPicker, Page, shortDate, Text, Touchable, useFeedback, type BarMenu, type IconName } from '@/ui';
 
@@ -449,7 +449,7 @@ export default function JobScreen() {
       <AddTemplateSheet jobId={jobId} templateId={templateParam ?? null} visible={templateSheet} onClose={() => setTemplateSheet(false)} />
       <OptionPicker
         visible={pasting}
-        title={copied ? `Paste ${itemsWord(copied.items.length)} In` : 'Paste In'}
+        title={copied ? `Paste ${itemsTitle(copied.items.length)} In` : 'Paste In'}
         options={formOptions.roomOptions}
         value={null}
         onSelect={(locationId) => void pasteInto(locationId)}

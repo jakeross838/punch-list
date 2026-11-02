@@ -2,7 +2,8 @@
 // location's name (a bathroom offers Trim out toilet, Install faucet, Install shower trim and so
 // on) and can be switched with a tap. Tick the ones that apply and Add puts each on the list in
 // this location, with its company and usual time from the standard titles. What is already on the
-// list here shows as added, so nothing doubles up. The lists are set in Item Form.
+// list here shows as added, so nothing doubles up. The lists are set in Item Form. The search finds
+// any standard title, common here or not.
 
 import {
   companyForTrade,
@@ -19,7 +20,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Checkbox, Chip, EmptyState, haptic, Sheet, Text, Touchable, useFeedback } from '@/ui';
+import { Checkbox, Chip, EmptyState, haptic, matchRank, SearchField, Sheet, Text, Touchable, useFeedback } from '@/ui';
 import { startDraft } from './ItemForm';
 
 export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { jobId: string; locationId: string | null; visible: boolean; onClose: () => void; onAdded?: (text: string) => void }) {
@@ -35,6 +36,8 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
   const [picked, setPicked] = useState<string[]>([]);
   const [opened, setOpened] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
+  const trades = data.useTrades();
 
   // Each time it opens: the kind the name says, nothing ticked.
   const key = visible ? (locationId ?? '') : null;
@@ -42,10 +45,20 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
     setOpened(key);
     setKind(location ? roomKind(location.label) : null);
     setPicked([]);
+    setQuery('');
   }
 
   const shown = kind ?? 'living';
-  const tasks = roomTasks(shown, titles);
+  const searching = query.trim() !== '';
+  // Searching: every standard title, the closest first; otherwise the common ones for this kind of room.
+  const tasks = searching
+    ? titles
+        .filter((t) => t.approved)
+        .map((t, i) => ({ t, i, rank: matchRank({ value: t.id, label: t.title, hint: trades.find((x) => x.id === t.tradeId)?.name }, query) }))
+        .filter((x): x is { t: (typeof titles)[number]; i: number; rank: number } => x.rank !== null)
+        .sort((a, b) => a.rank - b.rank || b.t.uses - a.t.uses || a.i - b.i)
+        .map((x) => x.t)
+    : roomTasks(shown, titles);
   const onList = (title: string) => !!locationId && duplicatesOf(title, locationId, items).length > 0;
   const companyName = (tradeId: string | null) => {
     const id = tradeId ? companyForTrade(tradeId, jobCompanies) : null;
@@ -61,7 +74,7 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
     if (!locationId || picked.length === 0 || saving) return;
     setSaving(true);
     try {
-      const chosen = tasks.filter((t) => picked.includes(t.id) && !onList(t.title));
+      const chosen = titles.filter((t) => picked.includes(t.id) && !onList(t.title));
       for (const t of chosen) {
         const { locationId: at, ...start } = startDraft(locationId, settings);
         const companyId = t.tradeId ? companyForTrade(t.tradeId, jobCompanies) : null;
@@ -89,11 +102,16 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
       right={{ label: count > 0 ? `Add ${count}` : 'Add', variant: 'prominent', onPress: () => void add(), disabled: count === 0 || saving, testID: 'common-add' }}
       testID="common-tasks"
     >
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text variant="footnote" weight="600" color={colors.secondary} style={styles.label}>
-          Common in
-        </Text>
-        <View style={styles.kinds}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+        <View style={styles.search}>
+          <SearchField value={query} onChangeText={setQuery} placeholder="Search Every Standard Title" testID="common-search" />
+        </View>
+        {searching ? null : (
+          <Text variant="footnote" weight="600" color={colors.secondary} style={styles.label}>
+            Common in
+          </Text>
+        )}
+        <View style={[styles.kinds, searching ? styles.hidden : null]}>
           {ROOM_KINDS.map((k) => (
             <Chip
               key={k}
@@ -102,14 +120,17 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
               onPress={() => {
                 haptic.selection();
                 setKind(k);
-                setPicked([]);
               }}
               testID={`common-kind-${k}`}
             />
           ))}
         </View>
         {tasks.length === 0 ? (
-          <EmptyState icon="list.bullet" title="No Common Tasks Yet" message={`Pick the common tasks for ${ROOM_KIND_LABELS[shown].toLowerCase()} in Item Form.`} />
+          searching ? (
+            <EmptyState icon="magnifyingglass" title="No Results" message={`No standard title matches “${query.trim()}”. Type it on New Item instead.`} />
+          ) : (
+            <EmptyState icon="list.bullet" title="No Common Tasks Yet" message={`Pick the common tasks for ${ROOM_KIND_LABELS[shown].toLowerCase()} in Item Form.`} />
+          )
         ) : (
           <View style={styles.list}>
             {tasks.map((t, i) => {
@@ -152,6 +173,8 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
 
 const styles = StyleSheet.create({
   content: { paddingTop: 8, paddingBottom: 48 },
+  search: { marginHorizontal: layout.margin, marginBottom: 14 },
+  hidden: { display: 'none' },
   label: { marginHorizontal: layout.inset, marginBottom: 8, textTransform: 'none' },
   kinds: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginHorizontal: layout.margin, marginBottom: 16 },
   list: { marginHorizontal: layout.margin, borderRadius: layout.radius, backgroundColor: colors.cell, overflow: 'hidden' },

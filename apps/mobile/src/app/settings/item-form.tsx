@@ -367,7 +367,7 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         }}
         onClose={() => setTiming(null)}
         footer="How long the work usually takes. Picking the title fills it in as the estimated time."
-        search={false}
+        typeFirst={false}
       />
     </Sheet>
   );
