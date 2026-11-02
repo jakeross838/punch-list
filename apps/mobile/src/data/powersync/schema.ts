@@ -96,6 +96,8 @@ const items = new Table(
     completed_by: column.text,
     completed_at: column.text,
     source: column.text,
+    /** Where it sits in its location's list, once dragged there. */
+    position: column.real,
     /** JSON: the answers to the added fields, by field id. */
     extra: column.text,
     /** 1 while it waits for its title, company or trade. */
@@ -264,6 +266,30 @@ const person_settings = new Table({
   updated_at: column.text,
 });
 
+/** What always needs doing in a house: named lists of tasks, added to a job in one go. */
+const templates = new Table({ org: column.text, name: column.text, active: column.integer, sort_order: column.integer, created_by: column.text, created_at: column.text, updated_at: column.text });
+
+const template_items = new Table(
+  {
+    org: column.text,
+    template_id: column.text,
+    title: column.text,
+    description: column.text,
+    kind: column.text,
+    trade_id: column.text,
+    hours: column.real,
+    /** The Whole House or another area every job has, or a kind of room: every location of that kind. */
+    place: column.text,
+    /** JSON: the tasks in the same template that have to be done first. */
+    waits_on: column.text,
+    sort_order: column.integer,
+    active: column.integer,
+    created_at: column.text,
+    updated_at: column.text,
+  },
+  { indexes: { template: ['template_id'] } },
+);
+
 /** Changes the server refused for good (a broken rule, not a lost signal). Kept on the phone, shown in the app. */
 const rejected_changes = new Table(
   {
@@ -291,6 +317,8 @@ export const AppSchema = new Schema({
   job_activity,
   title_library,
   custom_fields,
+  templates,
+  template_items,
   photos,
   visits,
   list_sends,

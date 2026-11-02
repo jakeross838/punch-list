@@ -1,6 +1,6 @@
 // Database rows (snake_case, booleans as 0 or 1 on the phone) to and from the app's records.
 
-import { tidyHours, tidyRooms, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type TeamMember, type TeamPart, type Trade, type Visit } from '@punch/core';
+import { isTemplatePlace, tidyHours, tidyRooms, type Template, type TemplateItem, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type TeamMember, type TeamPart, type Trade, type Visit } from '@punch/core';
 import type { ItemPatch } from './api';
 
 type Row = Record<string, unknown>;
@@ -42,6 +42,22 @@ export const rowToPerson = (r: Row): Person => ({
 export const rowToJob = (r: Row): Job => ({ id: text(r.id), name: text(r.name), address: text(r.address), closed: bool(r.archived) });
 
 const PARTS: TeamPart[] = ['project_manager', 'superintendent', 'field'];
+
+export const rowToTemplate = (r: Row): Template => ({ id: text(r.id), name: text(r.name), active: bool(r.active), sortOrder: num(r.sort_order) });
+
+export const rowToTemplateItem = (r: Row): TemplateItem => ({
+  id: text(r.id),
+  templateId: text(r.template_id),
+  title: text(r.title),
+  description: text(r.description),
+  kind: r.kind === 'added_scope' || r.kind === 'deficiency' ? r.kind : 'completion',
+  tradeId: textOrNull(r.trade_id),
+  hours: tidyHours(r.hours),
+  place: isTemplatePlace(r.place) ? r.place : 'Whole House',
+  waitsOn: waitingList(r.waits_on),
+  sortOrder: num(r.sort_order),
+  active: bool(r.active),
+});
 
 export const rowToTeamMember = (r: Row): TeamMember => ({
   id: text(r.id),
@@ -96,7 +112,8 @@ export const rowToItem = (r: Row): Item => ({
   status: r.status === 'complete' || r.status === 'removed' ? r.status : 'open',
   completedBy: textOrNull(r.completed_by),
   completedAt: textOrNull(r.completed_at),
-  source: r.source === 'walk' || r.source === 'import' ? r.source : 'typed',
+  source: r.source === 'walk' || r.source === 'import' || r.source === 'copy' || r.source === 'template' ? r.source : 'typed',
+  position: numOrNull(r.position),
   extra: json<Item['extra']>(r.extra, {}),
   unfinished: bool(r.unfinished),
   visitId: textOrNull(r.visit_id),
@@ -109,6 +126,7 @@ export const rowToItem = (r: Row): Item => ({
 
 const ITEM_COLUMNS: Record<keyof ItemPatch, string> = {
   locationId: 'location_id',
+  position: 'position',
   assignedTo: 'assigned_to',
   title: 'title',
   description: 'description',

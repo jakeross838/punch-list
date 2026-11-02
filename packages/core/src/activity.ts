@@ -156,6 +156,9 @@ function dayWords(ymd: string, today: Date, weekday = false): string {
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** "A, B and C" */
+const listWords = (words: string[]) => (words.length <= 1 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`);
 const clip = (text: string, max = 60) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 const titleCase = (text: string) => text.replace(/\b\w/g, (c) => c.toUpperCase());
 const sentence = (text: string) => (/[.!?…]$/.test(text) ? text : `${text}.`);
@@ -259,9 +262,12 @@ function fieldWords(field: string, before: string | null, after: string | null, 
 
 /** Fields that are not worth a line: they follow from others, or the database sets them. */
 // The trade follows the company (the company's trade on the job), so a change to it says nothing new.
-const QUIET = new Set(['bought_out', 'number', 'source', 'bt_external_id', 'org', 'completed_by', 'completed_at', 'job_id', 'trade_id']);
+/** Changes made to many items at once that read as one line on the job. */
+const BULK_FIELDS = new Set(['status', 'assigned_to', 'location_id']);
 
-type Kind = 'create' | 'status' | 'change' | 'photo' | 'locations' | 'other';
+const QUIET = new Set(['bought_out', 'number', 'source', 'bt_external_id', 'org', 'completed_by', 'completed_at', 'job_id', 'trade_id', 'position']);
+
+type Kind = 'create' | 'status' | 'change' | 'photo' | 'locations' | 'bulk' | 'bulkChange' | 'other';
 
 function classOf(e: Activity): Kind {
   if (e.kind === 'item_created') return 'create';
@@ -319,6 +325,43 @@ export function activityLines(entries: Activity[], look: ActivityLookups, option
     }
   }
   const groups: Group[] = [];
+  // Many items added at once, by Paste or a template, read as one line on the job.
+  if (!options.forItem) {
+    const sourceOf = (e: Activity) => (e.kind === 'item_created' && e.itemId ? look.items.get(e.itemId)?.source : undefined);
+    let run: Activity[] = [];
+    const flush = () => {
+      if (run.length > 1) {
+        for (const e of run) folded.add(e.id);
+        groups.push({ kind: 'bulk', personId: run[0]!.personId, itemId: null, first: Date.parse(run[0]!.at), last: Date.parse(run[run.length - 1]!.at), entries: run });
+      }
+      run = [];
+    };
+    for (const e of sorted) {
+      const source = sourceOf(e);
+      if (source !== 'copy' && source !== 'template') continue;
+      const prev = run[run.length - 1];
+      if (prev && (prev.personId !== e.personId || sourceOf(prev) !== source || Date.parse(e.at) - Date.parse(prev.at) > 5000)) flush();
+      run.push(e);
+    }
+    flush();
+    // The same change to several items at once (completed, assigned, moved, picked together) reads as one line too.
+    const runs = new Map<string, Activity[]>();
+    const close = (key: string) => {
+      const list = runs.get(key);
+      runs.delete(key);
+      if (!list || new Set(list.map((e) => e.itemId)).size < 2) return;
+      for (const e of list) folded.add(e.id);
+      groups.push({ kind: 'bulkChange', personId: list[0]!.personId, itemId: null, first: Date.parse(list[0]!.at), last: Date.parse(list[list.length - 1]!.at), entries: list });
+    };
+    for (const e of sorted) {
+      if (e.kind !== 'item_changed' || folded.has(e.id) || !e.field || !BULK_FIELDS.has(e.field)) continue;
+      const key = `${e.personId}|${e.field}|${e.after ?? ''}|${e.field === 'status' ? (e.before ?? '') : ''}`;
+      const list = runs.get(key);
+      if (list && Date.parse(e.at) - Date.parse(list[list.length - 1]!.at) > 5000) close(key);
+      runs.set(key, [...(runs.get(key) ?? []), e]);
+    }
+    for (const key of [...runs.keys()]) close(key);
+  }
   for (const e of sorted) {
     if (folded.has(e.id)) continue;
     const kind = classOf(e);
@@ -356,6 +399,30 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     action,
     detail: details.filter(Boolean).map(sentence).join(' '),
   });
+
+  if (g.kind === 'bulkChange') {
+    const ids = [...new Set(g.entries.map((e) => e.itemId).filter((id): id is string => !!id))];
+    const n = ids.length;
+    const places = [...new Set(ids.map((id) => look.locations.get(look.items.get(id)?.locationId ?? '') ?? '').filter(Boolean))];
+    const where = places.length <= 3 ? listWords(places) : `${places.slice(0, 2).join(', ')} and ${places.length - 2} more locations`;
+    const { field, after, before } = first;
+    if (field === 'assigned_to') return done(after ? `assigned ${n} items to ${look.people.get(after) ?? 'someone'}` : `unassigned ${n} items`, [where]);
+    if (field === 'location_id') {
+      const from = [...new Set(g.entries.map((e) => look.locations.get(e.before ?? '') ?? ''))];
+      return done(`moved ${n} items to ${look.locations.get(after ?? '') ?? 'another location'}`, [from.length === 1 && from[0] ? `From ${from[0]}` : '']);
+    }
+    if (after === 'complete') return done(`completed ${n} items`, [where]);
+    if (after === 'removed') return done(`removed ${n} items from the list`, [where]);
+    return done(before === 'complete' ? `reopened ${n} items` : `restored ${n} items to the list`, [where]);
+  }
+
+  if (g.kind === 'bulk') {
+    const items = g.entries.flatMap((e) => (e.itemId && look.items.get(e.itemId) ? [look.items.get(e.itemId)!] : []));
+    const places = [...new Set(items.map((i) => look.locations.get(i.locationId) ?? '').filter(Boolean))];
+    const where = places.length <= 3 ? listWords(places) : `${places.slice(0, 2).join(', ')} and ${places.length - 2} more locations`;
+    const n = g.entries.length;
+    return done(items[0]?.source === 'template' ? `added ${n} items from a template` : `pasted ${n} items`, [where]);
+  }
 
   if (first.kind === 'comment_added') {
     // An item's own Comments show its comments; its History does not repeat them.

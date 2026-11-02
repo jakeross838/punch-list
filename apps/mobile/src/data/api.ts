@@ -16,7 +16,9 @@ import type {
   ListSend,
   Location,
   Mark,
+  NewTemplateItem,
   ParsedLocation,
+  PlannedItem,
   Person,
   Photo,
   Role,
@@ -24,6 +26,8 @@ import type {
   StandardTitle,
   TeamMember,
   TeamPart,
+  Template,
+  TemplateItem,
   Trade,
   ViewSettings,
   Visit,
@@ -37,7 +41,12 @@ export interface NewItem extends ItemFields {
 
 export interface ItemPatch extends Partial<ItemFields> {
   locationId?: string;
+  /** Where it sits in its location's list, from dragging it. */
+  position?: number | null;
 }
+
+/** A template's task as it is added or changed. */
+export type TemplateItemInput = Pick<TemplateItem, 'title' | 'description' | 'kind' | 'tradeId' | 'hours' | 'place' | 'waitsOn'>;
 
 export interface NewPhoto {
   jobId: string;
@@ -88,6 +97,10 @@ export interface DataApi {
   useTeams(): TeamMember[];
   /** The items assigned to a person, on every job the signed-in person sees. */
   useAssigned(personId: string): Item[];
+  /** Every template, switched off ones included. */
+  useTemplates(): Template[];
+  /** Every template's tasks, switched off ones included. */
+  useTemplateItems(): TemplateItem[];
   useLocations(jobId: string): Location[];
   useItems(jobId: string): Item[];
   /** The job's photos that are not removed, each item's in order. */
@@ -122,6 +135,14 @@ export interface DataApi {
   updatePerson(id: string, patch: PersonPatch): Promise<void>;
   /** Admins only. Puts a person on a job's team, changes what they are on it, or takes them off with null. */
   setTeamMember(jobId: string, personId: string, part: TeamPart | null): Promise<void>;
+  /** Admins only. A new template, with tasks to start it (each key ties the waits together). */
+  addTemplate(input: { name: string; items?: NewTemplateItem[] }): Promise<string>;
+  /** Admins only. Its name, or switched off or back on. */
+  updateTemplate(id: string, patch: Partial<Pick<Template, 'name' | 'active'>>): Promise<void>;
+  /** Admins only. */
+  addTemplateItem(templateId: string, item: TemplateItemInput): Promise<string>;
+  /** Admins only. Switched off with active false; nothing is deleted. */
+  updateTemplateItem(id: string, patch: Partial<TemplateItemInput & Pick<TemplateItem, 'active' | 'sortOrder'>>): Promise<void>;
   /** Preview only: see the app the way someone else does. */
   previewAs?(personId: string): void;
   /**
@@ -133,8 +154,12 @@ export interface DataApi {
   updateLocation(id: string, patch: Partial<Pick<Location, 'name' | 'number' | 'label' | 'active'>>): Promise<void>;
   /** Done Here on a walk marks locations walked; Start a New Walk clears them. */
   setWalked(locationIds: string[], walked: boolean): Promise<void>;
+  /** Admins only. The walk order: the locations given, in this order, take the places they had between them. */
+  reorderLocations(jobId: string, orderedIds: string[]): Promise<void>;
   createItem(item: NewItem): Promise<string>;
   updateItem(id: string, patch: ItemPatch): Promise<void>;
+  /** Many new items at once, from Paste or a template, saved in the order given so each wait points at an item already saved. */
+  addItems(items: PlannedItem[]): Promise<string[]>;
   /** Several items at once, as one change: clearing a holdup, moving a Ready By. */
   updateItems(changes: { id: string; patch: ItemPatch }[]): Promise<void>;
   /** Keeps the pictures with the item, after the ones it has. */

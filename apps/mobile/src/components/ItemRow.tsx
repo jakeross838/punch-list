@@ -20,7 +20,7 @@ import {
   type Item,
   type Photo,
 } from '@punch/core';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { CompleteCircle, Icon, isBeforeToday, PhotoView, shortDate, SwipeRow, Text, Touchable, type SwipeAction } from '@/ui';
@@ -44,6 +44,9 @@ export const ItemRow = memo(function ItemRow({
   onReady,
   onRemove,
   onAddPhoto,
+  onLongPress,
+  select,
+  trailing,
 }: {
   item: Item;
   /** The item's first photo, shown small at the end of the row. */
@@ -69,6 +72,12 @@ export const ItemRow = memo(function ItemRow({
   onRemove: (item: Item) => void;
   /** Takes a photo for an item that has none yet. */
   onAddPhoto?: (item: Item) => void;
+  /** A long press: start picking items, with this one picked. */
+  onLongPress?: (item: Item) => void;
+  /** Picking items: a tap picks it or not, in place of opening it, and the circle says which. */
+  select?: { picked: boolean; onToggle: (item: Item) => void };
+  /** At the very end of the row: the handle to drag it by. */
+  trailing?: ReactNode;
 }) {
   const done = item.status === 'complete' || checking;
   const open = item.status === 'open' && !checking;
@@ -90,7 +99,7 @@ export const ItemRow = memo(function ItemRow({
   const by = holds ? readyByOf(item, holds) : item.readyBy;
   const waiting = notReady ? `Waiting on ${on || 'something'}${by && !late ? `, ready by ${shortDate(by)}` : ''}` : undefined;
 
-  const actions: SwipeAction[] = open
+  const actions: SwipeAction[] = open && !select
     ? [
         ...(item.ready ? [] : [{ label: 'Ready', icon: 'checkmark' as const, color: colors.tint, onPress: () => onReady(item), testID: `ready-${item.id}` }]),
         { label: 'Remove', icon: 'trash', color: colors.destructive, onPress: () => onRemove(item), testID: `remove-${item.id}` },
@@ -103,14 +112,21 @@ export const ItemRow = memo(function ItemRow({
       <Touchable
         feedback="highlight"
         pressDelay={50}
-        onPress={() => onOpen(item)}
+        onPress={() => (select ? select.onToggle(item) : onOpen(item))}
+        onLongPress={onLongPress && !select ? () => onLongPress(item) : undefined}
+        delayLongPress={450}
         style={styles.row}
-        accessibilityRole="button"
+        accessibilityRole={select ? 'checkbox' : 'button'}
+        accessibilityState={select ? { checked: select.picked } : undefined}
         accessibilityLabel={said}
         testID={`item-${item.id}`}
       >
-        <View style={[styles.lead, item.unfinished ? styles.leadDraft : null]}>
-          {item.unfinished ? (
+        <View style={[styles.lead, item.unfinished && !select ? styles.leadDraft : null]}>
+          {select ? (
+            <View style={[styles.pick, select.picked ? styles.picked : null]} testID={`pick-${item.id}`}>
+              {select.picked ? <Icon name="checkmark" size={12} color={colors.white} weight="bold" /> : null}
+            </View>
+          ) : item.unfinished ? (
             <View style={styles.draft}>
               <Icon name="pencil.tip" size={13} color={colors.tint} weight="semibold" />
             </View>
@@ -158,7 +174,7 @@ export const ItemRow = memo(function ItemRow({
           </View>
           {photo ? (
             <PhotoView photo={photo} width={PHOTO} height={PHOTO} radius={6} />
-          ) : onAddPhoto && open ? (
+          ) : onAddPhoto && open && !select ? (
             <Touchable
               feedback="scale"
               onPress={() => onAddPhoto(item)}
@@ -171,6 +187,7 @@ export const ItemRow = memo(function ItemRow({
               <Icon name="camera" size={16} color={colors.quiet} />
             </Touchable>
           ) : null}
+          {trailing}
         </View>
       </Touchable>
     </SwipeRow>
@@ -191,6 +208,8 @@ const styles = StyleSheet.create({
   time: { paddingTop: 2 },
   status: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
   hourglass: { marginTop: 3 },
+  pick: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.circle, alignItems: 'center', justifyContent: 'center' },
+  picked: { borderColor: colors.tint, backgroundColor: colors.tint },
   draft: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   photoSlot: { width: PHOTO, height: PHOTO, borderRadius: 6, borderWidth: 1.25, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
 });

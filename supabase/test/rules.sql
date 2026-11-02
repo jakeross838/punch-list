@@ -865,6 +865,88 @@ begin
 end $$;
 reset role;
 
+-- ---------- copy and paste, dragging, and templates ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+
+do $$
+declare
+  j uuid := (select id from public.jobs where name = 'Fish');
+  loc uuid := (select id from public.locations where job_id = (select id from public.jobs where name = 'Fish') order by sort_order limit 1);
+  t uuid := (select id from public.trades where name = 'Plumbing');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  tpl uuid; other uuid; a uuid; b uuid; x uuid; y uuid; before_count int;
+begin
+  -- Pasted items and items from a template say so; one made on the phone with its id can be waited on.
+  x := gen_random_uuid();
+  insert into public.items (id, job_id, location_id, title, trade_id, company_id, ready, source) values (x, j, loc, 'Caulk shower corner', t, c, true, 'copy');
+  insert into public.items (job_id, location_id, title, trade_id, company_id, ready, waiting_on_items, source)
+    values (j, loc, 'Install shower glass', t, c, false, array[x], 'template') returning id into y;
+  if (select waiting_on_items from public.items where id = y) <> array[x] then raise exception 'FAIL: a pasted item could not wait on another'; end if;
+  begin
+    insert into public.items (job_id, location_id, title, trade_id, company_id, ready, source) values (j, loc, 'Bad source', t, c, true, 'magic');
+    raise exception 'FAIL: an unknown source was accepted';
+  exception when check_violation then null;
+  end;
+  -- Dragging it in its list keeps where it was put, with no line in its History.
+  select count(*) into before_count from public.item_history where item_id = y;
+  update public.items set position = 0.5 where id = y;
+  if (select position from public.items where id = y) <> 0.5 then raise exception 'FAIL: the position did not save'; end if;
+  if (select count(*) from public.item_history where item_id = y) <> before_count then raise exception 'FAIL: dragging an item wrote its History'; end if;
+
+  -- An admin makes a template: its tasks wait only on tasks in it.
+  insert into public.templates (name) values ('  End  of the House ') returning id into tpl;
+  if (select name from public.templates where id = tpl) <> 'End of the House' or (select created_by from public.templates where id = tpl) is null then
+    raise exception 'FAIL: the template name was not tidied or its maker not stamped';
+  end if;
+  insert into public.template_items (template_id, title, trade_id, hours, place) values (tpl, 'Caulk shower corner', t, 0.5, 'bathroom') returning id into a;
+  insert into public.template_items (template_id, title, trade_id, hours, place, waits_on) values (tpl, 'Install shower glass', t, 2, 'bathroom', array[a, a]) returning id into b;
+  if (select waits_on from public.template_items where id = b) <> array[a] then raise exception 'FAIL: a task waits on the same task twice'; end if;
+  begin
+    insert into public.template_items (template_id, title, place) values (tpl, 'Somewhere', 'attic');
+    raise exception 'FAIL: a place every job does not have was accepted';
+  exception when check_violation then null;
+  end;
+  insert into public.templates (name) values ('Pool') returning id into other;
+  begin
+    insert into public.template_items (template_id, title, place, waits_on) values (other, 'Fill pool', 'Pool', array[a]);
+    raise exception 'FAIL: a task waited on a task in another template';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.templates (name) values ('end of the house');
+    raise exception 'FAIL: two templates with the same name';
+  exception when unique_violation then null;
+  end;
+  begin
+    delete from public.template_items where id = a;
+    raise exception 'FAIL: a template task was deleted';
+  exception when insufficient_privilege or restrict_violation then null;
+  end;
+  update public.template_items set active = false where id = b;
+  perform set_config('test.template', tpl::text, false);
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"sam@rossbuilt.com"}';
+
+do $$
+declare
+  tpl uuid := current_setting('test.template')::uuid;
+begin
+  -- The team uses the templates, and only an admin changes them.
+  if (select count(*) from public.template_items where template_id = tpl) <> 2 then raise exception 'FAIL: the team cannot read the templates'; end if;
+  begin
+    insert into public.templates (name) values ('Mine');
+    raise exception 'FAIL: a team member made a template';
+  exception when insufficient_privilege then null;
+  end;
+  update public.template_items set title = 'Changed' where template_id = tpl;
+  if exists (select 1 from public.template_items where template_id = tpl and title = 'Changed') then raise exception 'FAIL: a team member changed a template'; end if;
+end $$;
+reset role;
+
 -- ---------- someone who was never invited ----------
 set role authenticated;
 set request.jwt.claims = '{"email":"stranger@example.com"}';
@@ -928,6 +1010,11 @@ begin
   begin
     update public.job_activity set kind = 'job_renamed';
     raise exception 'FAIL: activity was changed with full rights';
+  exception when restrict_violation then null;
+  end;
+  begin
+    delete from public.templates;
+    raise exception 'FAIL: a template was deleted with full rights';
   exception when restrict_violation then null;
   end;
   if (select count(*) from public.items i join public.jobs j on j.id = i.job_id where j.name = 'Test Job (generated)') <> 600 then

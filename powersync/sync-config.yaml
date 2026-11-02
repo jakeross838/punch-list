@@ -7,7 +7,7 @@ config:
   edition: 3
 
 streams:
-  # What everyone at Ross Built shares: the people, the companies and trades, the standard titles and the added fields.
+  # What everyone at Ross Built shares: the people, the companies and trades, the standard titles, the added fields and the templates.
   ross_built:
     auto_subscribe: true
     with:
@@ -18,6 +18,8 @@ streams:
       - SELECT * FROM companies WHERE org IN my_org
       - SELECT * FROM title_library WHERE org IN my_org
       - SELECT * FROM custom_fields WHERE org IN my_org
+      - SELECT * FROM templates WHERE org IN my_org
+      - SELECT * FROM template_items WHERE org IN my_org
 
   # Each job the person may see, as job_access has it (every job, or only the jobs they are on), with everything on it.
   jobs:

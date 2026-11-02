@@ -26,6 +26,9 @@ import {
   type Photo,
   type StandardTitle,
   type TeamMember,
+  type Template,
+  type TemplateItem,
+  type TemplatePlace,
   type Trade,
   type ViewSettings,
   type Visit,
@@ -54,6 +57,9 @@ export interface SampleState {
   comments: Comment[];
   titles: StandardTitle[];
   customFields: CustomField[];
+  /** What always needs doing in a house, to add to a job in one go. */
+  templates: Template[];
+  templateItems: TemplateItem[];
   formSettings: FormSettings;
   viewSettings: ViewSettings;
   counters: Record<string, number>;
@@ -291,6 +297,45 @@ export function sampleState(): SampleState {
     list.map(([title, uses, hours]) => ({ id: `title-${++titleNo}`, title, tradeId: t(trade), uses, approved: true, hours, rooms: DEFAULT_ROOM_TASKS[title.toLowerCase()] ?? [] })),
   );
 
+  // The starter template, as the database seeds it once the trades are in, and a small one for the outside.
+  const templates: Template[] = [
+    { id: 'template-house', name: 'End of the House', active: true, sortOrder: 1 },
+    { id: 'template-outside', name: 'Pool and Outside', active: true, sortOrder: 2 },
+  ];
+  let taskNo = 0;
+  const task = (templateId: string, title: string, trade: string, hours: number, place: TemplatePlace, waitsOn: string[] = []): TemplateItem => ({
+    id: `task-${++taskNo}`,
+    templateId,
+    title,
+    description: '',
+    kind: 'completion',
+    tradeId: t(trade),
+    hours,
+    place,
+    waitsOn,
+    sortOrder: taskNo,
+    active: true,
+  });
+  const templateItems: TemplateItem[] = [
+    task('template-house', 'Install mirror', 'Carpentry', 1, 'bathroom'),
+    task('template-house', 'Install towel bar', 'Carpentry', 0.5, 'bathroom'),
+    task('template-house', 'Install toilet paper holder', 'Carpentry', 0.25, 'bathroom'),
+    task('template-house', 'Trim out toilet', 'Plumbing', 1, 'bathroom'),
+    task('template-house', 'Caulk shower corner', 'Tile', 0.5, 'bathroom'),
+    task('template-house', 'Install shower glass', 'Carpentry', 2, 'bathroom', ['task-5']),
+    task('template-house', 'Install cabinet hardware', 'Carpentry', 2, 'kitchen'),
+    task('template-house', 'Install appliances', 'Ross Built Crew', 4, 'kitchen'),
+    task('template-house', 'Install dryer vent cover', 'Air Conditioning', 0.5, 'laundry'),
+    task('template-house', 'Install door stop', 'Carpentry', 0.25, 'bedroom'),
+    task('template-house', 'Touch up paint', 'Painting', 2, 'Whole House'),
+    task('template-house', 'Final clean', 'Ross Built Crew', 8, 'Whole House', ['task-11']),
+    task('template-house', 'Clean windows', 'Ross Built Crew', 8, 'Whole House'),
+    task('template-house', 'Pressure wash driveway', 'Ross Built Crew', 3, 'Driveway'),
+    task('template-outside', 'Clean pool tile line', 'Ross Built Crew', 2, 'Pool'),
+    task('template-outside', 'Clean gutters', 'Ross Built Crew', 3, 'Roof'),
+    task('template-outside', 'Touch up exterior paint', 'Painting', 4, 'outside'),
+  ];
+
   const customFields: CustomField[] = [
     { id: 'field-found-by', label: 'Found By', kind: 'list', options: ['Owner', 'Architect', 'Designer', 'Ross Built'], sortOrder: 1, active: true },
   ];
@@ -417,6 +462,8 @@ export function sampleState(): SampleState {
     comments,
     titles,
     customFields,
+    templates,
+    templateItems,
     formSettings: DEFAULT_FORM,
     viewSettings: DEFAULT_VIEW,
     counters: { [job.id]: n, [bay.id]: 0, [palm.id]: 0 },

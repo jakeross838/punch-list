@@ -20,6 +20,8 @@ const SCREENS = [
   'my',
   'settings/people/index',
   'settings/people/[personId]',
+  'settings/templates/index',
+  'settings/templates/[templateId]',
   'jobs/[jobId]/index',
   'jobs/[jobId]/setup',
   'jobs/[jobId]/list/[by]/[key]',

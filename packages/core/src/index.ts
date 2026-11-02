@@ -22,3 +22,5 @@ export * from './filters';
 export * from './comments';
 export * from './roomTasks';
 export * from './people';
+export * from './copy';
+export * from './templates';

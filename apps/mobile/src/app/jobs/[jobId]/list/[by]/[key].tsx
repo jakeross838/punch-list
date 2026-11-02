@@ -5,11 +5,18 @@
 // and the bottom bar steps to the one before or after, with the camera between.
 // Past Due lists everything late, the latest first, with the days. Drafts lists what was saved to
 // finish later, filling in from the photos while it shows. A Waiting On list can stop the wait for all its items at once, or move their Ready By
-// together.
+// together. Select (or a long press on an item) picks items to move, copy, assign, complete or save as
+// a template all at once; in a location, the lines at the end of each row drag it into order, with
+// the others picked along with it. Copied items paste into any location, on this job or another.
+// Add From a Template puts a template's tasks for this location on its list.
 
 import {
   clearHoldup,
+  complete,
+  dropAt,
   holdNames,
+  isAdmin,
+  pastePlan,
   commentCounts,
   GROUP_LABELS,
   groupItems,
@@ -25,11 +32,17 @@ import {
   type Item,
   type Photo,
 } from "@punch/core";
+import { randomUUID } from "expo-crypto";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { SectionList, StyleSheet, View } from "react-native";
 import { CAMERA_BAR_HEIGHT, CameraBar, RoomStep } from "@/components/CameraBar";
 import { CommonTasks } from "@/components/CommonTasks";
+import { DragList } from "@/components/DragList";
+import { fieldsOf, useFormOptions } from "@/components/ItemForm";
+import { usePersonOptions } from "@/components/people";
+import { SelectionBar } from "@/components/SelectionBar";
+import { AddTemplateSheet, SaveTemplateSheet } from "@/components/TemplateSheets";
 import { isFilling, useDraftFill } from "@/components/draftFill";
 import { FilterBar } from "@/components/FilterBar";
 import { ItemRow } from "@/components/ItemRow";
@@ -37,16 +50,19 @@ import { useItemActions } from "@/components/useItemActions";
 import { colors, layout } from "@/constants/theme";
 import { useData } from "@/data/api";
 import { capture } from "@/data/capture";
+import { clipboard, itemsWord, useClipboard } from "@/data/clipboard";
 import { useFilterContext, useHolds, useJobView } from "@/data/view";
 import {
   DateField,
   EmptyState,
   haptic,
   Icon,
+  OptionPicker,
   Page,
   Text,
   Touchable,
   useFeedback,
+  type BarItem,
 } from "@/ui";
 
 interface Section {
@@ -71,7 +87,8 @@ export default function GroupScreen() {
   const visits = data.useVisits(jobId);
   const context = useFilterContext(jobId);
   const today = context.today;
-  const job = data.useJobs().find((j) => j.id === jobId);
+  const jobs = data.useJobs();
+  const job = jobs.find((j) => j.id === jobId);
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId);
   const locations = data.useLocations(jobId);
@@ -83,6 +100,14 @@ export default function GroupScreen() {
   const commentsOn = commentCounts(data.useComments(jobId));
   const holds = useHolds(jobId);
   const fill = useDraftFill();
+  const me = data.useMe();
+  const admin = isAdmin(me);
+  const copied = useClipboard();
+  // Picking items to do something to all of them at once.
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [dragging, setDragging] = useState(false);
+  const [sheet, setSheet] = useState<"move" | "assign" | "template" | "save" | null>(null);
 
   const filters = view.filters;
   const group = useMemo(
@@ -263,6 +288,142 @@ export default function GroupScreen() {
     router.push({ pathname: "/jobs/[jobId]/capture", params: { jobId } });
   };
 
+  // ---------- picking items, and what can be done to them all at once ----------
+  const formOptions = useFormOptions(jobId, room?.id ?? "");
+  const personOptions = usePersonOptions(jobId);
+  const pickable = open.filter((i) => i.status === "open" || picked.has(i.id));
+  const pickedItems = items.filter((i) => picked.has(i.id));
+  const canDrag = selecting && !!room && !due && !drafts;
+  const startPicking = (first?: Item) => {
+    haptic.tap();
+    setSelecting(true);
+    setPicked(new Set(first ? [first.id] : []));
+  };
+  const stopPicking = () => {
+    setSelecting(false);
+    setPicked(new Set());
+    setDragging(false);
+  };
+  const togglePick = (item: Item) => {
+    haptic.selection();
+    setPicked((now) => {
+      const next = new Set(now);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
+  };
+  const allPicked = pickable.length > 0 && pickable.every((i) => picked.has(i.id));
+  const pickAll = () => {
+    haptic.selection();
+    setPicked(allPicked ? new Set() : new Set(pickable.map((i) => i.id)));
+  };
+  const count = itemsWord(pickedItems.length);
+  const moveTo = (locationId: string) => {
+    const before = pickedItems.map((i) => ({ id: i.id, patch: { locationId: i.locationId, position: i.position ?? null } }));
+    const moving = pickedItems.filter((i) => i.locationId !== locationId);
+    setSheet(null);
+    if (moving.length === 0) return stopPicking();
+    haptic.success();
+    void data.updateItems(moving.map((i) => ({ id: i.id, patch: { locationId, position: null } })));
+    const where = locations.find((l) => l.id === locationId)?.label ?? "the location";
+    feedback.toast({ message: `Moved ${itemsWord(moving.length)} to ${where}`, action: { label: "Undo", onPress: () => void data.updateItems(before) } });
+    stopPicking();
+  };
+  const copyPicked = () => {
+    clipboard.set({ jobId, items: pickedItems });
+    haptic.success();
+    feedback.toast({ message: `Copied ${count}. Open any location, on any job, and tap Paste.` });
+    stopPicking();
+  };
+  const assignTo = (personId: string | null) => {
+    const before = pickedItems.map((i) => ({ id: i.id, patch: { assignedTo: i.assignedTo } }));
+    setSheet(null);
+    haptic.success();
+    void data.updateItems(pickedItems.map((i) => ({ id: i.id, patch: { assignedTo: personId } })));
+    const who = personOptions.find((o) => o.value === personId)?.label;
+    feedback.toast({
+      message: personId ? `Assigned ${count} to ${who}` : `${count.charAt(0).toUpperCase()}${count.slice(1)} assigned to no one`,
+      action: { label: "Undo", onPress: () => void data.updateItems(before) },
+    });
+    stopPicking();
+  };
+  const completePicked = () => {
+    const doing = pickedItems.filter((i) => i.status === "open" && !i.unfinished);
+    if (!me || doing.length === 0) {
+      feedback.toast({ message: "Drafts are finished before they are completed." });
+      return;
+    }
+    haptic.success();
+    const changes = doing.map((i) => {
+      const next = complete(fieldsOf(i), me);
+      return { id: i.id, patch: { status: next.status, completedBy: next.completedBy, completedAt: next.completedAt } };
+    });
+    void data.updateItems(changes);
+    feedback.toast({
+      message: `Completed ${itemsWord(doing.length)}`,
+      action: { label: "Undo", onPress: () => void data.updateItems(doing.map((i) => ({ id: i.id, patch: { status: "open", completedBy: null, completedAt: null } }))) },
+    });
+    stopPicking();
+  };
+  /** Let go of a row: it goes before that one, with the others picked along with it. */
+  const dropRow = (key: string, before: string | null) => {
+    const list = pickable.filter((i) => i.status === "open");
+    const moving = picked.has(key) && picked.size > 1 ? list.filter((i) => picked.has(i.id)) : list.filter((i) => i.id === key);
+    const ids = new Set(moving.map((i) => i.id));
+    // Before a row that moves too: before the next one that stays.
+    let at = before === null ? -1 : list.findIndex((i) => i.id === before);
+    while (at >= 0 && at < list.length && ids.has(list[at]!.id)) at += 1;
+    const target = at >= 0 && at < list.length ? list[at]!.id : null;
+    const changes = dropAt(list, moving, target);
+    if (changes.length > 0) void data.updateItems(changes.map((c) => ({ id: c.id, patch: { position: c.position } })));
+  };
+  // ---------- pasting what was copied ----------
+  const pasteHere = async () => {
+    if (!copied || !room) return;
+    const plan = pastePlan(copied.items, { jobId, locationId: room.id }, items, randomUUID);
+    if (plan.items.length === 0) {
+      feedback.toast({ message: `${plan.skipped.length === 1 ? "It is" : "They are all"} on the list here already.` });
+      return;
+    }
+    try {
+      const ids = await data.addItems(plan.items);
+      haptic.success();
+      const left = plan.skipped.length > 0 ? `. ${plan.skipped.length} already here` : "";
+      feedback.toast({
+        message: `Pasted ${itemsWord(ids.length)}${left}`,
+        action: { label: "Undo", onPress: () => void data.updateItems(ids.map((id) => ({ id, patch: { status: "removed" } }))) },
+      });
+    } catch (e) {
+      haptic.warning();
+      feedback.toast({ message: e instanceof Error ? e.message : "That did not paste. Try again." });
+    }
+  };
+  const inLocation = !!room && !due && !drafts;
+  const right: BarItem[] = selecting
+    ? [{ kind: "button", label: "Done", variant: "prominent", onPress: stopPicking, testID: "select-done" }]
+    : [
+        ...(open.length > 0 ? [{ kind: "button" as const, label: "Select", onPress: () => startPicking(), testID: "select" }] : []),
+        ...(inLocation
+          ? [
+              {
+                kind: "menu" as const,
+                label: "More",
+                icon: "ellipsis.circle" as const,
+                testID: "list-more",
+                groups: [
+                  {
+                    actions: [
+                      { label: "Add From a Template", icon: "templates" as const, onPress: () => setSheet("template"), testID: "list-template" },
+                      ...(copied ? [{ label: `Paste ${itemsWord(copied.items.length)}`, icon: "clipboard" as const, onPress: () => void pasteHere(), testID: "list-paste" }] : []),
+                    ],
+                  },
+                ],
+              },
+            ]
+          : []),
+      ];
+
   return (
     <>
       <Page
@@ -275,11 +436,24 @@ export default function GroupScreen() {
               : (room.floor ?? undefined)
             : undefined
         }
-        subtitle={subtitle}
+        subtitle={selecting ? `${pickedItems.length} picked` : subtitle}
         backLabel={job?.name}
         background="plain"
+        right={right}
         footerHeight={CAMERA_BAR_HEIGHT}
         footer={
+          selecting ? (
+            <SelectionBar
+              count={pickedItems.length}
+              tools={[
+                ...(inLocation || by === "room" ? [{ icon: "move" as const, label: "Move", onPress: () => setSheet("move"), testID: "picked-move" }] : []),
+                { icon: "copy", label: "Copy", onPress: copyPicked, testID: "picked-copy" },
+                { icon: "person", label: "Assign", onPress: () => setSheet("assign"), testID: "picked-assign" },
+                { icon: "checkmark.circle.fill", label: "Complete", onPress: completePicked, testID: "picked-complete" },
+                ...(admin ? [{ icon: "templates" as const, label: "Template", onPress: () => setSheet("save"), testID: "picked-template" }] : []),
+              ]}
+            />
+          ) : (
           <CameraBar
             onCamera={openCamera}
             cameraLabel={
@@ -304,18 +478,76 @@ export default function GroupScreen() {
               ) : null
             }
           />
+          )
         }
         list={(scroll) => (
           <SectionList
             {...scroll.props}
-            sections={sections}
+            scrollEnabled={!dragging}
+            sections={canDrag ? [] : selecting ? sections.filter((x) => x.key === "open").map((x) => ({ ...x, data: pickable })) : sections}
             keyExtractor={(item) => item.id}
             stickySectionHeadersEnabled={false}
             contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
             ListHeaderComponent={
               <View>
                 {scroll.header}
-                {due || drafts ? null : (
+                {inLocation && copied && !selecting ? (
+                  <View style={styles.paste} testID="paste-banner">
+                    <Icon name="clipboard" size={18} color={colors.tint} />
+                    <Text variant="subheadline" style={{ flex: 1 }} numberOfLines={2}>
+                      {itemsWord(copied.items.length)} copied{copied.jobId === jobId ? "" : ` from ${jobs.find((j) => j.id === copied.jobId)?.name ?? "another job"}`}
+                    </Text>
+                    <Touchable feedback="opacity" onPress={() => void pasteHere()} accessibilityRole="button" testID="paste-here" hitSlop={8}>
+                      <Text variant="subheadline" weight="600" color={colors.tint}>
+                        Paste Here
+                      </Text>
+                    </Touchable>
+                    <Touchable feedback="opacity" onPress={() => clipboard.clear()} accessibilityRole="button" accessibilityLabel="Forget what was copied" testID="paste-clear" hitSlop={10}>
+                      <Icon name="xmark.circle.fill" size={18} color={colors.chevron} />
+                    </Touchable>
+                  </View>
+                ) : null}
+                {selecting ? (
+                  <View style={styles.picking}>
+                    <Touchable feedback="opacity" onPress={pickAll} accessibilityRole="button" testID="pick-all" hitSlop={8}>
+                      <Text variant="subheadline" weight="600" color={colors.tint}>
+                        {allPicked ? "Unpick All" : "Pick All"}
+                      </Text>
+                    </Touchable>
+                    <Text variant="footnote" color={colors.secondary} style={{ flex: 1, textAlign: "right" }} numberOfLines={2}>
+                      {canDrag ? "Drag the lines to put them in order." : "Tap items to pick them."}
+                    </Text>
+                  </View>
+                ) : null}
+                {canDrag ? (
+                  <DragList
+                    data={pickable.filter((i) => i.status === "open")}
+                    keyOf={(i) => i.id}
+                    carried={[...picked]}
+                    onDragging={setDragging}
+                    onDrop={dropRow}
+                    testID="drag-list"
+                    renderRow={(item, handle) => (
+                      <ItemRow
+                        item={item}
+                        photo={firstPhoto.get(item.id)}
+                        comments={commentsOn.get(item.id)}
+                        holds={holds}
+                        location={locationFor(item)}
+                        company={companyFor(item)}
+                        last={false}
+                        checking={false}
+                        onOpen={actions.onOpen}
+                        onCheck={actions.onCheck}
+                        onReady={actions.onReady}
+                        onRemove={actions.onRemove}
+                        select={{ picked: picked.has(item.id), onToggle: togglePick }}
+                        trailing={handle}
+                      />
+                    )}
+                  />
+                ) : null}
+                {due || drafts || selecting ? null : (
                   <FilterBar
                     jobId={jobId}
                     filters={filters}
@@ -367,7 +599,7 @@ export default function GroupScreen() {
               ) : null
             }
             renderSectionFooter={({ section }) =>
-              section.key === "open" ? (
+              section.key === "open" && !selecting ? (
                 <View>
                   {section.data.length === 0 ? (
                     <EmptyState
@@ -449,11 +681,32 @@ export default function GroupScreen() {
                 onReady={actions.onReady}
                 onRemove={actions.onRemove}
                 onAddPhoto={addPhoto}
+                onLongPress={drafts || due ? undefined : (i) => startPicking(i)}
+                select={selecting ? { picked: picked.has(item.id), onToggle: togglePick } : undefined}
               />
             )}
           />
         )}
       />
+      <OptionPicker
+        visible={sheet === "move"}
+        title={`Move ${count} To`}
+        options={formOptions.roomOptions}
+        value={room?.id ?? null}
+        onSelect={moveTo}
+        onClose={() => setSheet(null)}
+      />
+      <OptionPicker
+        visible={sheet === "assign"}
+        title={`Assign ${count} To`}
+        options={personOptions}
+        value={null}
+        onSelect={(v) => assignTo(v === "none" ? null : v)}
+        onClose={() => setSheet(null)}
+        footer="They show on that person's My Items."
+      />
+      {room ? <AddTemplateSheet jobId={jobId} locationId={room.id} visible={sheet === "template"} onClose={() => setSheet(null)} /> : null}
+      {admin ? <SaveTemplateSheet jobId={jobId} items={pickedItems} visible={sheet === "save"} onClose={() => setSheet(null)} onSaved={stopPicking} /> : null}
       {room ? (
         <CommonTasks
           jobId={jobId}
@@ -467,6 +720,19 @@ export default function GroupScreen() {
 }
 
 const styles = StyleSheet.create({
+  paste: {
+    minHeight: 48,
+    marginHorizontal: layout.margin,
+    marginTop: 6,
+    marginBottom: 4,
+    paddingHorizontal: 14,
+    borderRadius: layout.radius,
+    backgroundColor: colors.chipOn,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  picking: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: layout.inset, paddingTop: 6, paddingBottom: 6 },
   holdup: {
     marginHorizontal: layout.margin,
     marginTop: 6,

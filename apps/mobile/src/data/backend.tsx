@@ -15,6 +15,7 @@ import {
   tidyComment,
   tidyEmail,
   tidyName,
+  tidyTitle,
   type Activity,
   type ActivityDetail,
   type ActivityKind,
@@ -145,6 +146,14 @@ function commitItems(items: Item[], next: Partial<SampleState> = {}, happened: H
   commit({ ...next, items, team: joined.team }, [...happened, ...joined.happened]);
 }
 
+/** A template's name as the database keeps it: trimmed, one space between words, and its own among the templates in use. */
+function templateName(name: string, id: string | null): string {
+  const clean = name.trim().replace(/\s+/g, ' ');
+  if (clean === '') throw new Error('Give the template a name.');
+  if (state.templates.some((t) => t.id !== id && t.active && t.name.toLowerCase() === clean.toLowerCase())) throw new Error('There is a template with that name already.');
+  return clean;
+}
+
 /** A person as the database keeps them: the email tidied and checked, the name trimmed. */
 function checkPerson(p: Pick<Person, 'name' | 'email'>, id: string | null): void {
   if (p.name.trim() === '') throw new Error('Give them a name.');
@@ -178,6 +187,8 @@ const api: DataApi = {
     const s = useStore();
     return useMemo(() => s.jobs.filter((j) => seesJob(s.me, j.id, s.team)), [s.jobs, s.me, s.team]);
   },
+  useTemplates: () => useStore().templates,
+  useTemplateItems: () => useStore().templateItems,
   useTeams: () => {
     const s = useStore();
     return useMemo(() => s.team.filter((t) => seesJob(s.me, t.jobId, s.team)), [s.team, s.me]);
@@ -293,6 +304,57 @@ const api: DataApi = {
       ]);
     }
   },
+  async addTemplate({ name, items = [] }) {
+    adminOnly();
+    const id = randomUUID();
+    const clean = templateName(name, null);
+    const ids = new Map(items.map((i) => [i.key, randomUUID()]));
+    const tasks = items.map((i, n) => ({
+      id: ids.get(i.key)!,
+      templateId: id,
+      title: tidyTitle(i.title),
+      description: i.description.trim(),
+      kind: i.kind,
+      tradeId: i.tradeId,
+      hours: i.hours,
+      place: i.place,
+      waitsOn: i.waitsOn.flatMap((k) => (ids.has(k) ? [ids.get(k)!] : [])),
+      sortOrder: n + 1,
+      active: true,
+    }));
+    const sortOrder = Math.max(0, ...state.templates.map((t) => t.sortOrder)) + 1;
+    setState({ ...state, templates: [...state.templates, { id, name: clean, active: true, sortOrder }], templateItems: [...state.templateItems, ...tasks] });
+    return id;
+  },
+  async updateTemplate(id, patch) {
+    adminOnly();
+    const was = state.templates.find((t) => t.id === id);
+    if (!was) return;
+    const name = patch.name !== undefined ? templateName(patch.name, id) : was.name;
+    if (patch.active === true && !was.active) templateName(was.name, id);
+    setState({ ...state, templates: state.templates.map((t) => (t.id === id ? { ...t, ...patch, name } : t)) });
+  },
+  async addTemplateItem(templateId, input) {
+    adminOnly();
+    const title = tidyTitle(input.title);
+    if (title === '') throw new Error('Give the task a title.');
+    const id = randomUUID();
+    const sortOrder = Math.max(0, ...state.templateItems.filter((t) => t.templateId === templateId).map((t) => t.sortOrder)) + 1;
+    const own = new Set(state.templateItems.filter((t) => t.templateId === templateId).map((t) => t.id));
+    const task = { ...input, id, templateId, title, description: input.description.trim(), waitsOn: [...new Set(input.waitsOn)].filter((w) => own.has(w)), sortOrder, active: true };
+    setState({ ...state, templateItems: [...state.templateItems, task] });
+    return id;
+  },
+  async updateTemplateItem(id, patch) {
+    adminOnly();
+    const was = state.templateItems.find((t) => t.id === id);
+    if (!was) return;
+    const title = patch.title !== undefined ? tidyTitle(patch.title) : was.title;
+    if (title === '') throw new Error('Give the task a title.');
+    const own = new Set(state.templateItems.filter((t) => t.templateId === was.templateId && t.id !== id).map((t) => t.id));
+    const waitsOn = patch.waitsOn !== undefined ? [...new Set(patch.waitsOn)].filter((w) => own.has(w)) : was.waitsOn;
+    setState({ ...state, templateItems: state.templateItems.map((t) => (t.id === id ? { ...t, ...patch, title, waitsOn } : t)) });
+  },
   previewAs(personId) {
     const person = state.people.find((p) => p.id === personId && p.active);
     if (person) setState({ ...state, me: person });
@@ -322,6 +384,13 @@ const api: DataApi = {
     const on = new Set(locationIds);
     const at = walked ? now() : null;
     setState({ ...state, locations: state.locations.map((l) => (on.has(l.id) ? { ...l, walkedAt: at } : l)) });
+  },
+  async reorderLocations(jobId, orderedIds) {
+    adminOnly();
+    const moving = orderedIds.map((id) => state.locations.find((l) => l.id === id && l.jobId === jobId)).filter((l) => l !== undefined);
+    const places = moving.map((l) => l.sortOrder).sort((a, b) => a - b);
+    const next = new Map(moving.map((l, i) => [l.id, places[i]!]));
+    setState({ ...state, locations: state.locations.map((l) => (next.has(l.id) ? { ...l, sortOrder: next.get(l.id)! } : l)) });
   },
   async updateLocation(id, patch) {
     adminOnly();
@@ -353,6 +422,20 @@ const api: DataApi = {
     const titles = state.titles.map((t) => (t.title.toLowerCase() === key ? { ...t, uses: t.uses + 1 } : t));
     commitItems([...state.items, tradeFollows(item)], { titles, counters: { ...state.counters, [input.jobId]: number } });
     return id;
+  },
+  async addItems(planned) {
+    const counters = { ...state.counters };
+    const made: Item[] = planned.map((p) => {
+      const number = (counters[p.jobId] ?? 0) + 1;
+      counters[p.jobId] = number;
+      return tradeFollows({ ...p, number, position: null, btExternalId: null, createdBy: state.me.id, createdAt: now(), updatedAt: now() });
+    });
+    // Each standard title used again moves up the suggestions.
+    const used = new Map<string, number>();
+    for (const i of made) used.set(i.title.toLowerCase(), (used.get(i.title.toLowerCase()) ?? 0) + 1);
+    const titles = state.titles.map((t) => (used.has(t.title.toLowerCase()) ? { ...t, uses: t.uses + used.get(t.title.toLowerCase())! } : t));
+    commitItems([...state.items, ...made], { titles, counters });
+    return made.map((i) => i.id);
   },
   async updateItem(id: string, patch: ItemPatch) {
     commitItems(settle(state.items, state.items.map((i) => (i.id === id ? { ...i, ...patch, updatedAt: now() } : i))));

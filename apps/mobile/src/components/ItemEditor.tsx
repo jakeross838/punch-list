@@ -22,11 +22,8 @@ import {
   kindText,
   ORDER_LABELS,
   ORDER_TYPES,
-  PART_LABELS,
-  peopleInOrder,
   readOrder,
   suggestTitles,
-  teamInOrder,
   tidyTitle,
   TITLE_MAX,
   tradeForTitle,
@@ -42,6 +39,7 @@ import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, StyleSheet, TextInput, View } from 'react-native';
 import { colors, layout, type as typeScale } from '@/constants/theme';
 import { useData } from '@/data/api';
+import { usePersonOptions } from './people';
 import { haptic, Icon, ListLabeledField, ListRow, ListSection, OptionPicker, PhotoView, Segmented, Text, Touchable } from '@/ui';
 import { EstimateField } from './EstimateField';
 import { ExtraFields, useFormOptions, type ItemDraft } from './ItemForm';
@@ -112,7 +110,6 @@ export function ItemEditor({
   const options = useFormOptions(jobId, value.locationId);
   const [picker, setPicker] = useState<'room' | 'company' | 'person' | null>(null);
   const people = data.usePeople();
-  const team = data.useTeams().filter((t) => t.jobId === jobId);
   const [titleFocused, setTitleFocused] = useState(false);
   const [filled, setFilled] = useState(false);
   // The estimate came from the title: a different title brings its own.
@@ -129,15 +126,8 @@ export function ItemEditor({
   // Assigned To shows when it is on the form, or when the item is assigned to someone.
   const showAssigned = shows('assignedTo') || !!value.assignedTo;
   const assignedName = people.find((p) => p.id === value.assignedTo)?.name ?? null;
-  // The team first, as it reads on the job, then everyone else at Ross Built.
-  const personOptions = [
-    { value: 'none', label: 'No One' },
-    ...teamInOrder(team, people).flatMap((t) => {
-      const p = people.find((x) => x.id === t.personId && x.active);
-      return p ? [{ value: p.id, label: p.name, hint: PART_LABELS[t.part], group: 'On the Team' }] : [];
-    }),
-    ...peopleInOrder(people.filter((p) => p.active && !team.some((t) => t.personId === p.id))).map((p) => ({ value: p.id, label: p.name, group: 'Everyone Else' })),
-  ];
+  const personOptions = usePersonOptions(jobId);
+
   // The order is for additional work; one already there always shows, so nothing is hidden.
   const showPo = value.kind === 'added_scope' || !!value.poOrCo;
   const showHours = shows('hours') || value.hours !== null;

@@ -171,11 +171,21 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
 /** Numbered items first, in number order; items not yet numbered (made offline) after, oldest first. */
 export function sortItems(items: Item[]): Item[] {
   return [...items].sort((a, b) => {
-    if (a.number !== null && b.number !== null) return a.number - b.number;
-    if (a.number !== null) return -1;
-    if (b.number !== null) return 1;
+    // Where someone dragged it, or its number: the two count the same way, so a list put in order
+    // by hand stays in order, and anything added after it goes at the end.
+    const ka = sortKey(a);
+    const kb = sortKey(b);
+    if (ka !== null && kb !== null && ka !== kb) return ka - kb;
+    if (ka !== null && kb === null) return -1;
+    if (kb !== null && ka === null) return 1;
+    if (a.number !== null && b.number !== null && a.number !== b.number) return a.number - b.number;
     return a.createdAt.localeCompare(b.createdAt);
   });
+}
+
+/** Where an item sorts in its list: where it was dragged to, else its number, else nowhere yet. */
+export function sortKey(item: Pick<Item, 'position' | 'number'>): number | null {
+  return item.position ?? item.number ?? null;
 }
 
 /** Number order, the open items first and any completed ones after. */

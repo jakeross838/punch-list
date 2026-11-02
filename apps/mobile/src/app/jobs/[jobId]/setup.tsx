@@ -9,6 +9,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { colors, layout, type as typeScale } from '@/constants/theme';
+import { DragList } from '@/components/DragList';
 import { CompanySheet, JobFields, LocationSheet, type Pairing } from '@/components/SetupSheets';
 import { useData } from '@/data/api';
 import {
@@ -135,15 +136,34 @@ function floorsOf(locations: Location[]): { name: string; rooms: Location[] }[] 
 }
 
 function RoomsTab({ jobId, admin, onPaste, onOpen }: { jobId: string; admin: boolean; onPaste: () => void; onOpen: (id: string) => void }) {
-  const locations = useData().useLocations(jobId);
+  const data = useData();
+  const locations = data.useLocations(jobId);
   const floors = useMemo(() => floorsOf(locations.filter((l) => l.active)), [locations]);
+  // Putting the locations in walk order: drag the lines at the end of each row.
+  const [ordering, setOrdering] = useState(false);
+  const drop = (rooms: Location[], key: string, before: string | null) => {
+    const rest = rooms.filter((r) => r.id !== key);
+    const at = before === null ? rest.length : rest.findIndex((r) => r.id === before);
+    const next = [...rest.slice(0, at), rooms.find((r) => r.id === key)!, ...rest.slice(at)];
+    void data.reorderLocations(
+      jobId,
+      next.map((r) => r.id),
+    );
+  };
   return (
     <>
       {admin ? (
         <View style={styles.action}>
-          <Button variant="tinted" icon="plus" label="Paste Locations" onPress={onPaste} testID="paste-rooms" />
+          <View style={styles.actionRow}>
+            <View style={{ flex: 1 }}>
+              <Button variant="tinted" icon="plus" label="Paste Locations" onPress={onPaste} testID="paste-rooms" />
+            </View>
+            {floors.length > 0 ? (
+              <Button variant={ordering ? 'filled' : 'tinted'} label={ordering ? 'Done' : 'Reorder'} onPress={() => setOrdering((o) => !o)} testID="reorder-rooms" />
+            ) : null}
+          </View>
           <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
-            From the plans, one on each line.
+            {ordering ? 'Drag the lines to set the walk order on each level.' : 'From the plans, one on each line.'}
           </Text>
         </View>
       ) : null}
@@ -159,15 +179,25 @@ function RoomsTab({ jobId, admin, onPaste, onOpen }: { jobId: string; admin: boo
             </Text>
           }
         >
-          {floor.rooms.map((room) => (
-            <ListRow
-              key={room.id}
-              title={room.label}
-              accessory={admin ? 'chevron' : 'none'}
-              onPress={admin ? () => onOpen(room.id) : undefined}
-              testID={`setup-location-${room.id}`}
+          {ordering ? (
+            <DragList
+              data={floor.rooms}
+              keyOf={(r) => r.id}
+              onDrop={(key, before) => drop(floor.rooms, key, before)}
+              testID={`reorder-${floor.name}`}
+              renderRow={(room, handle) => <ListRow title={room.label} right={handle} testID={`setup-location-${room.id}`} />}
             />
-          ))}
+          ) : (
+            floor.rooms.map((room) => (
+              <ListRow
+                key={room.id}
+                title={room.label}
+                accessory={admin ? 'chevron' : 'none'}
+                onPress={admin ? () => onOpen(room.id) : undefined}
+                testID={`setup-location-${room.id}`}
+              />
+            ))
+          )}
         </ListSection>
       ))}
     </>
@@ -542,6 +572,7 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
 const styles = StyleSheet.create({
   tabs: { marginHorizontal: layout.inset, marginTop: 18, marginBottom: 20 },
   action: { marginHorizontal: layout.inset, gap: 8, marginBottom: 6 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   actionNote: { paddingHorizontal: 4 },
   sheetContent: { paddingTop: 4, paddingBottom: 48 },
   closeJob: { marginTop: 36 },

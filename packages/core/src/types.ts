@@ -5,7 +5,8 @@ export type LocationKind = 'room' | 'shared';
 /** Deficiency: wrong or damaged, to fix. Completion (shown as Incomplete): scope completion, their work not done yet. Added scope (shown as Additional): extra work, to be quoted until it has its purchase order, variance purchase order or change order. */
 export type ItemKind = 'deficiency' | 'completion' | 'added_scope';
 export type ItemStatus = 'open' | 'complete' | 'removed';
-export type ItemSource = 'walk' | 'typed' | 'import';
+/** How an item came onto the list: a photo on a walk, typed in, imported, pasted, or from a template. */
+export type ItemSource = 'walk' | 'typed' | 'import' | 'copy' | 'template';
 
 /** admin: adds people, makes and closes jobs, changes the setup. team: walks jobs, adds items, checks them off. */
 export type Role = 'admin' | 'team';
@@ -108,6 +109,8 @@ export interface Item {
   completedBy: string | null;
   completedAt: string | null;
   source: ItemSource;
+  /** Where it sits in its location's list once someone drags it there. Absent or null: number order. */
+  position?: number | null;
   /** Answers to the added fields from Item Form setup, by field id. */
   extra: Record<string, ExtraValue>;
   /**

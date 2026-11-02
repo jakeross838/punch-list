@@ -21,6 +21,9 @@ export const SHARED_AREAS = [
   'Whole House',
 ] as const;
 
+/** One of the areas every job has besides its rooms. */
+export type SharedArea = (typeof SHARED_AREAS)[number];
+
 export interface ParsedLocation {
   name: string;
   number: string | null;

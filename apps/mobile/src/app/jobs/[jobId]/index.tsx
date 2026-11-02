@@ -4,11 +4,13 @@
 // count on Schedule. Filter, at the top under the title, narrows the list to exactly the work in
 // question and groups it by location, company or what items wait on; the filters that are on show as
 // chips beside it. The bottom bar is the walk and what comes of it: Schedule (the chart the list
-// builds), the camera in the middle, and Send Lists.
+// builds), the camera in the middle, and Send Lists. Add From a Template puts a template's tasks in
+// every location they fit; copied items paste here into a location picked from the job.
 
 import {
   byFloor,
   commentCounts,
+  pastePlan,
   GROUP_LABELS,
   groupItems,
   isFiltered,
@@ -22,6 +24,7 @@ import {
   type Location,
   type Photo,
 } from '@punch/core';
+import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
@@ -30,13 +33,16 @@ import { BarTool, CAMERA_BAR_HEIGHT, CameraBar } from '@/components/CameraBar';
 import { draftFill } from '@/components/draftFill';
 import { FilterBar } from '@/components/FilterBar';
 import { ItemRow } from '@/components/ItemRow';
+import { useFormOptions } from '@/components/ItemForm';
+import { AddTemplateSheet } from '@/components/TemplateSheets';
 import { useItemActions } from '@/components/useItemActions';
 import { ViewSheet } from '@/components/ViewSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
+import { clipboard, itemsWord, useClipboard } from '@/data/clipboard';
 import { useFilterContext, useHolds, useJobView, useTimeline } from '@/data/view';
-import { Button, EmptyState, Icon, Page, shortDate, Text, Touchable, useFeedback, type BarMenu, type IconName } from '@/ui';
+import { Button, EmptyState, haptic, Icon, OptionPicker, Page, shortDate, Text, Touchable, useFeedback, type BarMenu, type IconName } from '@/ui';
 
 const GROUP_ICONS: Record<GroupBy, IconName> = { room: 'rooms', company: 'person.2.fill', waiting: 'hourglass' };
 
@@ -66,10 +72,16 @@ function matchesQuery(item: Item, q: string, name: (id: string | null) => string
 }
 
 export default function JobScreen() {
-  const { jobId } = useLocalSearchParams<{ jobId: string }>();
+  const { jobId, template: templateParam } = useLocalSearchParams<{ jobId: string; template?: string }>();
   const data = useData();
   const feedback = useFeedback();
-  const job = data.useJobs().find((j) => j.id === jobId);
+  const jobs = data.useJobs();
+  const job = jobs.find((j) => j.id === jobId);
+  const copied = useClipboard();
+  const formOptions = useFormOptions(jobId, '');
+  // Opened from a template's Add to a Job: its sheet comes up straight away.
+  const [templateSheet, setTemplateSheet] = useState(!!templateParam);
+  const [pasting, setPasting] = useState(false);
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId);
   const locations = data.useLocations(jobId);
@@ -248,6 +260,7 @@ export default function JobScreen() {
         actions: [
           { label: 'Activity', icon: 'clock', onPress: openActivity, testID: 'activity' },
           ...(walked > 0 ? [{ label: 'Start a New Walk', icon: 'rooms' as IconName, onPress: newWalk, testID: 'new-walk' }] : []),
+          { label: 'Add From a Template', icon: 'templates', onPress: () => setTemplateSheet(true), testID: 'add-template' },
           { label: 'Job Setup', icon: 'slider', onPress: openSetup, testID: 'job-setup' },
           { label: 'Item Form', icon: 'list.bullet', onPress: () => router.push('/settings/item-form'), testID: 'item-form' },
         ],
@@ -268,9 +281,49 @@ export default function JobScreen() {
           <Button label="Clear the Filters" variant="tinted" onPress={() => setView({ ...view, filters: NO_FILTERS })} />
         </View>
       </EmptyState>
+    ) : items.every((i) => i.status === 'removed') ? (
+      <EmptyState icon="templates" title="Nothing on the List Yet" message="Walk it with the camera, or start from a template of what always needs doing.">
+        <View style={{ marginTop: 14 }}>
+          <Button label="Add From a Template" variant="tinted" onPress={() => setTemplateSheet(true)} testID="empty-template" />
+        </View>
+      </EmptyState>
     ) : (
       <EmptyState icon="checkmark.circle.fill" title="Nothing Open" message="Every item on this job is complete." />
     );
+  /** Copied items into a location picked from this job. */
+  async function pasteInto(locationId: string) {
+    setPasting(false);
+    if (!copied) return;
+    const plan = pastePlan(copied.items, { jobId, locationId }, items, randomUUID);
+    const where = locations.find((l) => l.id === locationId)?.label ?? 'there';
+    if (plan.items.length === 0) {
+      feedback.toast({ message: `Already on the list in ${where}.` });
+      return;
+    }
+    const ids = await data.addItems(plan.items);
+    haptic.success();
+    feedback.toast({
+      message: `Pasted ${itemsWord(ids.length)} in ${where}${plan.skipped.length > 0 ? `. ${plan.skipped.length} already there` : ''}`,
+      action: { label: 'Undo', onPress: () => void data.updateItems(ids.map((id) => ({ id, patch: { status: 'removed' } }))) },
+    });
+  }
+  const pasteRow =
+    copied && locations.length > 0 && !q ? (
+      <View style={styles.paste} testID="job-paste-banner">
+        <Icon name="clipboard" size={18} color={colors.tint} />
+        <Text variant="subheadline" style={{ flex: 1 }} numberOfLines={2}>
+          {itemsWord(copied.items.length)} copied{copied.jobId === jobId ? '' : ` from ${jobs.find((j) => j.id === copied.jobId)?.name ?? 'another job'}`}
+        </Text>
+        <Touchable feedback="opacity" onPress={() => setPasting(true)} accessibilityRole="button" testID="job-paste" hitSlop={8}>
+          <Text variant="subheadline" weight="600" color={colors.tint}>
+            Paste
+          </Text>
+        </Touchable>
+        <Touchable feedback="opacity" onPress={() => clipboard.clear()} accessibilityRole="button" accessibilityLabel="Forget what was copied" hitSlop={10}>
+          <Icon name="xmark.circle.fill" size={18} color={colors.chevron} />
+        </Touchable>
+      </View>
+    ) : null;
   // The filter is at the top, with how the job is grouped beside it.
   const filterBar = (
     <FilterBar
@@ -355,6 +408,7 @@ export default function JobScreen() {
                 <View>
                   {scroll.header}
                   {filterBar}
+                  {pasteRow}
                   {draftsRow}
                   {walkRow}
                 </View>
@@ -391,6 +445,15 @@ export default function JobScreen() {
             />
           )
         }
+      />
+      <AddTemplateSheet jobId={jobId} templateId={templateParam ?? null} visible={templateSheet} onClose={() => setTemplateSheet(false)} />
+      <OptionPicker
+        visible={pasting}
+        title={copied ? `Paste ${itemsWord(copied.items.length)} In` : 'Paste In'}
+        options={formOptions.roomOptions}
+        value={null}
+        onSelect={(locationId) => void pasteInto(locationId)}
+        onClose={() => setPasting(false)}
       />
       <ViewSheet
         jobId={jobId}
@@ -478,6 +541,18 @@ function GroupRow({
 }
 
 const styles = StyleSheet.create({
+  paste: {
+    minHeight: 48,
+    marginHorizontal: layout.margin,
+    marginTop: 4,
+    marginBottom: 6,
+    paddingHorizontal: 14,
+    borderRadius: layout.radius,
+    backgroundColor: colors.chipOn,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   drafts: {
     minHeight: 46,
     flexDirection: 'row',
