@@ -13,6 +13,7 @@
     "test:extension": "node apps/extension/build.mjs && tsx tools/extension-e2e.ts",
     "phase0": "tsx tools/phase0.ts",
     "test:db": "bash tools/db-test.sh",
+    "test:live-writes": "tsx --tsconfig tools/live-writes.tsconfig.json tools/live-writes-db.ts",
     "preview:build": "cd apps/mobile && EXPO_NO_DOTENV=1 npx expo export --platform web && cd ../.. && node tools/build-preview.mjs",
     "test:preview": "tsx tools/preview-e2e.ts",
     "import:buildertrend": "tsx tools/import-buildertrend.ts"

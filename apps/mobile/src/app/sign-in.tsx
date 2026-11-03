@@ -1,6 +1,7 @@
 // Sign in: your Ross Built email, then the six digit code it gets. Only people an admin has added
 // under People get a code, so there is no password and no account to make. On the preview page no
-// email is sent: an email from People and any six digits sign in.
+// email is sent: an email from People and any six digits sign in. On the iPhone, the first sign in
+// waits here while the jobs come down to the phone.
 
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -11,6 +12,7 @@ import { Banner, Button, haptic, ListRow, ListSection, ListTextField, Page, Text
 
 export default function SignInScreen() {
   const data = useData();
+  const sync = data.useSync();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'email' | 'code'>('email');
@@ -57,7 +59,29 @@ export default function SignInScreen() {
       <Text variant="subheadline" color={colors.secondary} style={styles.lead}>
         {`${APP_NAME}: every job's list, room by room, and the schedule it builds.`}
       </Text>
-      {step === 'email' ? (
+      {sync.gettingJobs ? (
+        <ListSection
+          header="Signed In"
+          footer={
+            problem ??
+            (sync.online
+              ? 'The first time, every job you see comes down to this phone. It takes a moment.'
+              : 'The first time, every job you see comes down to this phone. It needs a signal.')
+          }
+          footerTone={problem ? 'danger' : 'default'}
+        >
+          <ListRow title="Getting Your Jobs" testID="sign-in-getting" />
+          <ListRow
+            title="Sign Out"
+            tone="tint"
+            onPress={() => {
+              setProblem(null);
+              data.signOut().catch((e: unknown) => setProblem(e instanceof Error ? e.message : 'That did not go. Try again.'));
+            }}
+            testID="sign-in-sign-out"
+          />
+        </ListSection>
+      ) : step === 'email' ? (
         <>
           <ListSection
             footer={problem ?? 'Your Ross Built email. We send it a six digit code to sign in, so there is no password to remember.'}

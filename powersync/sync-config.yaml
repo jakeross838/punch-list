@@ -49,4 +49,5 @@ streams:
     with:
       me: SELECT id FROM people WHERE email = auth.parameter('email') AND active = true
     queries:
-      - SELECT * FROM person_settings WHERE person_id IN me
+      # The row has no id of its own: on the phone its id is the person's.
+      - SELECT person_id AS id, org, person_id, item_form, job_view, updated_at FROM person_settings WHERE person_id IN me

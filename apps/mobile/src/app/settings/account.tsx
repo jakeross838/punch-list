@@ -1,6 +1,7 @@
 // Your account: who you are signed in as, what you do at Ross Built and what you see, and the jobs
-// you are on and as what. An admin changes these in People. Sign Out clears what is on this phone;
-// it all comes back when you sign in again.
+// you are on and as what. An admin changes these in People. On the iPhone, This Phone says whether
+// every change made here has gone up, and anything the server turned down. Sign Out clears what is
+// on this phone; it all comes back when you sign in again. It waits until every change has gone up.
 
 import { isAdmin, PART_LABELS, ROLE_HINTS, ROLE_LABELS, SEES_LABELS } from '@punch/core';
 import Constants from 'expo-constants';
@@ -17,6 +18,7 @@ export default function AccountScreen() {
   const me = data.useMe();
   const jobs = data.useJobs();
   const team = data.useTeams().filter((t) => t.personId === me?.id);
+  const sync = data.useSync();
   // Signing out: the screen goes as the sign in comes up.
   if (!me) return <Page title="Account" backLabel="Jobs" />;
   const admin = isAdmin(me);
@@ -32,7 +34,10 @@ export default function AccountScreen() {
           destructive: true,
           onPress: () => {
             haptic.tap();
-            void data.signOut();
+            data.signOut().catch((e: unknown) => {
+              haptic.warning();
+              feedback.toast({ message: e instanceof Error ? e.message : 'That did not go. Try again.' });
+            });
           },
         },
       ],
@@ -65,6 +70,25 @@ export default function AccountScreen() {
           ) : null;
         })}
       </ListSection>
+      {data.mode === 'live' ? (
+        <ListSection
+          header="This Phone"
+          footer={
+            sync.refused.length > 0
+              ? 'The server turned these down, so they are no longer on the phone. Make them again, or ask an admin.'
+              : sync.waiting > 0
+                ? 'Changes made here go up on their own when there is a signal.'
+                : 'Every change made on this phone has gone up.'
+          }
+        >
+          <ListRow title="Signal" value={sync.online ? 'Connected' : 'No Signal'} testID="account-signal" />
+          <ListRow title="Waiting to Go Up" value={sync.waiting === 0 ? 'Nothing' : `${sync.waiting} ${sync.waiting === 1 ? 'Change' : 'Changes'}`} testID="account-waiting" />
+          {sync.refused.map((r) => (
+            <ListRow key={r.id} title={r.what} subtitle={formatWhen(r.at)} />
+          ))}
+          {sync.refused.length > 0 ? <ListRow title="Clear This List" tone="tint" onPress={() => void data.clearRefused()} testID="account-clear-refused" /> : null}
+        </ListSection>
+      ) : null}
       <ListSection>
         <ListRow title="Sign Out" tone="destructive" onPress={signOut} testID="sign-out" />
       </ListSection>
@@ -73,6 +97,13 @@ export default function AccountScreen() {
       </Text>
     </Page>
   );
+}
+
+/** When the server turned a change down, the way a person says it. */
+function formatWhen(at: string): string {
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-US', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 const styles = StyleSheet.create({

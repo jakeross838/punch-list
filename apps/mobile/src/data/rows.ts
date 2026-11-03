@@ -139,7 +139,7 @@ export const rowToCompanyLink = (r: Row): CompanyLink => ({
   revoked: bool(r.revoked),
 });
 
-export const rowToJobCompany = (r: Row): JobCompany => ({ jobId: text(r.job_id), companyId: text(r.company_id), tradeId: text(r.trade_id) });
+export const rowToJobCompany = (r: Row): JobCompany => ({ id: text(r.id), jobId: text(r.job_id), companyId: text(r.company_id), tradeId: text(r.trade_id) });
 
 export const rowToItem = (r: Row): Item => ({
   id: text(r.id),
@@ -358,8 +358,11 @@ export const JSON_COLUMNS: Record<string, string[]> = {
   person_settings: ['item_form', 'job_view'],
 };
 
-/** The column a table's rows are found by on the server, where it is not id: a company link is its token. */
-export const KEY_COLUMNS: Record<string, string> = { company_links: 'token' };
+/**
+ * The column a table's rows are found by on the server, where it is not id: a company link is its
+ * token, and a person's settings are theirs by person.
+ */
+export const KEY_COLUMNS: Record<string, string> = { company_links: 'token', person_settings: 'person_id' };
 
 export function toServerRow(table: string, data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...data };

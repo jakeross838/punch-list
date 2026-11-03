@@ -1,0 +1,812 @@
+// The app's data rules, the same on the preview page and on the iPhone: what every change does
+// (the trade follows the company, a ready item waits on nothing, a task done frees what waited on
+// it, what an admin alone may change, and the checks on names and emails). Where the changes are
+// kept is up to the backend: in memory on the preview page, in the phone's database on the iPhone,
+// which sends them up. There the database numbers items, puts whoever an item is assigned to on the
+// job's team, counts how often each standard title is used, and keeps the log; the preview does it
+// all itself.
+
+import { randomUUID } from 'expo-crypto';
+import { useMemo, useSyncExternalStore } from 'react';
+import {
+  contactProblem,
+  isAdmin,
+  isEmail,
+  releasedBy,
+  renamedHoldups,
+  seesJob,
+  tidyComment,
+  tidyContact,
+  tidyEmail,
+  tidyName,
+  tidyTitle,
+  type ActivityDetail,
+  type ActivityKind,
+  type Comment,
+  type Contact,
+  type Item,
+  type Person,
+  type Photo,
+  type TeamMember,
+  type Visit,
+} from '@punch/core';
+import type { DataApi, ItemPatch, NewItem, SyncInfo } from './api';
+import type { SampleState } from './sample';
+
+export type State = SampleState;
+
+/** Something that happened, besides an item's fields changing: who and when are added when it is logged. */
+export interface Happened {
+  jobId: string;
+  itemId?: string | null;
+  kind: Exclude<ActivityKind, 'item_created' | 'item_changed'>;
+  detail?: ActivityDetail;
+  /** Someone other than the signed-in person: null for the company, on its page. */
+  personId?: string | null;
+}
+
+/** Where the changes are kept. */
+export interface Keeper {
+  mode: DataApi['mode'];
+  /**
+   * The server numbers items, puts whoever an item is assigned to on the job's team, counts how
+   * often each standard title is used and keeps the log, so the app leaves those to it.
+   */
+  server: boolean;
+  get(): State;
+  subscribe(listener: () => void): () => void;
+  /** Keeps the parts of the state that changed. What happened is for the preview's log; the database keeps its own. */
+  save(next: Partial<State>, happened?: Happened[]): void | Promise<void>;
+  /** Keeps a new photo's picture where it can be shown from, named for the photo. */
+  keepPhoto(uri: string, id: string): Promise<string>;
+}
+
+/** What differs between the backends besides where the changes are kept. */
+export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signOut'> &
+  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'previewAs'>>;
+
+const now = () => new Date().toISOString();
+
+/**
+ * The trade follows the company, as the database has it: a trade the company does on the job stays,
+ * otherwise the first one it does there, or its usual trade.
+ */
+function tradeFollows(state: State, item: Item): Item {
+  if (!item.companyId) return item;
+  const onJob = state.jobCompanies.filter((jc) => jc.jobId === item.jobId && jc.companyId === item.companyId);
+  if (item.tradeId && onJob.some((jc) => jc.tradeId === item.tradeId)) return item;
+  const order = (id: string) => state.trades.find((t) => t.id === id);
+  const first = [...onJob].sort((a, b) => (order(a.tradeId)?.sortOrder ?? 0) - (order(b.tradeId)?.sortOrder ?? 0))[0]?.tradeId;
+  const tradeId = first ?? state.companies.find((c) => c.id === item.companyId)?.defaultTradeId ?? item.tradeId;
+  return tradeId === item.tradeId ? item : { ...item, tradeId };
+}
+
+/**
+ * What the database does on every item write: the trade follows the company, a ready item waits
+ * on nothing, and a task done or removed frees what waited on it (an item with nothing left to
+ * wait on is ready).
+ */
+function settle(state: State, before: Item[], after: Item[]): Item[] {
+  const was = new Map(before.map((i) => [i.id, i]));
+  let items = after.map((i) => (was.get(i.id) === i ? i : tradeFollows(state, i))).map((i) =>
+    i.ready && (i.waitingOn.length > 0 || i.waitingOnItems.length > 0 || i.readyBy !== null) ? { ...i, waitingOn: [], waitingOnItems: [], readyBy: null } : i,
+  );
+  const wasOpen = new Set(before.filter((i) => i.status === 'open').map((i) => i.id));
+  for (const done of items.filter((i) => wasOpen.has(i.id) && i.status !== 'open')) {
+    const freed = new Map(releasedBy(done.id, items).map((r) => [r.item.id, r.patch]));
+    if (freed.size > 0) items = items.map((i) => (freed.has(i.id) ? { ...i, ...freed.get(i.id)!, updatedAt: now() } : i));
+  }
+  return items;
+}
+
+/** What only an admin may do, refused the way the database refuses it. */
+function adminOnly(state: State): void {
+  if (!isAdmin(state.me)) throw new Error('Only an admin can change that.');
+}
+
+/**
+ * Assigning puts the person on the job's team, as the database does: on it as Field when they were
+ * not on it already.
+ */
+function joinTeams(state: State, items: Item[]): { team: TeamMember[]; happened: Happened[] } {
+  let team = state.team;
+  const happened: Happened[] = [];
+  for (const i of items) {
+    if (!i.assignedTo || team.some((t) => t.jobId === i.jobId && t.personId === i.assignedTo)) continue;
+    team = [...team, { id: randomUUID(), jobId: i.jobId, personId: i.assignedTo, part: 'field' }];
+    happened.push({ jobId: i.jobId, kind: 'team_added', detail: { person_id: i.assignedTo, part: 'field' } });
+  }
+  return { team, happened };
+}
+
+/** A template's name as the database keeps it: trimmed, one space between words, and its own among the templates in use. */
+function templateName(state: State, name: string, id: string | null): string {
+  const clean = name.trim().replace(/\s+/g, ' ');
+  if (clean === '') throw new Error('Give the template a name.');
+  if (state.templates.some((t) => t.id !== id && t.active && t.name.toLowerCase() === clean.toLowerCase())) throw new Error('There is a template with that name already.');
+  return clean;
+}
+
+/** A person as the database keeps them: the email tidied and checked, the name trimmed. */
+function checkPerson(state: State, p: Pick<Person, 'name' | 'email'>, id: string | null): void {
+  if (p.name.trim() === '') throw new Error('Give them a name.');
+  if (!isEmail(p.email)) throw new Error('That email does not look right.');
+  if (state.people.some((x) => x.id !== id && x.email === p.email)) throw new Error('Someone already has that email.');
+}
+
+const visitDetail = (v: { id: string; companyId: string; start: string; days: number; confirmed: boolean }): ActivityDetail => ({
+  visit_id: v.id,
+  company_id: v.companyId,
+  start: v.start,
+  days: v.days,
+  confirmed: v.confirmed,
+});
+
+/** A comment as the database logs it in the job's activity. */
+const commentDetail = (c: Comment): ActivityDetail => ({
+  comment_id: c.id,
+  company_id: c.companyId,
+  from_company: c.fromCompany,
+  author_name: c.authorName,
+  internal: c.internal,
+  body: c.body.slice(0, 200),
+});
+
+/** A new link's token: 64 random hex characters, never short enough to guess. */
+const newToken = () => `${randomUUID()}${randomUUID()}`.replace(/-/g, '').toLowerCase();
+
+export function makeApi(keeper: Keeper, extras: Extras): DataApi {
+  const get = keeper.get;
+  const save = (next: Partial<State>, happened: Happened[] = []) => keeper.save(next, happened);
+  const useStore = (): State => useSyncExternalStore(keeper.subscribe, get, get);
+
+  /** Saves items, with whoever they are now assigned to on the team (on the phone, the database does that). */
+  const saveItems = async (items: Item[], next: Partial<State> = {}, happened: Happened[] = []) => {
+    const state = get();
+    if (keeper.server) return save({ ...next, items }, happened);
+    const joined = joinTeams(state, items.filter((i) => i.assignedTo && state.items.find((x) => x.id === i.id)?.assignedTo !== i.assignedTo));
+    return save({ ...next, items, team: joined.team }, [...happened, ...joined.happened]);
+  };
+
+  const api: DataApi = {
+    mode: keeper.mode,
+    useMe:
+      extras.useMe ??
+      (() => {
+        const s = useStore();
+        return s.signedIn ? s.me : null;
+      }),
+    usePeople: () => useStore().people,
+    useJobs: () => {
+      const s = useStore();
+      return useMemo(() => s.jobs.filter((j) => seesJob(s.me, j.id, s.team)), [s.jobs, s.me, s.team]);
+    },
+    useTemplates: () => useStore().templates,
+    useTemplateItems: () => useStore().templateItems,
+    useTeams: () => {
+      const s = useStore();
+      return useMemo(() => s.team.filter((t) => seesJob(s.me, t.jobId, s.team)), [s.team, s.me]);
+    },
+    useAssigned: (personId) => {
+      const s = useStore();
+      return useMemo(
+        () => s.items.filter((i) => i.assignedTo === personId && i.status !== 'removed' && seesJob(s.me, i.jobId, s.team)),
+        [s.items, s.me, s.team, personId],
+      );
+    },
+    useLocations: (jobId) => {
+      const s = useStore();
+      return useMemo(() => s.locations.filter((l) => l.jobId === jobId), [s.locations, jobId]);
+    },
+    useItems: (jobId) => {
+      const s = useStore();
+      return useMemo(() => s.items.filter((i) => i.jobId === jobId), [s.items, jobId]);
+    },
+    usePhotos: (jobId) => {
+      const s = useStore();
+      return useMemo(
+        () => s.photos.filter((p) => p.jobId === jobId && !p.removed).sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt)),
+        [s.photos, jobId],
+      );
+    },
+    useTrades: () => useStore().trades,
+    useCompanies: () => useStore().companies,
+    useContacts: () => useStore().contacts,
+    useCompanyLinks: (jobId) => {
+      const s = useStore();
+      return useMemo(() => s.links.filter((l) => l.jobId === jobId && !l.revoked), [s.links, jobId]);
+    },
+    useJobCompanies: (jobId) => {
+      const s = useStore();
+      return useMemo(() => s.jobCompanies.filter((jc) => jc.jobId === jobId), [s.jobCompanies, jobId]);
+    },
+    useWaitingOnExtras: (jobId) => useStore().waitingOn[jobId] ?? NO_LABELS,
+    useTitles: () => useStore().titles,
+    useCustomFields: () => useStore().customFields,
+    useFormSettings: () => useStore().formSettings,
+    useViewSettings: () => useStore().viewSettings,
+    useVisits: (jobId) => {
+      const s = useStore();
+      return useMemo(() => s.visits.filter((v) => v.jobId === jobId && !v.removed), [s.visits, jobId]);
+    },
+    useSends: (jobId) => {
+      const s = useStore();
+      return useMemo(() => s.sends.filter((x) => x.jobId === jobId && !x.removed), [s.sends, jobId]);
+    },
+    useComments: (jobId) => {
+      const s = useStore();
+      return useMemo(() => s.comments.filter((c) => c.jobId === jobId), [s.comments, jobId]);
+    },
+    useActivity:
+      extras.useActivity ??
+      ((jobId) => {
+        const s = useStore();
+        return useMemo(() => s.activity.filter((a) => a.jobId === jobId), [s.activity, jobId]);
+      }),
+
+    async createJob({ name, address, projectManagerId }) {
+      const state = get();
+      adminOnly(state);
+      const id = randomUUID();
+      const pm = projectManagerId ? state.people.find((p) => p.id === projectManagerId && p.active) : undefined;
+      await save(
+        {
+          jobs: [...state.jobs, { id, name, address, closed: false }],
+          team: pm ? [...state.team, { id: randomUUID(), jobId: id, personId: pm.id, part: 'project_manager' }] : state.team,
+          ...(keeper.server ? {} : { counters: { ...state.counters, [id]: 0 } }),
+        },
+        pm ? [{ jobId: id, kind: 'team_added', detail: { person_id: pm.id, part: 'project_manager' } }] : [],
+      );
+      return id;
+    },
+    async updateJob(id, patch) {
+      const state = get();
+      adminOnly(state);
+      const job = state.jobs.find((j) => j.id === id);
+      if (!job) return;
+      const happened: Happened[] = [];
+      if (patch.name !== undefined && patch.name !== job.name) happened.push({ jobId: id, kind: 'job_renamed', detail: { from: job.name, to: patch.name } });
+      if (patch.address !== undefined && patch.address !== job.address) happened.push({ jobId: id, kind: 'job_address_changed', detail: { from: job.address, to: patch.address } });
+      if (patch.closed !== undefined && patch.closed !== job.closed) happened.push({ jobId: id, kind: patch.closed ? 'job_closed' : 'job_reopened' });
+      await save({ jobs: state.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)) }, happened);
+    },
+    async addPerson(input) {
+      const state = get();
+      adminOnly(state);
+      const person: Person = { id: randomUUID(), name: input.name.trim(), email: tidyEmail(input.email), phone: input.phone?.trim() || null, role: input.role, sees: input.sees, active: true };
+      checkPerson(state, person, null);
+      await save({ people: [...state.people, person] });
+      return person.id;
+    },
+    async updatePerson(id, patch) {
+      const state = get();
+      adminOnly(state);
+      const was = state.people.find((p) => p.id === id);
+      if (!was) return;
+      const next: Person = {
+        ...was,
+        ...patch,
+        name: patch.name !== undefined ? patch.name.trim() : was.name,
+        email: patch.email !== undefined ? tidyEmail(patch.email) : was.email,
+        phone: patch.phone !== undefined ? patch.phone?.trim() || null : was.phone,
+      };
+      checkPerson(state, next, id);
+      const people = state.people.map((p) => (p.id === id ? next : p));
+      if (!people.some(isAdmin)) throw new Error('Ross Built needs at least one admin. Make someone else an admin first.');
+      await save({ people, me: state.me.id === id ? next : state.me });
+    },
+    async setTeamMember(jobId, personId, part) {
+      const state = get();
+      adminOnly(state);
+      const was = state.team.find((t) => t.jobId === jobId && t.personId === personId);
+      if (part === null) {
+        if (!was) return;
+        await save({ team: state.team.filter((t) => t !== was) }, [{ jobId, kind: 'team_removed', detail: { person_id: personId, part: was.part } }]);
+      } else if (!was) {
+        await save({ team: [...state.team, { id: randomUUID(), jobId, personId, part }] }, [{ jobId, kind: 'team_added', detail: { person_id: personId, part } }]);
+      } else if (was.part !== part) {
+        await save({ team: state.team.map((t) => (t === was ? { ...t, part } : t)) }, [{ jobId, kind: 'team_changed', detail: { person_id: personId, part, was_part: was.part } }]);
+      }
+    },
+    async addTemplate({ name, items = [] }) {
+      const state = get();
+      adminOnly(state);
+      const id = randomUUID();
+      const clean = templateName(state, name, null);
+      const ids = new Map(items.map((i) => [i.key, randomUUID()]));
+      const tasks = items.map((i, n) => ({
+        id: ids.get(i.key)!,
+        templateId: id,
+        title: tidyTitle(i.title),
+        description: i.description.trim(),
+        kind: i.kind,
+        tradeId: i.tradeId,
+        hours: i.hours,
+        place: i.place,
+        waitsOn: i.waitsOn.flatMap((k) => (ids.has(k) ? [ids.get(k)!] : [])),
+        sortOrder: n + 1,
+        active: true,
+      }));
+      const sortOrder = Math.max(0, ...state.templates.map((t) => t.sortOrder)) + 1;
+      await save({ templates: [...state.templates, { id, name: clean, active: true, sortOrder }], templateItems: [...state.templateItems, ...tasks] });
+      return id;
+    },
+    async updateTemplate(id, patch) {
+      const state = get();
+      adminOnly(state);
+      const was = state.templates.find((t) => t.id === id);
+      if (!was) return;
+      const name = patch.name !== undefined ? templateName(state, patch.name, id) : was.name;
+      if (patch.active === true && !was.active) templateName(state, was.name, id);
+      await save({ templates: state.templates.map((t) => (t.id === id ? { ...t, ...patch, name } : t)) });
+    },
+    async addTemplateItem(templateId, input) {
+      const state = get();
+      adminOnly(state);
+      const title = tidyTitle(input.title);
+      if (title === '') throw new Error('Give the task a title.');
+      const id = randomUUID();
+      const sortOrder = Math.max(0, ...state.templateItems.filter((t) => t.templateId === templateId).map((t) => t.sortOrder)) + 1;
+      const own = new Set(state.templateItems.filter((t) => t.templateId === templateId).map((t) => t.id));
+      const task = { ...input, id, templateId, title, description: input.description.trim(), waitsOn: [...new Set(input.waitsOn)].filter((w) => own.has(w)), sortOrder, active: true };
+      await save({ templateItems: [...state.templateItems, task] });
+      return id;
+    },
+    async updateTemplateItem(id, patch) {
+      const state = get();
+      adminOnly(state);
+      const was = state.templateItems.find((t) => t.id === id);
+      if (!was) return;
+      const title = patch.title !== undefined ? tidyTitle(patch.title) : was.title;
+      if (title === '') throw new Error('Give the task a title.');
+      const own = new Set(state.templateItems.filter((t) => t.templateId === was.templateId && t.id !== id).map((t) => t.id));
+      const waitsOn = patch.waitsOn !== undefined ? [...new Set(patch.waitsOn)].filter((w) => own.has(w)) : was.waitsOn;
+      await save({ templateItems: state.templateItems.map((t) => (t.id === id ? { ...t, ...patch, title, waitsOn } : t)) });
+    },
+    previewAs: extras.previewAs,
+    async addLocations(jobId, parsed) {
+      const state = get();
+      adminOnly(state);
+      const existing = state.locations.filter((l) => l.jobId === jobId);
+      const byLabel = new Map(existing.map((l) => [l.label.toLowerCase(), l]));
+      // One removed before comes back where it was.
+      const back = new Set(
+        parsed.flatMap((p) => {
+          const was = byLabel.get(p.label.toLowerCase());
+          return was && !was.active ? [was.id] : [];
+        }),
+      );
+      let order = existing.reduce((m, l) => Math.max(m, l.sortOrder), 0);
+      const added = parsed
+        .filter((p) => !byLabel.has(p.label.toLowerCase()))
+        .map((p) => ({ ...p, id: randomUUID(), jobId, active: true, sortOrder: ++order, walkedAt: null }));
+      await save({ locations: [...state.locations.map((l) => (back.has(l.id) ? { ...l, active: true } : l)), ...added] }, [
+        ...added.map((l): Happened => ({ jobId, kind: 'location_added', detail: { location_id: l.id, label: l.label } })),
+        ...existing.filter((l) => back.has(l.id)).map((l): Happened => ({ jobId, kind: 'location_restored', detail: { location_id: l.id, label: l.label } })),
+      ]);
+      return added.length + back.size;
+    },
+    async setWalked(locationIds, walked) {
+      const state = get();
+      const on = new Set(locationIds);
+      const at = walked ? now() : null;
+      await save({ locations: state.locations.map((l) => (on.has(l.id) ? { ...l, walkedAt: at } : l)) });
+    },
+    async reorderLocations(jobId, orderedIds) {
+      const state = get();
+      adminOnly(state);
+      const moving = orderedIds.map((id) => state.locations.find((l) => l.id === id && l.jobId === jobId)).filter((l) => l !== undefined);
+      const places = moving.map((l) => l.sortOrder).sort((a, b) => a - b);
+      const next = new Map(moving.map((l, i) => [l.id, places[i]!]));
+      await save({ locations: state.locations.map((l) => (next.has(l.id) ? { ...l, sortOrder: next.get(l.id)! } : l)) });
+    },
+    async updateLocation(id, patch) {
+      const state = get();
+      adminOnly(state);
+      const was = state.locations.find((l) => l.id === id);
+      if (!was) return;
+      const happened: Happened[] = [];
+      if (patch.label !== undefined && patch.label !== was.label) {
+        happened.push({ jobId: was.jobId, kind: 'location_renamed', detail: { location_id: id, from: was.label, to: patch.label } });
+      }
+      if (patch.active !== undefined && patch.active !== was.active) {
+        happened.push({ jobId: was.jobId, kind: patch.active ? 'location_restored' : 'location_removed', detail: { location_id: id, label: patch.label ?? was.label } });
+      }
+      await save({ locations: state.locations.map((l) => (l.id === id ? { ...l, ...patch } : l)) }, happened);
+    },
+    async createItem(input: NewItem) {
+      const state = get();
+      const id = randomUUID();
+      // On the phone the database numbers it, in the order items reach the server.
+      const number = keeper.server ? null : (state.counters[input.jobId] ?? 0) + 1;
+      const item: Item = { ...input, id, number, btExternalId: null, createdBy: state.me.id, createdAt: now(), updatedAt: now() };
+      if (keeper.server) {
+        await saveItems([...state.items, tradeFollows(state, item)]);
+        return id;
+      }
+      // A standard title used again moves up the suggestions.
+      const key = item.title.toLowerCase();
+      const titles = state.titles.map((t) => (t.title.toLowerCase() === key ? { ...t, uses: t.uses + 1 } : t));
+      await saveItems([...state.items, tradeFollows(state, item)], { titles, counters: { ...state.counters, [input.jobId]: number! } });
+      return id;
+    },
+    async addItems(planned) {
+      const state = get();
+      const counters = { ...state.counters };
+      const made: Item[] = planned.map((p) => {
+        let number: number | null = null;
+        if (!keeper.server) {
+          number = (counters[p.jobId] ?? 0) + 1;
+          counters[p.jobId] = number;
+        }
+        return tradeFollows(state, { ...p, number, position: null, btExternalId: null, createdBy: state.me.id, createdAt: now(), updatedAt: now() });
+      });
+      if (keeper.server) {
+        await saveItems([...state.items, ...made]);
+        return made.map((i) => i.id);
+      }
+      // Each standard title used again moves up the suggestions.
+      const used = new Map<string, number>();
+      for (const i of made) used.set(i.title.toLowerCase(), (used.get(i.title.toLowerCase()) ?? 0) + 1);
+      const titles = state.titles.map((t) => (used.has(t.title.toLowerCase()) ? { ...t, uses: t.uses + used.get(t.title.toLowerCase())! } : t));
+      await saveItems([...state.items, ...made], { titles, counters });
+      return made.map((i) => i.id);
+    },
+    async updateItem(id: string, patch: ItemPatch) {
+      const state = get();
+      await saveItems(settle(state, state.items, state.items.map((i) => (i.id === id ? { ...i, ...patch, updatedAt: now() } : i))));
+    },
+    async updateItems(changes) {
+      const state = get();
+      const byId = new Map(changes.map((c) => [c.id, c.patch]));
+      await saveItems(settle(state, state.items, state.items.map((i) => (byId.has(i.id) ? { ...i, ...byId.get(i.id), updatedAt: now() } : i))));
+    },
+    async addVisit({ itemIds, note, ...input }) {
+      const state = get();
+      const id = randomUUID();
+      const visit: Visit = {
+        ...input,
+        id,
+        note: note ?? '',
+        removed: false,
+        askedStart: null,
+        askedDays: null,
+        askedName: null,
+        askedAt: null,
+        createdBy: state.me.id,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      const on = new Set(itemIds);
+      await save(
+        {
+          visits: [...state.visits, visit],
+          items: state.items.map((i) => (on.has(i.id) ? { ...i, visitId: id, updatedAt: now() } : i)),
+        },
+        [{ jobId: visit.jobId, kind: 'visit_added', detail: visitDetail(visit) }],
+      );
+      return id;
+    },
+    async updateVisit(id, patch, itemIds) {
+      const state = get();
+      const was = state.visits.find((v) => v.id === id);
+      if (!was) return;
+      const changed = { ...was, ...patch, updatedAt: now() };
+      // New dates, or confirming it, answer what the company asked for, as the database does.
+      const answered = changed.start !== was.start || changed.days !== was.days || (changed.confirmed && !was.confirmed);
+      const visit = answered ? { ...changed, askedStart: null, askedDays: null, askedName: null, askedAt: null } : changed;
+      const on = itemIds ? new Set(itemIds) : null;
+      const moved = visit.start !== was.start || visit.days !== was.days || visit.confirmed !== was.confirmed;
+      await save(
+        {
+          visits: state.visits.map((v) => (v.id === id ? visit : v)),
+          items: on
+            ? state.items.map((i) =>
+                on.has(i.id) && i.visitId !== id ? { ...i, visitId: id, updatedAt: now() } : !on.has(i.id) && i.visitId === id ? { ...i, visitId: null, updatedAt: now() } : i,
+              )
+            : state.items,
+        },
+        moved ? [{ jobId: was.jobId, kind: 'visit_changed', detail: { ...visitDetail(visit), was_start: was.start, was_days: was.days, was_confirmed: was.confirmed } }] : [],
+      );
+    },
+    async keepVisitDates(id) {
+      const state = get();
+      await save({ visits: state.visits.map((v) => (v.id === id ? { ...v, askedStart: null, askedDays: null, askedName: null, askedAt: null, updatedAt: now() } : v)) });
+    },
+    companyConfirmVisit:
+      extras.companyConfirmVisit ??
+      (async ({ visitId, name }) => {
+        const state = get();
+        const was = state.visits.find((v) => v.id === visitId && !v.removed);
+        if (!was) throw new Error('That visit is not on this list');
+        const visit = { ...was, confirmed: true, askedStart: null, askedDays: null, askedName: null, askedAt: null, updatedAt: now() };
+        await save({ visits: state.visits.map((v) => (v.id === visitId ? visit : v)) }, [
+          { jobId: was.jobId, kind: 'visit_confirmed_by_company', detail: { ...visitDetail(visit), from_company: true, author_name: tidyName(name) }, personId: null },
+        ]);
+      }),
+    companyAskVisit:
+      extras.companyAskVisit ??
+      (async ({ visitId, start, days, name }) => {
+        const state = get();
+        const was = state.visits.find((v) => v.id === visitId && !v.removed);
+        if (!was) throw new Error('That visit is not on this list');
+        const visit = { ...was, confirmed: false, askedStart: start, askedDays: Math.max(1, days), askedName: tidyName(name), askedAt: now(), updatedAt: now() };
+        await save({ visits: state.visits.map((v) => (v.id === visitId ? visit : v)) }, [
+          {
+            jobId: was.jobId,
+            kind: 'visit_change_asked',
+            detail: { visit_id: was.id, company_id: was.companyId, start, days: Math.max(1, days), was_start: was.start, was_days: was.days, from_company: true, author_name: tidyName(name) },
+            personId: null,
+          },
+        ]);
+      }),
+    async removeVisit(id) {
+      const state = get();
+      const was = state.visits.find((v) => v.id === id);
+      if (!was) return;
+      await save(
+        {
+          visits: state.visits.map((v) => (v.id === id ? { ...v, removed: true, updatedAt: now() } : v)),
+          items: state.items.map((i) => (i.visitId === id ? { ...i, visitId: null, updatedAt: now() } : i)),
+        },
+        [{ jobId: was.jobId, kind: 'visit_removed', detail: visitDetail(was) }],
+      );
+    },
+    async addComment({ jobId, itemId, companyId, body, internal }) {
+      const state = get();
+      const text = tidyComment(body);
+      if (text === '') return '';
+      const item = itemId ? state.items.find((i) => i.id === itemId) : undefined;
+      const comment: Comment = {
+        id: randomUUID(),
+        jobId,
+        itemId,
+        // An item's comment is with the company doing the item, as the database keeps it.
+        companyId: item ? item.companyId : (companyId ?? null),
+        body: text,
+        personId: state.me.id,
+        fromCompany: false,
+        authorName: null,
+        internal,
+        removed: false,
+        createdAt: now(),
+      };
+      await save({ comments: [...state.comments, comment] }, [{ jobId, itemId, kind: 'comment_added', detail: commentDetail(comment) }]);
+      return comment.id;
+    },
+    async setCommentRemoved(id, removed) {
+      const state = get();
+      const was = state.comments.find((c) => c.id === id);
+      if (!was || was.personId !== state.me.id) return;
+      await save({ comments: state.comments.map((c) => (c.id === id ? { ...c, removed } : c)) });
+    },
+    addCompanyComment:
+      extras.addCompanyComment ??
+      (async ({ jobId, companyId, itemId, body, name }) => {
+        const state = get();
+        const text = tidyComment(body);
+        if (text === '') return '';
+        if (itemId && !state.items.some((i) => i.id === itemId && i.jobId === jobId && i.companyId === companyId)) throw new Error('That item is not on this list');
+        const comment: Comment = {
+          id: randomUUID(),
+          jobId,
+          itemId,
+          companyId,
+          body: text,
+          personId: null,
+          fromCompany: true,
+          authorName: tidyName(name),
+          internal: false,
+          removed: false,
+          createdAt: now(),
+        };
+        await save({ comments: [...state.comments, comment] }, [{ jobId, itemId, kind: 'comment_added', detail: commentDetail(comment), personId: null }]);
+        return comment.id;
+      }),
+    async recordSend({ jobId, list, itemIds, snapshot }) {
+      const state = get();
+      const id = randomUUID();
+      await save({ sends: [...state.sends, { id, jobId, list, itemIds, sentAt: now(), sentBy: state.me.id, removed: false, snapshot: snapshot ?? null }] }, [
+        { jobId, kind: 'list_sent', detail: { list, items: itemIds.length } },
+      ]);
+      return id;
+    },
+    async undoSend(id) {
+      const state = get();
+      const was = state.sends.find((x) => x.id === id);
+      if (!was || was.removed) return;
+      await save({ sends: state.sends.map((x) => (x.id === id ? { ...x, removed: true } : x)) }, [{ jobId: was.jobId, kind: 'list_undone', detail: { list: was.list } }]);
+    },
+    async addPhotos(list) {
+      const before = get();
+      const added: Photo[] = [];
+      for (const p of list) {
+        const id = randomUUID();
+        const order = Math.max(0, ...before.photos.filter((x) => x.itemId === p.itemId).map((x) => x.sortOrder), ...added.filter((x) => x.itemId === p.itemId).map((x) => x.sortOrder));
+        added.push({
+          id,
+          jobId: p.jobId,
+          itemId: p.itemId,
+          uri: await keeper.keepPhoto(p.uri, id),
+          storagePath: null,
+          width: p.width,
+          height: p.height,
+          marks: p.marks,
+          sortOrder: order + 1,
+          removed: false,
+          createdBy: before.me.id,
+          createdAt: now(),
+        });
+      }
+      // Keeping the pictures takes a moment: whatever changed meanwhile stays.
+      const state = get();
+      await save(
+        { photos: [...state.photos, ...added] },
+        added.map((p) => ({ jobId: p.jobId, itemId: p.itemId, kind: 'photo_added', detail: { photo_id: p.id } })),
+      );
+    },
+    async updatePhoto(id, patch) {
+      const state = get();
+      const was = state.photos.find((p) => p.id === id);
+      if (!was) return;
+      const happened: Happened[] = [];
+      if (patch.removed && !was.removed) happened.push({ jobId: was.jobId, itemId: was.itemId, kind: 'photo_removed', detail: { photo_id: id } });
+      else if (patch.marks && JSON.stringify(patch.marks) !== JSON.stringify(was.marks)) {
+        happened.push({ jobId: was.jobId, itemId: was.itemId, kind: 'photo_marked', detail: { photo_id: id } });
+      }
+      await save({ photos: state.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)) }, happened);
+    },
+    async addTrade(name) {
+      const state = get();
+      adminOnly(state);
+      const id = randomUUID();
+      await save({ trades: [...state.trades, { id, name, sortOrder: state.trades.length + 1 }] });
+      return id;
+    },
+    async reorderTrades(orderedIds) {
+      const state = get();
+      adminOnly(state);
+      const place = new Map(orderedIds.map((id, i) => [id, i + 1]));
+      await save({ trades: state.trades.map((t) => (place.has(t.id) ? { ...t, sortOrder: place.get(t.id)! } : t)) });
+    },
+    async addCompany({ name, defaultTradeId }) {
+      const state = get();
+      adminOnly(state);
+      const id = randomUUID();
+      await save({ companies: [...state.companies, { id, name, defaultTradeId, phone: null, email: null, active: true }] });
+      return id;
+    },
+    async addCompanyToJob(jobId, companyId, tradeId) {
+      const state = get();
+      adminOnly(state);
+      if (state.jobCompanies.some((jc) => jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) return;
+      await save({ jobCompanies: [...state.jobCompanies, { jobId, companyId, tradeId }] }, [{ jobId, kind: 'company_added', detail: { company_id: companyId, trade_id: tradeId } }]);
+    },
+    async updateCompany(id, patch) {
+      const state = get();
+      adminOnly(state);
+      const was = state.companies.find((c) => c.id === id);
+      if (!was) return;
+      if (patch.name !== undefined && patch.name.trim() === '') throw new Error('Give the company a name.');
+      const renamed = patch.name !== undefined && patch.name !== was.name;
+      const holdups = renamed ? new Map(renamedHoldups(state.items, was.name, patch.name!).map((h) => [h.id, h.waitingOn])) : new Map<string, string[]>();
+      // The new name shows on every job the company is on.
+      const jobs = renamed ? [...new Set(state.jobCompanies.filter((jc) => jc.companyId === id).map((jc) => jc.jobId))] : [];
+      await save(
+        {
+          companies: state.companies.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+          items: holdups.size > 0 ? state.items.map((i) => (holdups.has(i.id) ? { ...i, waitingOn: holdups.get(i.id)!, updatedAt: now() } : i)) : state.items,
+        },
+        jobs.map((jobId) => ({ jobId, kind: 'company_renamed', detail: { company_id: id, from: was.name, to: patch.name! } })),
+      );
+    },
+    async addContact(input) {
+      const state = get();
+      adminOnly(state);
+      const problem = contactProblem(input);
+      if (problem) throw new Error(problem);
+      const sortOrder = Math.max(0, ...state.contacts.filter((x) => x.companyId === input.companyId).map((x) => x.sortOrder)) + 1;
+      const contact: Contact = { ...tidyContact(input), id: randomUUID(), sortOrder, active: true };
+      await save({ contacts: [...state.contacts, contact] });
+      return contact.id;
+    },
+    async updateContact(id, patch) {
+      const state = get();
+      adminOnly(state);
+      const was = state.contacts.find((x) => x.id === id);
+      if (!was) return;
+      const next = tidyContact({ ...was, ...patch });
+      const problem = contactProblem(next);
+      if (problem) throw new Error(problem);
+      await save({ contacts: state.contacts.map((x) => (x.id === id ? next : x)) });
+    },
+    async companyLink(jobId, companyId) {
+      const state = get();
+      const live = state.links.find((l) => l.jobId === jobId && l.companyId === companyId && !l.revoked);
+      if (live) return live.token;
+      const token = newToken();
+      await save({ links: [...state.links, { token, jobId, companyId, createdAt: now(), revoked: false }] });
+      return token;
+    },
+    async revokeCompanyLink(token) {
+      const state = get();
+      await save({ links: state.links.map((l) => (l.token === token ? { ...l, revoked: true } : l)) });
+    },
+    async setJobCompanyTrade(jobId, companyId, fromTradeId, toTradeId) {
+      const state = get();
+      adminOnly(state);
+      if (fromTradeId === toTradeId) return;
+      const pair = (tradeId: string) => (jc: { jobId: string; companyId: string; tradeId: string }) => jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId;
+      // On the job for the new trade already: the two become one.
+      const merging = state.jobCompanies.some(pair(toTradeId));
+      const jobCompanies = merging
+        ? state.jobCompanies.filter((jc) => !pair(fromTradeId)(jc))
+        : state.jobCompanies.map((jc) => (pair(fromTradeId)(jc) ? { ...jc, tradeId: toTradeId } : jc));
+      await save(
+        {
+          jobCompanies,
+          items: state.items.map((i) => (i.jobId === jobId && i.companyId === companyId && i.tradeId === fromTradeId ? { ...i, tradeId: toTradeId, updatedAt: now() } : i)),
+        },
+        [
+          merging
+            ? { jobId, kind: 'company_removed', detail: { company_id: companyId, trade_id: fromTradeId } }
+            : { jobId, kind: 'company_trade_changed', detail: { company_id: companyId, from: fromTradeId, to: toTradeId } },
+        ],
+      );
+    },
+    async removeCompanyFromJob(jobId, companyId, tradeId) {
+      const state = get();
+      adminOnly(state);
+      if (!state.jobCompanies.some((jc) => jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) return;
+      await save({ jobCompanies: state.jobCompanies.filter((jc) => !(jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) }, [
+        { jobId, kind: 'company_removed', detail: { company_id: companyId, trade_id: tradeId } },
+      ]);
+    },
+    async setWaitingOnExtras(jobId, labels) {
+      const state = get();
+      await save({ waitingOn: { ...state.waitingOn, [jobId]: labels } });
+    },
+    async addTitle({ title, tradeId, hours }) {
+      const state = get();
+      adminOnly(state);
+      const id = randomUUID();
+      await save({ titles: [...state.titles, { id, title, tradeId, uses: 0, approved: true, hours: hours ?? null, rooms: [] }] });
+      return id;
+    },
+    async updateTitle(id, patch) {
+      const state = get();
+      adminOnly(state);
+      await save({ titles: state.titles.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
+    },
+    async addCustomField({ label, kind, options }) {
+      const state = get();
+      adminOnly(state);
+      const id = randomUUID();
+      const sortOrder = Math.max(0, ...state.customFields.map((f) => f.sortOrder)) + 1;
+      await save({ customFields: [...state.customFields, { id, label, kind, options, sortOrder, active: true }] });
+      return id;
+    },
+    async updateCustomField(id, patch) {
+      const state = get();
+      adminOnly(state);
+      await save({ customFields: state.customFields.map((f) => (f.id === id ? { ...f, ...patch } : f)) });
+    },
+    async setFormSettings(formSettings) {
+      await save({ formSettings });
+    },
+    async setViewSettings(viewSettings) {
+      await save({ viewSettings });
+    },
+    sendSignInCode: extras.sendSignInCode,
+    verifySignInCode: extras.verifySignInCode,
+    signOut: extras.signOut,
+    useSync: extras.useSync ?? (() => UP_TO_DATE),
+    clearRefused: extras.clearRefused ?? (async () => {}),
+  };
+  return api;
+}
+
+const NO_LABELS: string[] = [];
+
+/** Nothing waiting and nothing turned down: the preview has no server. */
+const UP_TO_DATE: SyncInfo = { gettingJobs: false, waiting: 0, refused: [], online: true };

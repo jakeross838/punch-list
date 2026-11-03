@@ -1,5 +1,5 @@
 // The phone's copy of the database. Mirrors supabase/migrations; booleans are 0 or 1 here.
-// Imported only by backend.native.tsx, never by the preview build.
+// Imported only by the iPhone's live backend (data/live), never by the preview build.
 
 import { column, Schema, Table } from '@powersync/react-native';
 
@@ -276,6 +276,7 @@ const company_links = new Table(
   { indexes: { job: ['job_id'] } },
 );
 
+/** Each person's own settings. The row's id is the person's id. */
 const person_settings = new Table({
   org: column.text,
   person_id: column.text,
@@ -309,6 +310,12 @@ const template_items = new Table(
   },
   { indexes: { template: ['template_id'] } },
 );
+
+/**
+ * Where each photo's picture is on this phone, by the photo's id: taken here and waiting to go up
+ * (uploaded 0), or up, or brought down from storage to show (uploaded 1). Never sent up.
+ */
+const photo_files = new Table({ uri: column.text, uploaded: column.integer }, { localOnly: true });
 
 /** Changes the server refused for good (a broken rule, not a lost signal). Kept on the phone, shown in the app. */
 const rejected_changes = new Table(
@@ -346,5 +353,6 @@ export const AppSchema = new Schema({
   comments,
   company_links,
   person_settings,
+  photo_files,
   rejected_changes,
 });

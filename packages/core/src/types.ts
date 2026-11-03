@@ -76,6 +76,8 @@ export interface Company {
 }
 
 export interface JobCompany {
+  /** The database row, on the phone; the preview's sample has none. */
+  id?: string;
   jobId: string;
   companyId: string;
   tradeId: string;

@@ -1,6 +1,7 @@
-// The one interface the screens use. backend.tsx implements it with sample data in memory, for the
-// preview link; the phone's, on PowerSync synced with Supabase, implements the same interface.
-// Every read is a hook that updates when the data changes; every write goes through the core rules.
+// The one interface the screens use. engine.ts implements it once, with the app's rules; the preview
+// keeps the changes in memory (previewBackend.tsx) and the iPhone in its own database, synced with
+// Supabase through PowerSync (live/). Every read is a hook that updates when the data changes;
+// every write goes through the core rules.
 
 import { createContext, useContext } from 'react';
 import type {
@@ -102,6 +103,18 @@ export interface NewSend {
   list: string;
   itemIds: string[];
   snapshot?: ScheduleSnapshot | null;
+}
+
+/** How this phone stands with the server. The preview has nothing to send. */
+export interface SyncInfo {
+  /** Signed in, with the jobs on their way down for the first time. */
+  gettingJobs: boolean;
+  /** Changes made on this phone that have not gone up yet, photos included. */
+  waiting: number;
+  /** Changes the server turned down for good, newest first: they are no longer on the phone. */
+  refused: { id: string; at: string; what: string }[];
+  /** Reaching the server right now. */
+  online: boolean;
 }
 
 /** A visit's dates, days, confirmation and note. New dates, or confirming it, answer what the company asked for. */
@@ -247,8 +260,12 @@ export interface DataApi {
   sendSignInCode(email: string): Promise<void>;
   /** Signs in with the code from the email. */
   verifySignInCode(email: string, code: string): Promise<void>;
-  /** Signs out; what is on the phone is cleared. */
+  /** Signs out; what is on the phone is cleared. Refused while changes made here have not gone up. */
   signOut(): Promise<void>;
+  /** How this phone stands with the server. */
+  useSync(): SyncInfo;
+  /** Clears the list of changes the server turned down. */
+  clearRefused(): Promise<void>;
 }
 
 export const DataContext = createContext<DataApi | null>(null);
