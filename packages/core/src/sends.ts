@@ -4,6 +4,10 @@ import type { ListSend } from './types';
 
 export const LIST_KEYS = {
   job: 'job',
+  /** The Three Week Look Ahead, on its own. */
+  lookahead: 'lookahead',
+  /** The Friday schedule email to every company: the look ahead and the whole schedule. */
+  schedule: 'schedule',
   company: (companyId: string) => `company:${companyId}`,
   party: (name: string) => `party:${name.trim().toLowerCase()}`,
 };

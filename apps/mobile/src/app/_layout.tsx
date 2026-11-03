@@ -2,6 +2,7 @@
 // page sheets for New Job, New Item, Send Lists and Item Form, and the camera over everything. The
 // preview page uses the JavaScript stack with the same iOS motion: screens slide in from the right,
 // sheets rise from the bottom while the screen behind shrinks back, and the camera rises full screen.
+// Signed out, the only screen is Sign In; signing in opens Jobs.
 
 import '@/ui/web-setup';
 import { Stack } from 'expo-router';
@@ -11,6 +12,7 @@ import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
+import { useData } from '@/data/api';
 import { DataProvider } from '@/data/backend';
 import { FeedbackProvider } from '@/ui';
 import { forSheetIOS } from '@/ui/sheetTransition';
@@ -20,6 +22,9 @@ const SCREENS = [
   'my',
   'settings/people/index',
   'settings/people/[personId]',
+  'settings/companies/index',
+  'settings/companies/[companyId]',
+  'settings/account',
   'settings/templates/index',
   'settings/templates/[templateId]',
   'jobs/[jobId]/index',
@@ -34,21 +39,26 @@ const SCREENS = [
 const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/send', 'settings/item-form'] as const;
 const CAMERA = 'jobs/[jobId]/capture';
 
-function NativeStack() {
+function NativeStack({ signedIn }: { signedIn: boolean }) {
   return (
     <Stack screenOptions={{ headerTintColor: colors.tint, contentStyle: { backgroundColor: colors.grouped } }}>
-      {SCREENS.map((name) => (
-        <Stack.Screen key={name} name={name} />
-      ))}
-      {SHEETS.map((name) => (
-        <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
-      ))}
-      <Stack.Screen name={CAMERA} options={{ presentation: 'fullScreenModal', headerShown: false, contentStyle: { backgroundColor: colors.black } }} />
+      <Stack.Protected guard={signedIn} redirectTo="/sign-in">
+        {SCREENS.map((name) => (
+          <Stack.Screen key={name} name={name} />
+        ))}
+        {SHEETS.map((name) => (
+          <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
+        ))}
+        <Stack.Screen name={CAMERA} options={{ presentation: 'fullScreenModal', headerShown: false, contentStyle: { backgroundColor: colors.black } }} />
+      </Stack.Protected>
+      <Stack.Protected guard={!signedIn} redirectTo="/">
+        <Stack.Screen name="sign-in" />
+      </Stack.Protected>
     </Stack>
   );
 }
 
-function WebStack() {
+function WebStack({ signedIn }: { signedIn: boolean }) {
   return (
     <JSStack
       screenOptions={{
@@ -60,36 +70,47 @@ function WebStack() {
         cardStyle: { flex: 1, backgroundColor: colors.grouped },
       }}
     >
-      {SCREENS.map((name) => (
-        <JSStack.Screen key={name} name={name} />
-      ))}
-      {SHEETS.map((name) => (
+      <JSStack.Protected guard={signedIn} redirectTo="/sign-in">
+        {SCREENS.map((name) => (
+          <JSStack.Screen key={name} name={name} />
+        ))}
+        {SHEETS.map((name) => (
+          <JSStack.Screen
+            key={name}
+            name={name}
+            options={{
+              presentation: 'modal',
+              animation: 'default',
+              ...TransitionPresets.ModalPresentationIOS,
+              cardStyleInterpolator: forSheetIOS,
+              detachPreviousScreen: false,
+              gestureEnabled: false,
+              cardStyle: { flex: 1, backgroundColor: colors.grouped },
+            }}
+          />
+        ))}
         <JSStack.Screen
-          key={name}
-          name={name}
+          name={CAMERA}
           options={{
             presentation: 'modal',
-            animation: 'default',
-            ...TransitionPresets.ModalPresentationIOS,
-            cardStyleInterpolator: forSheetIOS,
+            ...TransitionPresets.ModalSlideFromBottomIOS,
             detachPreviousScreen: false,
             gestureEnabled: false,
-            cardStyle: { flex: 1, backgroundColor: colors.grouped },
+            cardStyle: { flex: 1, backgroundColor: colors.black },
           }}
         />
-      ))}
-      <JSStack.Screen
-        name={CAMERA}
-        options={{
-          presentation: 'modal',
-          ...TransitionPresets.ModalSlideFromBottomIOS,
-          detachPreviousScreen: false,
-          gestureEnabled: false,
-          cardStyle: { flex: 1, backgroundColor: colors.black },
-        }}
-      />
+      </JSStack.Protected>
+      <JSStack.Protected guard={!signedIn} redirectTo="/">
+        <JSStack.Screen name="sign-in" />
+      </JSStack.Protected>
     </JSStack>
   );
+}
+
+/** The stack for whoever is signed in, or Sign In. */
+function Navigator() {
+  const signedIn = useData().useMe() !== null;
+  return Platform.OS === 'web' ? <WebStack signedIn={signedIn} /> : <NativeStack signedIn={signedIn} />;
 }
 
 export default function RootLayout() {
@@ -99,7 +120,7 @@ export default function RootLayout() {
         <DataProvider>
           <FeedbackProvider>
             <StatusBar style="dark" />
-            {Platform.OS === 'web' ? <WebStack /> : <NativeStack />}
+            <Navigator />
           </FeedbackProvider>
         </DataProvider>
       </SafeAreaProvider>

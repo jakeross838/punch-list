@@ -4,6 +4,7 @@
 // either one back. Neither can come off while it still has open items.
 
 import { renameLocation, type Job } from '@punch/core';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { useData } from '@/data/api';
@@ -145,6 +146,7 @@ export function CompanySheet({ jobId, pairing, visible, onClose }: { jobId: stri
   const jobCompanies = data.useJobCompanies(jobId);
   const items = data.useItems(jobId);
   const company = companies.find((c) => c.id === pairing?.companyId);
+  const people = data.useContacts().filter((c) => c.companyId === company?.id && c.active).length;
   const [name, setName] = useState('');
   const [tradeId, setTradeId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -219,6 +221,20 @@ export function CompanySheet({ jobId, pairing, visible, onClose }: { jobId: stri
             testID="pick-edit-trade"
           />
         </ListSection>
+        {company ? (
+          <ListSection footer="Who gets its lists and the Schedule Email, on every job.">
+            <ListRow
+              title="People"
+              value={people > 0 ? String(people) : 'None yet'}
+              accessory="chevron"
+              onPress={() => {
+                onClose();
+                router.push({ pathname: '/settings/companies/[companyId]', params: { companyId: company.id } });
+              }}
+              testID="company-people"
+            />
+          </ListSection>
+        ) : null}
         <ListSection
           footer={open > 0 ? `It has ${itemCount(open)} on this job. Finish them or pick another company for them first.` : 'Its completed items stay in the history.'}
         >

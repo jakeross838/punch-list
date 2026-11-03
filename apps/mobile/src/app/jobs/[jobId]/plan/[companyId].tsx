@@ -3,8 +3,8 @@
 // time. Ready work longer than a day splits into full working days, location by location, so each
 // day can be scheduled on its own, or all of it at once. A batch that comes free schedules as soon
 // as what it waits on is done (with a day of handoff and fair notice), for the days its time needs.
-// At the top, the company's own page (what it sees from the link on its list) and the comments on
-// its whole list: the back and forth about its week.
+// At the top, the company's own page (what it sees from the link on its list), its link to copy or
+// take back, and the comments on its whole list: the back and forth about its week.
 
 import {
   companyPlan,
@@ -30,8 +30,10 @@ import { CommentThread } from '@/components/Comments';
 import { VisitSheet, VisitStatus, type VisitDraft } from '@/components/VisitSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
+import { companyPageUrl } from '@/data/links';
 import { useHolds } from '@/data/view';
-import { EmptyState, Icon, ListRow, ListSection, Page, shortDate, Text, Touchable, weekdayDate } from '@/ui';
+import { copyText } from '@/export/compose';
+import { EmptyState, haptic, Icon, ListRow, ListSection, Page, shortDate, Text, Touchable, useFeedback, weekdayDate } from '@/ui';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -45,10 +47,40 @@ export default function PlanScreen() {
   const today = dayOfDate(new Date());
   const [draft, setDraft] = useState<VisitDraft | null>(null);
   const thread = listComments(data.useComments(jobId), companyId);
+  const feedback = useFeedback();
+  const link = data.useCompanyLinks(jobId).find((l) => l.companyId === companyId);
 
   const lookups = useMemo(() => ({ locations, companies }), [locations, companies]);
   const holds = useHolds(jobId);
   const plan = useMemo(() => companyPlan(companyId, items, visits, lookups, today), [companyId, items, visits, lookups, today]);
+
+  /** The page's link, made the first time it is asked for, on the clipboard to paste anywhere. */
+  async function copyLink() {
+    const url = companyPageUrl(await data.companyLink(jobId, companyId));
+    const copied = await copyText(url);
+    haptic.success();
+    // Where it could not be copied, the link itself, to copy by hand.
+    feedback.toast({ message: copied ? 'Link copied' : url });
+  }
+
+  const takeBack = () => {
+    if (!link) return;
+    feedback.actionSheet({
+      title: `Take back ${plan.company}'s link?`,
+      message: 'It stops working at once, on every list it went out with. The next list sent has a new one.',
+      actions: [
+        {
+          label: 'Take the Link Back',
+          destructive: true,
+          onPress: () => {
+            haptic.heavy();
+            void data.revokeCompanyLink(link.token);
+            feedback.toast({ message: `${plan.company}'s link no longer works` });
+          },
+        },
+      ],
+    });
+  };
 
   // What a visit can cover: its own items and the company's work not on another visit.
   const loose = useMemo(
@@ -96,7 +128,13 @@ export default function PlanScreen() {
     <Page title={plan.company} large subtitle={subtitle} backLabel="Schedule" background="grouped">
       {open === 0 ? <EmptyState icon="checkmark.circle.fill" title="Nothing Open" message={`${plan.company} has no open work on this job.`} /> : null}
 
-      <ListSection footer="What they see from the link on their list, and where they comment.">
+      <ListSection
+        footer={
+          link
+            ? 'What they see from the link and the scan code on their list, and where they confirm dates and comment.'
+            : 'What they see from the link and the scan code on their list. The link is made with their first list.'
+        }
+      >
         <ListRow
           title={`${plan.company}'s Page`}
           icon="eye"
@@ -104,6 +142,8 @@ export default function PlanScreen() {
           onPress={() => router.push({ pathname: '/jobs/[jobId]/company/[companyId]', params: { jobId, companyId } })}
           testID="company-page"
         />
+        <ListRow title="Copy Link" icon="link" onPress={() => void copyLink()} testID="company-copy-link" />
+        {link ? <ListRow title="Take the Link Back" tone="destructive" onPress={takeBack} testID="company-take-back" /> : null}
       </ListSection>
       <Text variant="footnote" color={colors.secondary} style={styles.threadTitle}>
         Comments on the Whole List

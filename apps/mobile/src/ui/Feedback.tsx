@@ -54,6 +54,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
         },
         (index) => {
           if (index < request.actions.length) request.actions[index]?.onPress();
+          else request.onCancel?.();
         },
       );
       return;

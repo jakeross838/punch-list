@@ -1,6 +1,7 @@
 // Item Form setup: which fields the New Item form shows, what a new item starts as, the fields
-// Ross Built adds of its own, the standard titles with how long each usually takes, and the common
-// tasks for each kind of room, offered on a walk with a tap. Changes apply right away.
+// Ross Built adds of its own, and the standard titles with how long each usually takes. The common
+// tasks for each kind of room come from the templates, so there is one place to keep them. Changes
+// apply right away.
 
 import {
   customFieldKindLabel,
@@ -11,14 +12,11 @@ import {
   KIND_LABELS,
   KINDS as ITEM_KINDS,
   PICK_HOURS,
-  ROOM_KIND_LABELS,
-  ROOM_KINDS,
   setFieldShown,
   tidyTitle,
   type CustomField,
   type CustomFieldKind,
   type FormSettings,
-  type RoomKind,
 } from '@punch/core';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -52,7 +50,6 @@ export default function ItemFormScreen() {
   const titles = data.useTitles();
   const [fieldSheet, setFieldSheet] = useState<{ field: CustomField | null } | null>(null);
   const [titlesOpen, setTitlesOpen] = useState(false);
-  const [roomSheet, setRoomSheet] = useState<RoomKind | null>(null);
   const update = (next: FormSettings) => void data.setFormSettings(next);
   // The fields, titles and common tasks are Ross Built's setup, changed by admins; the rest is each person's own.
   const admin = isAdmin(data.useMe());
@@ -100,17 +97,21 @@ export default function ItemFormScreen() {
         <ListRow title="Standard Titles" value={String(titles.length)} accessory="chevron" onPress={() => setTitlesOpen(true)} testID="standard-titles" />
       </ListSection>
 
-      <ListSection header="Common Tasks" footer="The usual work in each kind of room, added with a tap on a walk. The kind of room comes from the location's name.">
-        {ROOM_KINDS.map((k) => (
-          <ListRow
-            key={k}
-            title={ROOM_KIND_LABELS[k]}
-            value={String(titles.filter((t) => t.rooms.includes(k)).length)}
-            accessory="chevron"
-            onPress={() => setRoomSheet(k)}
-            testID={`room-tasks-${k}`}
-          />
-        ))}
+      <ListSection
+        header="Common Tasks"
+        footer="The usual work in each kind of room, added with a tap on a walk, comes from the templates: each task for Every Bathroom shows in every bathroom, and so on."
+      >
+        <ListRow
+          title="Templates"
+          icon="templates"
+          accessory="chevron"
+          onPress={() => {
+            // Out of this sheet, then to Templates.
+            router.back();
+            router.push('/settings/templates');
+          }}
+          testID="common-tasks-templates"
+        />
       </ListSection>
         </>
       ) : (
@@ -119,7 +120,6 @@ export default function ItemFormScreen() {
 
       <FieldSheet visible={!!fieldSheet} field={fieldSheet?.field ?? null} onClose={() => setFieldSheet(null)} />
       <TitlesSheet visible={titlesOpen} onClose={() => setTitlesOpen(false)} />
-      <RoomTasksSheet kind={roomSheet} onClose={() => setRoomSheet(null)} />
     </Page>
   );
 }
@@ -218,56 +218,6 @@ function FieldSheet({ visible, field, onClose }: { visible: boolean; field: Cust
             <ListRow title="Remove Field" tone="destructive" onPress={removeField} testID="field-remove" />
           </ListSection>
         ) : null}
-      </ScrollView>
-    </Sheet>
-  );
-}
-
-/** The standard titles common in one kind of room: tap one to put it on that room's list or take it off. */
-function RoomTasksSheet({ kind, onClose }: { kind: RoomKind | null; onClose: () => void }) {
-  const data = useData();
-  const titles = data.useTitles();
-  const trades = data.useTrades();
-  const [query, setQuery] = useState('');
-  const q = query.trim().toLowerCase();
-  const groups = [...trades]
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((t) => ({ trade: t, titles: titles.filter((x) => x.tradeId === t.id && (q === '' || x.title.toLowerCase().includes(q))).sort((a, b) => a.title.localeCompare(b.title)) }))
-    .filter((g) => g.titles.length > 0);
-  return (
-    <Sheet
-      visible={!!kind}
-      onClose={onClose}
-      title={kind ? `Common in ${ROOM_KIND_LABELS[kind]}` : 'Common Tasks'}
-      right={{ label: 'Done', variant: 'prominent', onPress: onClose, testID: 'room-tasks-done' }}
-      testID="room-tasks"
-    >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
-        <View style={styles.search}>
-          <SearchField value={query} onChangeText={setQuery} placeholder="Search Titles" />
-        </View>
-        {kind
-          ? groups.map((g) => (
-              <ListSection key={g.trade.id} header={g.trade.name}>
-                {g.titles.map((t) => {
-                  const on = t.rooms.includes(kind);
-                  return (
-                    <ListRow
-                      key={t.id}
-                      title={t.title}
-                      accessory={on ? 'checkmark' : 'none'}
-                      onPress={() => {
-                        haptic.selection();
-                        void data.updateTitle(t.id, { rooms: on ? t.rooms.filter((r) => r !== kind) : [...t.rooms, kind] });
-                      }}
-                      testID={`room-task-${t.title}`}
-                    />
-                  );
-                })}
-              </ListSection>
-            ))
-          : null}
-        {groups.length === 0 ? <EmptyState icon="magnifyingglass" title="No Titles" message={q ? `Nothing matches “${query}”.` : 'Add standard titles first.'} /> : null}
       </ScrollView>
     </Sheet>
   );

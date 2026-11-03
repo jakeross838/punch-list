@@ -62,6 +62,24 @@ const companies = new Table({
   active: column.integer,
 });
 
+/** The people at each company: who gets its lists and the Schedule Email, on every job. */
+const company_contacts = new Table(
+  {
+    org: column.text,
+    company_id: column.text,
+    name: column.text,
+    email: column.text,
+    phone: column.text,
+    gets_lists: column.integer,
+    sort_order: column.integer,
+    active: column.integer,
+    created_by: column.text,
+    created_at: column.text,
+    updated_at: column.text,
+  },
+  { indexes: { company: ['company_id'] } },
+);
+
 const job_companies = new Table(
   { org: column.text, job_id: column.text, company_id: column.text, trade_id: column.text },
   { indexes: { job: ['job_id'] } },
@@ -220,6 +238,8 @@ const list_sends = new Table(
     sent_at: column.text,
     sent_by: column.text,
     removed: column.integer,
+    /** JSON: the schedule as it went out, for the look ahead and the Schedule Email. */
+    snapshot: column.text,
   },
   { indexes: { job: ['job_id'] } },
 );
@@ -310,6 +330,7 @@ export const AppSchema = new Schema({
   locations,
   trades,
   companies,
+  company_contacts,
   job_companies,
   job_waiting_on,
   items,

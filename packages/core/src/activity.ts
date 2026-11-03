@@ -187,6 +187,8 @@ function parseObject(text: string | null | undefined): Record<string, unknown> {
 function listName(list: unknown, look: ActivityLookups): string {
   const key = String(list ?? '');
   if (key === 'job') return 'the whole job list';
+  if (key === 'lookahead') return 'the Three Week Look Ahead';
+  if (key === 'schedule') return 'the schedule to every company';
   if (key.startsWith('company:')) return `the ${look.companies.get(key.slice(8)) ?? 'company'} list`;
   if (key.startsWith('party:')) return `the ${titleCase(key.slice(6))} list`;
   return 'a list';

@@ -19,6 +19,7 @@ import { holdText } from './holds';
 import { kindText, orderText } from './orders';
 import { holdsFor, type CompanyList, type ListLine, type ListLookups } from './lists';
 import { timelineRows, workingIndex, type Timeline, type TimelineBar } from './timeline';
+import { anyChange, changeText, movedText, type ScheduleChanges } from './tracking';
 import { markShapes, type MarkShape } from './marks';
 import { isPriced } from './rules';
 import { daysText, hoursText, totalText, totalTime } from './time';
@@ -47,6 +48,8 @@ export interface PrintSettings {
   comments?: (itemId: string) => PrintComment[];
   /** Comments on the company's whole list, the same way. */
   listComments?: PrintComment[];
+  /** The company's own page: its link, and the scan code for it as an SVG. */
+  link?: { url: string; code: string | null };
 }
 
 /** A comment ready to print: who wrote it, when (an ISO time) and what it says. */
@@ -184,6 +187,21 @@ function header(settings: PrintSettings, kind: string, title: string, summary: s
   ].join('');
 }
 
+/** The company's page: the scan code and the link, to see its dates and photos, answer and comment. */
+function linkBlock(link: PrintSettings['link']): string {
+  if (!link) return '';
+  // The code is drawn here from the link, never typed by anyone: only a plain SVG goes on the page.
+  const code = link.code && /^<svg[\s>]/.test(link.code.trim()) && !/<script|<foreignObject|\son[a-z]+\s*=|javascript:/i.test(link.code) ? `<div class="rb-qr">${link.code}</div>` : '';
+  return [
+    '<div class="rb-link">',
+    code,
+    '<div class="rb-link-text"><b>Your Page</b>',
+    'Scan the code or open the link for your dates and this list with photos. Confirm your dates or ask for others, and comment on anything.',
+    `<div class="rb-url">${esc(link.url)}</div>`,
+    '</div></div>',
+  ].join('');
+}
+
 interface Column {
   label: string;
   width?: string;
@@ -255,7 +273,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
         ? `${plural(list.open, 'open item')}, all ready now.`
         : `${plural(list.open, 'open item')}, ${andList(counts)}.`;
   const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-  const parts = [header(settings, 'Completion List', list.company, sentence(summary))];
+  const parts = [header(settings, 'Completion List', list.company, sentence(summary)), linkBlock(settings.link)];
 
   if (settings.listComments && settings.listComments.length > 0) {
     parts.push('<h2 class="rb-section">Comments</h2>');
@@ -264,7 +282,9 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
 
   if (planned.length > 0) {
     parts.push('<h2 class="rb-section">Scheduled Visits</h2>');
-    parts.push('<p class="rb-section-note">Say whether these dates work on your page, from the link with this list: These Dates Work, or Other Dates.</p>');
+    parts.push(
+      `<p class="rb-section-note">Say whether these dates work on your page, from ${settings.link ? 'the code or link at the top' : 'the link with this list'}: These Dates Work, or Other Dates.</p>`,
+    );
     const body = planned
       .map(({ visit, lines }) => {
         const end = visitEnd(visit);
@@ -558,6 +578,17 @@ export function jobPrintout(lines: ListLine[], settings: PrintSettings): Printou
 
 // ---------- the three week look ahead ----------
 
+/** When everything with a date is done, and who sets that date: the last visits, after the ones whose work they wait on. */
+function finishLines(timeline: Timeline, company: (id: string) => string, date: Date): string[] {
+  const finish = timeline.finish ? `Everything with a date is done by ${dayText(timeline.finish, date, true)}.` : '';
+  const names = (list: TimelineBar[]) => andList([...new Set(list.map((b) => company(b.companyId)))]);
+  const last = timeline.critical.filter((b) => b.end === timeline.finish);
+  const lastCompanies = new Set(last.map((b) => b.companyId));
+  const before = timeline.critical.filter((b) => b.end !== timeline.finish && !lastCompanies.has(b.companyId));
+  const setBy = last.length > 0 ? `That date is set by ${names(last)}${before.length > 0 ? `, after ${names(before)}` : ''}.` : '';
+  return [finish, setBy];
+}
+
 const LOOK_AHEAD_WEEKS = 3;
 
 /** The look ahead starts this week, or next week once it is Friday: the day it goes out. */
@@ -584,17 +615,9 @@ export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, sett
   const bars = rows.flatMap((r) => r.bars).sort((a, b) => a.start.localeCompare(b.start) || company(a.companyId).localeCompare(company(b.companyId)));
   const todayIndex = workingIndex(monday, today);
 
-  const finish = timeline.finish ? `Everything with a date is done by ${dayText(timeline.finish, settings.date, true)}.` : '';
-  // Who sets that date: the companies on the last visits, after the ones whose work they wait on.
-  const names = (list: TimelineBar[]) => andList([...new Set(list.map((b) => company(b.companyId)))]);
-  const last = timeline.critical.filter((b) => b.end === timeline.finish);
-  const lastCompanies = new Set(last.map((b) => b.companyId));
-  const before = timeline.critical.filter((b) => b.end !== timeline.finish && !lastCompanies.has(b.companyId));
-  const setBy = last.length > 0 ? `That date is set by ${names(last)}${before.length > 0 ? `, after ${names(before)}` : ''}.` : '';
   const critical = new Set(timeline.critical.map((b) => b.key));
   const summary = [
-    finish,
-    setBy,
+    ...finishLines(timeline, company, settings.date),
     bars.length > 0
       ? `${plural(bars.length, 'visit')} in the next three weeks. Green is confirmed; blue is our best guess. Tell us if your dates do not work, or if anything is missing.`
       : 'No visits in the next three weeks.',
@@ -637,7 +660,7 @@ export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, sett
     );
     const holidays = holidayGroups(holidaysBetween(monday, lastDay));
     parts.push(
-      `<p class="rb-key"><span><i class="rb-g-ok"></i>Confirmed</span><span><i></i>Our best guess</span>${critical.size > 0 ? '<span><i class="rb-g-sets"></i>Sets the finish date</span>' : ''}${holidays.length > 0 ? '<span><i class="rb-g-off"></i>Holiday</span>' : ''}</p>`,
+      `<p class="rb-key"><span><i class="rb-g-ok"></i>Confirmed</span><span><i></i>Our best guess</span>${critical.size > 0 ? '<span><i class="rb-g-sets"></i>Sets the finish date</span>' : ''}${bars.some((b) => b.pastDue) ? '<span><i class="rb-g-late"></i>Over, with work still open</span>' : ''}${holidays.length > 0 ? '<span><i class="rb-g-off"></i>Holiday</span>' : ''}</p>`,
     );
     if (holidays.length > 0) {
       parts.push(
@@ -698,6 +721,173 @@ export function lookAheadPrintout(timeline: Timeline, lookups: ListLookups, sett
   };
 }
 
+// ---------- the whole schedule ----------
+
+/** Weeks on one chart of the Whole Schedule; a longer job takes more than one. At least a couple of months shows. */
+const SCHEDULE_WEEKS = 16;
+const SCHEDULE_MIN_WEEKS = 8;
+
+/** "November", or "January 2027" in another year. */
+function monthText(ymd: string, today: Date): string {
+  const [y, m] = ymd.split('-').map(Number);
+  return `${MONTHS[(m ?? 1) - 1]}${y === today.getFullYear() ? '' : ` ${y}`}`;
+}
+
+/** A visit's days: "Monday, November 2" or "Monday, November 2 to Wednesday, November 4". */
+function spanText(start: string, end: string, today: Date): string {
+  return end === start ? dayText(start, today, true) : `${dayText(start, today, true)} to ${dayText(end, today, true)}`;
+}
+
+/**
+ * The whole job's schedule, sent with the look ahead: every company's work week by week from this
+ * week to the finish, green once confirmed and blue for our best guess, then every visit company by
+ * company, what moved since the schedule last went out, and what is not on it yet.
+ */
+export function schedulePrintout(timeline: Timeline, lookups: ListLookups, settings: PrintSettings, today: string, options: { changes?: ScheduleChanges | null } = {}): Printout {
+  const company = (id: string) => lookups.companies.find((c) => c.id === id)?.name ?? 'Not set';
+  const from = mondayOf(today);
+  const live = timeline.bars.filter((b) => !b.done && b.items.length > 0);
+  const rows = timelineRows({ ...timeline, bars: live }, from);
+  const bars = rows.flatMap((r) => r.bars);
+  const critical = new Set(timeline.critical.map((b) => b.key));
+  const summary = [
+    ...finishLines(timeline, company, settings.date),
+    bars.length > 0
+      ? `${plural(bars.length, 'visit')} for ${plural(rows.length, 'company', 'companies')}. Green is confirmed; blue is our best guess. Tell us if your dates do not work.`
+      : 'Nothing on the schedule yet.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const parts = [header(settings, 'Schedule', 'Whole Schedule', summary)];
+
+  if (rows.length > 0) {
+    // The chart: a row for each company, a column for each week from this one to the finish.
+    const lastMonday = mondayOf(bars.reduce((m, b) => (b.end > m ? b.end : m), from));
+    const weeks: string[] = [];
+    for (let m = from; m <= lastMonday || weeks.length < SCHEDULE_MIN_WEEKS; m = addDays(m, 7)) weeks.push(m);
+    for (let at = 0; at < weeks.length; at += SCHEDULE_WEEKS) {
+      const shown = weeks.slice(at, at + SCHEDULE_WEEKS);
+      const months: { name: string; span: number }[] = [];
+      for (const m of shown) {
+        const name = monthText(m, settings.date);
+        const lastMonth = months[months.length - 1];
+        if (lastMonth && lastMonth.name === name) lastMonth.span += 1;
+        else months.push({ name, span: 1 });
+      }
+      const monthHeads = months.map((m) => `<th colspan="${m.span}" class="rb-g-week">${esc(m.name)}</th>`).join('');
+      const weekHeads = shown.map((m) => `<th class="rb-g-day rb-g-wk${m === from ? ' rb-g-now' : ''}">${Number(m.slice(8))}</th>`).join('');
+      const body = rows
+        .map((r) => {
+          const cells = shown.map((m) => {
+            const friday = addDays(m, 4);
+            // Work that is over with items still open shows in this week.
+            const on = r.bars.filter((b) => (b.start <= friday && b.end >= m) || (b.pastDue && m === from));
+            if (on.length === 0) return `<td class="rb-g-cell rb-g-wk${m === from ? ' rb-g-now' : ''}"></td>`;
+            const ok = on.every((b) => b.kind === 'confirmed') ? ' rb-g-ok' : '';
+            const late = on.some((b) => b.pastDue) ? ' rb-g-late' : '';
+            const sets = on.some((b) => critical.has(b.key) && !b.pastDue) ? ' rb-g-sets' : '';
+            return `<td class="rb-g-cell rb-g-wk"><div class="rb-g-bar${ok}${late}${sets}"></div></td>`;
+          });
+          return `<tr><td class="rb-g-name">${esc(company(r.companyId))}</td>${cells.join('')}</tr>`;
+        })
+        .join('');
+      parts.push(
+        `<table class="rb-gantt"><colgroup><col style="width:1.35in">${'<col>'.repeat(shown.length)}</colgroup><thead><tr><th rowspan="2">Company</th>${monthHeads}</tr><tr>${weekHeads}</tr></thead><tbody>${body}</tbody></table>`,
+      );
+    }
+    parts.push(
+      `<p class="rb-key"><span><i class="rb-g-ok"></i>Confirmed</span><span><i></i>Our best guess</span>${critical.size > 0 ? '<span><i class="rb-g-sets"></i>Sets the finish date</span>' : ''}${bars.some((b) => b.pastDue) ? '<span><i class="rb-g-late"></i>Over, with work still open</span>' : ''}<span>Each column is a week, from its Monday</span></p>`,
+    );
+
+    // Every visit, company by company.
+    const columns = [{ label: 'When', width: '2.45in' }, { label: 'Status', width: '1.3in' }, { label: 'Work' }];
+    const visitRows = rows
+      .map((r) => {
+        const lines = r.bars
+          .map((b, i) => {
+            const status = b.pastDue ? 'Over, with work still open' : b.kind === 'confirmed' ? 'Confirmed' : 'Our best guess';
+            const asked = b.visit?.askedStart && !b.visit.confirmed ? `Other dates asked: ${dayText(b.visit.askedStart, settings.date, true)}` : '';
+            // Each title once, with how many when it is in more than one place.
+            const counts = new Map<string, number>();
+            for (const item of b.items) counts.set(item.title, (counts.get(item.title) ?? 0) + 1);
+            const titles = [...counts].slice(0, 3).map(([title, n]) => (n > 1 ? `${title} (${n})` : title));
+            const more = counts.size - titles.length;
+            const work = `${plural(b.items.length, 'item')}: ${andList(more > 0 ? [...titles, `${more} more`] : titles)}`;
+            return `<tr class="rb-row${i % 2 === 1 ? ' rb-alt' : ''}"><td>${esc(spanText(b.start, b.end, settings.date))}<div class="rb-meta">${esc(plural(b.days, 'day'))}</div></td><td>${esc(status)}${asked ? `<div class="rb-meta">${esc(asked)}</div>` : ''}</td><td>${esc(work)}</td></tr>`;
+          })
+          .join('');
+        return band(3, company(r.companyId)) + lines;
+      })
+      .join('');
+    parts.push('<h2 class="rb-section">Every Visit</h2>');
+    parts.push(table(columns, visitRows));
+  }
+
+  // What moved since the schedule last went out.
+  const changes = options.changes;
+  if (changes && anyChange(changes)) {
+    const sent = dayText(dayOfDate(new Date(changes.sentAt)), settings.date, true);
+    const { was, now, days } = changes.finish;
+    const finishNote =
+      was && now && days !== 0
+        ? `The finish date moved ${movedText(days)}, from ${dayText(was, settings.date, true)} to ${dayText(now, settings.date, true)}.`
+        : was && now
+          ? `The finish date has not moved: ${dayText(now, settings.date, true)}.`
+          : '';
+    parts.push(`<h2 class="rb-section">What Moved Since ${esc(sent)}</h2>`);
+    if (finishNote) parts.push(`<p class="rb-section-note">${esc(finishNote)}</p>`);
+    if (changes.changes.length > 0) {
+      const columns = [{ label: 'Company', width: '1.6in' }, { label: 'Was', width: '1.95in' }, { label: 'Now', width: '1.95in' }, { label: 'What Changed' }];
+      const span = (s: { start: string; end: string } | null) => (s ? spanText(s.start, s.end, settings.date) : 'Not on it');
+      const moved = changes.changes
+        .map(
+          (c, i) =>
+            `<tr class="rb-row${i % 2 === 1 ? ' rb-alt' : ''}"><td><b>${esc(company(c.companyId))}</b></td><td>${esc(span(c.was))}</td><td>${esc(span(c.now))}</td><td>${esc(changeText(c))}</td></tr>`,
+        )
+        .join('');
+      parts.push(table(columns, moved));
+    }
+  }
+
+  // What is not on the schedule yet, company by company.
+  const waiting = [...timeline.noDate, ...timeline.needsPrice];
+  if (waiting.length > 0) {
+    const look = holdsFor(lookups);
+    const groups = new Map<string, { noDate: Item[]; quote: Item[] }>();
+    for (const item of timeline.noDate) {
+      const g = groups.get(item.companyId ?? '') ?? { noDate: [], quote: [] };
+      g.noDate.push(item);
+      groups.set(item.companyId ?? '', g);
+    }
+    for (const item of timeline.needsPrice) {
+      const g = groups.get(item.companyId ?? '') ?? { noDate: [], quote: [] };
+      g.quote.push(item);
+      groups.set(item.companyId ?? '', g);
+    }
+    const columns = [{ label: 'Company', width: '1.6in' }, { label: 'Items', width: '0.7in' }, { label: 'Why' }];
+    const notYet = [...groups]
+      .sort((a, b) => (a[0] ? company(a[0]) : 'zz').localeCompare(b[0] ? company(b[0]) : 'zz'))
+      .map(([companyId, g], i) => {
+        const holds = [...new Set(g.noDate.map((item) => holdText(item, look) || 'something not named'))];
+        const why = [g.noDate.length > 0 ? `${g.noDate.length} waiting on ${andList(holds)}` : '', g.quote.length > 0 ? `${g.quote.length} to be quoted` : '']
+          .filter(Boolean)
+          .join('; ');
+        return `<tr class="rb-row${i % 2 === 1 ? ' rb-alt' : ''}"><td><b>${esc(companyId ? company(companyId) : 'Not set')}</b></td><td class="rb-num">${g.noDate.length + g.quote.length}</td><td>${esc(why)}</td></tr>`;
+      })
+      .join('');
+    parts.push('<h2 class="rb-section">Not on the Schedule Yet</h2>');
+    parts.push('<p class="rb-section-note">These go on the schedule once what they wait on has a date, or once they have their order. The Three Week Look Ahead lists each one.</p>');
+    parts.push(table(columns, notYet));
+  }
+
+  return {
+    title: 'Whole Schedule',
+    kind: 'Schedule',
+    fileName: `${safeName(`${settings.job.name} Whole Schedule, ${printDate(settings.date).replace(',', '')}`)}.pdf`,
+    body: parts.join(''),
+  };
+}
+
 const FONT = "'Nunito Sans', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
 /** The house look, kept to the class rb-doc so the preview page can show it beside the app. */
@@ -753,12 +943,18 @@ export const PRINT_CSS = `
 .rb-gantt td.rb-g-now{background:#F7F5EC}
 .rb-g-bar{height:11pt;border-radius:2pt;background:#4E7A8C}
 .rb-g-bar.rb-g-ok,.rb-key i.rb-g-ok{background:#4E7F5E}
-.rb-g-bar.rb-g-late{border:1.25pt solid #B42318}
+.rb-g-bar.rb-g-late,.rb-key i.rb-g-late{border:1.25pt solid #B42318}
 .rb-g-bar.rb-g-sets,.rb-key i.rb-g-sets{box-shadow:0 0 0 1.25pt #1D1D1F}
 .rb-gantt .rb-g-off,.rb-key i.rb-g-off{background:#F7F5EC}
 .rb-gantt th.rb-g-off{background:#CBD8DB;color:#3B5864}
-.rb-key{display:flex;gap:16pt;margin:6pt 0 0;font-size:8.5pt;color:#4E7A8C}
+.rb-key{display:flex;flex-wrap:wrap;gap:4pt 16pt;margin:6pt 0 0;font-size:8.5pt;color:#4E7A8C}
 .rb-key i{display:inline-block;width:14pt;height:8pt;border-radius:2pt;margin-right:5pt;vertical-align:-1pt;background:#4E7A8C}
+.rb-link{display:flex;gap:11pt;align-items:center;margin:12pt 0 0;padding:8pt 10pt;border:0.75pt solid #CBD8DB;border-radius:3pt;page-break-inside:avoid;break-inside:avoid}
+.rb-qr{flex:none;width:0.9in;height:0.9in}
+.rb-qr svg{display:block;width:100%;height:100%}
+.rb-link-text{font-size:9pt;line-height:1.35}
+.rb-link-text b{display:block;font-size:10.5pt;font-weight:700;margin-bottom:1pt}
+.rb-url{margin-top:3pt;font-size:8pt;color:#4E7A8C;word-break:break-all;overflow-wrap:anywhere}
 .rb-ph{position:relative;width:${PHOTO_WIDTH}in;overflow:hidden;border-radius:3pt;background:#F7F5EC}
 .rb-ph img{display:block;width:100%;height:100%;object-fit:cover}
 .rb-ph svg{position:absolute;left:0;top:0;width:100%;height:100%;font-family:${FONT}}

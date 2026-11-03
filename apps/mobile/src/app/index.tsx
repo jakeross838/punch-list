@@ -1,7 +1,7 @@
 // Jobs: the first screen. My Items at the top when anything is assigned to you, then each open job
 // as a card with who runs it, how many items are open and how much of the list is complete. Closed
-// jobs wait at the bottom, out of the way. Admins make jobs; the gear holds People, Templates and
-// Item Form.
+// jobs wait at the bottom, out of the way. Admins make jobs; the gear holds People, Companies,
+// Templates, Item Form and your Account, where you sign out.
 
 import { assignedTo, isAdmin, teamText, totalText, totalTime, type Job } from '@punch/core';
 import { router } from 'expo-router';
@@ -27,10 +27,12 @@ export default function JobsScreen() {
     {
       actions: [
         { label: 'People', icon: 'person.2.fill', onPress: () => router.push('/settings/people'), testID: 'people' },
+        { label: 'Companies', icon: 'building', onPress: () => router.push('/settings/companies'), testID: 'companies' },
         { label: 'Templates', icon: 'templates', onPress: () => router.push('/settings/templates'), testID: 'templates' },
         { label: 'Item Form', icon: 'list.bullet', onPress: () => router.push('/settings/item-form'), testID: 'item-form' },
       ],
     },
+    { actions: [{ label: 'Account', icon: 'person.circle', onPress: () => router.push('/settings/account'), testID: 'account' }] },
     // The preview can be seen as anyone, to check what each person sees and can change.
     ...(data.mode === 'preview' && data.previewAs
       ? [

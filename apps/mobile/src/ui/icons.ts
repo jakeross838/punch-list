@@ -68,6 +68,10 @@ export const SF_SYMBOLS = {
   handle: 'line.3.horizontal',
   templates: 'rectangle.stack',
   archive: 'archivebox',
+  envelope: 'envelope',
+  message: 'message',
+  link: 'link',
+  'person.circle': 'person.crop.circle',
 } as const satisfies Record<string, SFSymbolName>;
 
 export type IconName = keyof typeof SF_SYMBOLS;

@@ -117,11 +117,12 @@ export function workingDayOnOrAfter(ymd: string): string {
   return d;
 }
 
-/** n working days after a day (n = 1 from Friday is Monday). */
+/** n working days after a day (n = 1 from Friday is Monday), or before it when n is below zero. */
 export function addWorkingDays(ymd: string, n: number): string {
   let d = ymd;
-  for (let left = n; left > 0; ) {
-    d = addDays(d, 1);
+  const step = n < 0 ? -1 : 1;
+  for (let left = Math.abs(n); left > 0; ) {
+    d = addDays(d, step);
     if (isWorkingDay(d)) left -= 1;
   }
   return d;

@@ -947,6 +947,104 @@ begin
 end $$;
 reset role;
 
+-- ---------- the people at each company, and the schedule each send keeps ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+
+do $$
+declare
+  j uuid := (select id from public.jobs where name = 'Fish');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  other uuid := (select id from public.companies where id <> (select id from public.companies where name = 'Gator Plumbing') limit 1);
+  k uuid; s uuid; rec record;
+begin
+  -- An admin adds a company's people: tidied, stamped, kept to the company.
+  insert into public.company_contacts (company_id, name, email, phone) values (c, '  Mike   Smith ', ' Mike@GatorPlumbing.com ', ' 941  555 0123 ') returning id into k;
+  select * into rec from public.company_contacts where id = k;
+  if rec.name <> 'Mike Smith' or rec.email <> 'mike@gatorplumbing.com' or rec.phone <> '941 555 0123' or not rec.gets_lists or rec.created_by is null then
+    raise exception 'FAIL: a contact was not tidied or stamped: %', row_to_json(rec);
+  end if;
+  insert into public.company_contacts (company_id, phone) values (c, '941 555 0100');
+  begin
+    insert into public.company_contacts (company_id, name, email) values (c, 'Bad', 'not an email');
+    raise exception 'FAIL: a bad email was accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.company_contacts (company_id, name) values (c, '   ');
+    raise exception 'FAIL: a contact with no name, email or phone was accepted';
+  exception when check_violation then null;
+  end;
+  -- Moving a contact to another company, or changing who added it, does not take.
+  update public.company_contacts set company_id = other, gets_lists = false where id = k;
+  if (select company_id from public.company_contacts where id = k) <> c then raise exception 'FAIL: a contact moved to another company'; end if;
+  if (select gets_lists from public.company_contacts where id = k) then raise exception 'FAIL: gets_lists did not change'; end if;
+  begin
+    delete from public.company_contacts where id = k;
+    raise exception 'FAIL: a contact was deleted';
+  exception when insufficient_privilege or restrict_violation then null;
+  end;
+  update public.company_contacts set active = false where id = k;
+
+  -- The Three Week Look Ahead and the Schedule Email go out, each keeping the schedule as it went.
+  insert into public.list_sends (job_id, list, snapshot) values (j, 'lookahead', '{"finish":"2026-11-17","bars":[]}') returning id into s;
+  insert into public.list_sends (job_id, list, snapshot)
+    values (j, 'schedule', '{"finish":"2026-11-17","bars":[{"key":"v1","companyId":"x","start":"2026-11-16","end":"2026-11-17","confirmed":true}]}');
+  update public.list_sends set snapshot = '{"finish":null,"bars":[]}', removed = true where id = s;
+  select snapshot, removed into rec from public.list_sends where id = s;
+  if rec.snapshot ->> 'finish' <> '2026-11-17' or not rec.removed then raise exception 'FAIL: the schedule a send kept was changed: %', row_to_json(rec); end if;
+  begin
+    insert into public.list_sends (job_id, list, snapshot) values (j, 'schedule', '[1, 2]');
+    raise exception 'FAIL: a schedule kept as something other than an object was accepted';
+  exception when check_violation then null;
+  end;
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"sam@rossbuilt.com"}';
+
+do $$
+declare
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+begin
+  -- The team sees who to send to, and only an admin changes it.
+  if (select count(*) from public.company_contacts where company_id = c) <> 2 then raise exception 'FAIL: the team cannot read the contacts'; end if;
+  begin
+    insert into public.company_contacts (company_id, name) values (c, 'Mine');
+    raise exception 'FAIL: a team member added a contact';
+  exception when insufficient_privilege then null;
+  end;
+  update public.company_contacts set name = 'Changed' where company_id = c;
+  if exists (select 1 from public.company_contacts where name = 'Changed') then raise exception 'FAIL: a team member changed a contact'; end if;
+end $$;
+reset role;
+
+-- ---------- who can sign in ----------
+do $$
+begin
+  if public.hook_only_ross_built_people('{"user":{"email":" Jake@RossBuilt.com "}}') <> '{}'::jsonb then
+    raise exception 'FAIL: an active person was turned away at sign in';
+  end if;
+  if public.hook_only_ross_built_people('{"user":{"email":"stranger@example.com"}}') -> 'error' ->> 'http_code' <> '403' then
+    raise exception 'FAIL: a stranger was let in to sign in';
+  end if;
+  if public.hook_only_ross_built_people('{"user":{"email":"former@rossbuilt.com"}}') -> 'error' is null then
+    raise exception 'FAIL: a switched off person was let in to sign in';
+  end if;
+  if public.hook_only_ross_built_people('{}') -> 'error' is null then
+    raise exception 'FAIL: a sign in with no email was let in';
+  end if;
+end $$;
+set role authenticated;
+do $$
+begin
+  perform public.hook_only_ross_built_people('{}');
+  raise exception 'FAIL: the app can call the sign in check';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+
 -- ---------- someone who was never invited ----------
 set role authenticated;
 set request.jwt.claims = '{"email":"stranger@example.com"}';

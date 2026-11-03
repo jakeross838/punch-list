@@ -161,13 +161,53 @@ export interface Visit {
 export interface ListSend {
   id: string;
   jobId: string;
-  /** Which list: "job", "company:<id>" or "party:<name>". */
+  /** Which list: "job", "lookahead", "schedule", "company:<id>" or "party:<name>". */
   list: string;
   /** The items on it when it went out, to mark what is new on the next one. */
   itemIds: string[];
   sentAt: string;
   sentBy: string;
   removed: boolean;
+  /** The schedule as it went out, for the look ahead and the schedule email: to track against. */
+  snapshot?: ScheduleSnapshot | null;
+}
+
+/** The schedule as it went out: when everything was to be done, and each visit or best guess. */
+export interface ScheduleSnapshot {
+  finish: string | null;
+  bars: SnapshotBar[];
+}
+
+export interface SnapshotBar {
+  key: string;
+  companyId: string;
+  start: string;
+  end: string;
+  confirmed: boolean;
+}
+
+/** A company's private link on a job: its own page, with no account. Taken back, it stops working. */
+export interface CompanyLink {
+  /** 64 random hex characters: the link itself. */
+  token: string;
+  jobId: string;
+  companyId: string;
+  createdAt: string;
+  revoked: boolean;
+}
+
+/** One of a company's people: who gets its lists and the Schedule Email, on every job. */
+export interface Contact {
+  id: string;
+  companyId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  /** Gets the company's lists and the schedule email. */
+  getsLists: boolean;
+  sortOrder: number;
+  /** Switched off: no longer gets anything. Nothing is deleted. */
+  active: boolean;
 }
 
 // ---------- comments ----------

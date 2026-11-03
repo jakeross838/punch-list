@@ -8,4 +8,6 @@ export interface ActionSheetRequest {
   message?: string;
   actions: { label: string; destructive?: boolean; onPress: () => void }[];
   cancelLabel?: string;
+  /** Cancel, or a tap outside the sheet. */
+  onCancel?: () => void;
 }

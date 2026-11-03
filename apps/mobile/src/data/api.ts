@@ -7,6 +7,8 @@ import type {
   Activity,
   Comment,
   Company,
+  CompanyLink,
+  Contact,
   CustomField,
   FormSettings,
   Item,
@@ -22,6 +24,7 @@ import type {
   Person,
   Photo,
   Role,
+  ScheduleSnapshot,
   Sees,
   StandardTitle,
   TeamMember,
@@ -82,12 +85,32 @@ export interface NewPerson {
 
 export type PersonPatch = Partial<Pick<Person, 'name' | 'email' | 'phone' | 'role' | 'sees' | 'active'>>;
 
+/** One of a company's people, as they are added. */
+export interface NewContact {
+  companyId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  getsLists: boolean;
+}
+
+export type ContactPatch = Partial<Pick<Contact, 'name' | 'email' | 'phone' | 'getsLists' | 'active' | 'sortOrder'>>;
+
+/** A list that went out: which, the items on it, and for the schedule, the schedule as it went. */
+export interface NewSend {
+  jobId: string;
+  list: string;
+  itemIds: string[];
+  snapshot?: ScheduleSnapshot | null;
+}
+
 /** A visit's dates, days, confirmation and note. New dates, or confirming it, answer what the company asked for. */
 export type VisitPatch = Partial<Pick<Visit, 'start' | 'days' | 'confirmed' | 'note'>>;
 
 export interface DataApi {
   /** preview: sample data, nothing saved beyond this browser tab. live: the real database. */
   mode: 'preview' | 'live';
+  /** Whoever is signed in; null before signing in. */
   useMe(): Person | null;
   /** Everyone at Ross Built, switched off or not: for who did what, and for People. */
   usePeople(): Person[];
@@ -107,6 +130,10 @@ export interface DataApi {
   usePhotos(jobId: string): Photo[];
   useTrades(): Trade[];
   useCompanies(): Company[];
+  /** Every company's people, switched off ones included. */
+  useContacts(): Contact[];
+  /** The job's company links that work: one for each company at most. */
+  useCompanyLinks(jobId: string): CompanyLink[];
   useJobCompanies(jobId: string): JobCompany[];
   useWaitingOnExtras(jobId: string): string[];
   /** The standard titles, each with its trade. */
@@ -168,8 +195,16 @@ export interface DataApi {
   addTrade(name: string): Promise<string>;
   addCompany(input: { name: string; defaultTradeId: string | null }): Promise<string>;
   addCompanyToJob(jobId: string, companyId: string, tradeId: string): Promise<void>;
-  /** Renames a company on every job; items waiting on it by the old name keep waiting on it. */
-  updateCompany(id: string, patch: Partial<Pick<Company, 'name'>>): Promise<void>;
+  /** Renames a company on every job (items waiting on it by the old name keep waiting on it), or changes its usual trade. */
+  updateCompany(id: string, patch: Partial<Pick<Company, 'name' | 'defaultTradeId'>>): Promise<void>;
+  /** Admins only. */
+  addContact(contact: NewContact): Promise<string>;
+  /** Admins only. Switched off with active false; nobody is deleted. */
+  updateContact(id: string, patch: ContactPatch): Promise<void>;
+  /** The company's link on the job: the one that works, or a new one. Returns its token. */
+  companyLink(jobId: string, companyId: string): Promise<string>;
+  /** Takes a link back: it stops working at once, and the next list sent gets a new one. */
+  revokeCompanyLink(token: string): Promise<void>;
   /** The trade a company does on the job; its items on the job with the old trade move to the new one. */
   setJobCompanyTrade(jobId: string, companyId: string, fromTradeId: string, toTradeId: string): Promise<void>;
   /** Takes a company off the job for that trade. Its items stay as they are. */
@@ -202,10 +237,15 @@ export interface DataApi {
    */
   companyConfirmVisit(input: { visitId: string; name: string | null }): Promise<void>;
   companyAskVisit(input: { visitId: string; start: string; days: number; name: string | null }): Promise<void>;
-  recordSend(send: { jobId: string; list: string; itemIds: string[] }): Promise<string>;
+  recordSend(send: NewSend): Promise<string>;
   undoSend(id: string): Promise<void>;
   setFormSettings(settings: FormSettings): Promise<void>;
   setViewSettings(settings: ViewSettings): Promise<void>;
+  /** Sends a six digit code to the email, for someone Ross Built has added. Refused for anyone else. */
+  sendSignInCode(email: string): Promise<void>;
+  /** Signs in with the code from the email. */
+  verifySignInCode(email: string, code: string): Promise<void>;
+  /** Signs out; what is on the phone is cleared. */
   signOut(): Promise<void>;
 }
 

@@ -58,7 +58,8 @@
           "microphonePermission": false
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-mail-composer"
     ],
     "experiments": {
       "typedRoutes": true,

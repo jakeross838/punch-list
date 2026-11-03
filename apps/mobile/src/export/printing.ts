@@ -10,6 +10,7 @@ import { printPage, type Printout } from '@punch/core';
 import { Asset } from 'expo-asset';
 import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { PDFDocument } from 'pdf-lib';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
@@ -112,4 +113,19 @@ export async function showPdf(file: File, title: string): Promise<void> {
 /** Straight to the share sheet: Mail, Messages, AirDrop or Files. */
 export async function sharePdf(file: File, title: string): Promise<void> {
   await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: title });
+}
+
+/** Several PDFs as one, in order: for the share sheet, which takes a single file. */
+export async function joinPdfs(files: File[], fileName: string): Promise<File> {
+  const joined = await PDFDocument.create();
+  for (const f of files) {
+    const doc = await PDFDocument.load(await f.bytes());
+    for (const page of await joined.copyPages(doc, doc.getPageIndices())) joined.addPage(page);
+  }
+  const folder = new Directory(Paths.cache, 'lists');
+  if (!folder.exists) folder.create({ intermediates: true, idempotent: true });
+  const out = new File(folder, fileName);
+  if (out.exists) out.delete();
+  out.write(await joined.save());
+  return out;
 }

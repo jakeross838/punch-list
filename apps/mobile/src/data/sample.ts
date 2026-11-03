@@ -5,6 +5,7 @@
 import {
   addDays,
   addWorkingDays,
+  buildTimeline,
   dayOfDate,
   DEFAULT_ROOM_TASKS,
   DEFAULT_FORM,
@@ -12,9 +13,13 @@ import {
   earliestStart,
   mondayOf,
   parseRoomList,
+  ROOM_KINDS,
+  scheduleSnapshot,
   type Activity,
   type Comment,
   type Company,
+  type CompanyLink,
+  type Contact,
   type CustomField,
   type FormSettings,
   type Item,
@@ -37,6 +42,10 @@ import { RANGE_WALL, RANGE_WALL_NO_UPPERS, SAMPLE_PHOTO_SIZE } from './samplePho
 
 export interface SampleState {
   me: Person;
+  /** Signed in as me; out after Sign Out, until a code is entered. */
+  signedIn: boolean;
+  /** Who asked for a sign in code, to enter it next. */
+  codeFor: string | null;
   /** Everyone at Ross Built, for who did what. */
   people: Person[];
   /** Who did what, the way the database logs it. */
@@ -47,6 +56,10 @@ export interface SampleState {
   locations: Location[];
   trades: Trade[];
   companies: Company[];
+  /** The people at each company: who gets its lists. */
+  contacts: Contact[];
+  /** Each company's private link on a job. */
+  links: CompanyLink[];
   jobCompanies: JobCompany[];
   waitingOn: Record<string, string[]>;
   items: Item[];
@@ -136,6 +149,31 @@ export function sampleState(): SampleState {
   }));
   const c = (name: string) => companies.find((x) => x.name === name)!.id;
   const jobCompanies: JobCompany[] = companies.map((co) => ({ jobId: job.id, companyId: co.id, tradeId: co.defaultTradeId! }));
+  // Made up people at the companies, with addresses that go nowhere. Volcano Stone and Climatic have
+  // nobody yet; Gator Plumbing's has only a phone, so its list goes by text.
+  let contactNo = 0;
+  const person = (company: string, name: string, email: string | null, phone: string | null, getsLists = true): Contact => ({
+    id: `contact-${++contactNo}`,
+    companyId: c(company),
+    name,
+    email,
+    phone,
+    getsLists,
+    sortOrder: contactNo,
+    active: true,
+  });
+  const contacts: Contact[] = [
+    person('SMS Carpentry', 'Mike Sample', 'mike@smscarpentry.example', '(941) 555-0131'),
+    person('SMS Carpentry', 'Office', 'office@smscarpentry.example', null, false),
+    person('Triple H Painting', 'Hector Sample', 'hector@triplehpainting.example', null),
+    person('Gator Plumbing', 'Dave Sample', null, '(941) 555-0187'),
+    person('Rangel Custom Tile', 'Luis Sample', 'luis@rangeltile.example', null),
+    person('Metro Electric', 'Sarah Sample', 'sarah@metroelectric.example', '(941) 555-0164'),
+  ];
+  // SMS Carpentry's page went out with its list last week.
+  const links: CompanyLink[] = [
+    { token: '5f3a9c1e7b2d4f6a8c0e1b3d5f7a9c2e4b6d8f0a1c3e5b7d9f2a4c6e8b0d1f3a', jobId: job.id, companyId: c('SMS Carpentry'), createdAt: '2026-10-30T16:00:00.000Z', revoked: false },
+  ];
 
   const parsed = parseRoomList(
     [
@@ -256,8 +294,31 @@ export function sampleState(): SampleState {
     visit('visit-tile', 'Rangel Custom Tile', addDays(mondayOf(today), -7), 1, true, [8]),
     visit('visit-stone', 'Volcano Stone', addWorkingDays(earliestStart(today), 2), 1, false, [25]),
   ];
+  // Last Friday's schedule, to track against: Volcano Stone was two working days sooner, Triple H
+  // Painting had not confirmed yet, and Climatic was not on it.
+  const now = scheduleSnapshot(buildTimeline(items, visits, locations, today));
+  const kept = now.bars.flatMap((b) =>
+    b.companyId === c('Climatic')
+      ? []
+      : b.companyId === c('Volcano Stone')
+        ? [{ ...b, start: addWorkingDays(b.start, -2), end: addWorkingDays(b.end, -2) }]
+        : b.companyId === c('Triple H Painting')
+          ? [{ ...b, confirmed: false }]
+          : [b],
+  );
+  const lastFriday = addDays(mondayOf(today), -3);
   // SMS Carpentry's list went out last week, before the cabinet door was found.
   const sends: ListSend[] = [
+    {
+      id: 'send-schedule',
+      jobId: job.id,
+      list: 'schedule',
+      itemIds: [],
+      sentAt: `${lastFriday}T15:30:00.000Z`,
+      sentBy: me.id,
+      removed: false,
+      snapshot: { finish: kept.reduce<string | null>((m, b) => (m === null || b.end > m ? b.end : m), null), bars: kept },
+    },
     {
       id: 'send-sms',
       jobId: job.id,
@@ -297,10 +358,12 @@ export function sampleState(): SampleState {
     list.map(([title, uses, hours]) => ({ id: `title-${++titleNo}`, title, tradeId: t(trade), uses, approved: true, hours, rooms: DEFAULT_ROOM_TASKS[title.toLowerCase()] ?? [] })),
   );
 
-  // The starter template, as the database seeds it once the trades are in, and a small one for the outside.
+  // The starter templates, as the database seeds them once the trades are in, and a small one for
+  // the outside. Common Tasks on a walk come from them.
   const templates: Template[] = [
     { id: 'template-house', name: 'End of the House', active: true, sortOrder: 1 },
-    { id: 'template-outside', name: 'Pool and Outside', active: true, sortOrder: 2 },
+    { id: 'template-rooms', name: 'Common Tasks by Room', active: true, sortOrder: 2 },
+    { id: 'template-outside', name: 'Pool and Outside', active: true, sortOrder: 3 },
   ];
   let taskNo = 0;
   const task = (templateId: string, title: string, trade: string, hours: number, place: TemplatePlace, waitsOn: string[] = []): TemplateItem => ({
@@ -335,6 +398,28 @@ export function sampleState(): SampleState {
     task('template-outside', 'Clean gutters', 'Ross Built Crew', 3, 'Roof'),
     task('template-outside', 'Touch up exterior paint', 'Painting', 4, 'outside'),
   ];
+  // The common tasks in each kind of room, each with its standard title's trade and usual time,
+  // leaving out what End of the House has there already.
+  const inHouse = new Set(templateItems.filter((x) => x.templateId === 'template-house').map((x) => `${x.title.toLowerCase()}|${x.place}`));
+  for (const kind of ROOM_KINDS) {
+    for (const [title, kinds] of Object.entries(DEFAULT_ROOM_TASKS)) {
+      if (!kinds.includes(kind) || inHouse.has(`${title}|${kind}`)) continue;
+      const standard = titles.find((x) => x.title.toLowerCase() === title);
+      templateItems.push({
+        id: `task-${++taskNo}`,
+        templateId: 'template-rooms',
+        title: standard?.title ?? title.charAt(0).toUpperCase() + title.slice(1),
+        description: '',
+        kind: 'completion',
+        tradeId: standard?.tradeId ?? null,
+        hours: standard?.hours ?? null,
+        place: kind,
+        waitsOn: [],
+        sortOrder: taskNo,
+        active: true,
+      });
+    }
+  }
 
   const customFields: CustomField[] = [
     { id: 'field-found-by', label: 'Found By', kind: 'list', options: ['Owner', 'Architect', 'Designer', 'Ross Built'], sortOrder: 1, active: true },
@@ -446,6 +531,8 @@ export function sampleState(): SampleState {
 
   return {
     me,
+    signedIn: true,
+    codeFor: null,
     people: [me, sam, taylor],
     activity,
     jobs: [job, bay, palm],
@@ -453,6 +540,8 @@ export function sampleState(): SampleState {
     locations,
     trades,
     companies,
+    contacts,
+    links,
     jobCompanies,
     waitingOn: { [job.id]: ['Ross Built', 'Owner', 'Cortney Bishop Design'] },
     items,

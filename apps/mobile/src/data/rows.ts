@@ -1,6 +1,35 @@
 // Database rows (snake_case, booleans as 0 or 1 on the phone) to and from the app's records.
 
-import { isTemplatePlace, tidyHours, tidyRooms, type Template, type TemplateItem, type Activity, type ActivityDetail, type ActivityKind, type Comment, type Company, type CustomField, type Item, type ItemFields, type Job, type JobCompany, type ListSend, type Location, type Mark, type Person, type Photo, type StandardTitle, type TeamMember, type TeamPart, type Trade, type Visit } from '@punch/core';
+import {
+  isTemplatePlace,
+  tidyHours,
+  tidyRooms,
+  type Activity,
+  type ActivityDetail,
+  type ActivityKind,
+  type Comment,
+  type Company,
+  type CompanyLink,
+  type Contact,
+  type CustomField,
+  type Item,
+  type ItemFields,
+  type Job,
+  type JobCompany,
+  type ListSend,
+  type Location,
+  type Mark,
+  type Person,
+  type Photo,
+  type ScheduleSnapshot,
+  type StandardTitle,
+  type TeamMember,
+  type TeamPart,
+  type Template,
+  type TemplateItem,
+  type Trade,
+  type Visit,
+} from '@punch/core';
 import type { ItemPatch } from './api';
 
 type Row = Record<string, unknown>;
@@ -88,6 +117,26 @@ export const rowToCompany = (r: Row): Company => ({
   phone: textOrNull(r.phone),
   email: textOrNull(r.email),
   active: bool(r.active),
+});
+
+export const rowToContact = (r: Row): Contact => ({
+  id: text(r.id),
+  companyId: text(r.company_id),
+  name: text(r.name),
+  email: textOrNull(r.email),
+  phone: textOrNull(r.phone),
+  getsLists: bool(r.gets_lists),
+  sortOrder: num(r.sort_order),
+  active: bool(r.active),
+});
+
+/** A company link: the phone keeps its token as the row's id. */
+export const rowToCompanyLink = (r: Row): CompanyLink => ({
+  token: text(r.id ?? r.token),
+  jobId: text(r.job_id),
+  companyId: text(r.company_id),
+  createdAt: text(r.created_at),
+  revoked: bool(r.revoked),
 });
 
 export const rowToJobCompany = (r: Row): JobCompany => ({ jobId: text(r.job_id), companyId: text(r.company_id), tradeId: text(r.trade_id) });
@@ -258,7 +307,21 @@ export const rowToListSend = (r: Row): ListSend => ({
   sentAt: text(r.sent_at),
   sentBy: text(r.sent_by),
   removed: bool(r.removed),
+  snapshot: snapshotOf(r.snapshot),
 });
+
+/** The schedule a send kept, when it has one that reads. */
+function snapshotOf(v: unknown): ScheduleSnapshot | null {
+  const s = json<unknown>(v, null);
+  if (!s || typeof s !== 'object' || !Array.isArray((s as ScheduleSnapshot).bars)) return null;
+  const { finish, bars } = s as ScheduleSnapshot;
+  return {
+    finish: typeof finish === 'string' ? finish : null,
+    bars: bars
+      .filter((b) => b && typeof b.companyId === 'string' && typeof b.start === 'string' && typeof b.end === 'string')
+      .map((b) => ({ key: String(b.key ?? ''), companyId: b.companyId, start: b.start, end: b.end, confirmed: b.confirmed === true })),
+  };
+}
 
 export function itemFieldsColumns(fields: ItemFields): [string, unknown][] {
   return itemPatchColumns(fields);
@@ -271,6 +334,7 @@ export const BOOLEAN_COLUMNS: Record<string, string[]> = {
   locations: ['active'],
   trades: ['active'],
   companies: ['active'],
+  company_contacts: ['gets_lists', 'active'],
   items: ['ready', 'bought_out', 'unfinished'],
   title_library: ['approved'],
   custom_fields: ['active'],
@@ -279,16 +343,23 @@ export const BOOLEAN_COLUMNS: Record<string, string[]> = {
   list_sends: ['removed'],
   comments: ['from_company', 'internal', 'removed'],
   company_links: ['revoked'],
+  templates: ['active'],
+  template_items: ['active'],
 };
 
 /** Columns the server keeps as JSON; the phone stores them as text. */
 export const JSON_COLUMNS: Record<string, string[]> = {
   items: ['extra', 'waiting_on', 'waiting_on_items'],
-  list_sends: ['item_ids'],
+  list_sends: ['item_ids', 'snapshot'],
   custom_fields: ['options'],
+  title_library: ['rooms'],
+  template_items: ['waits_on'],
   photos: ['marks'],
   person_settings: ['item_form', 'job_view'],
 };
+
+/** The column a table's rows are found by on the server, where it is not id: a company link is its token. */
+export const KEY_COLUMNS: Record<string, string> = { company_links: 'token' };
 
 export function toServerRow(table: string, data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...data };

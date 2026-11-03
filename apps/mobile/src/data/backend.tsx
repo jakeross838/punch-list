@@ -6,6 +6,7 @@
 import { randomUUID } from 'expo-crypto';
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import {
+  contactProblem,
   isAdmin,
   isEmail,
   itemChanges,
@@ -13,6 +14,7 @@ import {
   renamedHoldups,
   seesJob,
   tidyComment,
+  tidyContact,
   tidyEmail,
   tidyName,
   tidyTitle,
@@ -20,6 +22,7 @@ import {
   type ActivityDetail,
   type ActivityKind,
   type Comment,
+  type Contact,
   type Item,
   type Person,
   type Photo,
@@ -179,9 +182,15 @@ const commentDetail = (c: Comment): ActivityDetail => ({
   body: c.body.slice(0, 200),
 });
 
+/** A new link's token: 64 random hex characters, never short enough to guess. */
+const newToken = () => `${randomUUID()}${randomUUID()}`.replace(/-/g, '').toLowerCase();
+
 const api: DataApi = {
   mode: 'preview',
-  useMe: () => useStore().me,
+  useMe: () => {
+    const s = useStore();
+    return s.signedIn ? s.me : null;
+  },
   usePeople: () => useStore().people,
   useJobs: () => {
     const s = useStore();
@@ -217,6 +226,11 @@ const api: DataApi = {
   },
   useTrades: () => useStore().trades,
   useCompanies: () => useStore().companies,
+  useContacts: () => useStore().contacts,
+  useCompanyLinks: (jobId) => {
+    const s = useStore();
+    return useMemo(() => s.links.filter((l) => l.jobId === jobId && !l.revoked), [s.links, jobId]);
+  },
   useJobCompanies: (jobId) => {
     const s = useStore();
     return useMemo(() => s.jobCompanies.filter((jc) => jc.jobId === jobId), [s.jobCompanies, jobId]);
@@ -577,9 +591,9 @@ const api: DataApi = {
     commit({ comments: [...state.comments, comment] }, [{ jobId, itemId, kind: 'comment_added', detail: commentDetail(comment), personId: null }]);
     return comment.id;
   },
-  async recordSend({ jobId, list, itemIds }) {
+  async recordSend({ jobId, list, itemIds, snapshot }) {
     const id = randomUUID();
-    commit({ sends: [...state.sends, { id, jobId, list, itemIds, sentAt: now(), sentBy: state.me.id, removed: false }] }, [
+    commit({ sends: [...state.sends, { id, jobId, list, itemIds, sentAt: now(), sentBy: state.me.id, removed: false, snapshot: snapshot ?? null }] }, [
       { jobId, kind: 'list_sent', detail: { list, items: itemIds.length } },
     ]);
     return id;
@@ -647,6 +661,7 @@ const api: DataApi = {
     adminOnly();
     const was = state.companies.find((c) => c.id === id);
     if (!was) return;
+    if (patch.name !== undefined && patch.name.trim() === '') throw new Error('Give the company a name.');
     const renamed = patch.name !== undefined && patch.name !== was.name;
     const holdups = renamed ? new Map(renamedHoldups(state.items, was.name, patch.name!).map((h) => [h.id, h.waitingOn])) : new Map<string, string[]>();
     // The new name shows on every job the company is on.
@@ -658,6 +673,34 @@ const api: DataApi = {
       },
       jobs.map((jobId) => ({ jobId, kind: 'company_renamed', detail: { company_id: id, from: was.name, to: patch.name! } })),
     );
+  },
+  async addContact(input) {
+    adminOnly();
+    const problem = contactProblem(input);
+    if (problem) throw new Error(problem);
+    const sortOrder = Math.max(0, ...state.contacts.filter((x) => x.companyId === input.companyId).map((x) => x.sortOrder)) + 1;
+    const contact: Contact = { ...tidyContact(input), id: randomUUID(), sortOrder, active: true };
+    setState({ ...state, contacts: [...state.contacts, contact] });
+    return contact.id;
+  },
+  async updateContact(id, patch) {
+    adminOnly();
+    const was = state.contacts.find((x) => x.id === id);
+    if (!was) return;
+    const next = tidyContact({ ...was, ...patch });
+    const problem = contactProblem(next);
+    if (problem) throw new Error(problem);
+    setState({ ...state, contacts: state.contacts.map((x) => (x.id === id ? next : x)) });
+  },
+  async companyLink(jobId, companyId) {
+    const live = state.links.find((l) => l.jobId === jobId && l.companyId === companyId && !l.revoked);
+    if (live) return live.token;
+    const token = newToken();
+    setState({ ...state, links: [...state.links, { token, jobId, companyId, createdAt: now(), revoked: false }] });
+    return token;
+  },
+  async revokeCompanyLink(token) {
+    setState({ ...state, links: state.links.map((l) => (l.token === token ? { ...l, revoked: true } : l)) });
   },
   async setJobCompanyTrade(jobId, companyId, fromTradeId, toTradeId) {
     adminOnly();
@@ -720,8 +763,24 @@ const api: DataApi = {
   async setViewSettings(viewSettings) {
     setState({ ...state, viewSettings });
   },
+  async sendSignInCode(email) {
+    const clean = tidyEmail(email);
+    if (!isEmail(clean)) throw new Error('That email does not look right.');
+    // As the server does: a code only for someone Ross Built has added and not switched off.
+    if (!state.people.some((p) => p.active && p.email === clean)) throw new Error('That email is not set up at Ross Built. Ask an admin to add you under People.');
+    setState({ ...state, codeFor: clean });
+  },
+  async verifySignInCode(email, code) {
+    const clean = tidyEmail(email);
+    const person = state.people.find((p) => p.active && p.email === clean);
+    // The preview sends no email: any six digits sign in.
+    if (!person || state.codeFor !== clean) throw new Error('Send a code to that email first.');
+    if (!/^\d{6}$/.test(code.trim())) throw new Error('That code did not work. Check it, or send a new one.');
+    setState({ ...state, me: person, signedIn: true, codeFor: null });
+  },
   async signOut() {
-    setState(sampleState());
+    // What was on the phone is cleared, as it is on the iPhone.
+    setState({ ...sampleState(), signedIn: false });
   },
 };
 

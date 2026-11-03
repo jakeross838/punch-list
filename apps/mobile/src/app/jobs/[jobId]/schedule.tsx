@@ -7,18 +7,25 @@
 // companies set that date: the last visits, and the work they wait on, outlined on the chart.
 // Holidays are shaded and never get work. Past Due comes first; what has no date yet, the
 // additional work to be quoted and the drafts not checked yet are listed under the chart. Tap a bar
-// for its visit, or a company for its plan.
+// for its visit, or a company for its plan. Since the schedule last went out (the Schedule Email or
+// the look ahead), it says what moved: who starts or finishes later or earlier and by how many
+// working days, who is new on it, who confirmed, who is done, and the finish date then and now.
 
 import {
   addDays,
   buildTimeline,
+  changeText,
   companyPlan,
   dayOfDate,
   holdText,
   holidayGroups,
   holidaysBetween,
+  lastScheduleSend,
   lookAheadStart,
+  movedText,
   pastDue,
+  scheduleChanges,
+  scheduleSnapshot,
   timelineRows,
   waitingOnText,
   type ListLine,
@@ -46,6 +53,7 @@ export default function ScheduleScreen() {
   const locations = data.useLocations(jobId);
   const companies = data.useCompanies();
   const holds = useHolds(jobId);
+  const sends = data.useSends(jobId);
   const today = dayOfDate(new Date());
   // This week, or next week once it is Friday: the three weeks the look ahead sends.
   const monday = lookAheadStart(today);
@@ -56,6 +64,13 @@ export default function ScheduleScreen() {
   const timeline = useMemo(() => buildTimeline(items, visits, locations, today), [items, visits, locations, today]);
   const rows = useMemo(() => timelineRows(timeline, monday), [timeline, monday]);
   const moving = timeline.bars.filter((b) => b.kind === 'auto');
+  // What moved since the schedule last went out, to track against what everyone was told.
+  const lastSent = lastScheduleSend(sends);
+  const since = useMemo(() => {
+    if (!lastSent?.snapshot) return null;
+    const open = new Set(items.filter((i) => i.status === 'open' && !i.unfinished && i.companyId).map((i) => i.companyId!));
+    return scheduleChanges(lastSent.snapshot, scheduleSnapshot(timeline), lastSent.sentAt, (id) => open.has(id));
+  }, [lastSent, items, timeline]);
 
   const name = (id: string) => companies.find((c) => c.id === id)?.name ?? 'Not set';
   const where = (id: string) => locations.find((l) => l.id === id)?.label ?? '';
@@ -162,6 +177,8 @@ export default function ScheduleScreen() {
         </ListSection>
       ) : null}
 
+      {since && lastSent ? <SinceSection changes={since} sentAt={lastSent.sentAt} name={name} onCompany={openPlan} /> : null}
+
       {rows.length > 0 ? (
         <View style={styles.chart}>
           <Gantt timeline={timeline} rows={rows} monday={monday} today={today} companyName={name} onBar={openBar} onCompany={openPlan} />
@@ -256,6 +273,55 @@ export default function ScheduleScreen() {
 
       <VisitSheet jobId={jobId} company={draft ? name(draft.companyId) : ''} draft={draft} lines={sheetLines} onClose={() => setDraft(null)} />
     </Page>
+  );
+}
+
+/** "November 3 to 5", "November 3" */
+function spanWords(span: { start: string; end: string }): string {
+  if (span.start === span.end) return shortDate(span.start);
+  const [a, b] = [shortDate(span.start), shortDate(span.end)];
+  // The same month says its name once.
+  return a.split(' ')[0] === b.split(' ')[0] && !a.includes(',') && !b.includes(',') ? `${a} to ${b.split(' ')[1]}` : `${a} to ${b}`;
+}
+
+function SinceSection({
+  changes,
+  sentAt,
+  name,
+  onCompany,
+}: {
+  changes: ReturnType<typeof scheduleChanges>;
+  sentAt: string;
+  name: (id: string) => string;
+  onCompany: (companyId: string) => void;
+}) {
+  const sent = weekdayDate(dayOfDate(new Date(sentAt)));
+  const { was, now, days } = changes.finish;
+  const finish =
+    was && now && days !== 0
+      ? `The finish date moved ${movedText(days)}, from ${weekdayDate(was)} to ${weekdayDate(now)}.`
+      : now
+        ? `The finish date has not moved: ${weekdayDate(now)}.`
+        : '';
+  return (
+    <ListSection header={`Since ${sent}`} footer={[finish, changes.changes.length > 0 ? 'The Schedule Email in Send Lists tells everyone.' : ''].filter(Boolean).join(' ') || undefined}>
+      {changes.changes.length === 0 ? <ListRow title="Nothing has moved" subtitle="Every company's dates are as they went out." testID="since-nothing" /> : null}
+      {changes.changes.map((c) => (
+        <ListRow
+          key={c.companyId}
+          title={name(c.companyId)}
+          subtitle={[changeText(c), c.was && c.now ? `Was ${spanWords(c.was)}, now ${spanWords(c.now)}` : c.now ? spanWords(c.now) : c.was ? `Was ${spanWords(c.was)}` : '']
+            .filter(Boolean)
+            .join('. ')}
+          valueColor={c.kind === 'later' || c.kind === 'longer' || c.kind === 'off' ? colors.destructive : colors.secondary}
+          value={c.kind === 'later' || c.kind === 'longer' ? `${c.days}\u00a0${c.days === 1 ? 'day' : 'days'}` : undefined}
+          accessory="chevron"
+          onPress={() => onCompany(c.companyId)}
+          testID={`since-${c.companyId}`}
+          accessibilityLabel={`${name(c.companyId)}, ${changeText(c)}`}
+        />
+      ))}
+    </ListSection>
   );
 }
 

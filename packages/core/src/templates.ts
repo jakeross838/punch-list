@@ -95,18 +95,27 @@ export interface TemplatePlan {
   byLocation: { locationId: string; count: number }[];
 }
 
-/**
- * What adding a template to a job makes. onlyLocationId: just the tasks that fit that one location.
- * places: just these places. newId makes the ids of the new items.
- */
+export interface TemplatePlanOptions {
+  /** Just the tasks that fit this one location. */
+  onlyLocationId?: string;
+  /** Just the tasks for these places. */
+  places?: TemplatePlace[];
+  /** Just these tasks; the rest still count for what these wait on. */
+  taskIds?: string[];
+  /** Every task picked goes in this one location, whatever its place: Common Tasks. */
+  intoLocationId?: string;
+}
+
+/** What adding a template to a job makes. newId makes the ids of the new items. */
 export function templatePlan(
   tasks: TemplateItem[],
   job: { jobId: string; locations: Location[]; items: Item[]; jobCompanies: JobCompany[] },
   newId: () => string,
-  options: { onlyLocationId?: string; places?: TemplatePlace[] } = {},
+  options: TemplatePlanOptions = {},
 ): TemplatePlan {
   const live = tasks.filter((t) => t.active && t.title.trim() !== '').sort((a, b) => a.sortOrder - b.sortOrder);
-  const wanted = live.filter((t) => !options.places || options.places.includes(t.place));
+  const wanted = live.filter((t) => (!options.places || options.places.includes(t.place)) && (!options.taskIds || options.taskIds.includes(t.id)));
+  const into = options.intoLocationId ? job.locations.filter((l) => l.id === options.intoLocationId) : null;
   const existing = job.items.filter((i) => i.status !== 'removed');
   // Each task's item in each location: a new one, or the item already there with its title.
   const madeIn = new Map<string, Map<string, string>>();
@@ -115,8 +124,8 @@ export function templatePlan(
   const plannedKeys = new Set<string>();
   let skipped = 0;
   for (const task of wanted) {
-    const where = locationsFor(task.place, job.locations).filter((l) => !options.onlyLocationId || l.id === options.onlyLocationId);
-    if (where.length === 0 && !options.onlyLocationId && !missing.includes(task.place)) missing.push(task.place);
+    const where = into ?? locationsFor(task.place, job.locations).filter((l) => !options.onlyLocationId || l.id === options.onlyLocationId);
+    if (where.length === 0 && !options.onlyLocationId && !into && !missing.includes(task.place)) missing.push(task.place);
     const ids = new Map<string, string>();
     for (const l of where) {
       const twin = twinIn(task.title, l.id, existing, true);
@@ -141,7 +150,7 @@ export function templatePlan(
     const found = new Map<string, string>();
     const other = live.find((t) => t.id === taskId);
     if (!other) return found;
-    for (const l of locationsFor(other.place, job.locations)) {
+    for (const l of [...(into ?? []), ...locationsFor(other.place, job.locations)]) {
       const twin = twinIn(other.title, l.id, existing);
       if (twin) found.set(l.id, twin.id);
     }
@@ -229,6 +238,36 @@ export function templateFromItems(items: Item[], locations: Location[], newId: (
 }
 
 const titleKey = (title: string) => title.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/**
+ * Common Tasks for a place: every template's tasks there, template by template in order, each title
+ * once. A walk offers them in each location of that place, to add with a tap.
+ */
+export function commonTasks(place: TemplatePlace, templates: Template[], tasks: TemplateItem[]): { template: Template; tasks: TemplateItem[] }[] {
+  const seen = new Set<string>();
+  return [...templates]
+    .filter((t) => t.active)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    .map((template) => ({
+      template,
+      tasks: tasks
+        .filter((t) => t.templateId === template.id && t.active && t.place === place && t.title.trim() !== '')
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .filter((t) => {
+          const key = titleKey(t.title);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }),
+    }))
+    .filter((g) => g.tasks.length > 0);
+}
+
+/** The places Common Tasks offers in a location: its own place first, then every kind of room, then the Whole House. */
+export function commonPlaces(location: Pick<Location, 'kind' | 'label'> | null | undefined): TemplatePlace[] {
+  const own = location ? placeOf(location) : null;
+  return [...new Set<TemplatePlace>([...(own ? [own] : []), ...ROOM_KINDS, 'Whole House'])];
+}
 
 /** "12 tasks" */
 export const taskCount = (n: number) => (n === 1 ? '1 task' : `${n} tasks`);

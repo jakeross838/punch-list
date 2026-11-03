@@ -3,7 +3,7 @@
 
 import { UpdateType, type PowerSyncBackendConnector } from '@powersync/react-native';
 import { config } from '../config';
-import { toServerRow } from '../rows';
+import { KEY_COLUMNS, toServerRow } from '../rows';
 import { supabase } from './supabase';
 
 type Database = Parameters<PowerSyncBackendConnector['uploadData']>[0];
@@ -32,14 +32,16 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
     for (const op of tx.crud) {
       const table = supabase.from(op.table);
       const data = toServerRow(op.table, op.opData ?? {});
+      // The row's id on the phone; a company link's is its token.
+      const key = KEY_COLUMNS[op.table] ?? 'id';
       // The app only ever inserts new rows, so a PUT is a plain insert. A row that is already there
       // means an earlier attempt landed before the signal dropped.
       const result =
         op.op === UpdateType.PUT
-          ? await table.insert({ ...data, id: op.id })
+          ? await table.insert({ ...data, [key]: op.id })
           : op.op === UpdateType.PATCH
-            ? await table.update(data).eq('id', op.id)
-            : await table.delete().eq('id', op.id);
+            ? await table.update(data).eq(key, op.id)
+            : await table.delete().eq(key, op.id);
       const error = result.error;
       if (!error) continue;
       if (op.op === UpdateType.PUT && error.code === ALREADY_THERE) continue;

@@ -31,7 +31,7 @@ export function ActionSheetHost({ request, onDone }: { request: ActionSheetReque
   if (!request) return null;
   return createPortal(
     <div className="pl-action-root" data-open={shown ? 'true' : 'false'}>
-      <div className="pl-action-dim" onClick={() => finish()} />
+      <div className="pl-action-dim" onClick={() => finish(request.onCancel)} />
       <div className="pl-action-panel" role="dialog" aria-modal="true" aria-label={request.title ?? 'Choose'}>
         <div className="pl-action-group">
           {request.title || request.message ? (
@@ -53,7 +53,7 @@ export function ActionSheetHost({ request, onDone }: { request: ActionSheetReque
             </button>
           ))}
         </div>
-        <button type="button" className="pl-action-button pl-action-cancel" onClick={() => finish()}>
+        <button type="button" className="pl-action-button pl-action-cancel" onClick={() => finish(request.onCancel)}>
           {request.cancelLabel ?? 'Cancel'}
         </button>
       </div>

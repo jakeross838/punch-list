@@ -38,3 +38,7 @@ export async function showPdf(_file: File, _title: string): Promise<void> {
 export async function sharePdf(_file: File, _title: string): Promise<void> {
   throw new Error(ONLY_ON_THE_PHONE);
 }
+
+export async function joinPdfs(_files: File[], _fileName: string): Promise<File> {
+  throw new Error(ONLY_ON_THE_PHONE);
+}
