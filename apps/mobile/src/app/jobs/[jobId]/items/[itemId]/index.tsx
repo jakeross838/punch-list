@@ -22,6 +22,7 @@ import {
   restore,
   RuleError,
   sortItems,
+  tradeRanks,
   tidyItem,
   visitEnd,
   type Item,
@@ -154,6 +155,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   const { width: screenWidth } = useWindowDimensions();
   const me = data.useMe();
   const items = data.useItems(jobId);
+  const trades = data.useTrades();
   const photos = data.usePhotos(jobId).filter((p) => p.itemId === item.id);
   const room = data.useLocations(jobId).find((l) => l.id === item.locationId);
   const companies = data.useCompanies();
@@ -190,7 +192,10 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   // A draft whose photo belongs on an item already on the list here: the photo can go there instead.
   const targets: Option[] =
     item.unfinished && item.status === 'open' && photos.length > 0
-      ? sortItems(items.filter((i) => i.locationId === item.locationId && i.status === 'open' && !i.unfinished && i.id !== item.id)).map((i) => ({
+      ? sortItems(
+          items.filter((i) => i.locationId === item.locationId && i.status === 'open' && !i.unfinished && i.id !== item.id),
+          tradeRanks(trades),
+        ).map((i) => ({
           value: i.id,
           label: i.title,
           hint: `Item ${itemNumberLabel(i)}`,

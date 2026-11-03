@@ -644,6 +644,11 @@ const api: DataApi = {
     setState({ ...state, trades: [...state.trades, { id, name, sortOrder: state.trades.length + 1 }] });
     return id;
   },
+  async reorderTrades(orderedIds) {
+    adminOnly();
+    const place = new Map(orderedIds.map((id, i) => [id, i + 1]));
+    setState({ ...state, trades: state.trades.map((t) => (place.has(t.id) ? { ...t, sortOrder: place.get(t.id)! } : t)) });
+  },
   async addCompany({ name, defaultTradeId }) {
     adminOnly();
     const id = randomUUID();

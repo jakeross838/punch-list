@@ -193,6 +193,8 @@ export interface DataApi {
   addPhotos(photos: NewPhoto[]): Promise<void>;
   updatePhoto(id: string, patch: PhotoPatch): Promise<void>;
   addTrade(name: string): Promise<string>;
+  /** Admins only. The order the trades come in on every list: these trades, in this order. */
+  reorderTrades(orderedIds: string[]): Promise<void>;
   addCompany(input: { name: string; defaultTradeId: string | null }): Promise<string>;
   addCompanyToJob(jobId: string, companyId: string, tradeId: string): Promise<void>;
   /** Renames a company on every job (items waiting on it by the old name keep waiting on it), or changes its usual trade. */

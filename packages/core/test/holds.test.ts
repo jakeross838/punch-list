@@ -110,7 +110,8 @@ describe('waiting on other tasks', () => {
   it('groups and filters what waits on a task under the company doing it', () => {
     const groups = groupItems(jobItems, 'waiting', lookups);
     expect(groups.map((g) => [g.label, g.items.map((i) => i.id)])).toEqual([
-      ['Ready', ['stone', 'shoe']],
+      // Trade by trade: the carpentry, then the stone.
+      ['Ready', ['shoe', 'stone']],
       ['To Be Quoted', []],
       ['Owner', ['pulls']],
       ['SMS Carpentry', ['pulls']],

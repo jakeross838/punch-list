@@ -130,7 +130,8 @@ export default function JobScreen() {
 
   const filters = view.filters;
   const narrowed = isFiltered(filters);
-  const lookups = useMemo(() => ({ locations, companies }), [locations, companies]);
+  // Each list keeps a trade's items together, in the trades' order.
+  const lookups = useMemo(() => ({ locations, companies, trades }), [locations, companies, trades]);
   const groups = useMemo(() => groupItems(items, view.groupBy, lookups, { filters, context }), [items, view.groupBy, lookups, filters, context]);
   const draftItems = items.filter((i) => i.unfinished && i.status === 'open');
   const drafts = draftItems.length;

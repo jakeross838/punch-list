@@ -6,9 +6,9 @@
 import { matchesFilters, type FilterContext, type ItemFilters } from './filters';
 import { holdLookups, holdText, readyByOf, type HoldLookups } from './holds';
 import { isPriced } from './rules';
-import type { Company, Item, Location, Visit } from './types';
+import type { Company, Item, Location, Trade, Visit } from './types';
 import { floorOf, NO_FLOOR } from './rooms';
-import { sortItems } from './views';
+import { sortItems, tradeRanks } from './views';
 
 export interface ListLookups {
   locations: Location[];
@@ -21,6 +21,8 @@ export interface ListLookups {
   visits?: Visit[];
   /** Today, for those dates. */
   today?: string;
+  /** With them, each location's items come trade by trade, in the trades' order. */
+  trades?: Trade[];
 }
 
 export interface ListLine {
@@ -88,10 +90,10 @@ export function lineFor(item: Item, lookups: ListLookups): ListLine {
   };
 }
 
-/** Floor order, then the item number. */
+/** Floor order, then each trade together (when the trades are known), then the item number. */
 function inFloorOrder(items: Item[], lookups: ListLookups): Item[] {
   const order = new Map(lookups.locations.map((l) => [l.id, l.sortOrder]));
-  const numbered = sortItems(items);
+  const numbered = sortItems(items, lookups.trades ? tradeRanks(lookups.trades) : undefined);
   return [...numbered].sort((a, b) => (order.get(a.locationId) ?? 1e9) - (order.get(b.locationId) ?? 1e9));
 }
 
@@ -189,8 +191,13 @@ export function jobList(items: Item[], lookups: ListLookups): ListLine[] {
   const open = items.filter(onLists);
   const lines = inFloorOrder(open, look).map((i) => lineFor(i, look));
   const order = new Map(lookups.locations.map((l) => [l.id, l.sortOrder]));
+  // Each location trade by trade when the trades are known, then company by company.
+  const rank = lookups.trades ? tradeRanks(lookups.trades) : () => 0;
   return lines.sort(
-    (a, b) => (order.get(a.item.locationId) ?? 1e9) - (order.get(b.item.locationId) ?? 1e9) || a.company.localeCompare(b.company),
+    (a, b) =>
+      (order.get(a.item.locationId) ?? 1e9) - (order.get(b.item.locationId) ?? 1e9) ||
+      rank(a.item.tradeId) - rank(b.item.tradeId) ||
+      a.company.localeCompare(b.company),
   );
 }
 

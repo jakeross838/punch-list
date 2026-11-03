@@ -1066,6 +1066,15 @@ async function main(): Promise<void> {
       await shot('43-new-field');
       await app.getByTestId('field-save').click();
       await app.getByText('Walk', { exact: true }).waitFor();
+      // The order the trades come in on every list.
+      await app.getByTestId('trade-order').click();
+      await app.getByTestId('trade-order-sheet').waitFor();
+      await app.getByTestId('trade-order-list').getByText('Electrical', { exact: true }).waitFor();
+      await settle(600);
+      await shot('43b-trade-order');
+      await app.getByTestId('trade-order-done').click();
+      await app.getByTestId('trade-order-sheet').waitFor({ state: 'detached' });
+      await settle(400);
       await app.getByTestId('standard-titles').click();
       await app.getByTestId('title-new').fill('Adjust cabinet hinge');
       await app.getByTestId('title-trade').click();
@@ -1346,9 +1355,17 @@ async function main(): Promise<void> {
       await app.getByTestId('select').click();
       await app.getByTestId('selection-bar').waitFor();
       await settle(400);
+      // Each trade stays together: the cabinet hardware dragged to the top of the list goes to the
+      // top of the carpentry, under the electrical.
       const first = app.getByTestId('drag-list').getByTestId(/^item-/).first();
-      await dragRow(itemRow('Install range backsplash').getByTestId(/^drag-/), first);
-      await app.getByTestId('drag-list').getByTestId(/^item-/).first().filter({ hasText: 'Install range backsplash' }).waitFor();
+      await dragRow(itemRow('Install cabinet hardware').getByTestId(/^drag-/), first);
+      const at = async (title: string) => (await app.getByTestId('drag-list').getByTestId(/^item-item-/).allTextContents()).findIndex((t) => t.includes(title));
+      let kept = false;
+      for (let i = 0; i < 20 && !kept; i += 1) {
+        kept = (await at('Install pendant lights')) < (await at('Install cabinet hardware')) && (await at('Install cabinet hardware')) < (await at('Adjust cabinet door'));
+        if (!kept) await settle(150);
+      }
+      if (!kept) throw new Error(`The hardware did not stay with the carpentry: ${(await app.getByTestId('drag-list').getByTestId(/^item-item-/).allTextContents()).join(' | ')}`);
       await settle(300);
       await shot('63-dragged');
       await itemRow('Install range backsplash').click();

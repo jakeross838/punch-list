@@ -13,7 +13,7 @@ import { holdLookups, holdNames, type HoldLookups } from './holds';
 import { floorOf, NO_FLOOR } from './rooms';
 import { isPriced } from './rules';
 import { NO_TIME, totalTime, type TimeTotal } from './time';
-import type { Company, Item, Location } from './types';
+import type { Company, Item, Location, Trade } from './types';
 
 export type GroupBy = 'room' | 'company' | 'waiting';
 
@@ -81,6 +81,8 @@ export interface ItemGroup {
 export interface Lookups {
   locations: Location[];
   companies: Company[];
+  /** With them, each list keeps a trade's items together, in the trades' order. */
+  trades?: Trade[];
 }
 
 /** Totals for a set of items: open, ready, past due and the open work's estimated time. */
@@ -156,21 +158,42 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
       .sort((a, b) => a.label.localeCompare(b.label));
   }
 
+  const rank = lookups.trades ? tradeRanks(lookups.trades) : undefined;
   return order.map(({ key, label }) => {
     const all = groups.get(key) ?? [];
     return {
       key,
       label,
-      items: arrange(all),
+      items: arrange(all, rank),
       ...itemTotals(all, context),
       late: by === 'waiting' ? Math.max(0, ...all.map(lateBy)) : 0,
     };
   });
 }
 
-/** Numbered items first, in number order; items not yet numbered (made offline) after, oldest first. */
-export function sortItems(items: Item[]): Item[] {
+/**
+ * Each trade's place when a list keeps a trade's items together, so it does not jump from
+ * electrical to plumbing to painting and back: the trades' own order, then their names. An item with
+ * no trade yet comes last.
+ */
+export function tradeRanks(trades: Pick<Trade, 'id' | 'name' | 'sortOrder'>[]): (tradeId: string | null) => number {
+  const order = [...trades].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  const rank = new Map(order.map((t, i) => [t.id, i]));
+  return (tradeId) => (tradeId !== null && rank.has(tradeId) ? rank.get(tradeId)! : order.length);
+}
+
+/**
+ * Numbered items first, in number order; items not yet numbered (made offline) after, oldest first.
+ * With tradeRank, each trade's items come together first, in the trades' order: something added
+ * lands with its trade.
+ */
+export function sortItems(items: Item[], tradeRank?: (tradeId: string | null) => number): Item[] {
   return [...items].sort((a, b) => {
+    if (tradeRank) {
+      const ra = tradeRank(a.tradeId);
+      const rb = tradeRank(b.tradeId);
+      if (ra !== rb) return ra - rb;
+    }
     // Where someone dragged it, or its number: the two count the same way, so a list put in order
     // by hand stays in order, and anything added after it goes at the end.
     const ka = sortKey(a);
@@ -188,9 +211,9 @@ export function sortKey(item: Pick<Item, 'position' | 'number'>): number | null 
   return item.position ?? item.number ?? null;
 }
 
-/** Number order, the open items first and any completed ones after. */
-function arrange(items: Item[]): Item[] {
-  const sorted = sortItems(items);
+/** Number order (each trade together, when ranked), the open items first and any completed ones after. */
+function arrange(items: Item[], tradeRank?: (tradeId: string | null) => number): Item[] {
+  const sorted = sortItems(items, tradeRank);
   return [...sorted.filter((i) => i.status !== 'complete'), ...sorted.filter((i) => i.status === 'complete')];
 }
 

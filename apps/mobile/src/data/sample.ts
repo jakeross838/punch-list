@@ -126,7 +126,10 @@ export function sampleState(): SampleState {
   ];
 
   const tradeNames = ['Plumbing', 'Electrical', 'Painting', 'Tile', 'Carpentry', 'Stone', 'Air Conditioning', 'Ross Built Crew'];
-  const trades: Trade[] = tradeNames.map((name, i) => ({ id: `trade-${i}`, name, sortOrder: i + 1 }));
+  // The order the finish work goes, which every list follows: the electrical and plumbing trim
+  // first, the paint and the clean last.
+  const workOrder = ['Electrical', 'Plumbing', 'Air Conditioning', 'Carpentry', 'Tile', 'Stone', 'Painting', 'Ross Built Crew'];
+  const trades: Trade[] = tradeNames.map((name, i) => ({ id: `trade-${i}`, name, sortOrder: workOrder.indexOf(name) + 1 }));
   const t = (name: string) => trades.find((x) => x.name === name)!.id;
 
   const companyList: [string, string][] = [

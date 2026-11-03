@@ -137,6 +137,23 @@ export function firstThingsFirst<T extends { id: string; waitingOnItems: string[
 }
 
 /**
+ * Where a dragged row can go in a list that keeps its groups together (each trade's items, say):
+ * within its own group's run. Let go among another group's rows, it goes to the nearer end of its
+ * own. Returns the row it goes before, or null for the end of the list.
+ */
+export function keepTogether<T extends { id: string }>(list: T[], movedId: string, before: string | null, groupOf: (row: T) => string): string | null {
+  const moved = list.find((r) => r.id === movedId);
+  if (!moved) return before;
+  const group = groupOf(moved);
+  const own = list.map((r, i) => (groupOf(r) === group ? i : -1)).filter((i) => i >= 0);
+  const first = own[0]!;
+  const last = own[own.length - 1]!;
+  const at = before === null ? list.length : list.findIndex((r) => r.id === before);
+  const into = at < 0 ? list.length : Math.min(Math.max(at, first), last + 1);
+  return into < list.length ? list[into]!.id : null;
+}
+
+/**
  * Items dropped into a list before another one (or at the end when before is null): the position
  * each item in the list needs now, only for the ones that change. list is the list as it shows;
  * moved can come from it or from somewhere else, and keep their order. The list's own sort keys are

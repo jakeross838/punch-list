@@ -41,7 +41,8 @@ export default function CompanyPageScreen() {
 
   const company = companies.find((c) => c.id === companyId);
   const today = dayOfDate(new Date());
-  const lookups = useMemo(() => ({ locations, companies, items, visits, today }), [locations, companies, items, visits, today]);
+  const trades = data.useTrades();
+  const lookups = useMemo(() => ({ locations, companies, items, visits, today, trades }), [locations, companies, items, visits, today, trades]);
   const list = useMemo(() => companyList(companyId, items, lookups), [companyId, items, lookups]);
   const ownVisits = visits.filter((v) => v.companyId === companyId).sort((a, b) => a.start.localeCompare(b.start));
   const shared = comments.filter(isShared);

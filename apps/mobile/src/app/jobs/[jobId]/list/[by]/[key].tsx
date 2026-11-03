@@ -14,6 +14,7 @@ import {
   clearHoldup,
   complete,
   dropAt,
+  keepTogether,
   holdNames,
   isAdmin,
   pastePlan,
@@ -93,6 +94,7 @@ export default function GroupScreen() {
   const photos = data.usePhotos(jobId);
   const locations = data.useLocations(jobId);
   const companies = data.useCompanies();
+  const trades = data.useTrades();
   const [view, setView] = useJobView(jobId, data.useViewSettings());
   const [showDone, setShowDone] = useState(false);
   const [common, setCommon] = useState(false);
@@ -115,10 +117,11 @@ export default function GroupScreen() {
       groupItems(
         items,
         by,
-        { locations, companies },
+        // Each trade's items together, so the list does not jump between trades.
+        { locations, companies, trades },
         { filters, showCompleted: true, context },
       ).find((g) => g.key === key),
-    [items, by, key, filters, context, locations, companies],
+    [items, by, key, filters, context, locations, companies, trades],
   );
   const late = useMemo(
     () => (due ? pastDue(items, visits, today) : []),
@@ -371,8 +374,10 @@ export default function GroupScreen() {
     const list = pickable.filter((i) => i.status === "open");
     const moving = picked.has(key) && picked.size > 1 ? list.filter((i) => picked.has(i.id)) : list.filter((i) => i.id === key);
     const ids = new Set(moving.map((i) => i.id));
+    // It stays with its trade: let go among another trade, it goes to the nearer end of its own.
+    const within = keepTogether(list, key, before, (i) => i.tradeId ?? "");
     // Before a row that moves too: before the next one that stays.
-    let at = before === null ? -1 : list.findIndex((i) => i.id === before);
+    let at = within === null ? -1 : list.findIndex((i) => i.id === within);
     while (at >= 0 && at < list.length && ids.has(list[at]!.id)) at += 1;
     const target = at >= 0 && at < list.length ? list[at]!.id : null;
     const changes = dropAt(list, moving, target);

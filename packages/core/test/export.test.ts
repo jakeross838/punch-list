@@ -61,8 +61,9 @@ const design = (over: Partial<ListDesign> = {}): ListDesign => ({ ...DEFAULT_LIS
 
 describe('a list made to order', () => {
   it('takes the items that pass the filters, in floor order, completed ones only when asked', () => {
-    expect(filteredLines(items, NO_FILTERS, lookups).map((l) => l.item.id)).toEqual(['b', 'c', 'a', 'd']);
-    expect(filteredLines(items, NO_FILTERS, lookups, { completed: true }).map((l) => l.item.id)).toEqual(['b', 'c', 'a', 'd', 'e']);
+    // Each location trade by trade: the cabinets before the paint.
+    expect(filteredLines(items, NO_FILTERS, lookups).map((l) => l.item.id)).toEqual(['c', 'b', 'a', 'd']);
+    expect(filteredLines(items, NO_FILTERS, lookups, { completed: true }).map((l) => l.item.id)).toEqual(['c', 'b', 'a', 'd', 'e']);
     expect(filteredLines(items, { ...NO_FILTERS, companyIds: ['c-sms'], states: ['ready'] }, lookups).map((l) => l.item.id)).toEqual(['a', 'd']);
   });
 

@@ -1,5 +1,6 @@
 // Item Form setup: which fields the New Item form shows, what a new item starts as, the fields
-// Ross Built adds of its own, and the standard titles with how long each usually takes. The common
+// Ross Built adds of its own, the order of the trades (every list keeps each trade's items
+// together, in that order), and the standard titles with how long each usually takes. The common
 // tasks for each kind of room come from the templates, so there is one place to keep them. Changes
 // apply right away.
 
@@ -21,6 +22,7 @@ import {
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { DragList } from '@/components/DragList';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import {
@@ -48,10 +50,12 @@ export default function ItemFormScreen() {
     .filter((f) => f.active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
   const titles = data.useTitles();
+  const trades = data.useTrades();
   const [fieldSheet, setFieldSheet] = useState<{ field: CustomField | null } | null>(null);
   const [titlesOpen, setTitlesOpen] = useState(false);
+  const [tradesOpen, setTradesOpen] = useState(false);
   const update = (next: FormSettings) => void data.setFormSettings(next);
-  // The fields, titles and common tasks are Ross Built's setup, changed by admins; the rest is each person's own.
+  // The fields, the trade order and the titles are Ross Built's setup, changed by admins; the rest is each person's own.
   const admin = isAdmin(data.useMe());
 
   return (
@@ -93,6 +97,10 @@ export default function ItemFormScreen() {
         <ListRow title="Add a Field" tone="tint" onPress={() => setFieldSheet({ field: null })} testID="add-field" />
       </ListSection>
 
+      <ListSection header="Trades" footer="Every list keeps each trade's items together, in this order, so a location reads the way the work goes instead of jumping between trades.">
+        <ListRow title="Trade Order" value={String(trades.length)} accessory="chevron" onPress={() => setTradesOpen(true)} testID="trade-order" />
+      </ListSection>
+
       <ListSection header="Titles" footer="Picking a title fills in its company and how long it usually takes. The company comes from the title's trade, from the companies on the job.">
         <ListRow title="Standard Titles" value={String(titles.length)} accessory="chevron" onPress={() => setTitlesOpen(true)} testID="standard-titles" />
       </ListSection>
@@ -120,6 +128,7 @@ export default function ItemFormScreen() {
 
       <FieldSheet visible={!!fieldSheet} field={fieldSheet?.field ?? null} onClose={() => setFieldSheet(null)} />
       <TitlesSheet visible={titlesOpen} onClose={() => setTitlesOpen(false)} />
+      <TradeOrderSheet visible={tradesOpen} onClose={() => setTradesOpen(false)} />
     </Page>
   );
 }
@@ -218,6 +227,42 @@ function FieldSheet({ visible, field, onClose }: { visible: boolean; field: Cust
             <ListRow title="Remove Field" tone="destructive" onPress={removeField} testID="field-remove" />
           </ListSection>
         ) : null}
+      </ScrollView>
+    </Sheet>
+  );
+}
+
+/** The trades in the order every list follows: drag the lines at the end of a row to move one. */
+function TradeOrderSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const data = useData();
+  const trades = [...data.useTrades()].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  const [dragging, setDragging] = useState(false);
+  const drop = (key: string, before: string | null) => {
+    const rest = trades.filter((t) => t.id !== key);
+    const at = before === null ? rest.length : rest.findIndex((t) => t.id === before);
+    const next = [...rest.slice(0, at), trades.find((t) => t.id === key)!, ...rest.slice(at)];
+    haptic.selection();
+    void data.reorderTrades(next.map((t) => t.id));
+  };
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Trade Order"
+      right={{ label: 'Done', variant: 'prominent', onPress: onClose, testID: 'trade-order-done' }}
+      testID="trade-order-sheet"
+    >
+      <ScrollView scrollEnabled={!dragging} contentContainerStyle={styles.sheetContent}>
+        <ListSection footer="Each location lists its items trade by trade, in this order. Drag the lines at the end of a row to move a trade.">
+          <DragList
+            data={trades}
+            keyOf={(t) => t.id}
+            onDrop={drop}
+            onDragging={setDragging}
+            testID="trade-order-list"
+            renderRow={(t, handle) => <ListRow title={t.name} right={handle} testID={`trade-${t.id}`} />}
+          />
+        </ListSection>
       </ScrollView>
     </Sheet>
   );

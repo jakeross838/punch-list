@@ -145,7 +145,8 @@ export default function SendScreen() {
 
   const today = dayOfDate(new Date());
   // With the items and visits, every list says which tasks an item waits on and when they are scheduled.
-  const lookups = useMemo(() => ({ locations, companies, items, visits, today }), [locations, companies, items, visits, today]);
+  const trades = data.useTrades();
+  const lookups = useMemo(() => ({ locations, companies, items, visits, today, trades }), [locations, companies, items, visits, today, trades]);
   const look = useMemo(
     () => ({ people: new Map(people.map((p) => [p.id, p.name])), companies: new Map(companies.map((c) => [c.id, c.name])) }),
     [people, companies],
