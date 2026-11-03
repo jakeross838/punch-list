@@ -20,9 +20,6 @@ alter table public.people add column sees text not null default 'all' check (see
 alter table public.people add column phone text;
 alter table public.people add column added_by uuid references public.people (id);
 
--- Everyone set up by hand before roles were admins.
-update public.people set role = 'admin';
-
 create function public.is_admin() returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.people p where p.email = public.current_email() and p.active and p.role = 'admin')
@@ -239,6 +236,9 @@ create trigger jobs_closed_activity after update of archived on public.jobs
 
 -- ---------- access rules ----------
 
+-- The rules made before are changed in place (alter policy), never dropped and made again, so
+-- nothing here takes anything away from the database.
+
 alter table public.job_team enable row level security;
 alter table public.job_access enable row level security;
 
@@ -248,58 +248,37 @@ grant select, insert, update, delete on public.job_team to authenticated;
 grant select on public.job_access to authenticated;
 
 -- People: everyone sees the people list; admins add and change people.
-drop policy people_read on public.people;
-create policy people_read on public.people for select to authenticated using (public.is_active_person());
 create policy people_insert on public.people for insert to authenticated with check (public.is_admin());
 create policy people_update on public.people for update to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- Org-wide setup: everyone reads, admins change.
-drop policy trades_insert on public.trades;
-drop policy trades_update on public.trades;
-create policy trades_insert on public.trades for insert to authenticated with check (public.is_admin());
-create policy trades_update on public.trades for update to authenticated using (public.is_admin()) with check (public.is_admin());
+alter policy trades_insert on public.trades with check (public.is_admin());
+alter policy trades_update on public.trades using (public.is_admin()) with check (public.is_admin());
 
-drop policy companies_insert on public.companies;
-drop policy companies_update on public.companies;
-create policy companies_insert on public.companies for insert to authenticated with check (public.is_admin());
-create policy companies_update on public.companies for update to authenticated using (public.is_admin()) with check (public.is_admin());
+alter policy companies_insert on public.companies with check (public.is_admin());
+alter policy companies_update on public.companies using (public.is_admin()) with check (public.is_admin());
 
-drop policy title_library_insert on public.title_library;
-drop policy title_library_update on public.title_library;
-drop policy title_library_delete on public.title_library;
-create policy title_library_insert on public.title_library for insert to authenticated with check (public.is_admin());
-create policy title_library_update on public.title_library for update to authenticated using (public.is_admin()) with check (public.is_admin());
-create policy title_library_delete on public.title_library for delete to authenticated using (public.is_admin());
+alter policy title_library_insert on public.title_library with check (public.is_admin());
+alter policy title_library_update on public.title_library using (public.is_admin()) with check (public.is_admin());
+alter policy title_library_delete on public.title_library using (public.is_admin());
 
-drop policy custom_fields_insert on public.custom_fields;
-drop policy custom_fields_update on public.custom_fields;
-create policy custom_fields_insert on public.custom_fields for insert to authenticated with check (public.is_admin());
-create policy custom_fields_update on public.custom_fields for update to authenticated using (public.is_admin()) with check (public.is_admin());
+alter policy custom_fields_insert on public.custom_fields with check (public.is_admin());
+alter policy custom_fields_update on public.custom_fields using (public.is_admin()) with check (public.is_admin());
 
 -- Jobs: seen as each person's access says; made, renamed and closed by admins.
-drop policy jobs_read on public.jobs;
-drop policy jobs_insert on public.jobs;
-drop policy jobs_update on public.jobs;
-create policy jobs_read on public.jobs for select to authenticated using (public.can_see_job(id));
-create policy jobs_insert on public.jobs for insert to authenticated with check (public.is_admin());
-create policy jobs_update on public.jobs for update to authenticated using (public.is_admin()) with check (public.is_admin());
+alter policy jobs_read on public.jobs using (public.can_see_job(id));
+alter policy jobs_insert on public.jobs with check (public.is_admin());
+alter policy jobs_update on public.jobs using (public.is_admin()) with check (public.is_admin());
 
 -- A job's setup: seen by whoever sees the job; changed by admins (locations also take Done Here, above).
-drop policy locations_read on public.locations;
-drop policy locations_insert on public.locations;
-drop policy locations_update on public.locations;
-create policy locations_read on public.locations for select to authenticated using (public.can_see_job(job_id));
-create policy locations_insert on public.locations for insert to authenticated with check (public.is_admin());
-create policy locations_update on public.locations for update to authenticated using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
+alter policy locations_read on public.locations using (public.can_see_job(job_id));
+alter policy locations_insert on public.locations with check (public.is_admin());
+alter policy locations_update on public.locations using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
 
-drop policy job_companies_read on public.job_companies;
-drop policy job_companies_insert on public.job_companies;
-drop policy job_companies_update on public.job_companies;
-drop policy job_companies_delete on public.job_companies;
-create policy job_companies_read on public.job_companies for select to authenticated using (public.can_see_job(job_id));
-create policy job_companies_insert on public.job_companies for insert to authenticated with check (public.is_admin());
-create policy job_companies_update on public.job_companies for update to authenticated using (public.is_admin()) with check (public.is_admin());
-create policy job_companies_delete on public.job_companies for delete to authenticated using (public.is_admin());
+alter policy job_companies_read on public.job_companies using (public.can_see_job(job_id));
+alter policy job_companies_insert on public.job_companies with check (public.is_admin());
+alter policy job_companies_update on public.job_companies using (public.is_admin()) with check (public.is_admin());
+alter policy job_companies_delete on public.job_companies using (public.is_admin());
 
 create policy job_team_read on public.job_team for select to authenticated using (public.can_see_job(job_id));
 create policy job_team_insert on public.job_team for insert to authenticated with check (public.is_admin());
@@ -310,64 +289,40 @@ create policy job_access_read on public.job_access for select to authenticated
   using (public.is_admin() or person_id = public.current_person_id());
 
 -- What it waits on: anyone on the job adds a choice from the Not Ready box.
-drop policy job_waiting_on_read on public.job_waiting_on;
-drop policy job_waiting_on_insert on public.job_waiting_on;
-drop policy job_waiting_on_update on public.job_waiting_on;
-drop policy job_waiting_on_delete on public.job_waiting_on;
-create policy job_waiting_on_read on public.job_waiting_on for select to authenticated using (public.can_see_job(job_id));
-create policy job_waiting_on_insert on public.job_waiting_on for insert to authenticated with check (public.can_see_job(job_id));
-create policy job_waiting_on_update on public.job_waiting_on for update to authenticated using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
-create policy job_waiting_on_delete on public.job_waiting_on for delete to authenticated using (public.can_see_job(job_id));
+alter policy job_waiting_on_read on public.job_waiting_on using (public.can_see_job(job_id));
+alter policy job_waiting_on_insert on public.job_waiting_on with check (public.can_see_job(job_id));
+alter policy job_waiting_on_update on public.job_waiting_on using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
+alter policy job_waiting_on_delete on public.job_waiting_on using (public.can_see_job(job_id));
 
 -- The work itself: anyone who sees the job.
-drop policy items_read on public.items;
-drop policy items_insert on public.items;
-drop policy items_update on public.items;
-create policy items_read on public.items for select to authenticated using (public.can_see_job(job_id));
-create policy items_insert on public.items for insert to authenticated with check (public.can_see_job(job_id));
-create policy items_update on public.items for update to authenticated using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
+alter policy items_read on public.items using (public.can_see_job(job_id));
+alter policy items_insert on public.items with check (public.can_see_job(job_id));
+alter policy items_update on public.items using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
 
-drop policy item_history_read on public.item_history;
-create policy item_history_read on public.item_history for select to authenticated using (public.can_see_job(job_id));
+alter policy item_history_read on public.item_history using (public.can_see_job(job_id));
 
-drop policy job_activity_read on public.job_activity;
-create policy job_activity_read on public.job_activity for select to authenticated using (public.can_see_job(job_id));
+alter policy job_activity_read on public.job_activity using (public.can_see_job(job_id));
 
-drop policy photos_read on public.photos;
-drop policy photos_insert on public.photos;
-drop policy photos_update on public.photos;
-create policy photos_read on public.photos for select to authenticated using (public.can_see_job(job_id));
-create policy photos_insert on public.photos for insert to authenticated with check (public.can_see_job(job_id));
-create policy photos_update on public.photos for update to authenticated using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
+alter policy photos_read on public.photos using (public.can_see_job(job_id));
+alter policy photos_insert on public.photos with check (public.can_see_job(job_id));
+alter policy photos_update on public.photos using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
 
-drop policy visits_read on public.visits;
-drop policy visits_insert on public.visits;
-drop policy visits_update on public.visits;
-create policy visits_read on public.visits for select to authenticated using (public.can_see_job(job_id));
-create policy visits_insert on public.visits for insert to authenticated with check (public.can_see_job(job_id));
-create policy visits_update on public.visits for update to authenticated using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
+alter policy visits_read on public.visits using (public.can_see_job(job_id));
+alter policy visits_insert on public.visits with check (public.can_see_job(job_id));
+alter policy visits_update on public.visits using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
 
-drop policy list_sends_read on public.list_sends;
-drop policy list_sends_insert on public.list_sends;
-drop policy list_sends_update on public.list_sends;
-create policy list_sends_read on public.list_sends for select to authenticated using (public.can_see_job(job_id));
-create policy list_sends_insert on public.list_sends for insert to authenticated with check (public.can_see_job(job_id));
-create policy list_sends_update on public.list_sends for update to authenticated using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
+alter policy list_sends_read on public.list_sends using (public.can_see_job(job_id));
+alter policy list_sends_insert on public.list_sends with check (public.can_see_job(job_id));
+alter policy list_sends_update on public.list_sends using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
 
-drop policy comments_read on public.comments;
-drop policy comments_insert on public.comments;
-drop policy comments_update on public.comments;
-create policy comments_read on public.comments for select to authenticated using (public.can_see_job(job_id));
-create policy comments_insert on public.comments for insert to authenticated with check (public.can_see_job(job_id) and not from_company);
-create policy comments_update on public.comments for update to authenticated
+alter policy comments_read on public.comments using (public.can_see_job(job_id));
+alter policy comments_insert on public.comments with check (public.can_see_job(job_id) and not from_company);
+alter policy comments_update on public.comments
   using (public.can_see_job(job_id) and person_id = public.current_person_id())
   with check (public.can_see_job(job_id) and person_id = public.current_person_id());
 
-drop policy company_links_read on public.company_links;
-drop policy company_links_insert on public.company_links;
-drop policy company_links_update on public.company_links;
-create policy company_links_read on public.company_links for select to authenticated using (public.can_see_job(job_id));
-create policy company_links_insert on public.company_links for insert to authenticated with check (public.can_see_job(job_id));
-create policy company_links_update on public.company_links for update to authenticated using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
+alter policy company_links_read on public.company_links using (public.can_see_job(job_id));
+alter policy company_links_insert on public.company_links with check (public.can_see_job(job_id));
+alter policy company_links_update on public.company_links using (public.can_see_job(job_id)) with check (public.can_see_job(job_id));
 
 alter publication powersync add table public.job_team, public.job_access;

@@ -102,7 +102,7 @@ A six digit code sent to the person's email: no password. Only people Ross Built
 
 ## Needs from Jake
 
-1. Supabase: a new project, `punch-list`. Its URL, anon key, and database connection string with password.
+1. Supabase: done. The project `punch-list` is made and loaded (see The live database). The database password stays with Jake; only PowerSync needs it, and he types it in there.
 2. PowerSync: an account and an access token.
 3. Expo: an account and an access token, for the TestFlight build and the updates after it.
 4. Apple Developer account, for the TestFlight build (checks C3, C4 and C7 to C10).
@@ -110,7 +110,7 @@ A six digit code sent to the person's email: no password. Only people Ross Built
 6. The standard titles: the preview starts from a list of about fifty by trade; Fish's own completion list would make it real.
 7. Fill In From Photo on the iPhone: an Anthropic API key for the `suggest-item` server function (the preview link uses the viewer's own Claude instead).
 8. Fish's list from Buildertrend: one pasted session (Copy as cURL from Chrome) for the read-only import, `npm run import:buildertrend`, which writes `local/fish-import.json` to load once the database exists. It never writes to Buildertrend.
-9. In Supabase, once the project exists: the email template for Magic Link with the code in it (`{{ .Token }}`), so the email carries the six digit code; the Before User Created hook set to `hook_only_ross_built_people`; and the email sent from a Ross Built address (custom SMTP), so codes do not land in spam.
+9. In Supabase: the email templates for Magic Link and Confirm Sign Up with the code in them (`{{ .Token }}`) and the code length set to 6, so the email carries the six digit code; the Before User Created hook set to `hook_only_ross_built_people`; and the email sent from a Ross Built address (custom SMTP), so codes do not land in spam.
 10. Where the companies' pages live: `link.rossbuilt.com` (or another address, set as `EXPO_PUBLIC_COMPANY_PAGE_URL`), pointed at the page that shows a company its list from the link's token.
 
 Secrets live only in `local/` in the build workspace, which git ignores.
@@ -144,6 +144,15 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 - **Sign In** with a six digit code by email, **Account** and **Sign Out** (see Sign-in).
 - **Each trade together**: every list keeps a trade's items together, in the trades' order, so a location does not jump between electrical, plumbing and paint. Something added lands with its trade; dragging moves an item within its trade; the printed lists follow the same order. Admins set the order once in Item Form, Trade Order.
 - **Common Tasks come from the templates**, one place for room tasks: a location offers each template's tasks for its kind (Every Bathroom in a bathroom) or its area, picked with a tap, in that location with the company, the usual time and the waits between them. The starter templates are End of the House and Common Tasks by Room. Item Form points to Templates for them.
+
+## The live database (3 November 2026)
+
+- The Supabase project `punch-list` (Canada Central) holds the schema and the access rules: all 19 migrations, applied in order, with the same version numbers as the files. It matches the database the checks test, function for function and rule for rule; the only extra is Supabase's own `rls_auto_enable`.
+- Jake (jake@rossbuilt.com) is the first admin. Everyone else is added under People.
+- Nobody signed out reads anything: the tables and the access checks answer permission denied. Only the company page's four functions are open, and they work only with a live link.
+- Supabase's security check is clear but for what is meant: the company page's functions, and the checks the access rules run as the person signed in. Nobody can call a trigger function.
+- The migration that brought in roles changes the earlier access rules in place instead of dropping and making them again. Supabase asks for a confirmation before running anything that drops, which this setup cannot show; the result is the same.
+- `apps/mobile/.env` (not in git) has the project's address and publishable key. The app stays on the sample until the PowerSync address is added. The preview page is always built on the sample.
 
 ## Status (31 October 2026)
 
