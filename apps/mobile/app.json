@@ -2,6 +2,7 @@
   "expo": {
     "name": "Punch List",
     "slug": "punch-list",
+    "owner": "jakeross",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -10,7 +11,10 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.rossbuilt.punchlist",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -59,11 +63,17 @@
         }
       ],
       "expo-asset",
-      "expo-mail-composer"
+      "expo-mail-composer",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "037db08a-8ab6-4f77-8840-8c82789b503b"
+      }
     }
   }
 }
