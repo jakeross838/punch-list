@@ -154,6 +154,11 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 - The migration that brought in roles changes the earlier access rules in place instead of dropping and making them again. Supabase asks for a confirmation before running anything that drops, which this setup cannot show; the result is the same.
 - `apps/mobile/.env` (not in git) has the project's address and publishable key. The app stays on the sample until the PowerSync address is added. The preview page is always built on the sample.
 
+## Completed (4 November 2026)
+
+- Every list ends with Completed and how many: closed until it is tapped, and closed again with another tap. It starts open when View has Show Completed on.
+- Each completed item is checked off and crossed off, with a line under it saying when it was completed and by whom. Its circle opens it again.
+
 ## The live connection (3 November 2026)
 
 - The iPhone runs on the real database once `apps/mobile/.env` has the PowerSync address. Until then, and on the preview page, it runs on the sample.

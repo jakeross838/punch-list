@@ -151,17 +151,25 @@ async function main(): Promise<void> {
       await settle();
       await shot('03-room');
     });
-    await step('the circle checks an item off', async () => {
+    await step('the circle checks an item off, and it goes under Completed, crossed off', async () => {
       await app.getByTestId('check-item-3').click();
       await settle(200);
       await shot('04-checking');
       // A way back from a tap that was a mistake.
       await app.getByText('Completed Touch up paint').waitFor();
-      await app.getByTestId('show-done').waitFor({ timeout: 5_000 });
-      await app.getByTestId('show-done').click();
-      await app.getByText('Completed', { exact: true }).waitFor();
+      // It goes under Completed at the end, closed, which opens and closes with a tap.
+      await app.getByTestId('completed-toggle').waitFor({ timeout: 5_000 });
+      await app.getByTestId('item-item-3').waitFor({ state: 'detached' });
+      await app.getByTestId('completed-toggle').click();
+      await app.getByTestId('item-item-3').waitFor();
+      // Checked off and crossed off, with when and by whom.
+      await app.getByText(/Completed [A-Z][a-z]+ \d+ by Jake Ross/).first().waitFor();
+      const crossed = await app.getByTestId('item-item-3').getByText('Touch up paint', { exact: true }).evaluate((el) => getComputedStyle(el).textDecorationLine);
+      if (!crossed.includes('line-through')) throw new Error(`The completed item is not crossed off: ${crossed}`);
       await settle(300);
       await shot('05-completed');
+      await app.getByTestId('completed-toggle').click();
+      await app.getByTestId('item-item-3').waitFor({ state: 'detached' });
     });
     await step('swipe a row for Remove, then Undo', async () => {
       await app.getByTestId('item-item-2').evaluate((el) => {
@@ -1426,11 +1434,12 @@ async function main(): Promise<void> {
       await app.getByTestId('pick-all').click();
       await app.getByTestId('picked-complete').click();
       await app.getByText(/^Completed \d items$/).waitFor();
-      await app.getByTestId('show-done').waitFor();
+      await app.getByTestId('completed-toggle').last().click();
+      await app.getByTestId('completed-count').last().waitFor();
       await settle(300);
       await shot('67-completed');
       await app.getByRole('button', { name: 'Undo' }).click();
-      await app.getByTestId('show-done').waitFor({ state: 'detached' });
+      await app.getByTestId('completed-toggle').last().waitFor({ state: 'detached' });
       await settle(400);
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();

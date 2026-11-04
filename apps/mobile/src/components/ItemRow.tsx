@@ -4,6 +4,8 @@
 // when it is past due. Its photo sits at the end; an open item with no photo yet has an empty slot:
 // tap it to take the photo. How many comments it has shows too. Everything else is one tap in.
 // Swipe left for Ready and Remove. A draft shows a pencil instead of the circle and what it still needs.
+// A completed item is checked off and crossed off, with when it was completed and by whom; its
+// circle opens it again.
 
 import {
   commentCountText,
@@ -23,7 +25,7 @@ import {
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
-import { CompleteCircle, Icon, isBeforeToday, PhotoView, shortDate, SwipeRow, Text, Touchable, type SwipeAction } from '@/ui';
+import { CompleteCircle, dayOf, Icon, isBeforeToday, PhotoView, shortDate, SwipeRow, Text, Touchable, type SwipeAction } from '@/ui';
 
 const PHOTO = 40;
 
@@ -47,6 +49,7 @@ export const ItemRow = memo(function ItemRow({
   onLongPress,
   select,
   trailing,
+  completedBy,
 }: {
   item: Item;
   /** The item's first photo, shown small at the end of the row. */
@@ -78,6 +81,8 @@ export const ItemRow = memo(function ItemRow({
   select?: { picked: boolean; onToggle: (item: Item) => void };
   /** At the very end of the row: the handle to drag it by. */
   trailing?: ReactNode;
+  /** Who completed it, by name, for a completed item. */
+  completedBy?: string;
 }) {
   const done = item.status === 'complete' || checking;
   const open = item.status === 'open' && !checking;
@@ -94,7 +99,12 @@ export const ItemRow = memo(function ItemRow({
   const needs = item.unfinished ? missingDetails(item).filter((m) => m !== 'title') : [];
   const draftNote = note ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : undefined);
   const talk = comments > 0 ? commentCountText(comments) : undefined;
-  const meta = (item.unfinished ? [location, draftNote, talk] : [location, company, kindText(item), talk]).filter(Boolean).join(' · ');
+  // Completed: when and by whom, in place of Incomplete, which it no longer is.
+  const completed = item.status === 'complete' && !checking;
+  const doneWhen = completed && item.completedAt && !Number.isNaN(new Date(item.completedAt).getTime()) ? dayOf(item.completedAt) : null;
+  const doneText = completed ? ['Completed', doneWhen, completedBy ? `by ${completedBy}` : null].filter(Boolean).join(' ') : undefined;
+  const kind = completed && item.kind === 'completion' ? undefined : kindText(item);
+  const meta = (item.unfinished ? [location, draftNote, talk] : [location, company, kind, talk]).filter(Boolean).join(' · ');
   const on = holds ? holdText(item, holds) : waitingOnText(item.waitingOn);
   const by = holds ? readyByOf(item, holds) : item.readyBy;
   const waiting = notReady ? `Waiting on ${on || 'something'}${by && !late ? `, ready by ${shortDate(by)}` : ''}` : undefined;
@@ -105,7 +115,7 @@ export const ItemRow = memo(function ItemRow({
         { label: 'Remove', icon: 'trash', color: colors.destructive, onPress: () => onRemove(item), testID: `remove-${item.id}` },
       ]
     : [];
-  const said = [title, time, meta, waiting, red].filter(Boolean).join(', ');
+  const said = [title, time, meta, waiting, red, doneText].filter(Boolean).join(', ');
 
   return (
     <SwipeRow actions={actions} style={styles.swipe}>
@@ -143,7 +153,7 @@ export const ItemRow = memo(function ItemRow({
         <View style={[styles.body, last ? null : styles.divider]}>
           <View style={styles.text}>
             <View style={styles.titleLine}>
-              <Text numberOfLines={2} weight="500" color={done || !item.title ? colors.secondary : colors.label} style={styles.title}>
+              <Text numberOfLines={2} weight="500" color={done || !item.title ? colors.secondary : colors.label} style={[styles.title, done ? styles.crossed : null]}>
                 {title}
               </Text>
               {time ? (
@@ -156,6 +166,14 @@ export const ItemRow = memo(function ItemRow({
               <Text variant="subheadline" color={colors.secondary} numberOfLines={2}>
                 {meta}
               </Text>
+            ) : null}
+            {doneText ? (
+              <View style={styles.status}>
+                <Icon name="checkmark" size={11} color={colors.quiet} weight="semibold" style={styles.hourglass} />
+                <Text variant="subheadline" color={colors.secondary} numberOfLines={2} style={{ flexShrink: 1 }} testID={`done-${item.id}`}>
+                  {doneText}
+                </Text>
+              </View>
             ) : null}
             {waiting || red ? (
               <View style={styles.status}>
@@ -205,6 +223,7 @@ const styles = StyleSheet.create({
   text: { flex: 1, gap: 2 },
   titleLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   title: { flex: 1 },
+  crossed: { textDecorationLine: 'line-through', textDecorationColor: colors.secondary },
   time: { paddingTop: 2 },
   status: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
   hourglass: { marginTop: 3 },

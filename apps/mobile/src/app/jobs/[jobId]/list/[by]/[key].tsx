@@ -1,7 +1,8 @@
 // One location's items (or one company's, or what they wait on): each with its time, who does
 // it and its type, what it waits on, and its photo or an empty slot to take it. The heading says how
 // many are open and how long they take, and the filters that are on show as chips. Completed items
-// wait under their own heading. In a location, New Item under the list types one in with no camera,
+// are checked off and crossed off under Completed at the end, which opens and closes with a tap
+// (open from the start when View has Show Completed on). In a location, New Item under the list types one in with no camera,
 // and the bottom bar steps to the one before or after, with the camera between.
 // Past Due lists everything late, the latest first, with the days. Drafts lists what was saved to
 // finish later, filling in from the photos while it shows. A Waiting On list can stop the wait for all its items at once, or move their Ready By
@@ -95,8 +96,10 @@ export default function GroupScreen() {
   const locations = data.useLocations(jobId);
   const companies = data.useCompanies();
   const trades = data.useTrades();
+  const people = data.usePeople();
   const [view, setView] = useJobView(jobId, data.useViewSettings());
-  const [showDone, setShowDone] = useState(false);
+  // Completed opens and closes with a tap; until then it follows Show Completed in View.
+  const [doneOpen, setDoneOpen] = useState<boolean | null>(null);
   const [common, setCommon] = useState(false);
   const actions = useItemActions(jobId);
   const commentsOn = commentCounts(data.useComments(jobId));
@@ -144,6 +147,10 @@ export default function GroupScreen() {
     () => new Map(companies.map((c) => [c.id, c.name])),
     [companies],
   );
+  const personName = useMemo(
+    () => new Map(people.map((p) => [p.id, p.name])),
+    [people],
+  );
 
   const listed = due
     ? late.map((p) => p.item)
@@ -156,13 +163,17 @@ export default function GroupScreen() {
   const done = listed.filter(
     (i) => i.status === "complete" && !actions.checking.has(i.id),
   );
-  const doneShown = view.showCompleted || showDone;
+  const doneShown = doneOpen ?? view.showCompleted;
   const sections: Section[] = [
     { key: "open", title: null, data: open },
-    ...(done.length > 0 && doneShown
-      ? [{ key: "done" as const, title: "Completed", data: done }]
+    ...(done.length > 0
+      ? [{ key: "done" as const, title: "Completed", data: doneShown ? done : [] }]
       : []),
   ];
+  const toggleDone = () => {
+    haptic.selection();
+    setDoneOpen(!doneShown);
+  };
 
   const room = by === "room" ? locations.find((l) => l.id === key) : undefined;
   const { previous, next } = room
@@ -591,16 +602,35 @@ export default function GroupScreen() {
               </View>
             }
             renderSectionHeader={({ section }) =>
-              section.title ? (
-                <View style={styles.header}>
+              section.key === "done" ? (
+                <Touchable
+                  feedback="highlight"
+                  onPress={toggleDone}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: doneShown }}
+                  accessibilityLabel={`Completed, ${itemsWord(done.length)}`}
+                  accessibilityHint={doneShown ? "Hides the completed items" : "Shows the completed items"}
+                  testID="completed-toggle"
+                  style={styles.doneHeader}
+                >
+                  <Icon
+                    name={doneShown ? "chevron.down" : "chevron.right"}
+                    size={13}
+                    weight="semibold"
+                    color={colors.secondary}
+                  />
                   <Text
                     variant="subheadline"
                     weight="600"
                     color={colors.secondary}
+                    style={{ flex: 1 }}
                   >
-                    {section.title}
+                    Completed
                   </Text>
-                </View>
+                  <Text variant="subheadline" color={colors.secondary} tabular testID="completed-count">
+                    {done.length}
+                  </Text>
+                </Touchable>
               ) : null
             }
             renderSectionFooter={({ section }) =>
@@ -653,19 +683,6 @@ export default function GroupScreen() {
                       </Touchable>
                     </View>
                   ) : null}
-                  {done.length > 0 && !doneShown ? (
-                    <Touchable
-                      feedback="opacity"
-                      onPress={() => setShowDone(true)}
-                      accessibilityRole="button"
-                      testID="show-done"
-                      style={styles.showDone}
-                    >
-                      <Text variant="subheadline" color={colors.tint}>
-                        Show {done.length} Completed
-                      </Text>
-                    </Touchable>
-                  ) : null}
                 </View>
               ) : null
             }
@@ -681,6 +698,7 @@ export default function GroupScreen() {
                 lateText={lateFor(item)}
                 last={index === section.data.length - 1}
                 checking={actions.checking.has(item.id)}
+                completedBy={item.status === "complete" ? personName.get(item.completedBy ?? "") : undefined}
                 onOpen={drafts ? openUnfinished : actions.onOpen}
                 onCheck={actions.onCheck}
                 onReady={actions.onReady}
@@ -754,18 +772,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   holdupRule: { borderTopWidth: layout.hairline, borderTopColor: colors.rule },
-  header: {
+  doneHeader: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingHorizontal: layout.inset,
-    paddingTop: 24,
-    paddingBottom: 4,
+    marginTop: 14,
     backgroundColor: colors.background,
-  },
-  showDone: {
-    height: 40,
-    justifyContent: "center",
-    paddingHorizontal: layout.inset,
-    marginTop: 8,
-    alignSelf: "flex-start",
   },
   newRow: { flexDirection: "row", flexWrap: "wrap" },
   newItem: {
