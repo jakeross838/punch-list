@@ -34,16 +34,21 @@ How each service behind the app is set up, and where its secrets are kept. Secre
 - `apps/mobile/eas.json` has two build profiles: `production`, the TestFlight build, with build numbers kept by Expo, and `simulator`, which checks the iPhone build without Apple.
 - The app's three public settings are Expo environment variables (production, preview and development): `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` and `EXPO_PUBLIC_POWERSYNC_URL`. For local runs they are in `apps/mobile/.env`, which git ignores.
 - The Expo access token is `EXPO_TOKEN` in `local/secrets/expo.env`.
-- Builds start from GitHub. The build workspace cannot send the project to Expo (its network blocks the upload), so Expo takes the code from `github.com/jakeross838/punch-list` once the Expo GitHub app is installed on that repository and linked to the project, with `apps/mobile` as the base directory. Expo is already authorized on Jake's GitHub account; the install (Install and Authorize, punch-list only) is Jake's to click, since it gives Expo write access to the repository.
+- Builds start from GitHub. The build workspace cannot send the project to Expo (its network blocks the upload), so Expo takes the code from `github.com/jakeross838/punch-list` once the Expo GitHub app is installed on that repository and linked to the project, with `apps/mobile` as the base directory. Jake installed the Expo GitHub app on 5 November, and the project is linked to the repository with `/apps/mobile` as the base directory.
+- First builds, 5 November: the simulator build and the production build (build 2) both finished from GitHub, in about 9 and 6 minutes.
 - The iPhone project generates cleanly (`expo prebuild`) and has one PowerSync library requirement, `powersync-sqlite-core` 0.5. The app uses PowerSync's callback forms, so the async iterator polyfill PowerSync mentions for Expo is not needed.
 
 ## Apple and TestFlight
 
-- Apple Developer Program: active since 2 November 2026, on Jake's Apple Account (jakeross838@gmail.com), as an individual.
-- Bundle identifier `com.rossbuilt.punchlist`. The name on the iPhone is Punch List; the App Store Connect record needs a name no other app uses, such as Ross Built Punch List.
+- Apple Developer Program: active since 2 November 2026, on Jake's Apple Account (jakeross838@gmail.com), as an individual. Team ID `HZVH9SG629`.
+- Bundle identifier `com.rossbuilt.punchlist`, registered at Apple. The name on the iPhone is Punch List.
+- App Store Connect record: Ross Built Punch List (Apple ID `6831305928`, SKU `rossbuilt-punchlist`), in `apps/mobile/eas.json` under `submit`.
+- App Store Connect API key: Expo EAS Punch List, Admin, key ID `LU54LZZAX7`. The key file and the issuer ID are in `local/secrets/` (`AuthKey_LU54LZZAX7.p8`, `apple.env`). Apple lets the key file be downloaded only once; the copy in `local/secrets/` and Jake's are the only ones.
+- Signing: the distribution certificate and the App Store provisioning profile were made with `eas credentials` and the API key, and are kept by Expo. Both expire 5 November 2027.
 - The app says it uses no encryption that needs an export declaration, so TestFlight builds do not stop on that question.
-- What it takes, once App Store Connect is signed in:
-  1. An App Store Connect API key with Admin access (Users and Access, Integrations, Team Keys). The key file goes in `local/secrets/`, with its key ID and the issuer ID.
-  2. `eas credentials` with the key makes the distribution certificate and the provisioning profile, and stores the key with Expo for TestFlight uploads. Expo does not make the certificate without prompts, so this one is run interactively.
-  3. The app record in App Store Connect, with the bundle identifier above. Apple's API cannot make app records, so this is done on the App Store Connect website, signed in as Jake.
-  4. Build `production` from GitHub on expo.dev, then send it to TestFlight with `eas submit --platform ios`, and add Jake to internal testing.
+- TestFlight: the internal group Ross Built has every build, and Jake is in it. Apple invites the group when a processed build is ready.
+- To ship a new build to TestFlight:
+  1. Push to `main`, then on expo.dev, Builds, Build from GitHub: iOS, git ref `main`, profile `production`. Expo numbers the builds.
+  2. From the build workspace, with `EXPO_TOKEN` from `local/secrets/expo.env`, add the key to the submit profile for this one run (`ascApiKeyPath` `../../local/secrets/AuthKey_LU54LZZAX7.p8`, `ascApiKeyId`, `ascApiKeyIssuerId` from `apple.env`), run `npx eas-cli submit -p ios --id <build id> --non-interactive`, and put `eas.json` back as committed. The key cannot be stored on Expo for automatic uploads without signing in with the Apple ID's password, which is not done here.
+  3. Apple processes the build (about 10 to 15 minutes) and TestFlight offers it to the Ross Built group.
+- Expo's free plan queues builds and uploads; an upload waited about 40 minutes on 5 November.
