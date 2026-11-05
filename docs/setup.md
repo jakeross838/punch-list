@@ -48,7 +48,8 @@ How each service behind the app is set up, and where its secrets are kept. Secre
 - The app says it uses no encryption that needs an export declaration, so TestFlight builds do not stop on that question.
 - TestFlight: the internal group Ross Built has every build, and Jake is in it. Apple invites the group when a processed build is ready.
 - To ship a new build to TestFlight:
-  1. Push to `main`, then on expo.dev, Builds, Build from GitHub: iOS, git ref `main`, profile `production`. Expo numbers the builds.
-  2. From the build workspace, with `EXPO_TOKEN` from `local/secrets/expo.env`, add the key to the submit profile for this one run (`ascApiKeyPath` `../../local/secrets/AuthKey_LU54LZZAX7.p8`, `ascApiKeyId`, `ascApiKeyIssuerId` from `apple.env`), run `npx eas-cli submit -p ios --id <build id> --non-interactive`, and put `eas.json` back as committed. The key cannot be stored on Expo for automatic uploads without signing in with the Apple ID's password, which is not done here.
-  3. Apple processes the build (about 10 to 15 minutes) and TestFlight offers it to the Ross Built group.
-- Expo's free plan queues builds and uploads; an upload waited about 40 minutes on 5 November.
+  1. Push to `main`, then on expo.dev, Builds, Build from GitHub: iOS, git ref `main`, profile `production`. Expo numbers the builds. A build takes about 5 to 10 minutes.
+  2. Download the build's .ipa (the build's Artifact link) into an empty folder and run `node tools/upload-testflight.mjs <ipa> <version> <build number>`. It uploads straight to App Store Connect with Apple's build upload API and the key in `local/secrets/`, in about 3 minutes, the same calls Expo's submit makes (build 3, 5 November).
+  3. Apple processes the build (a few minutes) and TestFlight offers it to the Ross Built group by itself, with a notice to Jake.
+  - The other way to upload is `npx eas-cli submit -p ios --id <build id> --non-interactive`, with the key added to the submit profile for that one run (`ascApiKeyPath` `../../local/secrets/AuthKey_LU54LZZAX7.p8`, `ascApiKeyId`, `ascApiKeyIssuerId` from `apple.env`) and `eas.json` put back as committed. It waits in Expo's free submission queue first (about 35 minutes on 5 November). The key cannot be stored on Expo for automatic uploads without signing in with the Apple ID's password, which is not done here.
+- Expo's free plan queues builds and submissions; builds started within a minute on 5 November.
