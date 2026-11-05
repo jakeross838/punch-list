@@ -7,7 +7,7 @@
 import { checkItem, holdChoices, hoursForTitle, readyByOf, tidyItem, tidyTitle, type HoldLookups, type Item } from '@punch/core';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { colors, layout, type as typeScale } from '@/constants/theme';
+import { colors, fieldFont, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { Checkbox, DateField, haptic, Icon, ListRow, ListSection, OptionPicker, SearchField, Sheet, shortDate, Text, Touchable } from '@/ui';
 import { blankDraft, useFormOptions } from './ItemForm';
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
   rule: { borderTopWidth: layout.hairline, borderTopColor: colors.separator },
   rowText: { flex: 1, gap: 1 },
-  input: { ...typeScale.body, flex: 1, height: 46, color: colors.label, outlineWidth: 0 },
+  input: { ...fieldFont('body'), flex: 1, height: 46, color: colors.label, outlineWidth: 0 },
   buttons: { justifyContent: 'flex-end', gap: 22 },
   textButton: { height: 44, justifyContent: 'center' },
   note: { marginHorizontal: layout.inset, marginTop: -14, marginBottom: 22 },

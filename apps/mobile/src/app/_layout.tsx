@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { HEADER_TEXT, largeTitleFor } from '@/constants/largeTitles';
 import { colors } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { DataProvider } from '@/data/backend';
@@ -39,12 +40,28 @@ const SCREENS = [
 const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/send', 'settings/item-form'] as const;
 const CAMERA = 'jobs/[jobId]/capture';
 
+/**
+ * A large title screen gets its large title here, so it is there before the screen first lays out
+ * (see constants/largeTitles.ts). Other screens set their own header from their Page.
+ */
+function screenOptions(name: string) {
+  const title = largeTitleFor(name);
+  if (title === undefined) return undefined;
+  return {
+    title,
+    headerLargeTitleEnabled: true,
+    headerLargeTitleShadowVisible: false,
+    headerLargeTitleStyle: HEADER_TEXT.largeTitle,
+    headerTitleStyle: HEADER_TEXT.title,
+  };
+}
+
 function NativeStack({ signedIn }: { signedIn: boolean }) {
   return (
     <Stack screenOptions={{ headerTintColor: colors.tint, contentStyle: { backgroundColor: colors.grouped } }}>
       <Stack.Protected guard={signedIn} redirectTo="/sign-in">
         {SCREENS.map((name) => (
-          <Stack.Screen key={name} name={name} />
+          <Stack.Screen key={name} name={name} options={screenOptions(name)} />
         ))}
         {SHEETS.map((name) => (
           <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
@@ -52,7 +69,7 @@ function NativeStack({ signedIn }: { signedIn: boolean }) {
         <Stack.Screen name={CAMERA} options={{ presentation: 'fullScreenModal', headerShown: false, contentStyle: { backgroundColor: colors.black } }} />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn} redirectTo="/">
-        <Stack.Screen name="sign-in" />
+        <Stack.Screen name="sign-in" options={screenOptions('sign-in')} />
       </Stack.Protected>
     </Stack>
   );

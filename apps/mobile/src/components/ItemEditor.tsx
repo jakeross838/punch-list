@@ -37,7 +37,7 @@ import {
 } from '@punch/core';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, StyleSheet, TextInput, View } from 'react-native';
-import { colors, layout, type as typeScale } from '@/constants/theme';
+import { colors, fieldFont, layout, type as typeScale } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { usePersonOptions } from './people';
 import { haptic, Icon, ListLabeledField, ListRow, ListSection, OptionPicker, PhotoView, Segmented, Text, Touchable } from '@/ui';
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   badge: { position: 'absolute', right: 4, bottom: 4, minWidth: 24, height: 20, paddingHorizontal: 6, borderRadius: 10, backgroundColor: 'rgba(0, 0, 0, 0.55)', alignItems: 'center', justifyContent: 'center' },
   addPhoto: { height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   textColumn: { flex: 1, minWidth: 0 },
-  title: { ...typeScale.title3, minHeight: 26, padding: 0, color: colors.label, outlineWidth: 0 },
+  title: { ...fieldFont('title3'), minHeight: 26, padding: 0, color: colors.label, outlineWidth: 0 },
   titleProblem: { color: colors.destructive },
   rule: { height: 0, borderBottomWidth: layout.hairline, borderBottomColor: colors.separator, marginTop: 10, marginBottom: 9 },
   description: { ...typeScale.body, minHeight: 60, padding: 0, color: colors.label, textAlignVertical: 'top', outlineWidth: 0 },

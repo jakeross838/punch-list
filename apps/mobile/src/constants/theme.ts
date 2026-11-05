@@ -78,6 +78,16 @@ export const type = {
 
 export type TypeVariant = keyof typeof type;
 
+/**
+ * A text style for a one-line text field: the size and weight without the line height. On the
+ * iPhone a one-line field with a line height draws its text off center, and the words jump as you
+ * type. Fields that wrap keep the line height.
+ */
+export function fieldFont(variant: TypeVariant): TextStyle {
+  const { lineHeight: _lineHeight, ...rest } = type[variant];
+  return rest;
+}
+
 /** Layout: margins, row sizes, corner radii. */
 export const layout = {
   margin: 16,

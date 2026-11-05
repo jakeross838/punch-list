@@ -3,7 +3,7 @@
 
 import { Children, createContext, isValidElement, useContext, useState, type ReactNode } from 'react';
 import { Platform, StyleSheet, TextInput, View, type ColorValue, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
-import { colors, layout, type as typeScale } from '@/constants/theme';
+import { colors, fieldFont, layout, type as typeScale } from '@/constants/theme';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { Switch } from './Switch';
@@ -243,7 +243,9 @@ export function ListTextField({
         style={[
           styles.input,
           size === 'title' ? styles.titleInput : null,
-          multiline ? { height, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' } : null,
+          multiline
+            ? { height, lineHeight: size === 'title' ? 28 : typeScale.body.lineHeight, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' }
+            : null,
           props.style,
         ]}
       />
@@ -361,8 +363,9 @@ const styles = StyleSheet.create({
   tile: { alignItems: 'center', justifyContent: 'center' },
   fieldRow: { paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
   invalid: { backgroundColor: 'rgba(215, 0, 21, 0.05)' },
-  input: { ...typeScale.body, color: colors.label, minHeight: layout.rowMinHeight, paddingVertical: 0, outlineWidth: 0 },
-  titleInput: { fontSize: 22, lineHeight: 28, fontWeight: '600', letterSpacing: -0.2, minHeight: 54 },
+  // One line: no line height, so the words stay put as you type (see fieldFont). Wrapping fields add it.
+  input: { ...fieldFont('body'), color: colors.label, minHeight: layout.rowMinHeight, paddingVertical: 0, outlineWidth: 0 },
+  titleInput: { fontSize: 22, fontWeight: '600', letterSpacing: -0.2, minHeight: 54 },
   label: { flexShrink: 0 },
   // minWidth 0 lets the field shrink beside its label (a web input otherwise keeps its own width).
   labeledInput: { flex: 1, minWidth: 0, textAlign: 'right' },

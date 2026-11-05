@@ -5,7 +5,8 @@
 import { Stack } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, layout, type as typeScale } from '@/constants/theme';
+import { HEADER_TEXT } from '@/constants/largeTitles';
+import { colors, layout } from '@/constants/theme';
 import { SF_SYMBOLS } from './icons';
 import type { BarButton, BarItem, PageProps, PageScroll } from './page-types';
 import { Text } from './Text';
@@ -93,9 +94,10 @@ export function Page({
           title,
           headerLargeTitleEnabled: !!large && !sheet,
           headerLargeTitleShadowVisible: false,
-          // A step under the system's sizes, like the rest of the app's text.
-          headerLargeTitleStyle: { fontSize: typeScale.largeTitle.fontSize, fontWeight: '700' },
-          headerTitleStyle: { fontSize: 16, fontWeight: '600' },
+          // The same as the stack sets for the large title screens (app/_layout.tsx), so these
+          // options change nothing on those screens once they are open.
+          headerLargeTitleStyle: HEADER_TEXT.largeTitle,
+          headerTitleStyle: HEADER_TEXT.title,
           headerTintColor: colors.tint,
           gestureEnabled: dismissible,
           contentStyle: { backgroundColor: bg },
