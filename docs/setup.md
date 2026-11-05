@@ -8,7 +8,8 @@ How each service behind the app is set up, and where its secrets are kept. Secre
 - The database is the migrations in `supabase/migrations`, applied in order (see The live database in `phase-1.md`).
 - Sign in is by email with a six digit code: the Magic Link and Confirm Sign Up templates carry the code (`{{ .Token }}`), subject "Your Ross Built sign in code", and the code length is 6.
 - The Before User Created hook runs `public.hook_only_ross_built_people`. An email that is not an active person in People is turned away with "That email is not set up at Ross Built. Ask an admin to add you under People." before any account is made. Checked on the live project.
-- Email: Supabase's own sender only sends to the organization's team members. jake@rossbuilt.com is invited to the team as a Developer; once the invitation is accepted, his codes arrive. Before anyone else signs in, the email needs a Ross Built sender (custom SMTP, for example Resend with the rossbuilt.com domain).
+- Email: Supabase's own sender only sends to the organization's team. jake@rossbuilt.com is invited to the team as a Developer, and with the invitation still open his codes already arrive (checked 5 November: a code reached his inbox in about a minute and a half). Keep the invitation; it may be what lets them through. Before anyone else signs in, the email needs a Ross Built sender (custom SMTP, for example Resend with the rossbuilt.com domain).
+- Checked end to end on 5 November: a code emailed to jake@rossbuilt.com signed him in, PowerSync accepted that sign in and finished the first sync (the `mine` and `ross_built` streams; only his own People row so far, since no jobs are loaded), and the test session was signed out.
 - PowerSync's database role, `powersync_role`: can log in and replicate, reads past the access rules (PowerSync's sync config is the gate for the phones), and can only read the tables in `public`, which are exactly the tables in the `powersync` publication. It was made by hand, not in a migration. Its password was made in the build workspace and only its SCRAM hash was sent to the database. The password is `POWERSYNC_DATABASE_PASSWORD` in `local/secrets/powersync.env`.
 
 ## PowerSync
@@ -33,14 +34,16 @@ How each service behind the app is set up, and where its secrets are kept. Secre
 - `apps/mobile/eas.json` has two build profiles: `production`, the TestFlight build, with build numbers kept by Expo, and `simulator`, which checks the iPhone build without Apple.
 - The app's three public settings are Expo environment variables (production, preview and development): `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` and `EXPO_PUBLIC_POWERSYNC_URL`. For local runs they are in `apps/mobile/.env`, which git ignores.
 - The Expo access token is `EXPO_TOKEN` in `local/secrets/expo.env`.
-- Builds start from GitHub. The build workspace cannot send the project to Expo (its network blocks the upload), so Expo takes the code from `github.com/jakeross838/punch-list` once the Expo GitHub app is connected to the project, with `apps/mobile` as the base directory.
+- Builds start from GitHub. The build workspace cannot send the project to Expo (its network blocks the upload), so Expo takes the code from `github.com/jakeross838/punch-list` once the Expo GitHub app is installed on that repository and linked to the project, with `apps/mobile` as the base directory. Expo is already authorized on Jake's GitHub account; the install (Install and Authorize, punch-list only) is Jake's to click, since it gives Expo write access to the repository.
+- The iPhone project generates cleanly (`expo prebuild`) and has one PowerSync library requirement, `powersync-sqlite-core` 0.5. The app uses PowerSync's callback forms, so the async iterator polyfill PowerSync mentions for Expo is not needed.
 
 ## Apple and TestFlight
 
+- Apple Developer Program: active since 2 November 2026, on Jake's Apple Account (jakeross838@gmail.com), as an individual.
 - Bundle identifier `com.rossbuilt.punchlist`. The name on the iPhone is Punch List; the App Store Connect record needs a name no other app uses, such as Ross Built Punch List.
 - The app says it uses no encryption that needs an export declaration, so TestFlight builds do not stop on that question.
 - What it takes, once App Store Connect is signed in:
   1. An App Store Connect API key with Admin access (Users and Access, Integrations, Team Keys). The key file goes in `local/secrets/`, with its key ID and the issuer ID.
   2. `eas credentials` with the key makes the distribution certificate and the provisioning profile, and stores the key with Expo for TestFlight uploads. Expo does not make the certificate without prompts, so this one is run interactively.
-  3. The app record in App Store Connect, with the bundle identifier above.
+  3. The app record in App Store Connect, with the bundle identifier above. Apple's API cannot make app records, so this is done on the App Store Connect website, signed in as Jake.
   4. Build `production` from GitHub on expo.dev, then send it to TestFlight with `eas submit --platform ios`, and add Jake to internal testing.

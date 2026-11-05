@@ -105,12 +105,12 @@ A six digit code sent to the person's email: no password. Only people Ross Built
 1. Supabase: done. The project `punch-list` is made and loaded (see The live database). The database password stays with Jake; nothing needs it, since PowerSync reads the database as its own role (see `setup.md`).
 2. PowerSync: done. The instance Production is connected to the database and runs the sync config.
 3. Expo: done. The project `@jakeross/punch-list` has the build settings and the app's settings.
-4. Apple, for the TestFlight build (checks C3, C4 and C7 to C10): an active Apple Developer membership, and App Store Connect signed in, so the signing files, the app record and TestFlight can be set up (`setup.md`, Apple and TestFlight). And the Expo GitHub app connected to the repository, since the builds start from GitHub.
+4. Apple, for the TestFlight build (checks C3, C4 and C7 to C10): the Apple Developer membership is active (2 November); App Store Connect signed in, once, so the signing files, the app record and TestFlight can be set up (`setup.md`, Apple and TestFlight). And the Expo GitHub app connected to the repository, since the builds start from GitHub.
 5. Fish's room list: the plan callouts with their numbers, in floor order.
 6. The standard titles: the preview starts from a list of about fifty by trade; Fish's own completion list would make it real.
 7. Fill In From Photo on the iPhone: an Anthropic API key for the `suggest-item` server function (the preview link uses the viewer's own Claude instead).
 8. Fish's list from Buildertrend: one pasted session (Copy as cURL from Chrome) for the read-only import, `npm run import:buildertrend`, which writes `local/fish-import.json` to load once the database exists. It never writes to Buildertrend.
-9. In Supabase: the email templates with the six digit code, the code length and the Before User Created hook are done. Still to do: the email sent from a Ross Built address (custom SMTP), so codes reach everyone and do not land in spam. Until then Supabase sends codes only to its own team; jake@rossbuilt.com is invited, so his arrive once he accepts.
+9. In Supabase: the email templates with the six digit code, the code length and the Before User Created hook are done. Still to do: the email sent from a Ross Built address (custom SMTP), so codes reach everyone and do not land in spam. Until then Supabase sends codes only to its own team; jake@rossbuilt.com is invited, and his codes already arrive.
 10. Where the companies' pages live: `link.rossbuilt.com` (or another address, set as `EXPO_PUBLIC_COMPANY_PAGE_URL`), pointed at the page that shows a company its list from the link's token.
 
 Secrets live only in `local/` in the build workspace, which git ignores.
@@ -174,6 +174,7 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 
 - PowerSync: the instance Production reads the database's direct connection as its own read only role and runs the sync config; phones sign in with Supabase Auth. The first copy of the database is done, every synced table replicates, and a request with no sign in is refused. `apps/mobile/.env` has its address, so the iPhone now runs on the real database.
 - Supabase: the six digit code emails and the sign in check are on. Checked on the live project: an email that is not in People is turned away with the Ross Built message, and no account is made.
+- Checked end to end on 5 November: a code emailed to jake@rossbuilt.com signed him in, and PowerSync accepted the sign in and finished the first sync.
 - Expo: the project `@jakeross/punch-list`, the production and simulator build profiles, and the app's settings as Expo environment variables. Expo Doctor passes all 20 checks.
 - Fixed on the way: the app carried an old PowerSync package it never used, which asked for an older PowerSync iPhone library than the one the app uses and would have stopped the iPhone build. Eleven packages were brought to the versions Expo 58 expects.
 - Left for the TestFlight build: Apple (App Store Connect signed in) and the Expo GitHub app, because the build workspace cannot send the project to Expo itself. The steps are in `setup.md`.
