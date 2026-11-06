@@ -1,14 +1,2 @@
-import type { useFeedback } from '@/ui';
-
-/** Leaves at once when nothing changed; otherwise asks first, the way iOS sheets do. */
-export function leaveOrConfirm(dirty: boolean, feedback: ReturnType<typeof useFeedback>, leave: () => void, what = 'this item'): void {
-  if (!dirty) {
-    leave();
-    return;
-  }
-  feedback.actionSheet({
-    message: `Your changes to ${what} will be lost.`,
-    actions: [{ label: 'Discard Changes', destructive: true, onPress: leave }],
-    cancelLabel: 'Keep Editing',
-  });
-}
+// Kept so the screens that ask before throwing away changes find it where they always have.
+export { askToDiscard, leaveOrConfirm, useLeaveGuard } from '@/ui/discard';

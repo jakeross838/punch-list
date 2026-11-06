@@ -6,13 +6,14 @@
 // when nothing has that name: Add "Kitchen 109" at the top, or the search key.
 
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { layout } from '@/constants/theme';
 import { useFeedback } from './Feedback';
 import { haptic } from './haptics';
 import { EmptyState, ListRow, ListSection } from './List';
 import { SearchField } from './SearchField';
 import { Sheet } from './Sheet';
+import { SheetScroll } from './SheetScroll';
 
 export interface Option {
   value: string;
@@ -130,7 +131,7 @@ export function OptionPicker({
 
   return (
     <Sheet visible={visible} onClose={close} title={title} left={{ label: 'Cancel', onPress: close, testID: 'picker-cancel' }} testID="picker">
-      <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={styles.content} style={{ flex: 1 }}>
+      <SheetScroll contentContainerStyle={styles.content} style={{ flex: 1 }}>
         {search ? (
           <View style={styles.search}>
             <SearchField
@@ -181,7 +182,7 @@ export function OptionPicker({
             ))
           : null}
         {shown.length === 0 && searching && !canAdd ? <EmptyState icon="magnifyingglass" title="No Results" message={`Nothing matches “${query.trim()}”.`} /> : null}
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }

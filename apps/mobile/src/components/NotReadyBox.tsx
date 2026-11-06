@@ -6,10 +6,10 @@
 
 import { checkItem, holdChoices, tidyItem, tidyTitle, type HoldLookups, type Item } from '@punch/core';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 import { colors, fieldFont, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Checkbox, DateField, haptic, Icon, ListRow, ListSection, OptionPicker, SearchField, Sheet, Text, Touchable } from '@/ui';
+import { SheetScroll, Checkbox, DateField, haptic, Icon, ListRow, ListSection, OptionPicker, SearchField, Sheet, Text, Touchable } from '@/ui';
 import { blankDraft, useFormOptions } from './ItemForm';
 
 export interface Waiting {
@@ -19,6 +19,8 @@ export interface Waiting {
 }
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
 export function NotReadyBox({
   visible,
@@ -166,8 +168,10 @@ export function NotReadyBox({
         testID: 'not-ready-done',
       }}
       testID="not-ready-box"
+      dirty={!sameList(tasks, value.waitingOnItems) || !sameList(who, value.waitingOn) || date !== value.readyBy || !!newTask?.title.trim()}
+      what="what it waits on"
     >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <SheetScroll contentContainerStyle={styles.content}>
         <Text variant="subheadline" color={colors.secondary} style={styles.lead}>
           What has to be done first? Usually one task.
         </Text>
@@ -302,7 +306,7 @@ export function NotReadyBox({
         <ListSection footer="When it should be ready, if you know. The company sees it on its list.">
           <ListRow title="Ready By" titleLines={1} right={<DateField value={date} onChange={setDate} label="Ready By" testID="not-ready-by" />} />
         </ListSection>
-      </ScrollView>
+      </SheetScroll>
 
       <OptionPicker
         visible={pickingCompany}

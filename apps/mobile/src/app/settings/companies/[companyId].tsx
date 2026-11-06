@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { ContactSheet } from '@/components/ContactSheet';
 import { colors } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { EmptyState, haptic, ListLabeledField, ListRow, ListSection, OptionPicker, Page, useFeedback } from '@/ui';
+import { useSaveOnLeave, EmptyState, haptic, ListLabeledField, ListRow, ListSection, OptionPicker, Page, useFeedback } from '@/ui';
 
 export default function CompanyScreen() {
   const { companyId } = useLocalSearchParams<{ companyId: string }>();
@@ -51,6 +51,12 @@ function CompanyDetail({ companyId }: { companyId: string }) {
       feedback.toast({ message: e instanceof Error ? e.message : 'That did not save. Try again.' });
     }
   }
+
+  // Leaving with the name still being typed keeps it.
+  useSaveOnLeave(() => {
+    const clean = name.trim().replace(/\s+/g, ' ');
+    if (admin && clean !== '' && clean !== company.name) data.updateCompany(company.id, { name: clean }).catch(() => undefined);
+  });
 
   /** Their email and phone, and whether the lists go to them. The icon says by email or by text. */
   const detail = (c: Contact) => [[c.email, c.phone].filter(Boolean).join(' · '), c.getsLists ? '' : 'Does not get the lists'].filter(Boolean).join('\n');

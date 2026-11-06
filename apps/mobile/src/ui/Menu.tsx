@@ -1,13 +1,15 @@
 // A drop-down menu, the same on the iPhone and the preview page: a white square panel under the
 // button that opened it, with a check beside what is on. Tap a choice or anywhere else to close.
+// The choice runs once the menu has gone, so a sheet or question it opens does show on the iPhone.
 
 import { useRef, useState, type ComponentRef, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { colors } from '@/constants/theme';
 import { BarButtonView } from './BarButton';
 import { haptic } from './haptics';
 import { Icon } from './Icon';
 import type { BarMenu, MenuAction, MenuGroup } from './page-types';
+import { afterSheets, useSheetPresence } from './presence';
 import { Text } from './Text';
 import { Touchable } from './Touchable';
 
@@ -43,14 +45,17 @@ export function MenuPanel({
   header?: ReactNode;
 }) {
   const { height } = useWindowDimensions();
+  const dismissed = useSheetPresence(anchor !== null);
   const choose = (action: MenuAction) => {
     haptic.selection();
     onClose();
-    // After the menu has gone, so a screen it opens does not slide in under it.
-    setTimeout(action.onPress, 0);
+    // On the iPhone, once the menu has gone: a sheet asked for while it fades out would not show at
+    // all. The preview page has no such limit.
+    if (Platform.OS === 'web') setTimeout(action.onPress, 0);
+    else afterSheets(action.onPress);
   };
   return (
-    <Modal visible={anchor !== null} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={anchor !== null} transparent animationType="fade" onRequestClose={onClose} onDismiss={dismissed} statusBarTranslucent>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close the menu" testID="menu-close" />
       {anchor ? (
         <View

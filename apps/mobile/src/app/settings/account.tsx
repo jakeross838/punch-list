@@ -10,11 +10,11 @@ import { COMPANY_NAME_MAX, companyNameProblem, isAdmin, PART_LABELS, ROLE_HINTS,
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { APP_NAME } from '@/constants/app';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { haptic, ListRow, ListSection, ListTextField, Page, Sheet, Text, useFeedback } from '@/ui';
+import { SheetScroll, haptic, ListRow, ListSection, ListTextField, Page, Sheet, Text, useFeedback } from '@/ui';
 
 export default function AccountScreen() {
   const data = useData();
@@ -32,6 +32,8 @@ export default function AccountScreen() {
   const version = Constants.expoConfig?.version;
   const company = org.name || 'Your Company';
   const others = people.filter((p) => p.active && p.id !== me.id);
+
+  const stopRenaming = () => setRenaming(null);
 
   const rename = async () => {
     if (renaming === null) return;
@@ -188,13 +190,15 @@ export default function AccountScreen() {
 
       <Sheet
         visible={renaming !== null}
-        onClose={() => setRenaming(null)}
+        onClose={stopRenaming}
         title="Company Name"
-        left={{ label: 'Cancel', onPress: () => setRenaming(null), testID: 'company-name-cancel' }}
+        left={{ label: 'Cancel', onPress: stopRenaming, testID: 'company-name-cancel' }}
         right={{ label: 'Save', variant: 'prominent', onPress: () => void rename(), disabled: (renaming ?? '').trim() === '', testID: 'company-name-save' }}
         testID="company-name-sheet"
+        dirty={renaming !== null && renaming !== org.name}
+        what="the company name"
       >
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheet}>
+        <SheetScroll contentContainerStyle={styles.sheet}>
           <ListSection footer="It goes at the top of every list you send, and on the emails.">
             <ListTextField
               placeholder="Company Name"
@@ -209,7 +213,7 @@ export default function AccountScreen() {
               testID="company-name-field"
             />
           </ListSection>
-        </ScrollView>
+        </SheetScroll>
       </Sheet>
     </Page>
   );

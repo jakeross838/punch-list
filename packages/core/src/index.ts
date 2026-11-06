@@ -7,6 +7,7 @@ export * from './marks';
 export * from './titles';
 export * from './forms';
 export * from './lists';
+export * from './workOrder';
 export * from './printout';
 export * from './dates';
 export * from './schedule';

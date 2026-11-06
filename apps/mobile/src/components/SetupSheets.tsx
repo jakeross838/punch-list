@@ -5,10 +5,10 @@
 
 import { renameLocation, type Job } from '@punch/core';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { StyleSheet, type TextInput } from 'react-native';
 import { useData } from '@/data/api';
-import { haptic, ListLabeledField, ListRow, ListSection, ListTextField, OptionPicker, Sheet, useFeedback } from '@/ui';
+import { afterSheets, haptic, ListLabeledField, ListRow, ListSection, ListTextField, OptionPicker, Sheet, SheetScroll, useFeedback, useSaveOnLeave } from '@/ui';
 
 const oneLine = (text: string) => text.trim().replace(/\s+/g, ' ');
 const itemCount = (n: number) => `${n} open ${n === 1 ? 'item' : 'items'}`;
@@ -19,6 +19,7 @@ export function JobFields({ job, editable = true }: { job: Job; editable?: boole
   const feedback = useFeedback();
   const [name, setName] = useState(job.name);
   const [address, setAddress] = useState(job.address);
+  const addressField = useRef<ComponentRef<typeof TextInput>>(null);
 
   function saveName() {
     const clean = oneLine(name);
@@ -37,6 +38,14 @@ export function JobFields({ job, editable = true }: { job: Job; editable?: boole
     if (clean !== job.address) void data.updateJob(job.id, { address: clean });
   }
 
+  // Leaving with a field still being typed in keeps what was typed.
+  useSaveOnLeave(() => {
+    const patch: Partial<Pick<Job, 'name' | 'address'>> = {};
+    if (oneLine(name) !== '' && oneLine(name) !== job.name) patch.name = oneLine(name);
+    if (oneLine(address) !== job.address) patch.address = oneLine(address);
+    if (Object.keys(patch).length > 0) void data.updateJob(job.id, patch);
+  });
+
   return (
     <ListSection variant="plain" header="Job">
       <ListLabeledField
@@ -47,10 +56,13 @@ export function JobFields({ job, editable = true }: { job: Job; editable?: boole
         editable={editable}
         placeholder="Job Name"
         autoCapitalize="words"
-        returnKeyType="done"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => addressField.current?.focus()}
         testID="field-job-name"
       />
       <ListLabeledField
+        ref={addressField}
         label="Address"
         value={address}
         onChangeText={setAddress}
@@ -58,6 +70,7 @@ export function JobFields({ job, editable = true }: { job: Job; editable?: boole
         editable={editable}
         placeholder="Street Address"
         autoCapitalize="words"
+        textContentType="fullStreetAddress"
         returnKeyType="done"
         testID="field-job-address"
       />
@@ -110,8 +123,10 @@ export function LocationSheet({ jobId, locationId, visible, onClose }: { jobId: 
       title="Location"
       left={{ label: 'Cancel', onPress: onClose, testID: 'location-cancel' }}
       right={{ label: 'Save', variant: 'prominent', onPress: () => void save(), disabled: !renamed, testID: 'location-save' }}
+      dirty={!!location && text !== location.label}
+      what="this location"
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      <SheetScroll contentContainerStyle={styles.content}>
         <ListSection footer={problem ?? 'The new name shows on every item and list.'} footerTone={problem ? 'danger' : 'default'}>
           <ListTextField
             placeholder="Kitchen 109"
@@ -119,6 +134,8 @@ export function LocationSheet({ jobId, locationId, visible, onClose }: { jobId: 
             onChangeText={setText}
             autoCapitalize="words"
             autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={() => void save()}
             accessibilityLabel="Location name"
             testID="field-location"
           />
@@ -128,7 +145,7 @@ export function LocationSheet({ jobId, locationId, visible, onClose }: { jobId: 
         >
           <ListRow title="Remove from Job" tone="destructive" disabled={open > 0} onPress={removeFromJob} testID="location-remove" />
         </ListSection>
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }
@@ -199,8 +216,10 @@ export function CompanySheet({ jobId, pairing, visible, onClose }: { jobId: stri
       title="Company"
       left={{ label: 'Cancel', onPress: onClose, testID: 'company-edit-cancel' }}
       right={{ label: 'Save', variant: 'prominent', onPress: () => void save(), disabled: !canSave, testID: 'company-save' }}
+      dirty={renamed || retraded}
+      what="this company"
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      <SheetScroll contentContainerStyle={styles.content}>
         <ListSection footer={nameProblem ?? 'A new name changes it on every job.'} footerTone={nameProblem ? 'danger' : 'default'}>
           <ListTextField
             placeholder="Company Name"
@@ -208,6 +227,8 @@ export function CompanySheet({ jobId, pairing, visible, onClose }: { jobId: stri
             onChangeText={setName}
             autoCapitalize="words"
             autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={() => void save()}
             accessibilityLabel="Company name"
             testID="field-company-name"
           />
@@ -229,7 +250,7 @@ export function CompanySheet({ jobId, pairing, visible, onClose }: { jobId: stri
               accessory="chevron"
               onPress={() => {
                 onClose();
-                router.push({ pathname: '/settings/companies/[companyId]', params: { companyId: company.id } });
+                afterSheets(() => router.push({ pathname: '/settings/companies/[companyId]', params: { companyId: company.id } }));
               }}
               testID="company-people"
             />
@@ -240,7 +261,7 @@ export function CompanySheet({ jobId, pairing, visible, onClose }: { jobId: stri
         >
           <ListRow title="Remove from Job" tone="destructive" disabled={open > 0} onPress={removeFromJob} testID="company-remove" />
         </ListSection>
-      </ScrollView>
+      </SheetScroll>
       <OptionPicker
         visible={picking}
         title="Trade"

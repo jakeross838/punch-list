@@ -46,7 +46,9 @@ export function companyListEmail(input: {
     greeting(input.contacts),
     '',
     `Here is your current list for ${place}. Take a look and let me know if anything is missing or needs adjusting.${
-      input.ready > 0 ? ' Anything marked ready can be done any time, so if you have an open day I would love to get those cleared out.' : ''
+      input.ready > 0
+        ? ' Anything marked ready can be done any time, so if you have an open day I would love to get those cleared out. It is numbered in the order to do it, starting with what holds up the most other work.'
+        : ''
     }`,
   ];
   if (input.link) {

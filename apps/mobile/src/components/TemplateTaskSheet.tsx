@@ -14,10 +14,10 @@ import {
   type TemplatePlace,
 } from '@punch/core';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { haptic, ListRow, ListSection, ListTextField, OptionPicker, Segmented, Sheet, useFeedback } from '@/ui';
+import { haptic, ListRow, ListSection, ListTextField, OptionPicker, Segmented, Sheet, SheetScroll, useFeedback } from '@/ui';
 
 type Picker = 'place' | 'trade' | 'waits' | null;
 
@@ -53,6 +53,12 @@ function TaskForm({ templateId, task, onClose }: { templateId: string; task: Tem
   const [picker, setPicker] = useState<Picker>(null);
   const [tried, setTried] = useState(false);
   const missing = tried && tidyTitle(title) === '';
+  const dirty =
+    title !== (task?.title ?? '') ||
+    place !== (task?.place ?? 'bathroom') ||
+    tradeId !== (task?.tradeId ?? null) ||
+    kind !== (task?.kind ?? 'completion') ||
+    waitsOn !== (task?.waitsOn[0] ?? null);
 
   // A standard title brings its trade and its usual time, where they are not set yet.
   const standard = titles.find((t) => t.approved && t.title.toLowerCase() === tidyTitle(title).toLowerCase());
@@ -97,10 +103,23 @@ function TaskForm({ templateId, task, onClose }: { templateId: string; task: Tem
       left={{ label: 'Cancel', onPress: onClose, testID: 'task-cancel' }}
       right={{ label: task ? 'Done' : 'Add', variant: 'prominent', onPress: () => void save(), testID: 'task-save' }}
       testID="task-sheet"
+      dirty={dirty}
+      what={task ? 'this task' : 'the new task'}
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      <SheetScroll contentContainerStyle={styles.content}>
         <ListSection footer={missing ? 'Give the task a title.' : 'A verb and the thing, like Install mirror.'} footerTone={missing ? 'danger' : 'default'}>
-          <ListTextField placeholder="Title" value={title} onChangeText={setTitle} autoCapitalize="sentences" autoFocus={!task} invalid={missing} accessibilityLabel="Title" testID="field-task-title" />
+          <ListTextField
+            placeholder="Title"
+            value={title}
+            onChangeText={setTitle}
+            autoCapitalize="sentences"
+            autoFocus={!task}
+            returnKeyType="done"
+            onSubmitEditing={() => void save()}
+            invalid={missing}
+            accessibilityLabel="Title"
+            testID="field-task-title"
+          />
         </ListSection>
         <ListSection>
           <ListRow title="Where" value={placeLabel(place)} accessory="chevron" onPress={() => setPicker('place')} testID="task-place" />
@@ -121,7 +140,7 @@ function TaskForm({ templateId, task, onClose }: { templateId: string; task: Tem
             <ListRow title="Take It Off the Template" tone="destructive" onPress={takeOff} testID="task-off" />
           </ListSection>
         ) : null}
-      </ScrollView>
+      </SheetScroll>
       <OptionPicker visible={picker === 'place'} title="Where" options={placeOptions} value={place} onSelect={(v) => setPlace(v as TemplatePlace)} onClose={() => setPicker(null)} footer="Every location of a kind comes from each location's name, like Bathroom 116." />
       <OptionPicker
         visible={picker === 'trade'}

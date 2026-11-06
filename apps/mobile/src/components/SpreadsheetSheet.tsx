@@ -45,7 +45,7 @@ export function SpreadsheetSheet({
         <Text variant="subheadline" color={colors.secondary} style={styles.about}>
           {`${rows.length} ${rows.length === 1 ? 'item' : 'items'}, one to a row, for Excel, Numbers or Google Sheets.${rows.length > SHOWN ? ` The first ${SHOWN} show here; the file has them all.` : ''}`}
         </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator style={styles.table} testID="spreadsheet-table">
+        <ScrollView horizontal showsHorizontalScrollIndicator scrollsToTop={false} style={styles.table} testID="spreadsheet-table">
           <View>
             <View style={[styles.row, styles.head]}>
               {SHEET_COLUMNS.map((c) => (

@@ -22,11 +22,11 @@ import {
 } from '@punch/core';
 import { randomUUID } from 'expo-crypto';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { itemsWord } from '@/data/clipboard';
-import { Checkbox, Chip, EmptyState, haptic, matchRank, SearchField, Sheet, Text, Touchable, useFeedback } from '@/ui';
+import { SheetScroll, Checkbox, Chip, EmptyState, haptic, matchRank, SearchField, Sheet, Text, Touchable, useFeedback } from '@/ui';
 import { startDraft } from './ItemForm';
 
 /** A task on the sheet: a template's, or a standard title found by searching. */
@@ -190,8 +190,10 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
       left={{ label: 'Cancel', onPress: onClose, testID: 'common-cancel' }}
       right={{ label: count > 0 ? `Add ${count}` : 'Add', variant: 'prominent', onPress: () => void add(), disabled: count === 0 || saving, testID: 'common-add' }}
       testID="common-tasks"
+      dirty={count > 0}
+      what="the tasks picked"
     >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+      <SheetScroll contentContainerStyle={styles.content}>
         <View style={styles.search}>
           <SearchField value={query} onChangeText={setQuery} placeholder="Search Every Task" testID="common-search" />
         </View>
@@ -237,7 +239,7 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
         <Text variant="footnote" color={colors.secondary} style={styles.note}>
           Each one goes on the list here with its company, its usual time and what it waits on. The tasks come from Templates.
         </Text>
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }

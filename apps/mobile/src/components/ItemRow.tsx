@@ -6,7 +6,7 @@
 // Ready and Remove. Rows sit in a white panel, every other one striped; the first and last close the
 // panel's edges.
 
-import { commentCountText, holdText, hoursText, kindText, missingDetails, waitingOnText, type HoldLookups, type Item, type Photo } from '@punch/core';
+import { commentCountText, freesText, holdText, hoursText, kindText, missingDetails, waitingOnText, type Freed, type HoldLookups, type Item, type Photo } from '@punch/core';
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -64,6 +64,8 @@ export const ItemRow = memo(function ItemRow({
   select,
   trailing,
   completedBy,
+  step,
+  freed,
 }: {
   item: Item;
   /** The item's first photo, shown small at the end of the row. */
@@ -100,6 +102,10 @@ export const ItemRow = memo(function ItemRow({
   trailing?: ReactNode;
   /** Who completed it, by name, for a completed item. */
   completedBy?: string;
+  /** Its place in the order to do the company's work, on a company's list: 1 first. */
+  step?: number;
+  /** What finishing it frees up, on a company's list. */
+  freed?: Freed;
 }) {
   const done = item.status === 'complete' || checking;
   const open = item.status === 'open' && !checking;
@@ -107,7 +113,9 @@ export const ItemRow = memo(function ItemRow({
   const status = itemStatus(item, { holds, checking, note, completedBy });
   const kind = item.kind === 'completion' || item.unfinished ? undefined : kindText(item);
   const time = item.hours !== null && item.hours > 0 && open ? hoursText(item.hours) : undefined;
-  const where = [location, company, kind, time].filter(Boolean).join(' · ');
+  const frees = open && freed ? freesText(freed) || undefined : undefined;
+  const where = [frees, location, company, kind, time].filter(Boolean).join(' · ');
+  const numbered = open && !!step && !select;
   const confirmed = open && !!item.confirmedAt && !item.markedDoneAt && !item.unfinished;
   const talk = comments > 0 ? commentCountText(comments) : undefined;
 
@@ -119,7 +127,9 @@ export const ItemRow = memo(function ItemRow({
         ]
       : [];
   const slot = !photo && !!onAddPhoto && open && !select;
-  const said = [title, item.priority ? 'Priority' : null, status.text, confirmed ? 'Confirmed by the company' : null, status.note, where, talk].filter(Boolean).join(', ');
+  const said = [numbered ? `Number ${step}` : null, title, item.priority ? 'Priority' : null, status.text, confirmed ? 'Confirmed by the company' : null, status.note, where, talk]
+    .filter(Boolean)
+    .join(', ');
 
   return (
     <SwipeRow actions={actions} style={[styles.swipe, first ? styles.first : null, last ? styles.last : styles.ruled]}>
@@ -151,6 +161,11 @@ export const ItemRow = memo(function ItemRow({
           </View>
           <View style={styles.text}>
             <View style={styles.titleLine}>
+              {numbered ? (
+                <Text variant="stamp" weight="700" color={colors.label} tabular style={styles.step} testID={`step-${item.id}`}>
+                  {step}
+                </Text>
+              ) : null}
               {item.priority && open ? <View style={styles.priority} accessibilityLabel="Priority" /> : null}
               <Text numberOfLines={2} color={done || !item.title ? colors.secondary : colors.label} style={[styles.title, done ? styles.crossed : null]}>
                 {title}
@@ -219,6 +234,17 @@ const styles = StyleSheet.create({
   titleLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   title: { flex: 1 },
   priority: { width: 6, height: 6, marginTop: 7, backgroundColor: colors.destructive },
+  step: {
+    minWidth: 22,
+    height: 20,
+    marginTop: 1,
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    textAlign: 'center',
+    lineHeight: 18,
+    overflow: 'hidden',
+  },
   crossed: { textDecorationLine: 'line-through', textDecorationColor: colors.secondary },
   statusLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 5, minWidth: 0 },
   note: { flexShrink: 1, letterSpacing: 1 },

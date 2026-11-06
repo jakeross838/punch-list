@@ -606,6 +606,19 @@ begin
   ) then
     raise exception 'FAIL: the page does not say which task an item waits on';
   end if;
+  -- What finishing each item frees up, down the chain, for the order to do the work.
+  if exists (select 1 from jsonb_array_elements(page -> 'items') x where x -> 'holds_up' is null or x -> 'holds_up' ->> 'items' is null) then
+    raise exception 'FAIL: an item on the page does not say what it holds up';
+  end if;
+  if not exists (select 1 from jsonb_array_elements(page -> 'items') x where x ->> 'title' = 'Install faucets' and (x -> 'holds_up' ->> 'items')::int = 1) then
+    raise exception 'FAIL: the page does not say the faucets hold up the caulk';
+  end if;
+  if exists (
+    select 1 from jsonb_array_elements(page -> 'items') x
+    where x ->> 'title' = 'Install vanity sinks' and (x -> 'holds_up' ->> 'items')::int <> 2
+  ) then
+    raise exception 'FAIL: the sinks do not hold up the faucets and the caulk after them';
+  end if;
   -- Never a Ross Built only note or one taken back.
   select array_agg(x ->> 'body') into shared from jsonb_array_elements(page -> 'comments') x;
   if shared is distinct from array['Can you come Tuesday?'] then raise exception 'FAIL: the page shows the wrong comments: %', shared; end if;

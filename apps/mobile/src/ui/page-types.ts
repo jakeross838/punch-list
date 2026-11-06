@@ -119,8 +119,6 @@ export interface PageProps {
   back?: boolean;
   /** The screen is shown as a sheet: its title in the sheet's head, no bar. */
   sheet?: boolean;
-  /** False keeps a sheet from closing with a swipe, for unsaved changes. */
-  dismissible?: boolean;
   /** The bottom bar with Jobs, Capture and Send. */
   tab?: PageTab;
   children?: ReactNode;

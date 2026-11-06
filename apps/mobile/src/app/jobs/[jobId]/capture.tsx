@@ -29,6 +29,7 @@ import { colors } from "@/constants/theme";
 import { useData } from "@/data/api";
 import { capture, useCapture } from "@/data/capture";
 import {
+  afterSheets,
   haptic,
   Icon,
   OptionPicker,
@@ -541,7 +542,7 @@ export default function CaptureScreen() {
         value={walk.roomId}
         onSelect={(id) => {
           capture.setRoom(id);
-          if (thenCommon) setTimeout(() => setCommon(true), 350);
+          if (thenCommon) afterSheets(() => setCommon(true));
         }}
         onClose={() => {
           setPicker(false);

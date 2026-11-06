@@ -4,14 +4,14 @@
 
 import { peopleInOrder } from '@punch/core';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { leaveOrConfirm } from '@/components/discard';
+import { useRef, useState, type ComponentRef } from 'react';
+import type { TextInput } from 'react-native';
 import { useData } from '@/data/api';
-import { haptic, ListRow, ListSection, ListTextField, OptionPicker, Page, useFeedback } from '@/ui';
+import { haptic, ListRow, ListSection, ListTextField, OptionPicker, Page, useLeaveGuard } from '@/ui';
 
 export default function NewJobScreen() {
   const data = useData();
-  const feedback = useFeedback();
+  const addressField = useRef<ComponentRef<typeof TextInput>>(null);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [tried, setTried] = useState(false);
@@ -21,6 +21,8 @@ export default function NewJobScreen() {
   const [picking, setPicking] = useState(false);
   const dirty = name !== '' || address !== '';
   const missingName = tried && name.trim() === '';
+  // A swipe down or Cancel asks before throwing away what was typed.
+  const allowLeave = useLeaveGuard(dirty, 'this job');
 
   async function create() {
     setTried(true);
@@ -30,6 +32,7 @@ export default function NewJobScreen() {
     }
     const jobId = await data.createJob({ name: name.trim(), address: address.trim(), projectManagerId: pm });
     haptic.success();
+    allowLeave();
     router.replace({ pathname: '/jobs/[jobId]', params: { jobId } });
   }
 
@@ -38,8 +41,7 @@ export default function NewJobScreen() {
       title="New Job"
       eyebrow="Admins only"
       sheet
-      dismissible={!dirty}
-      left={[{ kind: 'button', label: 'Cancel', onPress: () => leaveOrConfirm(dirty, feedback, () => router.back(), 'this job'), testID: 'cancel' }]}
+      left={[{ kind: 'button', label: 'Cancel', onPress: () => router.back(), testID: 'cancel' }]}
       right={[{ kind: 'button', label: 'Create', variant: 'prominent', onPress: create, testID: 'save' }]}
     >
       <ListSection
@@ -52,11 +54,24 @@ export default function NewJobScreen() {
           onChangeText={setName}
           autoFocus
           autoCapitalize="words"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => addressField.current?.focus()}
           invalid={missingName}
           accessibilityLabel="Job Name"
           testID="field-job-name"
         />
-        <ListTextField placeholder="Address" value={address} onChangeText={setAddress} autoCapitalize="words" accessibilityLabel="Address" testID="field-address" />
+        <ListTextField
+          ref={addressField}
+          placeholder="Address"
+          value={address}
+          onChangeText={setAddress}
+          autoCapitalize="words"
+          textContentType="fullStreetAddress"
+          returnKeyType="done"
+          accessibilityLabel="Address"
+          testID="field-address"
+        />
       </ListSection>
       <ListSection footer="The rest of the team goes on in Job Setup, or when an item is assigned to them.">
         <ListRow

@@ -33,6 +33,11 @@ export function samplePage(): Page {
         photos: [{ url: photo(WALL), width: 1200, height: 900, marks: [circle, label] }],
       },
       {
+        id: '55555555-5555-4555-8555-555555555555', number: 16, title: 'Set the shower valve', description: 'The tile, the glass and the trim wait on it.',
+        location: 'Primary Bath 207', floor: 'Level 2', kind: 'completion', ready: true, waiting_on: [], waiting_for: [], ready_by: null, hours: 3,
+        priority: false, po_or_co: null, checklist: [], confirmed_at: null, marked_done_at: null, photos: [], holds_up: { items: 3, hours: 14 },
+      },
+      {
         id: '22222222-2222-4222-8222-222222222222', number: 14, title: 'Set the toilet', description: '',
         location: 'Guest Bath 210', floor: 'Level 2', kind: 'completion', ready: false, waiting_on: ['the owner'],
         waiting_for: [{ title: 'Install tile floor', company: 'Sample Tile', location: 'Guest Bath 210' }], ready_by: daysFromNow(9), hours: null,

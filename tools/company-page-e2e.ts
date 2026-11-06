@@ -35,6 +35,12 @@ const state = {
       photos: [{ url: '/photo.jpg', width: 1200, height: 900, marks: [{ tool: 'circle', color: 'red', from: [0.33, 0.14], to: [0.67, 0.5] }, { tool: 'text', color: 'red', at: [0.5, 0.58], text: 'Faucet here' }] }],
     },
     {
+      // Holds up the tile, the glass and the trim after it: it comes right after the Priority item.
+      id: '55555555-5555-4555-8555-555555555555', number: 16, title: 'Set the shower valve', description: '',
+      location: 'Primary Bath 207', floor: 'Level 2', kind: 'completion', ready: true, waiting_on: [], waiting_for: [], ready_by: null, hours: 3,
+      priority: false, po_or_co: null, checklist: [], confirmed_at: null, marked_done_at: null, photos: [], holds_up: { items: 3, hours: 14 },
+    },
+    {
       id: '22222222-2222-4222-8222-222222222222', number: 14, title: 'Set the toilet', description: '',
       location: 'Guest Bath 210', floor: 'Level 2', kind: 'completion', ready: false, waiting_on: ['Owner'],
       waiting_for: [{ title: 'Install tile floor', company: 'Volcano Stone', location: 'Guest Bath 210' }], ready_by: '2026-11-20', hours: 2,
@@ -131,7 +137,16 @@ async function main(): Promise<void> {
 
   await page.goto(`http://localhost:4320/c/#${TOKEN}`);
   await page.getByRole('heading', { name: 'Gator Plumbing' }).waitFor();
-  check((await page.locator('.counts').textContent())?.includes('3 open items') ?? false, 'the list opens from its link, with its counts');
+  check((await page.locator('.counts').textContent())?.includes('4 open items') ?? false, 'the list opens from its link, with its counts');
+  const order = await page.locator('article.item').evaluateAll((els) =>
+    els.map((el) => `${el.querySelector('.step')?.textContent ?? '-'} ${el.querySelector('h3')?.textContent ?? ''}`),
+  );
+  check(
+    order.join('|') === '1 Install vanity faucets|2 Set the shower valve|3 Set the toilet|- Add a hose bib on the deck',
+    `the work is numbered in the order to do it, Priority first, then what holds up the most (${order.join('|')})`,
+  );
+  check((await page.getByText('Holds up 3 items').count()) === 1, 'an item says what it holds up');
+  check((await page.getByText('Start at number 1: the first ones hold up the most other work.').count()) === 1, 'Ready Now says to start at number 1');
   check((await page.getByText('On Install tile floor (Volcano Stone, Guest Bath 210) and Owner · Ready by Friday, November 20').count()) === 1, 'a waiting item says what it waits on and when it should be ready');
   check((await page.locator('.section h2').allTextContents()).join('|') === 'Ready Now|Waiting|To Be Quoted|The Whole List|Checked Off Lately', 'the sections are in order');
   await shot('01-opened');

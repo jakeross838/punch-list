@@ -4,9 +4,8 @@
 import { isAdmin, taskCount } from '@punch/core';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView } from 'react-native';
 import { useData } from '@/data/api';
-import { EmptyState, haptic, ListRow, ListSection, ListTextField, Page, Sheet, useFeedback } from '@/ui';
+import { SheetScroll, EmptyState, haptic, ListRow, ListSection, ListTextField, Page, Sheet, useFeedback } from '@/ui';
 
 export default function TemplatesScreen() {
   const data = useData();
@@ -83,12 +82,25 @@ function NewTemplateSheet({ visible, onClose, onAdded }: { visible: boolean; onC
       title="New Template"
       left={{ label: 'Cancel', onPress: close, testID: 'new-template-cancel' }}
       right={{ label: 'Create', variant: 'prominent', onPress: () => void add(), testID: 'new-template-create' }}
+      dirty={name.trim() !== ''}
+      what="the new template"
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 12 }}>
+      <SheetScroll contentContainerStyle={{ paddingTop: 12 }}>
         <ListSection footer={missing ? 'Give the template a name.' : 'Like End of the House, or Pool and Outside. Its tasks come next.'} footerTone={missing ? 'danger' : 'default'}>
-          <ListTextField placeholder="Template Name" value={name} onChangeText={setName} autoCapitalize="words" autoFocus invalid={missing} accessibilityLabel="Template Name" testID="field-new-template" />
+          <ListTextField
+            placeholder="Template Name"
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={() => void add()}
+            invalid={missing}
+            accessibilityLabel="Template Name"
+            testID="field-new-template"
+          />
         </ListSection>
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }

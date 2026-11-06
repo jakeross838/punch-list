@@ -6,6 +6,20 @@
 
 **Design:** [Punch List App Design](https://claude.ai/artifact/MkYkFBRyhwxCDGG488omuC), the approved canvas. Jake's review asked for less text up front, the rest one tap in, very calm and easy to use, with a clear way to check things complete.
 
+## Behaving like an iPhone app, and each company's work in order (6 November 2026)
+
+Jake, on build 6: "check everything and if you notice it doesn't behave as an apple application would behave, fix it now." And: "set priorities for each company, like numbered do this then this then this so they can always be working on the thing that holds up the most amount of work first when possible."
+
+- **Sheets:** a sheet with nothing changed follows the finger down and closes, as the iPhone's own do. With changes not saved yet, swiping it down, Cancel, or tapping outside it on the preview asks first: Discard Changes, or Keep Editing. New Job, New Item and every sheet with a form do this. Saving, or going to the camera for the item's photo, does not ask.
+- **One sheet after another:** iOS will not show a sheet, a menu or a question while the last one is still sliding away, so a button could seem to do nothing. A menu choice now runs once the menu has gone, and a picker that leads to another (a new company, then its trade) waits for the first to close, instead of guessing at a fixed wait.
+- **Typing:** Next moves to the next field (a job's name to its address; a person's name, email and phone), and Return on a one field sheet saves it. One line fields have the clear button. Sheets keep the field being typed in above the keyboard, and a drag down puts the keyboard away. Leaving a screen with a field still being typed in (an item's description, a job's name, a person, a company, a template) keeps what was typed.
+- **Photos:** full screen like Photos: pinch or double tap to zoom in, drag around a zoomed photo, swipe sideways to the item's other photos, swipe down to put it away, tap to show or hide the bar. Zoomed photos stay sharp.
+- **Camera:** pinch to zoom, with 1× to go back.
+- **Small things:** a tap on the status bar scrolls back to the top on the job (a sideways row of chips stopped it). Larger Text grows the app's words, up to where the bars and buttons still fit them.
+- **Each company's work in order:** a company's list is numbered 1, 2, 3 in the order to do it. What is ready comes first: an item marked Priority, then whatever holds up the most other work, counting every open item that waits on it down the chain, whoever does it, then the most hours of it. What is waiting comes after, soonest ready first. Each item says what it holds up ("Holds up 3 items"). The numbers are the same in the app (the company's list), on the printed list (a new Order column), on the company's page, and the email says the list is numbered. Work still to be quoted, and work the company already marked done, has no number.
+- **The database:** the company's page answer says what each item holds up (`holds_up`, in `company_page`, still to be applied with the other two). Until it is, the page numbers by Priority and readiness alone.
+- Checked: 227 unit tests (new ones for the order), the type checks, lint, the database checks (with what an item holds up, down the chain), 105 of the phone's writes, the full preview walk-through (57 steps, with new ones for the numbered list, the photo viewer and Discard Changes; no console or page errors), and the company's page against its stand-in.
+
 ## Walk right away, manage jobs, and the company's page (6 November 2026)
 
 Jake's review of build 5: keep it simple and effective. Walk a house fast, photograph what is left, and give each item to whoever is doing it, with marked up photos and whether it is ready. Everyone sees the job live without being there. He found no way to manage, close or delete a job, or to mark items done (a new job had no locations, so there were no items to check off). And the companies should see everything that is theirs, ready or not, what it waits on and when it should be ready, and confirm, comment and put in their times.

@@ -15,9 +15,16 @@ export interface AppTextProps extends TextProps {
   align?: TextStyle['textAlign'];
 }
 
+/**
+ * How far the iPhone's Larger Text setting grows the app's words: well past the standard size, but
+ * not so far that the bars, buttons and rows cut them off.
+ */
+export const TEXT_LARGEST = 1.4;
+
 export function Text({ variant = 'body', color = colors.label, weight, tabular, align, style, ...props }: AppTextProps) {
   return (
     <RNText
+      maxFontSizeMultiplier={TEXT_LARGEST}
       {...props}
       style={[
         typeScale[variant],

@@ -17,12 +17,13 @@ import {
   type FormSettings,
 } from '@punch/core';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useRef, useState, type ComponentRef } from 'react';
+import { ScrollView, StyleSheet, View, type TextInput } from 'react-native';
 import { DragList } from '@/components/DragList';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import {
+  SheetScroll,
   EmptyState,
   haptic,
   ListRow,
@@ -160,6 +161,8 @@ function FieldSheet({ visible, field, onClose }: { visible: boolean; field: Cust
     .filter((c, i, all) => c !== '' && all.indexOf(c) === i);
   const name = tidyTitle(label);
   const canSave = name !== '' && (kind !== 'list' || options.length > 0);
+  const dirty = label !== (field?.label ?? '') || kind !== (field?.kind ?? 'list') || choices !== (field?.options.join('\n') ?? '');
+  const choicesField = useRef<ComponentRef<typeof TextInput>>(null);
 
   async function save() {
     if (!canSave) return;
@@ -193,10 +196,22 @@ function FieldSheet({ visible, field, onClose }: { visible: boolean; field: Cust
       title={field ? 'Edit Field' : 'New Field'}
       left={{ label: 'Cancel', onPress: onClose, testID: 'field-cancel' }}
       right={{ label: field ? 'Done' : 'Add', variant: 'prominent', onPress: () => void save(), disabled: !canSave, testID: 'field-save' }}
+      dirty={dirty}
+      what={field ? 'this field' : 'the new field'}
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
+      <SheetScroll contentContainerStyle={styles.sheetContent}>
         <ListSection footer="What the form calls it, like Found By.">
-          <ListTextField placeholder="Name" value={label} onChangeText={setLabel} autoCapitalize="words" accessibilityLabel="Field name" testID="field-label" />
+          <ListTextField
+            placeholder="Name"
+            value={label}
+            onChangeText={setLabel}
+            autoCapitalize="words"
+            returnKeyType={kind === 'list' ? 'next' : 'done'}
+            submitBehavior={kind === 'list' ? 'submit' : 'blurAndSubmit'}
+            onSubmitEditing={() => (kind === 'list' ? choicesField.current?.focus() : void save())}
+            accessibilityLabel="Field name"
+            testID="field-label"
+          />
         </ListSection>
         {field ? null : (
           <View style={styles.kind}>
@@ -206,6 +221,7 @@ function FieldSheet({ visible, field, onClose }: { visible: boolean; field: Cust
         {kind === 'list' ? (
           <ListSection footer="One choice on each line.">
             <ListTextField
+              ref={choicesField}
               multiline
               minLines={4}
               placeholder={'Owner\nArchitect\nDesigner'}
@@ -222,7 +238,7 @@ function FieldSheet({ visible, field, onClose }: { visible: boolean; field: Cust
             <ListRow title="Remove Field" tone="destructive" onPress={removeField} testID="field-remove" />
           </ListSection>
         ) : null}
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }
@@ -294,12 +310,24 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Standard Titles" right={{ label: 'Done', variant: 'prominent', onPress: onClose, testID: 'titles-done' }}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
+      <SheetScroll contentContainerStyle={styles.sheetContent}>
         <ListSection
           footer={exists ? 'That title is on the list already.' : 'A verb and the thing, like Install toilet. No location, trade, size or brand.'}
           footerTone={exists ? 'danger' : 'default'}
         >
-          <ListTextField placeholder="New Title" value={title} onChangeText={setTitle} autoCapitalize="sentences" accessibilityLabel="New title" testID="title-new" />
+          <ListTextField
+            placeholder="New Title"
+            value={title}
+            onChangeText={setTitle}
+            autoCapitalize="sentences"
+            returnKeyType="done"
+            submitBehavior="submit"
+            onSubmitEditing={() => {
+              if (canAdd) void add();
+            }}
+            accessibilityLabel="New title"
+            testID="title-new"
+          />
           <ListRow
             title="Trade"
             value={trades.find((t) => t.id === tradeId)?.name ?? 'Choose'}
@@ -321,7 +349,7 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
           </ListSection>
         ))}
         {groups.length === 0 ? <EmptyState icon="magnifyingglass" title="No Titles" message={q ? `Nothing matches “${query}”.` : 'Add the first standard title.'} /> : null}
-      </ScrollView>
+      </SheetScroll>
       <OptionPicker visible={picking} title="Trade" options={tradeOptions} value={tradeId} onSelect={setTradeId} onClose={() => setPicking(false)} />
     </Sheet>
   );

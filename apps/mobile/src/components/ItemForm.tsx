@@ -243,6 +243,7 @@ export function ExtraFields({
                 value={typeof v === 'string' ? v : ''}
                 onChangeText={(t) => onChange({ ...value, [f.id]: t === '' ? null : t }, true)}
                 onBlur={() => set(f, v)}
+                returnKeyType="done"
                 testID={`extra-${f.id}`}
               />
             );

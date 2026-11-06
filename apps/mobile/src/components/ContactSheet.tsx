@@ -3,10 +3,10 @@
 // phone. Admins add and change them; nobody is deleted, they are switched off.
 
 import { contactProblem, type Contact } from '@punch/core';
-import { useState } from 'react';
-import { ScrollView } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import type { TextInput } from 'react-native';
 import { useData } from '@/data/api';
-import { haptic, ListRow, ListSection, ListSwitchRow, ListTextField, Sheet, useFeedback } from '@/ui';
+import { haptic, ListRow, ListSection, ListSwitchRow, ListTextField, Sheet, SheetScroll, useFeedback } from '@/ui';
 
 export function ContactSheet({
   companyId,
@@ -44,6 +44,10 @@ export function ContactSheet({
 
   const fields = { name, email: email.trim() || null, phone: phone.trim() || null };
   const problem = tried ? contactProblem(fields) : null;
+  const dirty =
+    name !== (contact?.name ?? '') || email !== (contact?.email ?? '') || phone !== (contact?.phone ?? '') || getsLists !== (contact?.getsLists ?? true);
+  const emailField = useRef<ComponentRef<typeof TextInput>>(null);
+  const phoneField = useRef<ComponentRef<typeof TextInput>>(null);
 
   async function save() {
     setTried(true);
@@ -79,15 +83,30 @@ export function ContactSheet({
       left={{ label: 'Cancel', onPress: onClose, testID: 'contact-cancel' }}
       right={{ label: contact ? 'Save' : 'Add', variant: 'prominent', onPress: () => void save(), testID: 'contact-save' }}
       testID="contact-sheet"
+      dirty={dirty}
+      what={contact ? 'this person' : 'the new person'}
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 12, paddingBottom: 40 }}>
+      <SheetScroll contentContainerStyle={{ paddingTop: 12, paddingBottom: 40 }}>
         <ListSection
           header={companyName}
           footer={problem ?? 'Lists go by email to anyone with one, and by text to anyone with only a phone.'}
           footerTone={problem ? 'danger' : 'default'}
         >
-          <ListTextField placeholder="Name" value={name} onChangeText={setName} autoCapitalize="words" autoFocus={!contact} accessibilityLabel="Name" testID="field-contact-name" />
           <ListTextField
+            placeholder="Name"
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+            autoCorrect={false}
+            autoFocus={!contact}
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => emailField.current?.focus()}
+            accessibilityLabel="Name"
+            testID="field-contact-name"
+          />
+          <ListTextField
+            ref={emailField}
             placeholder="Email"
             value={email}
             onChangeText={setEmail}
@@ -95,11 +114,23 @@ export function ContactSheet({
             keyboardType="email-address"
             autoCorrect={false}
             textContentType="emailAddress"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => phoneField.current?.focus()}
             invalid={problem === 'That email does not look right.'}
             accessibilityLabel="Email"
             testID="field-contact-email"
           />
-          <ListTextField placeholder="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" textContentType="telephoneNumber" accessibilityLabel="Phone" testID="field-contact-phone" />
+          <ListTextField
+            ref={phoneField}
+            placeholder="Phone"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            textContentType="telephoneNumber"
+            accessibilityLabel="Phone"
+            testID="field-contact-phone"
+          />
         </ListSection>
         <ListSection footer="The company's list on every job.">
           <ListSwitchRow title="Gets the Lists" value={getsLists} onValueChange={setGetsLists} testID="switch-contact-lists" />
@@ -109,7 +140,7 @@ export function ContactSheet({
             <ListRow title="Switch Off" tone="destructive" onPress={() => void switchOff()} testID="contact-switch-off" />
           </ListSection>
         ) : null}
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }

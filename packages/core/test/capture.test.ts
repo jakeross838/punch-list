@@ -302,7 +302,8 @@ describe('the lists that go to the subs', () => {
     expect(list.ready.map((l) => [l.room, l.item.number])).toEqual([['Living 107', 2], ['Kitchen 109', 1]]);
     expect(list.waiting.map((g) => [g.on, g.readyBy, g.lines.map((l) => l.item.number)])).toEqual([
       ['Volcano Stone and Owner', '2026-11-02', [4]],
-      ['Owner', '2026-11-09', [5, 3]],
+      // Soonest ready first, inside each group too: 3 has a date, 5 does not.
+      ['Owner', '2026-11-09', [3, 5]],
     ]);
   });
 

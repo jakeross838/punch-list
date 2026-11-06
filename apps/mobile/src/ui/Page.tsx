@@ -5,8 +5,7 @@
 // the bottom, either the screen's own buttons or the bar with Jobs, Capture and Send. A sheet has a
 // head of its own instead of the bar.
 
-import { router, useCanGoBack, useNavigation } from 'expo-router';
-import { useEffect } from 'react';
+import { router, useCanGoBack } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AccountButton, JobSwitch } from '@/components/AppBar';
@@ -133,7 +132,6 @@ export function Page({
   footerHeight = 72,
   search,
   sheet,
-  dismissible = true,
   tab,
   children,
   list,
@@ -141,12 +139,6 @@ export function Page({
 }: PageProps) {
   const insets = useSafeAreaInsets();
   const canGoBack = useCanGoBack();
-  const navigation = useNavigation();
-
-  // A sheet with unsaved changes does not close with a swipe.
-  useEffect(() => {
-    if (sheet) navigation.setOptions({ gestureEnabled: dismissible });
-  }, [navigation, sheet, dismissible]);
 
   const showBack = !sheet && back && canGoBack && !jobSwitch;
   const hasBottom = !!bottom?.length;

@@ -2,12 +2,12 @@
 // and as what. Admins change all of it, put them on a job, and switch them off or back on; everyone
 // else can look. There is always at least one admin.
 
-import { isAdmin, PART_LABELS, TEAM_PARTS, type Person, type TeamPart } from '@punch/core';
+import { isEmail, isAdmin, PART_LABELS, TEAM_PARTS, type Person, type TeamPart } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { RoleRows, SeesRows, useInvite } from '@/components/PeopleSheets';
 import { useData } from '@/data/api';
-import { EmptyState, haptic, ListLabeledField, ListRow, ListSection, OptionPicker, Page, useFeedback } from '@/ui';
+import { useSaveOnLeave, afterSheets, EmptyState, haptic, ListLabeledField, ListRow, ListSection, OptionPicker, Page, useFeedback } from '@/ui';
 
 export default function PersonScreen() {
   const { personId } = useLocalSearchParams<{ personId: string }>();
@@ -95,6 +95,16 @@ function PersonDetail({ person }: { person: Person }) {
     });
 
   const notOn = jobs.filter((j) => !j.closed && !team.some((t) => t.jobId === j.id));
+
+  // Leaving with a field still being typed in keeps what was typed, when it is right.
+  useSaveOnLeave(() => {
+    if (!admin) return;
+    const patch: Parameters<typeof data.updatePerson>[1] = {};
+    if (name.trim() !== '' && name.trim() !== person.name) patch.name = name;
+    if (isEmail(email) && email.trim().toLowerCase() !== person.email) patch.email = email;
+    if ((phone.trim() || null) !== person.phone) patch.phone = phone.trim() || null;
+    if (Object.keys(patch).length > 0) data.updatePerson(person.id, patch).catch(() => undefined);
+  });
 
   return (
     <Page title={person.name} eyebrow="Person" crumb={['Me', 'People', person.name]} backLabel="People" subtitle={person.active ? undefined : 'Switched off'} tab={{}}>
@@ -188,7 +198,7 @@ function PersonDetail({ person }: { person: Person }) {
         onSelect={(jobId) => {
           setPicking(false);
           // The sheet closes first, then what they are on the job.
-          setTimeout(() => choosePart(jobId, null), 350);
+          afterSheets(() => choosePart(jobId, null));
         }}
         onClose={() => setPicking(false)}
       />

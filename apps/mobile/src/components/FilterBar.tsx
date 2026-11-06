@@ -48,6 +48,8 @@ export function FilterBar({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      // Only the page's own list takes a tap on the status bar to go back to the top.
+      scrollsToTop={false}
       contentContainerStyle={styles.row}
       style={[styles.bar, grouping ? styles.top : null, style]}
       testID={chips.length > 0 ? 'filter-bar' : 'filter-top'}

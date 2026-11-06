@@ -3,11 +3,11 @@
 // jobs they are on. Nobody is ever deleted; switched off, they can no longer sign in.
 
 import { isEmail, ROLE_HINTS, ROLE_LABELS, SEES_LABELS, type Person, type Role, type Sees } from '@punch/core';
-import { useState } from 'react';
-import { ScrollView, Share } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { Share, type TextInput } from 'react-native';
 import { APP_NAME } from '@/constants/app';
 import { useData } from '@/data/api';
-import { haptic, ListRow, ListSection, ListTextField, Sheet, useFeedback } from '@/ui';
+import { SheetScroll, haptic, ListRow, ListSection, ListTextField, Sheet, useFeedback } from '@/ui';
 
 /** The invite, sent by whoever added them: short, and how to get in. */
 export function inviteText(person: Pick<Person, 'name' | 'email'>, company: string): string {
@@ -77,6 +77,15 @@ export function AddPersonSheet({ visible, onClose, onAdded }: { visible: boolean
   const [tried, setTried] = useState(false);
   const missingName = tried && name.trim() === '';
   const badEmail = tried && !isEmail(email);
+  const dirty = name !== '' || email !== '' || phone !== '' || role !== 'team' || sees !== 'assigned';
+  const emailField = useRef<ComponentRef<typeof TextInput>>(null);
+  const phoneField = useRef<ComponentRef<typeof TextInput>>(null);
+
+  /** Cancel, or Discard Changes: the next Add Person starts empty. */
+  function cancel() {
+    reset();
+    onClose();
+  }
 
   function reset() {
     setName('');
@@ -110,34 +119,53 @@ export function AddPersonSheet({ visible, onClose, onAdded }: { visible: boolean
   return (
     <Sheet
       visible={visible}
-      onClose={onClose}
+      onClose={cancel}
       title="Add Person"
-      left={{ label: 'Cancel', onPress: onClose, testID: 'person-cancel' }}
+      left={{ label: 'Cancel', onPress: cancel, testID: 'person-cancel' }}
       right={{ label: 'Add', variant: 'prominent', onPress: () => void add(), testID: 'person-add' }}
       testID="add-person-sheet"
+      dirty={dirty}
+      what="the new person"
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 12, paddingBottom: 40 }}>
+      <SheetScroll contentContainerStyle={{ paddingTop: 12, paddingBottom: 40 }}>
         <ListSection
           footer={missingName ? 'Give them a name.' : badEmail ? 'That email does not look right.' : 'They sign in with this email. Nothing else to set up.'}
           footerTone={missingName || badEmail ? 'danger' : 'default'}
         >
-          <ListTextField placeholder="Name" value={name} onChangeText={setName} autoCapitalize="words" autoFocus invalid={missingName} accessibilityLabel="Name" testID="field-person-name" />
           <ListTextField
+            placeholder="Name"
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+            autoCorrect={false}
+            autoFocus
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => emailField.current?.focus()}
+            invalid={missingName}
+            accessibilityLabel="Name"
+            testID="field-person-name"
+          />
+          <ListTextField
+            ref={emailField}
             placeholder="Email"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
             autoCorrect={false}
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => phoneField.current?.focus()}
             invalid={badEmail}
             accessibilityLabel="Email"
             testID="field-person-email"
           />
-          <ListTextField placeholder="Phone (Optional)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" accessibilityLabel="Phone" testID="field-person-phone" />
+          <ListTextField ref={phoneField} placeholder="Phone (Optional)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" accessibilityLabel="Phone" testID="field-person-phone" />
         </ListSection>
         <RoleRows value={role} onChange={setRole} />
         <SeesRows value={sees} role={role} onChange={setSees} />
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }

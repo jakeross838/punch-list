@@ -1,7 +1,9 @@
 // The lists that go out: one per company for the subs, one for the owner and design team, and the
 // whole job for your own team. Open, finished items only, the room on every line. A company's list says
 // what is ready now, then what is waiting, grouped by what it waits on and soonest first, then
-// additional work to be quoted, so the work can be done in batches and in the right order.
+// additional work to be quoted, so the work can be done in batches and in the right order. Its work
+// is numbered in the order to do it (workOrder.ts): the ready items first, Priority first, then
+// whatever holds up the most other work.
 
 import { matchesFilters, type FilterContext, type ItemFilters } from './filters';
 import { holdLookups, holdText, readyByOf, type HoldLookups } from './holds';
@@ -9,6 +11,7 @@ import { isPriced } from './rules';
 import type { Company, Item, Location, Trade, Visit } from './types';
 import { floorOf, NO_FLOOR } from './rooms';
 import { sortItems, tradeRanks } from './views';
+import { doFirst, FREES_NOTHING, freedWork, type Freed } from './workOrder';
 
 export interface ListLookups {
   locations: Location[];
@@ -36,9 +39,24 @@ export interface ListLine {
   waitingGroup: string;
   /** When it should be ready: its own Ready By, or the day the tasks it waits on are scheduled to be done. */
   readyBy: string | null;
+  /** The open work that waits on it, directly or down the chain: what finishing it frees up. */
+  freed: Freed;
+  /** Its place in the order to do the company's work, 1 first. Null outside a company's list, and for work still to be quoted. */
+  step: number | null;
 }
 
 const holdCache = new WeakMap<ListLookups, HoldLookups>();
+const freedCache = new WeakMap<ListLookups, Map<string, Freed>>();
+
+/** What each item frees up, worked out once for each set of list lookups. */
+function freedFor(lookups: ListLookups): Map<string, Freed> {
+  let freed = freedCache.get(lookups);
+  if (!freed) {
+    freed = freedWork(lookups.items ?? []);
+    freedCache.set(lookups, freed);
+  }
+  return freed;
+}
 
 /** What items wait on, looked up once for each set of list lookups. */
 export function holdsFor(lookups: ListLookups): HoldLookups {
@@ -87,8 +105,16 @@ export function lineFor(item: Item, lookups: ListLookups): ListLine {
     waiting: item.ready ? '' : holdText(item, look),
     waitingGroup: item.ready ? '' : holdText(item, look, { everywhere: true }),
     readyBy: readyByOf(item, look),
+    freed: freedFor(lookups).get(item.id) ?? FREES_NOTHING,
+    step: null,
   };
 }
+
+/** The facts the work order goes by, for a line. */
+const workFacts = (line: ListLine) => ({ ready: line.item.ready, priority: line.item.priority, readyBy: line.readyBy, freed: line.freed });
+/** In the order to do the work. What the company already says is done goes after, for the builder to check. */
+const inWorkOrder = (lines: ListLine[]) =>
+  [...lines].sort((a, b) => Number(!!a.item.markedDoneAt) - Number(!!b.item.markedDoneAt) || doFirst(workFacts(a), workFacts(b)));
 
 /** Floor order, then each trade together (when the trades are known), then the item number. */
 function inFloorOrder(items: Item[], lookups: ListLookups): Item[] {
@@ -102,7 +128,7 @@ export function companyList(companyId: string, items: Item[], lookups: ListLooku
   const open = items.filter((i) => onLists(i) && i.companyId === companyId);
   const sorted = inFloorOrder(open, look);
   const priced = sorted.filter((i) => isPriced(i));
-  const ready = priced.filter((i) => i.ready).map((i) => lineFor(i, look));
+  const ready = inWorkOrder(priced.filter((i) => i.ready).map((i) => lineFor(i, look)));
   const groups = new Map<string, WaitingGroup>();
   for (const item of priced.filter((i) => !i.ready)) {
     const line = lineFor(item, look);
@@ -113,9 +139,13 @@ export function companyList(companyId: string, items: Item[], lookups: ListLooku
     if (line.readyBy && (!group.readyBy || line.readyBy < group.readyBy)) group.readyBy = line.readyBy;
     groups.set(key, group);
   }
-  const waiting = [...groups.values()].sort(
-    (a, b) => (a.readyBy ?? '9999').localeCompare(b.readyBy ?? '9999') || b.lines.length - a.lines.length || a.on.localeCompare(b.on),
-  );
+  const waiting = [...groups.values()]
+    .sort((a, b) => (a.readyBy ?? '9999').localeCompare(b.readyBy ?? '9999') || b.lines.length - a.lines.length || a.on.localeCompare(b.on))
+    .map((g) => ({ ...g, lines: inWorkOrder(g.lines) }));
+  // Numbered in the order to do it: what is ready, then what is waiting, as it comes ready. Work the
+  // company already says is done has no number: it waits for the builder to check it.
+  let step = 0;
+  for (const line of [...ready, ...waiting.flatMap((g) => g.lines)]) if (!line.item.markedDoneAt) line.step = ++step;
   return {
     companyId,
     company: lookups.companies.find((c) => c.id === companyId)?.name ?? 'Not set',

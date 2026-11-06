@@ -4,10 +4,10 @@
 
 import { isAdmin, type Job } from '@punch/core';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { StyleSheet, type TextInput } from 'react-native';
 import { useData } from '@/data/api';
-import { haptic, ListLabeledField, ListSection, Sheet, useFeedback } from '@/ui';
+import { haptic, ListLabeledField, ListSection, Sheet, SheetScroll, useFeedback } from '@/ui';
 
 const oneLine = (text: string) => text.trim().replace(/\s+/g, ' ');
 
@@ -112,7 +112,9 @@ function EditJobSheet({ job, visible, onClose }: { job: Job; visible: boolean; o
   const feedback = useFeedback();
   const [name, setName] = useState(job.name);
   const [address, setAddress] = useState(job.address);
+  const addressField = useRef<ComponentRef<typeof TextInput>>(null);
   const clean = oneLine(name);
+  const dirty = clean !== job.name || oneLine(address) !== job.address;
 
   async function save() {
     if (clean === '') {
@@ -139,11 +141,25 @@ function EditJobSheet({ job, visible, onClose }: { job: Job; visible: boolean; o
       left={{ label: 'Cancel', onPress: onClose, testID: 'edit-job-cancel' }}
       right={{ label: 'Save', variant: 'prominent', disabled: clean === '', onPress: () => void save(), testID: 'edit-job-save' }}
       testID="edit-job"
+      dirty={dirty}
+      what="this job"
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      <SheetScroll contentContainerStyle={styles.content}>
         <ListSection header="Job">
-          <ListLabeledField label="Name" value={name} onChangeText={setName} placeholder="Job Name" autoCapitalize="words" autoFocus returnKeyType="next" testID="edit-job-name" />
           <ListLabeledField
+            label="Name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Job Name"
+            autoCapitalize="words"
+            autoFocus
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => addressField.current?.focus()}
+            testID="edit-job-name"
+          />
+          <ListLabeledField
+            ref={addressField}
             label="Address"
             value={address}
             onChangeText={setAddress}
@@ -151,10 +167,11 @@ function EditJobSheet({ job, visible, onClose }: { job: Job; visible: boolean; o
             autoCapitalize="words"
             returnKeyType="done"
             onSubmitEditing={() => void save()}
+            textContentType="fullStreetAddress"
             testID="edit-job-address"
           />
         </ListSection>
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }

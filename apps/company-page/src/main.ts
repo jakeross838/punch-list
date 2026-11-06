@@ -1,12 +1,14 @@
 // The company's page: what a company sees from the private link on the list it was sent, with no
 // account and no app. Its open items on the job with their marked up photos, ready now or what each
-// waits on and when it should be ready, then what was checked off lately. On each item it confirms
+// waits on and when it should be ready, numbered in the order to do them (the same order as its
+// printed list: Priority first, then whatever holds up the most other work), then what was checked
+// off lately. On each item it confirms
 // the item, says how long it takes, marks it done for the builder to check, and comments, under the
 // name typed once at the top. It asks again every minute it is open, so the list stays live.
 //
 // Built into one page by tools/build-company-page.mjs; it talks only to the company-page function.
 
-import { hoursText, KIND_LABELS, marksSvg, PICK_HOURS, QUICK_HOURS } from '@punch/core';
+import { doFirst, FREES_NOTHING, freesText, hoursText, KIND_LABELS, marksSvg, PICK_HOURS, QUICK_HOURS } from '@punch/core';
 import { answerSample, samplePage } from './sample';
 import type { Page, PageComment, PageItem, PagePhoto } from './types';
 
@@ -29,6 +31,8 @@ const busy = new Set<string>();
 const drafts = new Map<string, string>();
 /** Items whose Other time list is open. */
 const choosingTime = new Set<string>();
+/** Each item's number in the order to do the work, from the last time the page was drawn. */
+let steps = new Map<string, number>();
 
 // ---------- small helpers ----------
 
@@ -195,18 +199,23 @@ function commentsHtml(key: string, list: PageComment[]): string {
     <button class="send" data-say="${esc(key)}"${busy.has(key) || !draft.trim() ? ' disabled' : ''}>Send</button></div></div>`;
 }
 
+/** The facts the order goes by, for an item on the page. */
+const workFacts = (item: PageItem) => ({ ready: item.ready, priority: item.priority, readyBy: item.ready_by, freed: item.holds_up ?? FREES_NOTHING });
+
 function itemHtml(item: PageItem): string {
   const mine = (page?.comments ?? []).filter((c) => c.item_id === item.id);
   const photos = item.photos;
+  const step = steps.get(item.id);
   const facts = [
     item.number !== null ? `Item ${item.number}` : null,
     item.location,
     item.kind === 'deficiency' ? KIND_LABELS.deficiency : item.kind === 'added_scope' ? (isQuoted(item) ? 'Additional' : `Additional, ${item.po_or_co}`) : null,
+    item.marked_done_at ? null : freesText(item.holds_up ?? FREES_NOTHING) || null,
   ].filter(Boolean);
   const checklist = (item.checklist ?? []).filter((c) => c.text.trim());
   const waiting = busy.has(item.id);
   return `<article class="item${item.confirmed_at ? ' confirmed' : ''}${item.marked_done_at ? ' marked' : ''}" id="item-${esc(item.id)}">
-    <div class="facts">${item.priority ? '<span class="priority">Priority</span>' : ''}${esc(facts.join(' · '))}</div>
+    <div class="facts">${step ? `<span class="step" aria-label="Number ${step}">${step}</span>` : ''}${item.priority ? '<span class="priority">Priority</span>' : ''}${esc(facts.join(' · '))}</div>
     <h3>${esc(item.title)}</h3>
     ${item.description ? `<p class="desc">${esc(item.description)}</p>` : ''}
     ${photos.length > 0 ? `<div class="photos">${photos.map((p, i) => photoHtml(item, p, i, i === 0)).join('')}</div>` : ''}
@@ -233,8 +242,12 @@ function render(): void {
   const done = open.filter((i) => i.marked_done_at);
   const working = open.filter((i) => !i.marked_done_at);
   const quoted = working.filter(isQuoted);
-  const ready = working.filter((i) => i.ready && !isQuoted(i));
-  const waiting = working.filter((i) => !i.ready && !isQuoted(i));
+  // In the order to do them, numbered on from what is ready to what is waiting.
+  const inOrder = (list: PageItem[]) => [...list].sort((a, b) => doFirst(workFacts(a), workFacts(b)));
+  const ready = inOrder(working.filter((i) => i.ready && !isQuoted(i)));
+  const waiting = inOrder(working.filter((i) => !i.ready && !isQuoted(i)));
+  steps = new Map([...ready, ...waiting].map((i, n) => [i.id, n + 1]));
+  const ordered = ready.some((i) => i.priority || (i.holds_up?.items ?? 0) > 0);
   const confirmed = open.filter((i) => i.confirmed_at).length;
   const counts = [
     plural(open.length, 'open item'),
@@ -263,7 +276,7 @@ function render(): void {
       <p class="hint">On each item: Confirm it once you have looked it over and it is yours, say about how long it takes, and Mark Done when it is finished. ${esc(p.builder)} sees every answer right away, then checks the work and takes it off.</p>
     </div>
     ${open.length === 0 ? `<div class="card empty"><h2>Nothing open</h2><p>Everything on your list here is done. Thank you.</p></div>` : ''}
-    ${sectionHtml('Ready Now', 'These can be done any time.', ready)}
+    ${sectionHtml('Ready Now', ordered ? 'These can be done any time. Start at number 1: the first ones hold up the most other work.' : 'These can be done any time.', ready)}
     ${sectionHtml('Waiting', 'Not ready yet: each says what it waits on, and when it should be ready.', waiting)}
     ${sectionHtml('To Be Quoted', 'Extra work: a price for each, before it starts.', quoted)}
     ${sectionHtml('Marked Done', `Waiting for ${p.builder} to check.`, done)}

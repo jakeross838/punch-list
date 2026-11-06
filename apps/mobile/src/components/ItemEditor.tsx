@@ -39,7 +39,7 @@ import { ActivityIndicator, Keyboard, StyleSheet, TextInput, View } from 'react-
 import { colors, fieldFont, layout, type as typeScale } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { usePersonOptions } from './people';
-import { haptic, Icon, ListLabeledField, ListRow, ListSection, ListSwitchRow, OptionPicker, PhotoView, Segmented, Text, Touchable, useFeedback } from '@/ui';
+import { afterSheets, haptic, Icon, ListLabeledField, ListRow, ListSection, ListSwitchRow, OptionPicker, PhotoView, Segmented, Text, Touchable, useFeedback } from '@/ui';
 import { HoursField } from './HoursField';
 import { ExtraFields, useFormOptions, type ItemDraft } from './ItemForm';
 import { ReadyRow } from './ReadyRow';
@@ -404,6 +404,8 @@ export function ItemEditor({
                 onChangeText={(n) => set({ poOrCo: writeOrder(orderType, n) }, true)}
                 onBlur={() => set({ poOrCo: value.poOrCo })}
                 autoCapitalize="characters"
+                autoCorrect={false}
+                returnKeyType="done"
                 invalid={!!problem('poOrCo')}
                 testID="field-po"
               />
@@ -458,7 +460,7 @@ export function ItemEditor({
           onAdd: async (name) => {
             setNewCompany(name);
             setPicker(null);
-            setTimeout(() => setPicker('trade'), 350);
+            afterSheets(() => setPicker('trade'));
             return null;
           },
         }}

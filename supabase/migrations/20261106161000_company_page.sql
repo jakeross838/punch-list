@@ -96,7 +96,20 @@ begin
         'photos', coalesce((
           select jsonb_agg(jsonb_build_object('storage_path', p.storage_path, 'width', p.width, 'height', p.height, 'marks', p.marks) order by p.sort_order)
           from public.photos p where p.item_id = i.id and not p.removed and coalesce(p.storage_path, '') <> ''
-        ), '[]'::jsonb)
+        ), '[]'::jsonb),
+        -- What finishing it frees up, for the order to do the work: every open item on the job that
+        -- waits on it, down the chain, whoever does it, and their hours.
+        'holds_up', (
+          with recursive after(id) as (
+            select w.id from public.items w
+            where w.job_id = i.job_id and w.status = 'open' and w.id <> i.id and i.id = any(w.waiting_on_items)
+            union
+            select w.id from public.items w join after a on a.id = any(w.waiting_on_items)
+            where w.job_id = i.job_id and w.status = 'open' and w.id <> i.id
+          )
+          select jsonb_build_object('items', count(*), 'hours', coalesce(sum(h.hours), 0))
+          from after join public.items h on h.id = after.id
+        )
       ) order by i.priority desc, lo.sort_order, i.number)
       from public.items i join public.locations lo on lo.id = i.location_id
       where i.job_id = l.job_id and i.company_id = l.company_id and i.status = 'open' and not i.unfinished

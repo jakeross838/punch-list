@@ -2,13 +2,13 @@
 // sand. Rows are divided by fine rules. Both variants look the same now; plain is kept for the
 // screens that still ask for it.
 
-import { Children, createContext, isValidElement, useContext, useState, type ReactNode } from 'react';
+import { Children, createContext, isValidElement, useContext, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
 import { Platform, StyleSheet, TextInput, View, type ColorValue, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { colors, fieldFont, layout, type as typeScale } from '@/constants/theme';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { Switch } from './Switch';
-import { Text } from './Text';
+import { Text, TEXT_LARGEST as FIELD_TEXT_LARGEST } from './Text';
 import { Touchable } from './Touchable';
 
 type Variant = 'grouped' | 'plain';
@@ -206,14 +206,20 @@ export function ListSwitchRow({
   );
 }
 
-/** A row that is a text field. title: the large field at the top of an item. Multiline grows. */
+/** The text fields' own: a field to move to with Next. */
+export type FieldRef = Ref<ComponentRef<typeof TextInput>>;
+
+/**
+ * A row that is a text field. title: the large field at the top of an item. Multiline grows. A
+ * one line field shows the clear button while you type in it, as iPhone fields do.
+ */
 export function ListTextField({
   multiline,
   minLines = 3,
   invalid,
   size = 'body',
   ...props
-}: TextInputProps & { minLines?: number; invalid?: boolean; size?: 'body' | 'title' }) {
+}: TextInputProps & { minLines?: number; invalid?: boolean; size?: 'body' | 'title'; ref?: FieldRef }) {
   const { separator } = useRow(false);
   const minHeight = multiline ? Math.max(layout.rowMinHeight, minLines * typeScale.body.lineHeight + 24) : size === 'title' ? 54 : layout.rowMinHeight;
   const [height, setHeight] = useState(minHeight);
@@ -222,6 +228,8 @@ export function ListTextField({
       <TextInput
         placeholderTextColor={colors.placeholder}
         selectionColor={colors.tint}
+        clearButtonMode={multiline ? 'never' : 'while-editing'}
+        maxFontSizeMultiplier={FIELD_TEXT_LARGEST}
         {...props}
         multiline={multiline}
         onContentSizeChange={(e) => {
@@ -249,7 +257,7 @@ export function ListTextField({
 }
 
 /** A label on the left and a short text field on the right, like the order's "Number". */
-export function ListLabeledField({ label, invalid, ...props }: TextInputProps & { label: string; invalid?: boolean }) {
+export function ListLabeledField({ label, invalid, ...props }: TextInputProps & { label: string; invalid?: boolean; ref?: FieldRef }) {
   const { separator, rowStyle } = useRow(false);
   return (
     <View style={[styles.row, rowStyle, invalid ? styles.invalid : null]}>
@@ -260,6 +268,8 @@ export function ListLabeledField({ label, invalid, ...props }: TextInputProps & 
         placeholderTextColor={colors.placeholder}
         selectionColor={colors.tint}
         accessibilityLabel={label}
+        clearButtonMode="while-editing"
+        maxFontSizeMultiplier={FIELD_TEXT_LARGEST}
         {...props}
         style={[styles.input, styles.labeledInput, props.style]}
       />

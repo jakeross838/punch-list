@@ -11,6 +11,7 @@
 // job or another.
 
 import {
+  companyList,
   clearHoldup,
   complete,
   dropAt,
@@ -170,9 +171,21 @@ export default function GroupScreen() {
     : stateList
       ? sortItems(items.filter((i) => stateOf(i) === stateList))
       : (group?.items ?? []);
-  const open = listed.filter(
-    (i) => i.status !== "complete" || actions.checking.has(i.id),
-  );
+  // A company's list goes in the order to do the work, numbered the same as on its printed list
+  // and its page: what is ready first, starting with whatever holds up the most other work.
+  const work = useMemo(() => {
+    if (by !== "company" || drafts || stateList) return null;
+    const list = companyList(key, items, { locations, companies, items, trades });
+    const lines = [...list.ready, ...list.waiting.flatMap((g) => g.lines)];
+    return {
+      step: new Map(lines.flatMap((l) => (l.step !== null ? [[l.item.id, l.step] as const] : []))),
+      freed: new Map(lines.map((l) => [l.item.id, l.freed])),
+    };
+  }, [by, drafts, stateList, key, items, locations, companies, trades]);
+  const open = listed
+    .filter((i) => i.status !== "complete" || actions.checking.has(i.id))
+    // Numbered work first, in its order; drafts, work to be quoted and work to check after, as they were.
+    .sort((a, b) => (work?.step.get(a.id) ?? 1e9) - (work?.step.get(b.id) ?? 1e9));
   const done = listed.filter(
     (i) => i.status === "complete" && !actions.checking.has(i.id),
   );
@@ -488,6 +501,8 @@ export default function GroupScreen() {
         location={locationFor(item)}
         company={companyFor(item)}
         note={noteFor(item)}
+        step={section.kind === "open" && !selecting ? work?.step.get(item.id) : undefined}
+        freed={section.kind === "open" ? work?.freed.get(item.id) : undefined}
         first={index === 0}
         last={index === section.data.length - 1}
         stripe={index % 2 === 1}

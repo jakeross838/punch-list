@@ -7,7 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { TemplateTaskSheet } from '@/components/TemplateTaskSheet';
 import { useData } from '@/data/api';
-import { EmptyState, haptic, ListLabeledField, ListRow, ListSection, OptionPicker, Page, useFeedback } from '@/ui';
+import { useSaveOnLeave, EmptyState, haptic, ListLabeledField, ListRow, ListSection, OptionPicker, Page, useFeedback } from '@/ui';
 
 export default function TemplateScreen() {
   const { templateId } = useLocalSearchParams<{ templateId: string }>();
@@ -50,6 +50,11 @@ function TemplateDetail({ template }: { template: Template }) {
       feedback.toast({ message: e instanceof Error ? e.message : 'That did not save. Try again.' });
     }
   }
+
+  // Leaving with the name still being typed keeps it.
+  useSaveOnLeave(() => {
+    if (admin && name.trim() !== '' && name.trim() !== template.name) data.updateTemplate(template.id, { name }).catch(() => undefined);
+  });
 
   const sub = (t: TemplateItem) =>
     [trades.find((x) => x.id === t.tradeId)?.name ?? 'No trade', t.waitsOn.length > 0 ? `waits on ${t.waitsOn.map(titleOf).filter(Boolean).join(' and ')}` : null]

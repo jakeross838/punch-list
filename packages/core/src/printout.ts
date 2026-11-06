@@ -22,6 +22,7 @@ import { markShapes, type MarkShape } from './marks';
 import { isPriced } from './rules';
 import type { Item, Mark, Visit } from './types';
 import { itemNumberLabel } from './views';
+import { freesText } from './workOrder';
 
 /** The first photo of an item, ready to print: its picture (a data or file address) and its marks. */
 export interface PrintPhoto {
@@ -168,6 +169,8 @@ function workCell(line: ListLine, settings: PrintSettings): string {
     parts.push(`<div class="rb-note">${esc(note)}</div>`);
   }
   const facts = [
+    // On a company's list: what finishing it frees up, which is why it comes where it does.
+    line.step !== null ? freesText(line.freed) || null : null,
     !item.ready && isDay(item.readyBy) ? `Ready by ${dayText(item.readyBy, settings.date, true)}` : null,
     item.hours !== null && item.hours > 0 ? `About ${hoursText(item.hours)}` : null,
   ].filter(Boolean);
@@ -242,6 +245,8 @@ const photoColumn = (settings: PrintSettings): Column[] =>
 /** One company's list, for the sub. */
 export function companyPrintout(list: CompanyList, settings: PrintSettings): Printout {
   const columns: Column[] = [
+    // The order to do the work in, 1 first.
+    { label: 'Order', width: '0.5in', cell: (l) => (l.step !== null ? String(l.step) : ''), className: 'rb-num' },
     { label: 'Item', width: '0.55in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
     { label: 'Location', width: '1.3in', cell: (l) => esc(l.room) },
     { label: 'Work', cell: (l) => workCell(l, settings) },
@@ -272,7 +277,10 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
 
   parts.push('<h2 class="rb-section">Ready</h2>');
   if (ready.length > 0) {
-    parts.push('<p class="rb-section-note">These can be done any time.</p>');
+    const ordered = ready.some((l) => l.freed.items > 0 || l.item.priority);
+    parts.push(
+      `<p class="rb-section-note">${ordered ? 'These can be done any time. Start at number 1: the first ones hold up the most other work.' : 'These can be done any time.'}</p>`,
+    );
     parts.push(table(columns, rows(columns, ready)));
   } else {
     parts.push('<p class="rb-section-note">Nothing is ready yet.</p>');
@@ -287,7 +295,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
   if (needsPrice.length > 0) {
     // A line for the price on each one, to send back.
     const quoteColumns: Column[] = [
-      ...columns.filter((c) => c.label !== 'Photo'),
+      ...columns.filter((c) => c.label !== 'Photo' && c.label !== 'Order'),
       { label: 'Price', width: '1.05in', cell: () => '$<span class="rb-price"></span>' },
       ...columns.filter((c) => c.label === 'Photo'),
     ];
@@ -296,7 +304,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
     parts.push(table(quoteColumns, rows(quoteColumns, needsPrice)));
   }
 
-  const added = columns.filter((c) => c.label !== 'Photo');
+  const added = columns.filter((c) => c.label !== 'Photo' && c.label !== 'Order');
   parts.push('<h2 class="rb-section">Anything Missing</h2>');
   parts.push('<p class="rb-section-note">Add anything not on this list.</p>');
   parts.push(table(added, blanks(added.length, 6)));

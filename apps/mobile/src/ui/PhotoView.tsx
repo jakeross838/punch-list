@@ -71,6 +71,7 @@ export const PhotoView = memo(function PhotoView({
   height,
   fit = 'cover',
   edge = fit === 'cover',
+  sharp = false,
   style,
   testID,
 }: {
@@ -82,6 +83,8 @@ export const PhotoView = memo(function PhotoView({
   radius?: number;
   /** A thin slate edge, so a pale photo still reads as a photo. */
   edge?: boolean;
+  /** Kept at its full size, for zooming in: the full screen viewer's photo in view. */
+  sharp?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }) {
@@ -89,7 +92,14 @@ export const PhotoView = memo(function PhotoView({
   return (
     <View style={[{ width, height, overflow: 'hidden', backgroundColor: '#D6D1C9' }, style]} testID={testID}>
       <View style={{ position: 'absolute', left: shown.left, top: shown.top, width: shown.width, height: shown.height }}>
-        <Image source={{ uri: photo.uri }} style={{ width: shown.width, height: shown.height }} contentFit="fill" transition={120} accessibilityIgnoresInvertColors />
+        <Image
+          source={{ uri: photo.uri }}
+          style={{ width: shown.width, height: shown.height }}
+          contentFit="fill"
+          transition={120}
+          allowDownscaling={!sharp}
+          accessibilityIgnoresInvertColors
+        />
         <MarkLayer marks={photo.marks} width={shown.width} height={shown.height} />
       </View>
       {edge ? <View pointerEvents="none" style={styles.edge} /> : null}

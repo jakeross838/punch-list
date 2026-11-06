@@ -48,6 +48,7 @@ export default function SignInScreen() {
   const [resent, setResent] = useState(false);
   const [focused, setFocused] = useState(true);
   const codeField = useRef<ComponentRef<typeof TextInput>>(null);
+  const nameField = useRef<ComponentRef<typeof TextInput>>(null);
 
   async function send(again = false) {
     if (busy) return;
@@ -149,10 +150,13 @@ export default function SignInScreen() {
               autoFocus
               textContentType="organizationName"
               returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => nameField.current?.focus()}
               accessibilityLabel="Company name"
               testID="sign-up-company"
             />
             <ListTextField
+              ref={nameField}
               placeholder="Your Name"
               value={name}
               onChangeText={setName}

@@ -3,6 +3,7 @@
 import { StyleSheet, TextInput, View } from 'react-native';
 import { colors, fieldFont } from '@/constants/theme';
 import { Icon } from './Icon';
+import { TEXT_LARGEST } from './Text';
 import { Touchable } from './Touchable';
 
 export function SearchField({
@@ -35,6 +36,8 @@ export function SearchField({
         autoFocus={autoFocus}
         returnKeyType="search"
         enterKeyHint="search"
+        enablesReturnKeyAutomatically
+        maxFontSizeMultiplier={TEXT_LARGEST}
         onSubmitEditing={onSubmit}
         accessibilityLabel={placeholder}
         testID={testID}

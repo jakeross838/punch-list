@@ -17,7 +17,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { useData } from '@/data/api';
 import { itemsWord } from '@/data/clipboard';
-import { EmptyState, haptic, ListRow, ListSection, ListTextField, Sheet, useFeedback } from '@/ui';
+import { SheetScroll, EmptyState, haptic, ListRow, ListSection, ListTextField, Sheet, useFeedback } from '@/ui';
 
 export function AddTemplateSheet({
   jobId,
@@ -176,8 +176,10 @@ export function SaveTemplateSheet({ jobId, items, visible, onClose, onSaved }: {
       left={{ label: 'Cancel', onPress: close, testID: 'save-template-cancel' }}
       right={{ label: 'Save', variant: 'prominent', onPress: () => void save(), testID: 'save-template' }}
       testID="save-template-sheet"
+      dirty={name.trim() !== ''}
+      what="the new template"
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      <SheetScroll contentContainerStyle={styles.content}>
         <ListSection
           footer={missingName ? 'Give the template a name.' : 'Each title goes in once for each kind of location. Add it to any job from the job menu.'}
           footerTone={missingName ? 'danger' : 'default'}
@@ -188,6 +190,8 @@ export function SaveTemplateSheet({ jobId, items, visible, onClose, onSaved }: {
             onChangeText={setName}
             autoCapitalize="words"
             autoFocus
+            returnKeyType="done"
+            onSubmitEditing={() => void save()}
             invalid={missingName}
             accessibilityLabel="Template Name"
             testID="field-template-name"
@@ -200,7 +204,7 @@ export function SaveTemplateSheet({ jobId, items, visible, onClose, onSaved }: {
             ))}
           </ListSection>
         ))}
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }

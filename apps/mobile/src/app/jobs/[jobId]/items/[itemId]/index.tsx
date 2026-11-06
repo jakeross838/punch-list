@@ -51,6 +51,8 @@ import { capture } from '@/data/capture';
 import { clipboard } from '@/data/clipboard';
 import { useHolds } from '@/data/view';
 import {
+  useSaveOnLeave,
+  afterSheets,
   Banner,
   croppedHeight,
   dayOf,
@@ -144,6 +146,17 @@ function useLiveItem(item: Item) {
       feedback.toast({ message: e instanceof RuleError ? e.message : 'That did not save. Try again.' });
     });
   };
+
+  // Back or a swipe back can take the screen away before the field being typed in hears it was
+  // left: what was typed is kept, when the item allows it.
+  useSaveOnLeave(() => {
+    if (Object.keys(typed).length === 0) return;
+    const next = tidyItem(value);
+    if (checkItem(next).length > 0) return;
+    const changes: Partial<ItemDraft> = {};
+    for (const k of EDITABLE) if (!sameValue(next[k], base[k])) Object.assign(changes, { [k]: next[k] });
+    if (Object.keys(changes).length > 0) data.updateItem(item.id, changes).catch(() => undefined);
+  });
 
   return {
     value,
@@ -542,7 +555,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
           ) : null}
         </ItemEditor>
       </View>
-      <PhotoViewer photo={viewing} onClose={() => setViewing(null)} />
+      <PhotoViewer photo={viewing} photos={photos} onClose={() => setViewing(null)} />
       <Modal visible={!!marking} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setMarking(null)}>
         {marking ? (
           <>
@@ -559,7 +572,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
         onSelect={(id) => {
           const target = items.find((i) => i.id === id);
           // The picker slides away first.
-          if (target) setTimeout(() => void moveTo(target), 350);
+          if (target) afterSheets(() => void moveTo(target));
         }}
         onClose={() => setMoving(false)}
         footer="The photo goes on the item you pick, and this draft comes off the list."

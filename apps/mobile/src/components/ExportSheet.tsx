@@ -17,9 +17,9 @@ import {
   type ListGroupBy,
 } from '@punch/core';
 import { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
-import { Chip, haptic, ListRow, ListSection, ListSwitchRow, ListTextField, Segmented, Sheet, Text, Touchable } from '@/ui';
+import { SheetScroll, Chip, haptic, ListRow, ListSection, ListSwitchRow, ListTextField, Segmented, Sheet, Text, Touchable } from '@/ui';
 import { useFilterNames } from './FilterBar';
 import { Facet, FilterFacets } from './FilterFacets';
 
@@ -91,7 +91,7 @@ export function ExportSheet({
       testID="export-sheet"
     >
       {d ? (
-        <ScrollView contentContainerStyle={styles.content} style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+        <SheetScroll contentContainerStyle={styles.content} style={{ flex: 1 }}>
           <Text variant="subheadline" weight="600" color={colors.secondary} style={styles.summary} testID="export-summary">
             {summary}
           </Text>
@@ -101,6 +101,7 @@ export function ExportSheet({
               value={d.design.title}
               onChangeText={(title) => design({ title })}
               autoCapitalize="words"
+              returnKeyType="done"
               accessibilityLabel="Title"
               testID="export-title"
             />
@@ -197,7 +198,7 @@ export function ExportSheet({
               <ListRow title="Send" icon="share" tone="tint" disabled={busy || matching.items === 0} onPress={onSend} testID="export-send" />
             </ListSection>
           ) : null}
-        </ScrollView>
+        </SheetScroll>
       ) : null}
     </Sheet>
   );

@@ -39,9 +39,12 @@ export {
   type Tile,
 } from './Ledger';
 export type { BarButton, BarItem, BarMenu, MenuAction, MenuGroup, PageProps, PageScroll, PageTab } from './page-types';
+export { afterSheets } from './presence';
+export { askToDiscard, leaveOrConfirm, useLeaveGuard, useSaveOnLeave } from './discard';
 export { SearchField } from './SearchField';
 export { Segmented } from './Segmented';
 export { Sheet } from './Sheet';
+export { SheetScroll } from './SheetScroll';
 export { SwipeRow, type SwipeAction } from './SwipeRow';
 export { Switch } from './Switch';
 export { Text } from './Text';

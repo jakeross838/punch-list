@@ -7,12 +7,14 @@
 import { floorOf, isAdmin, parseRoomList, PART_LABELS, SHARED_GROUP, TEAM_PARTS, teamInOrder, type Location, type TeamPart } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 import { colors, layout, type as typeScale } from '@/constants/theme';
 import { DragList } from '@/components/DragList';
 import { CompanySheet, JobFields, LocationSheet, type Pairing } from '@/components/SetupSheets';
 import { useData } from '@/data/api';
 import {
+  SheetScroll,
+  afterSheets,
   Button,
   EmptyState,
   haptic,
@@ -333,7 +335,7 @@ function TeamTab({ jobId, admin }: { jobId: string; admin: boolean }) {
         onSelect={(personId) => {
           setAdding(false);
           // The picker closes first, then what they are on the job.
-          setTimeout(() => choose(personId, null), 350);
+          afterSheets(() => choose(personId, null));
         }}
         onClose={() => setAdding(false)}
       />
@@ -440,8 +442,10 @@ function PasteRoomsSheet({ jobId, visible, onClose }: { jobId: string; visible: 
       title="Paste Locations"
       left={{ label: 'Cancel', onPress: close, testID: 'paste-cancel' }}
       right={{ label: fresh.length > 0 ? `Add ${fresh.length}` : 'Add', variant: 'prominent', onPress: add, disabled: fresh.length === 0, testID: 'paste-add' }}
+      dirty={paste.trim() !== ''}
+      what="the pasted locations"
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
+      <SheetScroll contentContainerStyle={styles.sheetContent}>
         <ListSection footer="End a line with a colon to name a level, like Level 1: for the lines under it.">
           <ListTextField
             multiline
@@ -466,7 +470,7 @@ function PasteRoomsSheet({ jobId, visible, onClose }: { jobId: string; visible: 
             ))}
           </ListSection>
         ) : null}
-      </ScrollView>
+      </SheetScroll>
     </Sheet>
   );
 }
@@ -514,8 +518,10 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
       title="Add Company"
       left={{ label: 'Cancel', onPress: close, testID: 'company-cancel' }}
       right={{ label: 'Add', variant: 'prominent', onPress: add, disabled: !canAdd, testID: 'company-add' }}
+      dirty={companyId !== null || newName.trim() !== '' || tradeId !== null}
+      what="the new company"
     >
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
+      <SheetScroll contentContainerStyle={styles.sheetContent}>
         <ListSection footer="Pick a company already in the app, or type a new one.">
           <ListRow
             title="Company"
@@ -533,6 +539,8 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
               if (t.trim() !== '') setCompanyId(null);
             }}
             autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="done"
             accessibilityLabel="New company name"
             testID="field-new-company"
           />
@@ -550,7 +558,7 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
             testID="pick-company-trade"
           />
         </ListSection>
-      </ScrollView>
+      </SheetScroll>
       <OptionPicker
         visible={picker === 'company'}
         title="Company"

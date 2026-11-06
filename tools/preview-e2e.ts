@@ -1173,6 +1173,9 @@ async function main(): Promise<void> {
     });
     // A row's drag handle held and moved to the top of another row, with the mouse as the finger.
     const dragRow = async (handle: ReturnType<typeof app.getByTestId>, onto: ReturnType<typeof app.getByTestId>) => {
+      // A finger can only drag what is on the screen.
+      await handle.scrollIntoViewIfNeeded();
+      await settle(200);
       const a = await handle.boundingBox();
       const b = await onto.boundingBox();
       if (!a || !b) throw new Error('Nothing to drag');
@@ -1513,6 +1516,75 @@ async function main(): Promise<void> {
       await shot('99c-confirmed-row');
       await app.getByTestId('search-clear').last().click();
       await app.getByTestId('group-room-1').waitFor();
+    });
+    await step("New: a company's list is numbered in the order to do it, starting with what holds up the most", async () => {
+      await app.getByTestId('filter').click();
+      await app.getByTestId('view-done').waitFor();
+      await settle(600);
+      await app.getByRole('tab', { name: 'Company' }).click();
+      await app.getByTestId('view-done').click();
+      await app.getByTestId('group-company-4').waitFor();
+      await settle(500);
+      await app.getByTestId('group-company-4').click();
+      await app.locator('[data-testid^="step-"]').first().waitFor();
+      const steps = (await app.locator('[data-testid^="step-"]').allTextContents()).map((t) => t.trim());
+      if (steps.length === 0 || steps.some((t, i) => t !== String(i + 1))) throw new Error(`SMS Carpentry's list is not numbered 1, 2, 3: ${steps.join(', ')}`);
+      // The pocket door hardware holds up the painting after it, so it comes first.
+      if ((await app.getByTestId('step-item-26').count()) > 0) {
+        if ((await app.getByTestId('step-item-26').textContent())?.trim() !== '1') throw new Error('What holds up the most work is not number 1');
+        await app.getByText('Holds up 1 item').first().waitFor();
+      }
+      await settle(400);
+      await shot('99c2-company-work-order');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('filter').click();
+      await app.getByTestId('view-done').waitFor();
+      await settle(500);
+      await app.getByTestId('view-standard').click();
+      await app.getByTestId('view-done').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
+    await step('New: the photo opens full screen, and pages to the next one', async () => {
+      await app.getByTestId('search').last().fill('upper cabinets');
+      await app.getByText('Set upper cabinets').first().waitFor();
+      await settle(300);
+      await app.getByText('Set upper cabinets').first().click();
+      await app.getByTestId('item-photo').waitFor();
+      await settle(500);
+      await app.getByTestId('item-photo').click();
+      await app.getByTestId('viewer-done').waitFor();
+      await app.getByRole('img', { name: /^Photo/ }).first().waitFor();
+      await settle(500);
+      await shot('99c3-photo-viewer');
+      await app.getByTestId('viewer-done').click();
+      await app.getByTestId('viewer-done').waitFor({ state: 'detached' });
+      await app.getByTestId('back').last().click();
+      await settle(400);
+      await app.getByTestId('search-clear').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+    });
+    await step('New: a sheet with changes asks before they are thrown away', async () => {
+      await app.getByTestId('more').last().click();
+      await app.getByTestId('edit-job').waitFor();
+      await settle(350);
+      await app.getByTestId('edit-job').click();
+      await app.getByTestId('edit-job-name').waitFor();
+      await settle(600);
+      await app.getByTestId('edit-job-name').fill('Sample Job Renamed');
+      await app.getByTestId('edit-job-cancel').click();
+      await app.getByRole('button', { name: 'Discard Changes' }).waitFor();
+      await settle(400);
+      await shot('99c4-discard-changes');
+      await app.getByRole('button', { name: 'Keep Editing' }).click();
+      await settle(400);
+      if ((await app.getByTestId('edit-job-name').inputValue()) !== 'Sample Job Renamed') throw new Error('Keep Editing lost what was typed');
+      await app.getByTestId('edit-job-cancel').click();
+      await app.getByRole('button', { name: 'Discard Changes' }).click();
+      await app.getByTestId('edit-job').waitFor({ state: 'detached' });
+      await settle(500);
+      if ((await app.getByText('Sample Job Renamed').count()) > 0) throw new Error('Discard Changes kept the new name');
     });
     await step('New: every company has its page, and the link goes on its list', async () => {
       await app.getByTestId('send').last().click();

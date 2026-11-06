@@ -13,14 +13,13 @@ import { itemNumberLabel, type Item } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { leaveOrConfirm } from '@/components/discard';
 import { ItemEditor } from '@/components/ItemEditor';
 import { startDraft, useItemForm, type ItemDraft } from '@/components/ItemForm';
 import { useFillIn } from '@/components/useFillIn';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture, useCapture } from '@/data/capture';
-import { haptic, Icon, Page, Text, useFeedback } from '@/ui';
+import { haptic, Icon, Page, Text, useFeedback, useLeaveGuard } from '@/ui';
 
 export default function NewItemScreen() {
   const { jobId, typed } = useLocalSearchParams<{ jobId: string; typed?: string }>();
@@ -57,6 +56,9 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
   const [shots] = useState(() => walk.shots);
   const roomLabel = locations.find((l) => l.id === value.locationId)?.label;
   const hasContent = form.dirty || value.title.trim() !== '' || shots.length > 0;
+  // A swipe down or Cancel asks before throwing the new item away; leaving to save it or to take its
+  // photo does not.
+  const allowLeave = useLeaveGuard(hasContent, 'this new item', () => capture.discardItem());
 
   function set(patch: Partial<ItemDraft>) {
     form.set(patch);
@@ -68,6 +70,7 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
   function toCamera(editKey?: string) {
     capture.setDraft(value);
     if (editKey) capture.editShot(editKey);
+    allowLeave();
     if (typed) router.replace({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
     else router.back();
   }
@@ -97,12 +100,14 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
           onNext(note);
         } else {
           capture.end();
+          allowLeave();
           router.back();
           feedback.toast({ message: note });
         }
         return;
       }
       capture.itemSaved(what, roomLabel ?? null);
+      allowLeave();
       if (next) {
         // The camera confirms it, over the viewfinder.
         router.back();
@@ -122,19 +127,14 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
     await data.addPhotos(shots.map((s) => ({ jobId, itemId: target.id, uri: s.uri, width: s.width, height: s.height, marks: s.marks })));
     haptic.success();
     capture.photoAdded(target.title || `item ${itemNumberLabel(target)}`, roomLabel ?? null);
+    allowLeave();
     router.back();
   }
 
+  /** With something on the form, the guard asks first and throws it away on Discard Changes. */
   function cancel() {
-    leaveOrConfirm(
-      hasContent,
-      feedback,
-      () => {
-        capture.discardItem();
-        router.back();
-      },
-      'this new item',
-    );
+    if (!hasContent) capture.discardItem();
+    router.back();
   }
 
   return (
@@ -142,7 +142,6 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
       title="New Item"
       eyebrow={[roomLabel, typed ? 'Typed in' : shots.length > 0 ? `${shots.length === 1 ? 'A photo' : `${shots.length} photos`}` : null].filter(Boolean).join(' · ') || undefined}
       sheet
-      dismissible={!hasContent}
       right={[{ kind: 'button', label: 'Cancel', icon: 'xmark', iconOnly: true, onPress: cancel, testID: 'cancel' }]}
       bottom={[
         { kind: 'button', label: 'Save', variant: 'plain', onPress: () => void save(false), disabled: saving, testID: 'save' },

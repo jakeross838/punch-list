@@ -27,6 +27,8 @@ export interface PageItem {
   confirmed_at: string | null;
   marked_done_at: string | null;
   photos: PagePhoto[];
+  /** What finishing it frees up: the open items that wait on it, down the chain, and their hours. An older answer leaves it out. */
+  holds_up?: { items: number; hours: number } | null;
 }
 export interface PageComment {
   id: string;
