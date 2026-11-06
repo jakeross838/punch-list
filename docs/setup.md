@@ -29,6 +29,7 @@ How each service behind the app is set up, and where its secrets are kept. Secre
 
 - Checked: the connection test, the sync config check and the deploy pass; the first copy of the database is done and every synced table replicates; a request with no sign in is refused.
 - Deployed again on 5 November for build 4, with the plans (`plan_sheets`) and the items' new columns: run from the repository root, since the command line looks for the `powersync` folder there. Supabase changes go in first, then the sync config, then the build, so a phone never asks for a table the database does not have yet.
+- Deployed again on 6 November for build 5: the `company` stream (renamed from `ross_built`) also sends the signed-in person's company, from the new `orgs` table, after the `many_companies` migrations went in.
 
 ## Expo
 
