@@ -28,6 +28,7 @@ import { useCanSuggest } from '@/ai/suggest';
 import { draftFill } from '@/components/draftFill';
 import { FilterBar } from '@/components/FilterBar';
 import { ItemRow } from '@/components/ItemRow';
+import { backToJobs, useJobActions } from '@/components/JobActions';
 import { useFormOptions } from '@/components/ItemForm';
 import { AddTemplateSheet } from '@/components/TemplateSheets';
 import { useItemActions } from '@/components/useItemActions';
@@ -91,6 +92,7 @@ export default function JobScreen() {
   const feedback = useFeedback();
   const jobs = data.useJobs();
   const job = jobs.find((j) => j.id === jobId);
+  const jobActions = useJobActions();
   const copied = useClipboard();
   const formOptions = useFormOptions(jobId, '');
   // Opened from a template's Add to a Job: its sheet comes up straight away.
@@ -217,6 +219,28 @@ export default function JobScreen() {
         <Icon name="chevron.right" size={11} color={colors.tint} weight="semibold" />
       </Touchable>
     ) : null;
+  // What the companies say is done, from their pages: one tap to the list to check.
+  const toCheck = items.filter((i) => i.status === 'open' && !i.unfinished && i.markedDoneAt).length;
+  const checkRow =
+    toCheck > 0 ? (
+      <Touchable
+        feedback="highlight"
+        onPress={() => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'state', key: 'check' } })}
+        accessibilityRole="button"
+        accessibilityLabel={`${toCheck} marked done by the companies, to check`}
+        testID="open-to-check"
+        style={styles.note}
+      >
+        <Stamp color={colors.stone} size={8} />
+        <Text variant="label" weight="600" style={{ flex: 1 }}>
+          {toCheck} marked done, to check
+        </Text>
+        <Text variant="label" color={colors.tint}>
+          Check
+        </Text>
+        <Icon name="chevron.right" size={11} color={colors.tint} weight="semibold" />
+      </Touchable>
+    ) : null;
   const openCamera = (roomId: string | null = null) => {
     capture.start({ jobId, roomId });
     router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
@@ -258,14 +282,40 @@ export default function JobScreen() {
           { label: 'Item Form', icon: 'list.bullet', onPress: () => router.push('/settings/item-form'), testID: 'item-form' },
         ],
       },
+      ...(jobActions.admin && job
+        ? [
+            {
+              title: 'This Job',
+              actions: [
+                { label: 'Edit the Name and Address', icon: 'pencil.tip' as IconName, onPress: () => jobActions.edit(job), testID: 'edit-job' },
+                job.closed
+                  ? { label: 'Open the Job Again', icon: 'undo' as IconName, onPress: () => jobActions.reopen(job), testID: 'reopen-job' }
+                  : { label: 'Close the Job', icon: 'archive' as IconName, onPress: () => jobActions.close(job, backToJobs), testID: 'close-job' },
+                {
+                  label: 'Delete the Job',
+                  icon: 'trash' as IconName,
+                  destructive: true,
+                  onPress: () =>
+                    jobActions.remove(job, { items: items.filter((i) => i.status !== 'removed').length, photos: photos.filter((p) => !p.removed).length }, backToJobs),
+                  testID: 'delete-job',
+                },
+              ],
+            },
+          ]
+        : []),
     ],
   };
 
   const empty =
     locations.length === 0 ? (
-      <EmptyState icon="door" title="No Locations Yet" message="Paste the locations from the plans to start this job's list.">
-        <View style={{ marginTop: 14 }}>
-          <Button label="Set Up the Job" variant="tinted" onPress={openSetup} />
+      <EmptyState
+        icon="camera"
+        title="Start the Walk"
+        message="Take a photo of each thing left to do. Type the room as you go, or paste every location from the plans first."
+      >
+        <View style={{ marginTop: 14, gap: 10, alignSelf: 'stretch' }}>
+          <Button label="Start the Walk" icon="camera" onPress={() => openCamera(null)} testID="empty-walk" />
+          <Button label="Paste the Locations From the Plans" variant="tinted" onPress={openSetup} testID="empty-setup" />
         </View>
       </EmptyState>
     ) : narrowed ? (
@@ -435,6 +485,7 @@ export default function JobScreen() {
                   {groupChips}
                   {filterBar}
                   {pasteRow}
+                  {checkRow}
                   {draftsRow}
                 </View>
               }
@@ -483,6 +534,7 @@ export default function JobScreen() {
         onSaveDefault={() => void data.setViewSettings(view)}
         matching={total}
       />
+      {jobActions.sheet}
     </>
   );
 }

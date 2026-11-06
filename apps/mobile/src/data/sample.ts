@@ -270,7 +270,8 @@ export function sampleState(): SampleState {
     item('Laundry 119', 'Install baseboard', 'Both long walls.', 'SMS Carpentry'),
     item('Living 107', 'Install shoe molding', 'Along the stone hearth.', 'SMS Carpentry'),
     item('Foyer 115', 'Replace damaged trim', 'Door casing dented at the closet.', 'SMS Carpentry', { kind: 'deficiency' }),
-    item('Kitchen 109', 'Install cabinet hardware', 'Island and the pantry wall.', 'SMS Carpentry'),
+    // The company confirmed this one from its page, with its time.
+    item('Kitchen 109', 'Install cabinet hardware', 'Island and the pantry wall.', 'SMS Carpentry', { confirmedAt: '2026-11-05T14:10:00.000Z', hours: 2 }),
     // What other work waits on: the stone behind the range, on a visit, and the pocket door hardware.
     item('Kitchen 109', 'Install range backsplash', 'Full height slab behind the range.', 'Volcano Stone', { hours: 4 }),
     item('Master Bathroom 207', 'Install pocket door hardware', 'Both pocket doors.', 'SMS Carpentry', { hours: 1 }),

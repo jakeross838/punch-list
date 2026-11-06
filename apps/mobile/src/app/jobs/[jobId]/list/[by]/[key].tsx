@@ -74,15 +74,17 @@ interface Section {
   data: Item[];
 }
 
-type State = "ready" | "waiting";
+type State = "ready" | "waiting" | "check";
 const STATES: readonly (readonly [State, string])[] = [
   ["ready", "Ready"],
   ["waiting", "Waiting"],
+  ["check", "To Check"],
 ];
 
-/** Which state an open item is in, for the Ready and Waiting lists. */
+/** Which state an open item is in, for the Ready, Waiting and To Check lists. To Check: the company says it is done. */
 export function stateOf(item: Item): State | null {
   if (item.status !== "open" || item.unfinished) return null;
+  if (item.markedDoneAt) return "check";
   return item.ready ? "ready" : "waiting";
 }
 
@@ -156,7 +158,7 @@ export default function GroupScreen() {
   );
 
   const stateCounts = useMemo(() => {
-    const n: Record<State, number> = { ready: 0, waiting: 0 };
+    const n: Record<State, number> = { ready: 0, waiting: 0, check: 0 };
     for (const i of items) {
       const st = stateOf(i);
       if (st) n[st] += 1;
@@ -225,7 +227,7 @@ export default function GroupScreen() {
   const meta = drafts ? null : (
     <MetaLine
       facts={[
-        { text: `${openNow.length} ${stateList === "ready" ? "ready" : stateList === "waiting" ? "waiting" : "open"}`, color: stateList === "ready" ? colors.ok : colors.label },
+        { text: `${openNow.length} ${stateList === "ready" ? "ready" : stateList === "waiting" ? "waiting" : stateList === "check" ? "to check" : "open"}`, color: stateList === "ready" ? colors.ok : colors.label },
         !stateList && readyNow > 0 ? { text: `${readyNow} ready`, color: colors.ok } : null,
         stateList ? `${companiesNow} ${companiesNow === 1 ? "company" : "companies"}` : null,
       ]}
@@ -465,7 +467,9 @@ export default function GroupScreen() {
       ? "Can be done now"
       : stateList === "waiting"
         ? "Waiting on something first"
-        : room
+        : stateList === "check"
+          ? "Done, the companies say: check each"
+          : room
           ? `Location · ${room.kind === "shared" ? SHARED_GROUP : (room.floor ?? "On the job")}`
           : by === "company"
             ? "Company"

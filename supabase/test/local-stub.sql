@@ -25,3 +25,7 @@ create table auth.users (id uuid primary key, email text);
 
 grant usage on schema public, auth to anon, authenticated, service_role;
 grant execute on all functions in schema auth to anon, authenticated, service_role;
+
+-- As on Supabase, the service role (the company-page function) reaches every table the migrations make.
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant all on sequences to service_role;

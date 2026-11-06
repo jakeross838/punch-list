@@ -2,11 +2,13 @@
 // grouped (rooms by floor), and a search at the top of every list. Typing narrows it as you go,
 // the closest names first: "gat" finds Gator Plumbing, "master bath" finds Master Bathroom 207.
 // On a long list the search is ready to type straight away, and the search key picks the first
-// match. A tap picks and closes.
+// match. A tap picks and closes. A list that can grow (locations, companies) adds what was typed
+// when nothing has that name: Add "Kitchen 109" at the top, or the search key.
 
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { layout } from '@/constants/theme';
+import { useFeedback } from './Feedback';
 import { haptic } from './haptics';
 import { EmptyState, ListRow, ListSection } from './List';
 import { SearchField } from './SearchField';
@@ -45,6 +47,7 @@ export function OptionPicker({
   footer,
   search = true,
   typeFirst,
+  add,
 }: {
   visible: boolean;
   title: string;
@@ -57,9 +60,25 @@ export function OptionPicker({
   search?: boolean;
   /** The search ready to type when the list opens: on for a long list unless said otherwise. */
   typeFirst?: boolean;
+  /**
+   * A list that can grow: what it is called ("Location"), and what adds the typed name. It answers
+   * the new choice's value, which is then picked, or null when it was not added (it said why).
+   */
+  add?: { noun: string; onAdd: (name: string) => Promise<string | null> };
 }) {
+  const feedback = useFeedback();
   const [query, setQuery] = useState('');
+  const [adding, setAdding] = useState(false);
   const searching = query.trim() !== '';
+  // Closed from outside (another sheet comes next): what was typed goes.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (!visible) setQuery('');
+  }
+  const typed = query.trim().replace(/\s+/g, ' ');
+  // Add is offered while typing a name nothing on the list has.
+  const canAdd = !!add && typed !== '' && !options.some((o) => o.label.trim().toLowerCase() === typed.toLowerCase());
   // While searching: one list, the closest first, each in the order it had.
   const shown = useMemo(() => {
     if (!searching) return options;
@@ -92,6 +111,23 @@ export function OptionPicker({
     close();
   }
 
+  async function addTyped() {
+    if (!add || !canAdd || adding) return;
+    setAdding(true);
+    try {
+      const value = await add.onAdd(typed);
+      if (value) {
+        haptic.success();
+        onSelect(value);
+        close();
+      }
+    } catch (e) {
+      feedback.toast({ message: e instanceof Error && e.message ? e.message : `The ${add.noun.toLowerCase()} was not added. Try again.` });
+    } finally {
+      setAdding(false);
+    }
+  }
+
   return (
     <Sheet visible={visible} onClose={close} title={title} left={{ label: 'Cancel', onPress: close, testID: 'picker-cancel' }} testID="picker">
       <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={styles.content} style={{ flex: 1 }}>
@@ -100,14 +136,32 @@ export function OptionPicker({
             <SearchField
               value={query}
               onChangeText={setQuery}
-              autoFocus={typeFirst ?? options.length >= TYPE_FROM}
+              placeholder={add ? `Search or Add a ${add.noun}` : undefined}
+              autoFocus={typeFirst ?? (options.length >= TYPE_FROM || (!!add && options.length === 0))}
               onSubmit={() => {
-                const first = shown[0];
-                if (searching && first) pick(first);
+                const exact = shown.find((o) => o.label.trim().toLowerCase() === typed.toLowerCase());
+                if (exact) pick(exact);
+                else if (canAdd) void addTyped();
+                else if (searching && shown[0]) pick(shown[0]);
               }}
               testID="picker-search"
             />
           </View>
+        ) : null}
+        {canAdd && add ? (
+          <ListSection>
+            <ListRow
+              title={adding ? 'Adding' : `Add “${typed}”`}
+              subtitle={`New ${add.noun.toLowerCase()}`}
+              icon="plus"
+              accessory="none"
+              onPress={() => void addTyped()}
+              testID="picker-add"
+            />
+          </ListSection>
+        ) : null}
+        {add && options.length === 0 && !searching ? (
+          <EmptyState icon="plus" title={`No ${add.noun}s Yet`} message={`Type a ${add.noun.toLowerCase()}'s name above to add it.`} />
         ) : null}
         {shown.length > 0
           ? groups.map((g, gi) => (
@@ -126,7 +180,7 @@ export function OptionPicker({
               </ListSection>
             ))
           : null}
-        {shown.length === 0 ? <EmptyState icon="magnifyingglass" title="No Results" message={`Nothing matches “${query.trim()}”.`} /> : null}
+        {shown.length === 0 && searching && !canAdd ? <EmptyState icon="magnifyingglass" title="No Results" message={`Nothing matches “${query.trim()}”.`} /> : null}
       </ScrollView>
     </Sheet>
   );

@@ -166,7 +166,7 @@ function RoomsTab({ jobId, admin, onPaste, onOpen }: { jobId: string; admin: boo
           </Text>
         </View>
       ) : null}
-      {floors.length === 0 ? <EmptyState icon="door" title="No Locations Yet" message="Paste them from the plans to start." /> : null}
+      {floors.length === 0 ? <EmptyState icon="door" title="No Locations Yet" message="Paste them from the plans, or type each one in as you walk." /> : null}
       {floors.map((floor) => (
         <ListSection
           key={floor.name}

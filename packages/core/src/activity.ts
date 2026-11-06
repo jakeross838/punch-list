@@ -42,7 +42,9 @@ export type ActivityKind =
   | 'comment_added'
   | 'item_marked_done'
   | 'plan_added'
-  | 'plan_removed';
+  | 'plan_removed'
+  | 'item_confirmed'
+  | 'item_hours_given';
 
 export type ActivityDetail = Record<string, string | number | boolean | null>;
 
@@ -259,7 +261,7 @@ function fieldWords(field: string, before: string | null, after: string | null, 
       return [after ? `Order: ${orderText(after)}` : 'Order cleared'];
     case 'hours': {
       const hours = after === null ? NaN : Number(after);
-      return [Number.isFinite(hours) && hours > 0 ? `Estimated time: ${hoursText(hours)}` : 'Estimated time cleared'];
+      return [Number.isFinite(hours) && hours > 0 ? `How long it takes: ${hoursText(hours)}` : 'How long it takes cleared'];
     }
     case 'visit_id': {
       const visit = after ? look.visits.get(after) : undefined;
@@ -269,6 +271,8 @@ function fieldWords(field: string, before: string | null, after: string | null, 
       return [after === 'true' ? 'Priority' : 'No longer a priority'];
     case 'marked_done_at':
       return after ? ['Said to be done'] : ['Not done: back on the list'];
+    case 'confirmed_at':
+      return after ? ['Confirmed by the company'] : ['No longer confirmed, since the work changed'];
     case 'checklist': {
       const was = parseEntries(before);
       const now = parseEntries(after);
@@ -476,6 +480,27 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
       who: named ? `${named} at ${companyName}` : companyName,
       action: `marked ${title} done`,
       detail: [forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? ''), 'For your team to check'].filter(Boolean).map(sentence).join(' '),
+    };
+  }
+
+  if (first.kind === 'item_confirmed' || first.kind === 'item_hours_given') {
+    const d = first.detail ?? {};
+    const companyName = look.companies.get(String(d.company_id ?? '')) ?? 'The company';
+    const named = typeof d.author_name === 'string' && d.author_name.trim() !== '' ? d.author_name.trim() : '';
+    const item = g.itemId ? look.items.get(g.itemId) : undefined;
+    const title = forItem ? 'it' : item?.title.trim() || 'an item';
+    const hours = typeof d.hours === 'number' ? d.hours : typeof d.hours === 'string' && d.hours.trim() !== '' ? Number(d.hours) : null;
+    const action =
+      first.kind === 'item_confirmed'
+        ? `confirmed ${title}`
+        : hours !== null && Number.isFinite(hours) && hours > 0
+          ? `said ${title} takes about ${hoursText(hours)}`
+          : `took the time off ${title}`;
+    return {
+      ...base,
+      who: named ? `${named} at ${companyName}` : companyName,
+      action,
+      detail: [forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? ''), 'From their page'].filter(Boolean).map(sentence).join(' '),
     };
   }
 

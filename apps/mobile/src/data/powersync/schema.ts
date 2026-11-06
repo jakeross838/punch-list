@@ -129,6 +129,7 @@ const items = new Table(
     bt_external_id: column.text,
     /** When the company said it is done, from its page (out of the app for now). */
     marked_done_at: column.text,
+    confirmed_at: column.text,
     /** 1 when it is wanted first. */
     priority: column.integer,
     /** JSON: the steps inside it, each with its words and whether it is done. */

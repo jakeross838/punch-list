@@ -149,9 +149,19 @@ function withMe(s: State): State {
   return { ...s, me: me ?? NOBODY, signedIn: !!me };
 }
 
+/** Jobs deleted on the server whose rows have not come off the phone yet: out of sight meanwhile. */
+const gone = new Set<string>();
+
 function setState(next: State): void {
   state = withMe(next);
+  if (gone.size > 0 && state.jobs.some((j) => gone.has(j.id))) state = { ...state, jobs: state.jobs.filter((j) => !gone.has(j.id)) };
   for (const l of listeners) l();
+}
+
+/** A job just deleted on the server goes from the lists now, before the sync takes its rows off. */
+export function hideJob(id: string): void {
+  gone.add(id);
+  setState(state);
 }
 
 export const store = {

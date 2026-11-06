@@ -137,6 +137,12 @@ export interface Item {
    * waited for someone at your company to look. Only your own team completes an item.
    */
   markedDoneAt?: string | null;
+  /**
+   * When the company confirmed the item from its own page: it is theirs and right as it is. The
+   * builder changing what the work is, where, who does it, when it is ready or how long it takes
+   * takes it back.
+   */
+  confirmedAt?: string | null;
   /** Wanted first: it sorts to the top of its list and shows a red mark. */
   priority?: boolean;
   /** Steps to tick off inside the item, like the parts of a door to adjust. */

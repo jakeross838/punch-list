@@ -22,7 +22,11 @@ begin
   insert into public.jobs (name, address) values ('Fish', '715 North Shore Drive') returning id into j;
   insert into public.locations (job_id, name, number, label, kind, sort_order)
     values (j, 'Kitchen', '109', 'Kitchen 109', 'room', 1) returning id into loc;
-  insert into public.trades (name) values ('Plumbing') returning id into t;
+  -- The standard trades are there already; Plumbing is one.
+  t := (select id from public.trades where org = 'ross_built' and name = 'Plumbing');
+  if t is null then
+    raise exception 'FAIL: the standard trades are missing';
+  end if;
   insert into public.companies (name, default_trade_id) values ('Gator Plumbing', t) returning id into c;
   insert into public.job_companies (job_id, company_id, trade_id) values (j, c, t);
 
@@ -530,7 +534,7 @@ begin
   end;
 
   -- Another company's item, which Gator Plumbing's link must not reach.
-  insert into public.trades (name) values ('Painting') returning id into t2;
+  t2 := (select id from public.trades where org = 'ross_built' and name = 'Painting');
   insert into public.companies (name, default_trade_id) values ('Triple H Painting', t2) returning id into c2;
   insert into public.items (job_id, location_id, title, trade_id, company_id, ready) values (j, loc, 'Touch up paint', t2, c2, true) returning id into other;
   -- An item's comment is always with the company doing the item, whatever the app sends.
@@ -580,9 +584,10 @@ end $$;
 reset role;
 
 -- ---------- the company page's functions ----------
--- Out of the app for now: closed to the app and to anyone not signed in. What they do is still
--- checked, as the database.
+-- For the company-page function alone, which runs as the service role: closed to the app and to
+-- anyone not signed in.
 set request.jwt.claims = '';
+set role service_role;
 do $$
 declare
   link text := current_setting('test.link');
@@ -634,15 +639,54 @@ begin
     raise exception 'FAIL: a company marked another company''s item done';
   exception when insufficient_privilege then null;
   end;
-  -- Its dates: these work, or other dates asked for.
+  -- Confirming an item: it is theirs and right as it is. Saying it twice changes nothing.
+  perform public.trade_confirm(link, current_setting('test.item')::uuid, true, ' Mike ');
+  perform public.trade_confirm(link, current_setting('test.item')::uuid, true, 'Mike');
+  page := public.trade_page(link);
+  if not exists (select 1 from jsonb_array_elements(page -> 'items') x where x ->> 'id' = current_setting('test.item') and x ->> 'confirmed_at' is not null) then
+    raise exception 'FAIL: the company could not confirm an item';
+  end if;
+  begin
+    perform public.trade_confirm(link, current_setting('test.other_item')::uuid, true, 'Mike');
+    raise exception 'FAIL: a company confirmed another company''s item';
+  exception when insufficient_privilege then null;
+  end;
+  -- How long it takes: to the quarter hour, and a confirmation stays through the company's own answer.
+  perform public.trade_set_hours(link, current_setting('test.item')::uuid, 2.1, 'Mike');
+  if (select hours from public.items where id = current_setting('test.item')::uuid) <> 2 then raise exception 'FAIL: the company''s hours were not kept to the quarter hour'; end if;
+  if (select confirmed_at from public.items where id = current_setting('test.item')::uuid) is null then raise exception 'FAIL: the company''s hours took back its own confirmation'; end if;
+  perform public.trade_set_hours(link, current_setting('test.item')::uuid, 500, 'Mike');
+  if (select hours from public.items where id = current_setting('test.item')::uuid) <> 200 then raise exception 'FAIL: the company''s hours went past the most an item takes'; end if;
+  perform public.trade_set_hours(link, current_setting('test.item')::uuid, 3, 'Mike');
+  begin
+    perform public.trade_set_hours(link, current_setting('test.other_item')::uuid, 3, 'Mike');
+    raise exception 'FAIL: a company gave hours on another company''s item';
+  exception when insufficient_privilege then null;
+  end;
+  if public.trade_page('not-a-link') is not null then raise exception 'FAIL: a made up link opened a page'; end if;
+  -- What was checked off lately shows too, apart from the open work.
+  if jsonb_typeof(page -> 'completed') <> 'array' or page ->> 'builder' <> 'Ross Built' then raise exception 'FAIL: the page is missing the builder or what was checked off'; end if;
+  -- The schedule's dates are out of the app for now: the page function cannot answer them.
+  begin
+    perform public.trade_confirm_visit(link, current_setting('test.visit')::uuid, 'Mike');
+    raise exception 'FAIL: the page function can confirm a visit';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+-- The schedule's dates, as the database: these work, or other dates asked for.
+do $$
+declare
+  link text := current_setting('test.link');
+begin
   perform public.trade_confirm_visit(link, current_setting('test.visit')::uuid, 'Mike');
   perform public.trade_ask_visit(link, current_setting('test.visit2')::uuid, '2026-11-13', 1, ' Mike ');
-  page := public.trade_page(link);
-  if not exists (select 1 from jsonb_array_elements(page -> 'visits') x where x ->> 'id' = current_setting('test.visit') and (x ->> 'confirmed')::boolean) then
+  if not (select confirmed from public.visits where id = current_setting('test.visit')::uuid) then
     raise exception 'FAIL: the company could not confirm its dates';
   end if;
-  if not exists (select 1 from jsonb_array_elements(page -> 'visits') x where x ->> 'id' = current_setting('test.visit2') and x ->> 'asked_start' = '2026-11-13' and (x ->> 'asked_days')::int = 1) then
-    raise exception 'FAIL: the page does not show the dates the company asked for';
+  if (select asked_start from public.visits where id = current_setting('test.visit2')::uuid) <> '2026-11-13' then
+    raise exception 'FAIL: the dates the company asked for were not kept';
   end if;
   begin
     perform public.trade_confirm_visit(link, current_setting('test.other_visit')::uuid, 'Mike');
@@ -655,6 +699,7 @@ begin
   exception when check_violation then null;
   end;
 end $$;
+reset role;
 
 set role anon;
 do $$
@@ -674,6 +719,16 @@ begin
   begin
     perform public.trade_mark_done(link, current_setting('test.item')::uuid, true, 'Mike');
     raise exception 'FAIL: anyone can mark work done through a link';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.trade_confirm(link, current_setting('test.item')::uuid, true, 'Mike');
+    raise exception 'FAIL: anyone can confirm through a link';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.trade_set_hours(link, current_setting('test.item')::uuid, 1, 'Mike');
+    raise exception 'FAIL: anyone can give hours through a link';
   exception when insufficient_privilege then null;
   end;
   begin
@@ -703,9 +758,31 @@ set role authenticated;
 set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
 do $$
 begin
-  perform public.trade_page(current_setting('test.link'));
-  raise exception 'FAIL: the app can open a company page';
-exception when insufficient_privilege then null;
+  begin
+    perform public.trade_page(current_setting('test.link'));
+    raise exception 'FAIL: the app can open a company page';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.trade_confirm(current_setting('test.link'), current_setting('test.item')::uuid, true, 'Mike');
+    raise exception 'FAIL: the app can confirm for a company';
+  exception when insufficient_privilege then null;
+  end;
+  -- The builder changing the work takes back the company's confirmation; the company's hours stay.
+  if (select confirmed_at from public.items where id = current_setting('test.item')::uuid) is null then raise exception 'FAIL: the confirmation was lost'; end if;
+  update public.items set description = 'Both sinks, the left one first.' where id = current_setting('test.item')::uuid;
+  if (select confirmed_at from public.items where id = current_setting('test.item')::uuid) is not null then
+    raise exception 'FAIL: changing the work kept the company''s confirmation';
+  end if;
+  if (select hours from public.items where id = current_setting('test.item')::uuid) <> 3 then raise exception 'FAIL: the company''s hours were lost'; end if;
+  -- Its answers are in Activity under its name.
+  if (select count(*) from public.job_activity where kind = 'item_confirmed' and person_id is null and detail ->> 'author_name' = 'Mike') <> 1
+     or (select count(*) from public.job_activity where kind = 'item_hours_given' and person_id is null and (detail ->> 'hours')::numeric = 3) <> 1 then
+    raise exception 'FAIL: the company''s confirmation and hours are not in Activity';
+  end if;
+  if exists (select 1 from public.item_history where field in ('confirmed_at', 'hours') and person_id is null) then
+    raise exception 'FAIL: the company''s answers were logged as changes by nobody';
+  end if;
 end $$;
 reset role;
 
@@ -958,7 +1035,7 @@ declare
   loc uuid := (select id from public.locations where job_id = (select id from public.jobs where name = 'Fish') order by sort_order limit 1);
   t uuid := (select id from public.trades where name = 'Plumbing');
   c uuid := (select id from public.companies where name = 'Gator Plumbing');
-  x uuid;
+  x uuid; x2 uuid;
 begin
   if (select count(*) from public.jobs) <> 1 or (select name from public.jobs) <> 'Fish' then raise exception 'FAIL: a team member sees jobs they are not on'; end if;
   if exists (select 1 from public.items where job_id = current_setting('test.gavin')::uuid) or exists (select 1 from public.job_team where job_id = current_setting('test.gavin')::uuid) then
@@ -979,16 +1056,24 @@ begin
     raise exception 'FAIL: a team member renamed a location';
   exception when insufficient_privilege then null;
   end;
+  -- The walk itself: a location typed in, and a company picked for an item, put on the job.
+  insert into public.locations (job_id, name, label, sort_order) values (j, 'Attic', 'Attic', 99);
+  insert into public.companies (name) values ('My Company') returning id into x2;
+  insert into public.job_companies (job_id, company_id, trade_id) values (j, x2, t);
+  if (select org from public.companies where id = x2) <> 'ross_built' then raise exception 'FAIL: a company a team member added is not at their company'; end if;
+  -- Not on a job they are not on, and not changing a company.
   begin
-    insert into public.locations (job_id, name, label, sort_order) values (j, 'Attic', 'Attic', 99);
-    raise exception 'FAIL: a team member added a location';
+    insert into public.locations (job_id, name, label, sort_order) values (current_setting('test.gavin')::uuid, 'Attic', 'Attic', 99);
+    raise exception 'FAIL: a team member added a location to a job they are not on';
   exception when insufficient_privilege then null;
   end;
   begin
-    insert into public.companies (name) values ('My Company');
-    raise exception 'FAIL: a team member added a company';
+    insert into public.job_companies (job_id, company_id, trade_id) values (current_setting('test.gavin')::uuid, x2, t);
+    raise exception 'FAIL: a team member put a company on a job they are not on';
   exception when insufficient_privilege then null;
   end;
+  update public.companies set name = 'Renamed Company' where id = x2;
+  if (select name from public.companies where id = x2) <> 'My Company' then raise exception 'FAIL: a team member renamed a company'; end if;
   begin
     insert into public.title_library (title, trade_id) values ('Install widget', t);
     raise exception 'FAIL: a team member added a standard title';
@@ -1267,6 +1352,74 @@ begin
   if (select count(distinct number) from public.items i join public.jobs j on j.id = i.job_id where j.name = 'Test Job (generated)') <> 600 then
     raise exception 'FAIL: test job item numbers are not unique';
   end if;
+end $$;
+
+-- ---------- deleting a job ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+declare
+  j uuid; loc uuid; x uuid; t uuid := (select id from public.trades where org = 'ross_built' and name = 'Plumbing');
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  fish_items int := (select count(*) from public.items where job_id = (select id from public.jobs where name = 'Fish'));
+  n int; tbl text;
+begin
+  insert into public.jobs (name, address) values ('Old Job', '1 Old Road') returning id into j;
+  insert into public.locations (job_id, name, label, kind, sort_order) values (j, 'Garage', 'Garage', 'room', 1) returning id into loc;
+  insert into public.job_companies (job_id, company_id, trade_id) values (j, c, t);
+  insert into public.job_team (job_id, person_id, part) values (j, (select id from public.people where email = 'jake@rossbuilt.com'), 'project_manager');
+  insert into public.items (job_id, location_id, title, company_id, ready) values (j, loc, 'Sweep the garage', c, true) returning id into x;
+  update public.items set title = 'Sweep and clean the garage' where id = x;
+  insert into public.photos (job_id, item_id, width, height) values (j, x, 900, 1200);
+  insert into public.comments (job_id, item_id, body) values (j, x, 'Broom is in the truck.');
+  insert into public.company_links (job_id, company_id) values (j, c);
+  perform set_config('test.old_job', j::text, false);
+  perform set_config('test.fish_count', fish_items::text, false);
+  -- Not some other job, and not one that is not there.
+  begin
+    perform public.delete_job(gen_random_uuid());
+    raise exception 'FAIL: a job that is not there was deleted';
+  exception when no_data_found then null;
+  end;
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"sam@rossbuilt.com"}';
+do $$
+begin
+  begin
+    perform public.delete_job(current_setting('test.old_job')::uuid);
+    raise exception 'FAIL: a team member deleted a job';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+select public.delete_job(current_setting('test.old_job')::uuid);
+reset role;
+
+do $$
+declare
+  j uuid := current_setting('test.old_job')::uuid;
+  tbl text; n int;
+begin
+  foreach tbl in array array['job_team', 'job_companies', 'job_activity', 'item_history', 'comments', 'list_sends', 'company_links', 'photos', 'items', 'visits', 'plan_sheets', 'job_waiting_on', 'locations', 'job_access'] loop
+    execute format('select count(*) from public.%I where job_id = %L', tbl, j) into n;
+    if n <> 0 then raise exception 'FAIL: % still has the deleted job''s rows', tbl; end if;
+  end loop;
+  if exists (select 1 from public.jobs where id = j) then raise exception 'FAIL: the deleted job is still there'; end if;
+  if (select count(*) from public.items where job_id = (select id from public.jobs where name = 'Fish'))::text <> current_setting('test.fish_count') then
+    raise exception 'FAIL: deleting one job touched another';
+  end if;
+  -- Nothing else can be deleted afterward.
+  begin
+    delete from public.items where job_id = (select id from public.jobs where name = 'Fish');
+    raise exception 'FAIL: an item was deleted after a job was';
+  exception when restrict_violation then null;
+  end;
 end $$;
 
 -- ---------- a second company ----------

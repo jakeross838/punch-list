@@ -13,6 +13,19 @@ How each service behind the app is set up, and where its secrets are kept. Secre
 - Checked end to end on 5 November: a code emailed to jake@rossbuilt.com signed him in, PowerSync accepted that sign in and finished the first sync (the `mine` and `ross_built` streams; only his own People row so far, since no jobs are loaded), and the test session was signed out.
 - PowerSync's database role, `powersync_role`: can log in and replicate, reads past the access rules (PowerSync's sync config is the gate for the phones), and can only read the tables in `public`, which are exactly the tables in the `powersync` publication. It was made by hand, not in a migration. Its password was made in the build workspace and only its SCRAM hash was sent to the database. The password is `POWERSYNC_DATABASE_PASSWORD` in `local/secrets/powersync.env`.
 
+## The company's page (6 November 2026)
+
+- The page: `apps/company-page`, one small web page (about 33 KB, the script inside it), built by `node tools/build-company-page.mjs` into `apps/company-page/dist`. It is on Expo's hosting for the Punch List project: `https://punch-list.expo.app`, with each link at `https://punch-list.expo.app/c#<token>`. The token goes after the #, so the hosting never sees it. `https://punch-list.expo.app/c#sample` is the sample page, answered in the browser and sent nowhere; the preview's links all go there.
+- To put a new version up, from `apps/mobile` with the Expo token from `local/secrets/expo.env` in the environment:
+
+  ```
+  node tools/build-company-page.mjs
+  cd apps/mobile && npx eas-cli@latest deploy --export-dir ../company-page/dist --non-interactive --prod
+  ```
+
+- The function: `supabase/functions/company-page`, deployed with verify_jwt off (the link is the only key). Every call is a POST with the token in its body; it checks the link, answers through the `trade_*` database functions as the service role (nobody else can call them), and signs the photos for an hour. Supabase does not serve web pages from functions, which is why the page itself is on Expo's hosting.
+- Later: the page can move to the company's own address (for example `link.rossbuilt.com`, or one for Punch List) by pointing a domain at Expo's hosting and setting `EXPO_PUBLIC_COMPANY_PAGE_URL` in the app's build.
+
 ## PowerSync
 
 - Organization jakeross838, project Punch List, instance Production (United States): `https://6aeb7afcb0047aeb6df99617.powersync.journeyapps.com`.

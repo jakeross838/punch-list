@@ -1,7 +1,8 @@
 // Jobs: the first screen. My Items at the top when anything is assigned to you, then the jobs:
 // yours, all of them, or the closed ones, each with how much is open, how much is ready and how much
-// waits. A job with no locations yet says Set Up. Admins make jobs with the plus in the bar. People,
-// Companies, Templates, Item Form and your account are under Me, the round button in the bar.
+// waits. Admins make jobs with the plus in the bar, and swipe a job to close or delete it, or hold
+// it down to change its name and address too. People, Companies, Templates, Item Form and your
+// account are under Me, the round button in the bar.
 
 import { assignedTo, isAdmin, type Job } from '@punch/core';
 import { router } from 'expo-router';
@@ -9,7 +10,8 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Button, ChipRow, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, SectionLabel, Stamp, Text, type BarItem } from '@/ui';
+import { useJobActions } from '@/components/JobActions';
+import { Button, ChipRow, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, SectionLabel, Stamp, SwipeRow, Text, type BarItem, type SwipeAction } from '@/ui';
 
 const newJob = () => router.push('/jobs/new');
 
@@ -27,7 +29,9 @@ export default function JobsScreen() {
   const closed = jobs.filter((j) => j.closed);
   const hasMine = open.some((j) => mineIds.has(j.id));
   // Mine first when you are on a job; an admin on none sees them all.
-  const [show, setShow] = useState<Show>(hasMine ? 'mine' : 'all');
+  const [picked, setShow] = useState<Show>(hasMine ? 'mine' : 'all');
+  // Closed with none left (the last one opened again or deleted), or Mine with none: back to the rest.
+  const show: Show = picked === 'closed' && closed.length === 0 ? (hasMine ? 'mine' : 'all') : picked === 'mine' && !hasMine ? 'all' : picked;
   const shown = show === 'closed' ? closed : show === 'mine' ? open.filter((j) => mineIds.has(j.id)) : open;
   const q = query.trim().toLowerCase();
   const found = q ? shown.filter((j) => `${j.name} ${j.address}`.toLowerCase().includes(q)) : shown;
@@ -73,9 +77,16 @@ export default function JobsScreen() {
               {q ? `No job matches “${query.trim()}”.` : 'No jobs here.'}
             </Text>
           ) : (
-            <Panel>
-              <JobRows jobs={found} />
-            </Panel>
+            <>
+              <Panel>
+                <JobRows jobs={found} />
+              </Panel>
+              {admin && !q ? (
+                <Text variant="footnote" color={colors.secondary} style={styles.hint}>
+                  Swipe a job left to close or delete it, or hold it down to rename it.
+                </Text>
+              ) : null}
+            </>
           )}
         </>
       )}
@@ -125,35 +136,50 @@ function MyItemsRow({ personId }: { personId: string }) {
 }
 
 function JobRows({ jobs }: { jobs: Job[] }) {
+  const actions = useJobActions();
   return (
     <>
       {jobs.map((job, i) => (
-        <JobRow key={job.id} job={job} last={i === jobs.length - 1} stripe={i % 2 === 1} />
+        <JobRow key={job.id} job={job} last={i === jobs.length - 1} stripe={i % 2 === 1} actions={actions} />
       ))}
+      {actions.sheet}
     </>
   );
 }
 
-function JobRow({ job, last, stripe }: { job: Job; last: boolean; stripe: boolean }) {
+function JobRow({ job, last, stripe, actions }: { job: Job; last: boolean; stripe: boolean; actions: ReturnType<typeof useJobActions> }) {
   const data = useData();
   const items = data.useItems(job.id);
+  const photos = data.usePhotos(job.id);
   const locations = data.useLocations(job.id);
   const open = items.filter((i) => i.status === 'open' && !i.unfinished);
   const ready = open.filter((i) => i.ready).length;
   const waiting = open.length - ready;
-  const setUp = locations.some((l) => l.active);
-  const said = [job.name, job.address, setUp ? `${open.length} open, ${ready} ready${waiting ? `, ${waiting} waiting` : ''}` : 'not set up yet'].filter(Boolean).join(', ');
+  const started = locations.some((l) => l.active) || items.some((i) => i.status !== 'removed');
+  const counts = { items: items.filter((i) => i.status !== 'removed').length, photos: photos.filter((p) => !p.removed).length };
+  const said = [job.name, job.address, started ? `${open.length} open, ${ready} ready${waiting ? `, ${waiting} waiting` : ''}` : 'nothing on the list yet'].filter(Boolean).join(', ');
+  // Swipe it to close or delete it, or hold it down for those and Edit, for an admin.
+  const swipes: SwipeAction[] = actions.admin
+    ? [
+        job.closed
+          ? { label: 'Open', icon: 'undo', color: colors.okFill, onPress: () => actions.reopen(job), testID: `reopen-${job.id}` }
+          : { label: 'Close', icon: 'archive', color: colors.quiet, onPress: () => actions.close(job), testID: `close-${job.id}` },
+        { label: 'Delete', icon: 'trash', color: colors.destructive, onPress: () => actions.remove(job, counts), testID: `delete-${job.id}` },
+      ]
+    : [];
   return (
+    <SwipeRow actions={swipes}>
     <LedgerRow
       last={last}
       stripe={stripe}
       onPress={() => router.push({ pathname: '/jobs/[jobId]', params: { jobId: job.id } })}
+      onLongPress={actions.admin ? () => actions.menu(job, counts) : undefined}
       accessibilityLabel={said}
       testID={`job-${job.id}`}
       style={styles.jobRow}
     >
       <View style={styles.jobName}>
-        <Stamp color={job.closed ? colors.quiet : setUp ? colors.okFill : colors.quiet} size={7} />
+        <Stamp color={job.closed ? colors.quiet : started ? colors.okFill : colors.quiet} size={7} />
         <Text weight="500" numberOfLines={1} style={styles.jobTitle}>
           {job.name}
         </Text>
@@ -169,23 +195,25 @@ function JobRow({ job, last, stripe }: { job: Job; last: boolean; stripe: boolea
           facts={
             job.closed
               ? ['Closed', `${items.filter((i) => i.status === 'complete').length} complete`]
-              : setUp
+              : started
                 ? [
                     { text: `${open.length} open`, color: colors.label },
                     { text: `${ready} ready`, color: colors.ok },
                     waiting > 0 ? { text: `${waiting} waiting`, color: colors.secondary } : null,
                   ]
-                : [{ text: 'Set up', color: colors.tint }]
+                : [{ text: 'Nothing on the list yet', color: colors.tint }]
           }
         />
       </View>
     </LedgerRow>
+    </SwipeRow>
   );
 }
 
 const styles = StyleSheet.create({
   emptyAction: { marginTop: 14, alignSelf: 'stretch' },
   none: { marginHorizontal: layout.inset, marginTop: 12 },
+  hint: { marginHorizontal: layout.inset, marginTop: 8 },
   newJob: { marginHorizontal: layout.margin, marginTop: 16 },
   preview: { marginTop: 28, marginHorizontal: 32 },
   jobRow: { paddingVertical: 13 },

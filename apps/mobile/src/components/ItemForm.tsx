@@ -175,9 +175,11 @@ export function useFormOptions(jobId: string, locationId: string) {
         .map((l) => ({ value: l.id, label: l.label, group: floorOf(l) })),
     [locations, locationId],
   );
+  // The companies on this job first, then every other company, so any of them can be picked on a
+  // walk (it joins the job when it is). Each says its trade.
   const companyOptions = useMemo<Option[]>(() => {
     const seen = new Set<string>();
-    return jobCompanies
+    const onJob = jobCompanies
       .filter((jc) => (seen.has(jc.companyId) ? false : (seen.add(jc.companyId), true)))
       .map((jc) => ({
         value: jc.companyId,
@@ -185,6 +187,12 @@ export function useFormOptions(jobId: string, locationId: string) {
         hint: trades.find((t) => t.id === jc.tradeId)?.name ?? null,
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
+    const others = companies
+      .filter((c) => c.active && !seen.has(c.id))
+      .map((c) => ({ value: c.id, label: c.name, hint: trades.find((t) => t.id === c.defaultTradeId)?.name ?? null }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    if (onJob.length === 0 || others.length === 0) return [...onJob, ...others];
+    return [...onJob.map((o) => ({ ...o, group: 'On This Job' })), ...others.map((o) => ({ ...o, group: 'Other Companies' }))];
   }, [jobCompanies, companies, trades]);
   const waitingOptions = useMemo<Option[]>(
     () => waitingOnChoices(jobCompanies, companies, extras.length > 0 ? extras : defaultWaitingOnExtras(builder)).map((name) => ({ value: name, label: name })),

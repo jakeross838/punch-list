@@ -14,6 +14,7 @@ import {
   checkItem,
   commentAuthor,
   complete,
+  hoursText,
   itemComments,
   kindText,
   itemNumberLabel,
@@ -281,6 +282,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   }
 
   const who = people.find((p) => p.id === item.completedBy)?.name ?? 'Someone';
+  const companyName = companies.find((c) => c.id === item.companyId)?.name;
   function draftDetail() {
     if (filling) return 'Claude is filling it in from the photo.';
     const missing = missingText(live.value);
@@ -294,7 +296,21 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
         ? { icon: 'trash', color: colors.quiet, line: 'Removed from the list', detail: 'It stays in the history.' }
         : item.unfinished
           ? { icon: 'pencil.tip', color: colors.tint, line: 'Draft', detail: draftDetail() }
-          : null;
+          : item.markedDoneAt
+            ? {
+                icon: 'checkmark.circle.fill',
+                color: colors.stone,
+                line: `${companyName ?? 'The company'} says it is done`,
+                detail: `On ${dayOf(item.markedDoneAt)}, from their page. Check it, then tap Complete. If something is left, tap Not Done Yet in the menu and say what in a comment.`,
+              }
+            : item.confirmedAt
+              ? {
+                  icon: 'checkmark',
+                  color: colors.ok,
+                  line: `Confirmed by ${companyName ?? 'the company'}`,
+                  detail: `On ${dayOf(item.confirmedAt)}${item.hours ? `, about ${hoursText(item.hours)}` : ''}. Changing the work takes the confirmation back.`,
+                }
+              : null;
 
   const bottom: BarButton[] = fromCamera
     ? [{ kind: 'button', label: 'Done', icon: 'checkmark', variant: 'prominent', onPress: goNext, testID: 'done-camera' }]
@@ -328,6 +344,21 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
                   },
                   testID: 'toggle-priority',
                 },
+                // The company said done, and it is not: back on their list.
+                ...(item.markedDoneAt
+                  ? [
+                      {
+                        label: 'Not Done Yet',
+                        icon: 'undo' as IconName,
+                        onPress: () => {
+                          haptic.selection();
+                          void data.updateItem(item.id, { markedDoneAt: null });
+                          feedback.toast({ message: `Back on ${companyName ? `${companyName}'s` : 'their'} list. Say what is left in a comment.` });
+                        },
+                        testID: 'not-done-yet',
+                      },
+                    ]
+                  : []),
               ]
             : []),
           {

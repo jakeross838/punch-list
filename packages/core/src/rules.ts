@@ -33,6 +33,7 @@ export type ItemFields = Pick<
   | 'hours'
   | 'assignedTo'
   | 'markedDoneAt'
+  | 'confirmedAt'
   | 'priority'
   | 'checklist'
   | 'planId'

@@ -13,6 +13,7 @@ import {
   contactProblem,
   isAdmin,
   isEmail,
+  parseRoomList,
   releasedBy,
   renamedHoldups,
   seesJob,
@@ -70,7 +71,7 @@ export interface Keeper {
 
 /** What differs between the backends besides where the changes are kept. */
 export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signOut' | 'startCompany' | 'deleteAccount'> &
-  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useUpdates' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'companyMarkDone' | 'previewAs'>>;
+  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useUpdates' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'companyMarkDone' | 'previewAs' | 'deleteJob'>>;
 
 const now = () => new Date().toISOString();
 
@@ -110,6 +111,21 @@ function settle(state: State, before: Item[], after: Item[]): Item[] {
   const wasComplete = new Set(before.filter((i) => i.status === 'complete').map((i) => i.id));
   items = items.map((i) => (i.status === 'complete' && !wasComplete.has(i.id) && i.markedDoneAt ? { ...i, markedDoneAt: null } : i));
   items = items.map((i) => (!i.planId && (i.pinX != null || i.pinY != null) ? { ...i, pinX: null, pinY: null } : i));
+  // A company's confirmation is for the work as it was: changing what it is, where, who does it,
+  // when it is ready or how long it takes, or opening it again, takes it back (as the database does).
+  items = items.map((i) => {
+    const b = was.get(i.id);
+    if (!b || b === i || !i.confirmedAt || !b.confirmedAt) return i;
+    const changed =
+      i.title !== b.title ||
+      i.description !== b.description ||
+      i.locationId !== b.locationId ||
+      i.companyId !== b.companyId ||
+      i.readyBy !== b.readyBy ||
+      i.hours !== b.hours ||
+      (i.status === 'open' && b.status !== 'open');
+    return changed ? { ...i, confirmedAt: null } : i;
+  });
   const wasOpen = new Set(before.filter((i) => i.status === 'open').map((i) => i.id));
   for (const done of items.filter((i) => wasOpen.has(i.id) && i.status !== 'open')) {
     const freed = new Map(releasedBy(done.id, items).map((r) => [r.item.id, r.patch]));
@@ -306,6 +322,32 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       if (patch.closed !== undefined && patch.closed !== job.closed) happened.push({ jobId: id, kind: patch.closed ? 'job_closed' : 'job_reopened' });
       await save({ jobs: state.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)) }, happened);
     },
+    deleteJob:
+      extras.deleteJob ??
+      (async (id) => {
+        const state = get();
+        adminOnly(state);
+        if (!state.jobs.some((j) => j.id === id)) return;
+        const onJob = <T extends { jobId: string }>(rows: T[]) => rows.filter((r) => r.jobId !== id);
+        const { [id]: _counter, ...counters } = state.counters;
+        const { [id]: _waiting, ...waitingOn } = state.waitingOn;
+        await save({
+          jobs: state.jobs.filter((j) => j.id !== id),
+          team: onJob(state.team),
+          locations: onJob(state.locations),
+          links: onJob(state.links),
+          jobCompanies: onJob(state.jobCompanies),
+          items: onJob(state.items),
+          photos: onJob(state.photos),
+          plans: onJob(state.plans),
+          visits: onJob(state.visits),
+          sends: onJob(state.sends),
+          comments: onJob(state.comments),
+          activity: onJob(state.activity),
+          waitingOn,
+          counters,
+        });
+      }),
     async addPerson(input) {
       const state = get();
       adminOnly(state);
@@ -421,6 +463,23 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
         ...existing.filter((l) => back.has(l.id)).map((l): Happened => ({ jobId, kind: 'location_restored', detail: { location_id: l.id, label: l.label } })),
       ]);
       return added.length + back.size;
+    },
+    async addLocation(jobId, name, floor = null) {
+      const state = get();
+      if (!seesJob(state.me, jobId, state.team)) throw new Error('You are not on this job.');
+      const parsed = parseRoomList(name).locations[0];
+      if (!parsed) throw new Error('Give the location a name.');
+      const existing = state.locations.filter((l) => l.jobId === jobId);
+      const was = existing.find((l) => l.label.toLowerCase() === parsed.label.toLowerCase());
+      if (was) {
+        if (!was.active) await save({ locations: state.locations.map((l) => (l.id === was.id ? { ...l, active: true } : l)) }, [{ jobId, kind: 'location_restored', detail: { location_id: was.id, label: was.label } }]);
+        return was.id;
+      }
+      const id = randomUUID();
+      const sortOrder = existing.reduce((m, l) => Math.max(m, l.sortOrder), 0) + 1;
+      const location = { ...parsed, floor: parsed.floor ?? floor, id, jobId, active: true, sortOrder, walkedAt: null };
+      await save({ locations: [...state.locations, location] }, [{ jobId, kind: 'location_added', detail: { location_id: id, label: location.label } }]);
+      return id;
     },
     async setWalked(locationIds, walked) {
       const state = get();
@@ -745,14 +804,23 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async addCompany({ name, defaultTradeId }) {
       const state = get();
-      adminOnly(state);
+      // Anyone at the company adds the companies they walk with; changing one is for an admin.
+      if (!state.me?.active) throw new Error('Sign in again to add a company.');
+      const clean = tidyCompanyName(name);
+      const problem = companyNameProblem(clean);
+      if (problem) throw new Error(problem);
+      const same = state.companies.find((c) => c.name.trim().toLowerCase() === clean.toLowerCase());
+      if (same) {
+        if (!same.active) await save({ companies: state.companies.map((c) => (c.id === same.id ? { ...c, active: true } : c)) });
+        return same.id;
+      }
       const id = randomUUID();
-      await save({ companies: [...state.companies, { id, name, defaultTradeId, phone: null, email: null, active: true }] });
+      await save({ companies: [...state.companies, { id, name: clean, defaultTradeId, phone: null, email: null, active: true }] });
       return id;
     },
     async addCompanyToJob(jobId, companyId, tradeId) {
       const state = get();
-      adminOnly(state);
+      if (!seesJob(state.me, jobId, state.team)) throw new Error('You are not on this job.');
       if (state.jobCompanies.some((jc) => jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) return;
       await save({ jobCompanies: [...state.jobCompanies, { jobId, companyId, tradeId }] }, [{ jobId, kind: 'company_added', detail: { company_id: companyId, trade_id: tradeId } }]);
     },

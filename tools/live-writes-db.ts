@@ -226,7 +226,7 @@ async function main(): Promise<void> {
     bath = state.locations.find((l) => l.name === 'Primary Bath')!.id;
   });
   await step('trades, in order', async () => {
-    electrical = await api.addTrade('Electrical');
+    electrical = await api.addTrade('Low Voltage');
     carpentry = await api.addTrade('Carpentry');
     await api.reorderTrades([carpentry, electrical]);
   });
@@ -386,6 +386,27 @@ async function main(): Promise<void> {
     const c = await api.addComment({ jobId, itemId: id0(), companyId: null, body: 'Done Friday.', internal: false });
     await api.setCommentRemoved(c, true);
   });
+  let laundry = '';
+  let tile = '';
+  await step('Sam types a room in on the walk', async () => {
+    laundry = await api.addLocation(jobId, 'Laundry 112', 'First Floor');
+    // The same name again is the one already there.
+    if ((await api.addLocation(jobId, ' laundry  112 ')) !== laundry) failures.push('a room typed in twice was added twice');
+  });
+  await step('Sam adds a company for an item, and it joins the job', async () => {
+    tile = await api.addCompany({ name: '  Gulf Coast   Tile ', defaultTradeId: carpentry });
+    await api.addCompanyToJob(jobId, tile, carpentry);
+    await api.createItem(blank({ jobId, locationId: laundry, title: 'Grout the laundry floor', companyId: tile }));
+  });
+  await step('Sam cannot delete the job: the app stops it first', async () => {
+    let stopped = false;
+    try {
+      await api.deleteJob(jobId);
+    } catch {
+      stopped = true;
+    }
+    if (!stopped) failures.push('Sam was let through to delete a job');
+  });
   await step('Sam sets his own view', async () => {
     await api.setViewSettings({ ...DEFAULT_VIEW, showCompleted: true });
   });
@@ -420,7 +441,7 @@ async function main(): Promise<void> {
 
   check("the company's name, tidied", `select name from public.orgs where id = ${lit(ORG)}`, 'Ross Built Custom Homes');
   check('every row on the job is the company\'s', `select count(*) from public.items where job_id = ${lit(jobId)} and org <> ${lit(ORG)}`, '0');
-  check('every item numbered in the order it arrived', `select string_agg(number::text, ',' order by number) from public.items where job_id = ${lit(jobId)}`, '1,2,3,4,5,6,7');
+  check('every item numbered in the order it arrived', `select string_agg(number::text, ',' order by number) from public.items where job_id = ${lit(jobId)}`, '1,2,3,4,5,6,7,8');
   check(
     'the trade follows the company',
     `select count(*) from public.items i where i.job_id = ${lit(jobId)} and i.company_id = ${lit(sms)} and i.trade_id is distinct from ${lit(carpentry)}::uuid`,
@@ -449,6 +470,8 @@ async function main(): Promise<void> {
     'true:company:false,true:room:true',
   );
   check('the template name tidied', `select name from public.templates`, 'End of House');
+  check('the room Sam typed in, on its floor', `select label || ',' || coalesce(floor, '') from public.locations where id = ${lit(laundry)}`, 'Laundry 112,First Floor');
+  check('the company Sam added, tidied and on the job', `select c.name || ',' || count(jc.*) from public.companies c left join public.job_companies jc on jc.company_id = c.id and jc.job_id = ${lit(jobId)} where c.id = ${lit(tile)} group by c.name`, 'Gulf Coast Tile,1');
   check('the standard title counted as used', `select uses from public.title_library where title = 'Install towel bar'`, '1');
   check('the sent schedule kept as it went', `select snapshot -> 'bars' -> 0 ->> 'companyId' = ${lit(sms)} from public.list_sends where list = 'schedule'`, 't');
   check('History has every item and change', `select (count(*) > 15)::text from public.item_history where job_id = ${lit(jobId)}`, 'true');

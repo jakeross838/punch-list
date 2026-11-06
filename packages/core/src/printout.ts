@@ -17,6 +17,7 @@ import { kindText, orderText } from './orders';
 import { holdsFor, type CompanyList, type ListLine, type ListLookups } from './lists';
 import { timelineRows, workingIndex, type Timeline, type TimelineBar } from './timeline';
 import { anyChange, changeText, movedText, type ScheduleChanges } from './tracking';
+import { hoursText } from './time';
 import { markShapes, type MarkShape } from './marks';
 import { isPriced } from './rules';
 import type { Item, Mark, Visit } from './types';
@@ -44,6 +45,8 @@ export interface PrintSettings {
   comments?: (itemId: string) => PrintComment[];
   /** Comments on the company's whole list, the same way. */
   listComments?: PrintComment[];
+  /** The company's own page: its link, and the code to scan for it as an SVG. */
+  link?: { url: string; code: string | null };
 }
 
 /** A comment ready to print: who wrote it, when (an ISO time) and what it says. */
@@ -117,15 +120,25 @@ function shapeSvg(s: MarkShape): string {
 const PHOTO_WIDTH = 1.15;
 const PHOTO_MAX = 1.45;
 
+/**
+ * A photo's marks as an SVG to lay over it, on a frame the photo's own shape (1000 wide), or ''
+ * when it has none. Slice keeps them on the picture when it is cropped to fit, the way the picture
+ * is: for the printouts and the company's page.
+ */
+export function marksSvg(marks: Mark[], photoWidth: number, photoHeight: number, fit: 'slice' | 'meet' = 'slice'): string {
+  const w = 1000;
+  const h = Math.max(1, Math.round((w * photoHeight) / (photoWidth || 1)));
+  const shapes = marks.flatMap((m) => markShapes(m, w, h));
+  return shapes.length > 0 ? `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid ${fit}">${shapes.map(shapeSvg).join('')}</svg>` : '';
+}
+
 function photoCell(photo: PrintPhoto | undefined): string {
   if (!photo) return '';
   // The marks are drawn on a frame the photo's own shape, cropped the same way as the picture.
   const w = 1000;
   const h = Math.max(1, Math.round((w * photo.height) / (photo.width || 1)));
   const height = Math.min(PHOTO_MAX, (PHOTO_WIDTH * h) / w).toFixed(2);
-  const shapes = photo.marks.flatMap((m) => markShapes(m, w, h));
-  const svg = shapes.length > 0 ? `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice">${shapes.map(shapeSvg).join('')}</svg>` : '';
-  return `<div class="rb-ph" style="height:${height}in"><img src="${esc(photo.src)}" alt="">${svg}</div>`;
+  return `<div class="rb-ph" style="height:${height}in"><img src="${esc(photo.src)}" alt="">${marksSvg(photo.marks, photo.width, photo.height)}</div>`;
 }
 
 /** The item number, and New when it was not on the last list. */
@@ -142,7 +155,10 @@ function commentsHtml(list: PrintComment[] | undefined, today: Date): string {
   return `<div class="rb-comments">${list.map(one).join('')}</div>`;
 }
 
-/** The title, then where exactly, then for additional work its order (or that it is to be quoted), then its comments. */
+/**
+ * The title, then where exactly, then for additional work its order (or that it is to be quoted),
+ * when it should be ready and how long it takes when those are known, then its comments.
+ */
 function workCell(line: ListLine, settings: PrintSettings): string {
   const { item } = line;
   const parts = [`<div class="rb-work">${esc(item.title)}</div>`];
@@ -151,6 +167,11 @@ function workCell(line: ListLine, settings: PrintSettings): string {
     const note = isPriced(item) ? `Additional, ${orderText(item.poOrCo)}` : 'Additional, to be quoted';
     parts.push(`<div class="rb-note">${esc(note)}</div>`);
   }
+  const facts = [
+    !item.ready && isDay(item.readyBy) ? `Ready by ${dayText(item.readyBy, settings.date, true)}` : null,
+    item.hours !== null && item.hours > 0 ? `About ${hoursText(item.hours)}` : null,
+  ].filter(Boolean);
+  if (facts.length > 0) parts.push(`<div class="rb-note">${esc(facts.join(' · '))}</div>`);
   parts.push(commentsHtml(settings.comments?.(item.id), settings.date));
   return parts.join('');
 }
@@ -171,6 +192,21 @@ function header(settings: PrintSettings, kind: string, title: string, summary: s
     `<h1 class="rb-title">${esc(title)}</h1>`,
     `<p class="rb-job">${esc([job.name, job.address].filter(Boolean).join(', '))}</p>`,
     `<p class="rb-summary">${esc(summary)}</p>`,
+  ].join('');
+}
+
+/** The company's page: the code to scan and the link, to see the list with its photos, confirm it, put in times and comment. */
+function linkBlock(link: PrintSettings['link']): string {
+  if (!link) return '';
+  // The code is drawn from the link by the app, never typed by anyone: only a plain SVG goes on the page.
+  const code = link.code && /^<svg[\s>]/.test(link.code.trim()) && !/<script|<foreignObject|\son[a-z]+\s*=|javascript:/i.test(link.code) ? `<div class="rb-qr">${link.code}</div>` : '';
+  return [
+    '<div class="rb-link">',
+    code,
+    '<div class="rb-link-text"><b>Your Page</b>',
+    'Scan the code or open the link for this list with its photos, kept up to date. Confirm each item, say how long it takes, mark it done and comment on anything.',
+    `<div class="rb-url">${esc(link.url)}</div>`,
+    '</div></div>',
   ].join('');
 }
 
@@ -227,7 +263,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
         ? `${plural(list.open, 'open item')}, all ready now.`
         : `${plural(list.open, 'open item')}, ${andList(counts)}.`;
   const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-  const parts = [header(settings, 'Completion List', list.company, sentence(summary))];
+  const parts = [header(settings, 'Completion List', list.company, sentence(summary)), linkBlock(settings.link)];
 
   if (settings.listComments && settings.listComments.length > 0) {
     parts.push('<h2 class="rb-section">Comments</h2>');

@@ -29,6 +29,7 @@
   "exclude": [
     "tools/extension-e2e.ts",
     "apps/mobile",
-    "tools/preview-e2e.ts"
+    "tools/preview-e2e.ts",
+    "tools/company-page-e2e.ts"
   ]
 }

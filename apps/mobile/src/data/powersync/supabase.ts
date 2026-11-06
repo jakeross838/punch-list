@@ -62,7 +62,13 @@ export async function deleteAccountOnServer(): Promise<void> {
   if (error) throw new Error(/fetch|network/i.test(error.message) ? 'That did not go. Check the signal and try again.' : sentence(error.message));
 }
 
-/** Takes the company's photos out of storage, for the last person there deleting their account. */
+/** Deletes a job and everything on it, for an admin. Its photos come out of storage first. */
+export async function deleteJobOnServer(jobId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_job', { p_job: jobId });
+  if (error) throw new Error(/fetch|network/i.test(error.message) ? 'That did not go. Check the signal and try again.' : sentence(error.message));
+}
+
+/** Takes photos out of storage: the company's, for the last person there deleting their account, or a job's, as it is deleted. */
 export async function deletePhotosOnServer(bucket: string, paths: string[]): Promise<void> {
   for (let i = 0; i < paths.length; i += 100) {
     const { error } = await supabase.storage.from(bucket).remove(paths.slice(i, i + 100));

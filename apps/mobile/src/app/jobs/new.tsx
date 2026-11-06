@@ -1,5 +1,6 @@
 // New job, as a sheet: its name, address and Project Manager (you, unless you pick someone else).
-// Create takes you straight to Job Setup to paste the rooms. Only admins make jobs.
+// Create opens the job, ready to walk: rooms are typed in on the walk, or pasted from the plans in
+// Job Setup. Only admins make jobs.
 
 import { peopleInOrder } from '@punch/core';
 import { router } from 'expo-router';
@@ -29,7 +30,7 @@ export default function NewJobScreen() {
     }
     const jobId = await data.createJob({ name: name.trim(), address: address.trim(), projectManagerId: pm });
     haptic.success();
-    router.replace({ pathname: '/jobs/[jobId]/setup', params: { jobId } });
+    router.replace({ pathname: '/jobs/[jobId]', params: { jobId } });
   }
 
   return (

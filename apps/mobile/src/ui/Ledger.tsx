@@ -69,6 +69,7 @@ export function LedgerRow({
   lead,
   trail,
   onPress,
+  onLongPress,
   last,
   stripe,
   chevron,
@@ -81,6 +82,8 @@ export function LedgerRow({
   lead?: ReactNode;
   trail?: ReactNode;
   onPress?: () => void;
+  /** Holding the row down: what else can be done to it. */
+  onLongPress?: () => void;
   last?: boolean;
   stripe?: boolean;
   /** Defaults to on when the row opens something. */
@@ -112,7 +115,19 @@ export function LedgerRow({
     );
   }
   return (
-    <Touchable feedback="highlight" pressDelay={40} onPress={onPress} style={rowStyle} accessibilityRole="button" accessibilityLabel={accessibilityLabel} testID={testID}>
+    <Touchable
+      feedback="highlight"
+      pressDelay={40}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={450}
+      style={rowStyle}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityActions={onLongPress ? [{ name: 'longpress', label: 'More' }] : undefined}
+      onAccessibilityAction={onLongPress ? (e) => e.nativeEvent.actionName === 'longpress' && onLongPress() : undefined}
+      testID={testID}
+    >
       {body}
     </Touchable>
   );

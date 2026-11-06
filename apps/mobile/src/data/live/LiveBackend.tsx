@@ -4,7 +4,7 @@
 // signs in, starts their company and is its admin; deleting an account clears the phone too.
 
 import { PowerSyncContext, useQuery, useStatus } from '@powersync/react-native';
-import { companyNameProblem, tidyComment, tidyCompanyName, tidyEmail, yourNameProblem, type Activity } from '@punch/core';
+import { companyNameProblem, isAdmin, tidyComment, tidyCompanyName, tidyEmail, yourNameProblem, type Activity } from '@punch/core';
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { DataContext, type DataApi, type SyncInfo } from '../api';
@@ -13,6 +13,7 @@ import { keepPhoto } from '../photoFiles';
 import { SupabaseConnector } from '../powersync/connector';
 import {
   deleteAccountOnServer,
+  deleteJobOnServer,
   deletePhotosOnServer,
   myAccount,
   sendSignInCode,
@@ -24,7 +25,7 @@ import {
 import { rowToItemHistory, rowToJobActivity } from '../rows';
 import { db } from './db';
 import { BUCKET, deletePhotoFiles, photosWaiting, startPhotos, stopPhotos } from './photos';
-import { changed, loadEverything, reset, save, sessionEmail, setNewAccount, setSessionEmail, store, WATCHED_TABLES } from './store';
+import { changed, hideJob, loadEverything, reset, save, sessionEmail, setNewAccount, setSessionEmail, store, WATCHED_TABLES } from './store';
 
 type Row = Record<string, unknown>;
 
@@ -216,6 +217,22 @@ const liveApi: DataApi = makeApi(keeper, {
     }
     await deleteAccountOnServer();
     await clearPhone();
+  },
+  async deleteJob(id) {
+    if (!isAdmin(store.get().me)) throw new Error('Only an admin can delete a job.');
+    const changes = (await db.getUploadQueueStats()).count + (await photosWaiting());
+    if (changes > 0) {
+      throw new Error(
+        `${changes === 1 ? 'A change' : `${changes} changes`} made on this phone ${changes === 1 ? 'has' : 'have'} not gone up yet. Get a signal and wait a moment, then delete the job.`,
+      );
+    }
+    const rows = await db.getAll<Row>(
+      "SELECT storage_path FROM photos WHERE job_id = ? AND coalesce(storage_path, '') <> '' UNION SELECT storage_path FROM plan_sheets WHERE job_id = ? AND coalesce(storage_path, '') <> ''",
+      [id, id],
+    );
+    await deletePhotosOnServer(BUCKET, rows.map((r) => String(r.storage_path)));
+    await deleteJobOnServer(id);
+    hideJob(id);
   },
   async signOut() {
     const changes = (await db.getUploadQueueStats()).count + (await photosWaiting());

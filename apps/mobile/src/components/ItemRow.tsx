@@ -6,11 +6,11 @@
 // Ready and Remove. Rows sit in a white panel, every other one striped; the first and last close the
 // panel's edges.
 
-import { commentCountText, holdText, kindText, missingDetails, waitingOnText, type HoldLookups, type Item, type Photo } from '@punch/core';
+import { commentCountText, holdText, hoursText, kindText, missingDetails, waitingOnText, type HoldLookups, type Item, type Photo } from '@punch/core';
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
-import { CompleteCircle, dayOf, Icon, PhotoView, Pill, SwipeRow, Text, Touchable, type PillTone, type SwipeAction } from '@/ui';
+import { CompleteCircle, dayOf, Icon, PhotoView, Pill, shortDate, SwipeRow, Text, Touchable, type PillTone, type SwipeAction } from '@/ui';
 
 const PHOTO = 44;
 
@@ -24,14 +24,20 @@ export function itemStatus(
     const when = item.completedAt && !Number.isNaN(new Date(item.completedAt).getTime()) ? dayOf(item.completedAt) : null;
     return { tone: 'done', text: 'Complete', note: [when, completedBy].filter(Boolean).join(' · ') || undefined };
   }
+  // The company said it is done, from its page: it waits for someone at your company to look.
+  if (item.markedDoneAt && item.status === 'open' && !item.unfinished) {
+    const when = !Number.isNaN(new Date(item.markedDoneAt).getTime()) ? dayOf(item.markedDoneAt) : null;
+    return { tone: 'check', text: 'To Check', note: when ? `Done ${when}, by the company` : 'Done, by the company' };
+  }
   if (item.unfinished) {
     const needs = missingDetails(item).filter((m) => m !== 'title');
     return { tone: 'draft', text: 'Draft', note: note ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : undefined) };
   }
   if (!item.ready) {
     const on = holds ? holdText(item, holds) : waitingOnText(item.waitingOn);
-    // Beside the Waiting pill the note says what on.
-    return { tone: 'wait', text: 'Waiting', note: on ? `On ${on}` : undefined };
+    // Beside the Waiting pill the note says what on, and when it should be ready if that is known.
+    const by = item.readyBy ? `Ready by ${shortDate(item.readyBy)}` : null;
+    return { tone: 'wait', text: 'Waiting', note: [on ? `On ${on}` : null, by].filter(Boolean).join(' · ') || undefined };
   }
   if (item.kind === 'added_scope' && !item.poOrCo) return { tone: 'quote', text: 'To Be Quoted' };
   return { tone: 'ok', text: 'Ready' };
@@ -100,7 +106,9 @@ export const ItemRow = memo(function ItemRow({
   const title = item.title || 'No title yet';
   const status = itemStatus(item, { holds, checking, note, completedBy });
   const kind = item.kind === 'completion' || item.unfinished ? undefined : kindText(item);
-  const where = [location, company, kind].filter(Boolean).join(' · ');
+  const time = item.hours !== null && item.hours > 0 && open ? hoursText(item.hours) : undefined;
+  const where = [location, company, kind, time].filter(Boolean).join(' · ');
+  const confirmed = open && !!item.confirmedAt && !item.markedDoneAt && !item.unfinished;
   const talk = comments > 0 ? commentCountText(comments) : undefined;
 
   const actions: SwipeAction[] =
@@ -111,7 +119,7 @@ export const ItemRow = memo(function ItemRow({
         ]
       : [];
   const slot = !photo && !!onAddPhoto && open && !select;
-  const said = [title, item.priority ? 'Priority' : null, status.text, status.note, where, talk].filter(Boolean).join(', ');
+  const said = [title, item.priority ? 'Priority' : null, status.text, confirmed ? 'Confirmed by the company' : null, status.note, where, talk].filter(Boolean).join(', ');
 
   return (
     <SwipeRow actions={actions} style={[styles.swipe, first ? styles.first : null, last ? styles.last : styles.ruled]}>
@@ -150,6 +158,7 @@ export const ItemRow = memo(function ItemRow({
             </View>
             <View style={styles.statusLine}>
               <Pill text={status.text} tone={status.tone} />
+              {confirmed ? <Pill text="Confirmed" tone="ok" /> : null}
               {status.note ? (
                 <Text variant="stamp" color={colors.secondary} numberOfLines={2} style={styles.note} testID={done ? `done-${item.id}` : undefined}>
                   {status.note}

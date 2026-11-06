@@ -195,6 +195,11 @@ export interface DataApi {
   createJob(input: { name: string; address: string; projectManagerId?: string | null }): Promise<string>;
   /** Admins only. Closed puts the job away; opening it again brings it back. */
   updateJob(id: string, patch: Partial<Pick<Job, 'name' | 'address' | 'closed'>>): Promise<void>;
+  /**
+   * Admins only. Deletes the job and everything on it (items, photos, comments, its log) for
+   * everyone, for good. On the phone it needs a signal, and every change made here up first.
+   */
+  deleteJob(id: string): Promise<void>;
   /** Admins only. */
   addPerson(person: NewPerson): Promise<string>;
   /** Admins only. There is always at least one admin. */
@@ -216,6 +221,8 @@ export interface DataApi {
    * back where it was. Returns how many were added.
    */
   addLocations(jobId: string, locations: ParsedLocation[]): Promise<number>;
+  /** One location, typed in while walking or adding an item: anyone on the job. Answers its id (the one already there when the name is taken). */
+  addLocation(jobId: string, name: string, floor?: string | null): Promise<string>;
   /** Renames a location, or removes it from the job (active false), which keeps it in the history. */
   updateLocation(id: string, patch: Partial<Pick<Location, 'name' | 'number' | 'label' | 'active'>>): Promise<void>;
   /** Done Here on a walk marks locations walked; Start a New Walk clears them. */

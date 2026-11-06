@@ -60,6 +60,9 @@ import { useFilterNames } from '@/components/FilterBar';
 import { MessagePreview, namesText, type Message } from '@/components/MessagePreview';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
+import { pageUrlFor } from '@/data/links';
+import { scanCode } from '@/export/scanCode';
+import * as WebBrowser from 'expo-web-browser';
 import { useFilterContext, useJobView } from '@/data/view';
 import { composeEmail, composeText, copyText } from '@/export/compose';
 import { DocPreview } from '@/export/DocPreview';
@@ -119,6 +122,7 @@ export default function SendScreen() {
   const builder = data.useOrg().name;
   const contacts = data.useContacts();
   const comments = data.useComments(jobId);
+  const links = data.useCompanyLinks(jobId);
   const [withPhotos, setWithPhotos] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ made: Made; fontCss: string } | null>(null);
@@ -255,6 +259,13 @@ export default function SendScreen() {
     };
     if (target.kind === 'company' && target.companyId) {
       const list = companyList(target.companyId, items, lookups);
+      // A company's list carries its page: the link, and the code to scan for it. Without a signal
+      // on the preview or a first link not made yet, the list still goes, without them.
+      const url = await data
+        .companyLink(jobId, target.companyId)
+        .then((token) => pageUrlFor(data.mode, token))
+        .catch(() => null);
+      settings.link = url ? { url, code: scanCode(url) } : undefined;
       const printout = companyPrintout(list, settings);
       const r = listRecipients(contacts, target.companyId);
       const ready = list.ready.length;
@@ -266,10 +277,10 @@ export default function SendScreen() {
               cc: [],
               bcc: [],
               names: r.people.filter((p) => p.email).map((p) => p.name),
-              ...companyListEmail({ job: jobOf(), contacts: r.people.filter((p) => p.email), from: me, company: builder, ready }),
+              ...companyListEmail({ job: jobOf(), contacts: r.people.filter((p) => p.email), from: me, company: builder, ready, link: url }),
             }
           : r.phones.length > 0
-            ? { by: 'text', phones: r.phones, names: r.people.filter((p) => p.phone).map((p) => p.name || p.phone!), body: companyListText({ job: jobOf(), contacts: r.people, from: me, company: builder }) }
+            ? { by: 'text', phones: r.phones, names: r.people.filter((p) => p.phone).map((p) => p.name || p.phone!), body: companyListText({ job: jobOf(), contacts: r.people, from: me, company: builder, link: url }) }
             : { by: 'none', company: target.name };
       return { target, doc: { printout, footer: footerText(printout, settings) }, itemIds, message };
     }
@@ -404,6 +415,47 @@ export default function SendScreen() {
     }
   }
 
+  /** What a company's page row says: whether it has a link yet. */
+  const linkLine = (companyId: string) =>
+    links.some((l) => l.companyId === companyId && !l.revoked) ? 'Tap to copy or open the link to their page.' : 'Their link is made with their first list, or tap to make it now.';
+
+  /** A company's page: copy the link, open it, or make a new one (the old one stops working). */
+  function pageActions(companyId: string, name: string) {
+    const link = async () => pageUrlFor(data.mode, await data.companyLink(jobId, companyId));
+    feedback.actionSheet({
+      title: `${name}'s Page`,
+      message: 'Anyone with the link sees their list here, so it goes only to their people.',
+      actions: [
+        {
+          label: 'Copy the Link',
+          onPress: () =>
+            void link()
+              .then(copyText)
+              .then((ok) => feedback.toast({ message: ok ? 'Link copied' : 'The link did not copy. Try again.' }))
+              .catch(() => feedback.toast({ message: 'The link was not made. Check the signal and try again.' })),
+        },
+        {
+          label: 'Open Their Page',
+          onPress: () =>
+            void link()
+              .then((url) => WebBrowser.openBrowserAsync(url))
+              .catch(() => feedback.toast({ message: 'The page did not open. Check the signal and try again.' })),
+        },
+        {
+          label: 'Make a New Link',
+          destructive: true,
+          onPress: () => {
+            const live = links.find((l) => l.companyId === companyId && !l.revoked);
+            void (live ? data.revokeCompanyLink(live.token) : Promise.resolve())
+              .then(() => data.companyLink(jobId, companyId))
+              .then(() => feedback.toast({ message: 'New link made. The old one no longer works.' }))
+              .catch(() => feedback.toast({ message: 'The new link was not made. Try again.' }));
+          },
+        },
+      ],
+    });
+  }
+
   const trailing = (target: Target, icon: IconName = 'share') =>
     busy === target.list ? (
       <ActivityIndicator color={colors.secondary} />
@@ -474,6 +526,22 @@ export default function SendScreen() {
                 />
               );
             })}
+          </ListSection>
+          <ListSection
+            header="Company Pages"
+            footer="Each company's list, live, with its photos: they confirm items, put in how long each takes, mark them done and comment. The link goes on every list they get."
+          >
+            {rows.map((r) => (
+              <ListRow
+                key={`page-${r.companyId}`}
+                title={r.name}
+                subtitle={linkLine(r.companyId)}
+                icon="link"
+                accessory="chevron"
+                onPress={() => pageActions(r.companyId, r.name)}
+                testID={`page-${r.companyId}`}
+              />
+            ))}
           </ListSection>
           {ON_THE_PHONE && rows.length > 1 ? (
             <View style={styles.all}>

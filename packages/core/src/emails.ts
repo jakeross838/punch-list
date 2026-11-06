@@ -32,7 +32,15 @@ export function greeting(contacts: Pick<Contact, 'name'>[]): string {
 }
 
 /** A company's list, to its people. ready: how many of its items can be done any time. company: whose list it is, to sign with when the sender has no name. */
-export function companyListEmail(input: { job: Pick<Job, 'name' | 'address'>; contacts: Pick<Contact, 'name'>[]; from: Pick<Person, 'name'> | null; company?: string; ready: number }): Email {
+export function companyListEmail(input: {
+  job: Pick<Job, 'name' | 'address'>;
+  contacts: Pick<Contact, 'name'>[];
+  from: Pick<Person, 'name'> | null;
+  company?: string;
+  ready: number;
+  /** The company's own page, where it answers on each item. */
+  link?: string | null;
+}): Email {
   const place = jobPlace(input.job);
   const lines = [
     greeting(input.contacts),
@@ -41,14 +49,18 @@ export function companyListEmail(input: { job: Pick<Job, 'name' | 'address'>; co
       input.ready > 0 ? ' Anything marked ready can be done any time, so if you have an open day I would love to get those cleared out.' : ''
     }`,
   ];
+  if (input.link) {
+    lines.push('', 'It is also on your page with the photos, kept up to date. There you can confirm each item, put in how long it takes, mark it done and comment on anything:', input.link);
+  }
   lines.push('', ...thanks(input.from, input.company));
   return { subject: `${place} Completion List`, body: lines.join('\n') };
 }
 
 /** A company's list as a text, for people with a phone and no email. */
-export function companyListText(input: { job: Pick<Job, 'name' | 'address'>; contacts: Pick<Contact, 'name'>[]; from: Pick<Person, 'name'> | null; company?: string }): string {
+export function companyListText(input: { job: Pick<Job, 'name' | 'address'>; contacts: Pick<Contact, 'name'>[]; from: Pick<Person, 'name'> | null; company?: string; link?: string | null }): string {
   const hi = greeting(input.contacts).replace(/,$/, '');
-  return `${hi}, here is your current list for ${jobPlace(input.job)}. Let me know if anything is missing. ${thanks(input.from, input.company).join(' ')}`;
+  const page = input.link ? ` It is on your page with the photos, where you can confirm each item and put in how long it takes: ${input.link}` : '';
+  return `${hi}, here is your current list for ${jobPlace(input.job)}.${page} Let me know if anything is missing. ${thanks(input.from, input.company).join(' ')}`;
 }
 
 /** The Schedule Email to every company on the job. */

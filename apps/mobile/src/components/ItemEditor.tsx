@@ -1,8 +1,8 @@
 // One simple form for an item, the same when making one and when looking at one later. Up front:
 // the title (typing offers the standard titles, and picking one fills in the company), the
 // description, the location, the company and Ready as a checkbox. Everything else waits under
-// Details, with a line saying what is in it: priority, the type (Deficiency, Incomplete or
-// Additional, with its order only for additional work) and the added fields. The trade is not asked
+// Details, with a line saying what is in it: priority, how long it takes, the type (Deficiency,
+// Incomplete or Additional, with its order only for additional work) and the added fields. The trade is not asked
 // for: it follows the company's trade on the job. On an item that already exists, every change saves
 // as it is made. Fill In From Photo asks Claude for what is still blank; the same title already in
 // the location is pointed out.
@@ -12,6 +12,7 @@ import {
   defaultWaitingOnExtras,
   duplicatesOf,
   formShows,
+  hoursText,
   itemNumberLabel,
   KIND_HINTS,
   KIND_LABELS,
@@ -38,7 +39,8 @@ import { ActivityIndicator, Keyboard, StyleSheet, TextInput, View } from 'react-
 import { colors, fieldFont, layout, type as typeScale } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { usePersonOptions } from './people';
-import { haptic, Icon, ListLabeledField, ListRow, ListSection, ListSwitchRow, OptionPicker, PhotoView, Segmented, Text, Touchable } from '@/ui';
+import { haptic, Icon, ListLabeledField, ListRow, ListSection, ListSwitchRow, OptionPicker, PhotoView, Segmented, Text, Touchable, useFeedback } from '@/ui';
+import { HoursField } from './HoursField';
 import { ExtraFields, useFormOptions, type ItemDraft } from './ItemForm';
 import { ReadyRow } from './ReadyRow';
 
@@ -68,6 +70,7 @@ export function ItemEditor({
   itemId,
   fillIn,
   onTwin,
+  hoursNote,
   children,
 }: {
   jobId: string;
@@ -87,9 +90,12 @@ export function ItemEditor({
   fillIn?: { busy: boolean; onPress: () => void };
   /** What to offer when the same title is already in the location: putting the photo on it instead. */
   onTwin?: { label: string; onPress: (twin: Item) => void };
+  /** Under How Long It Takes: who gave the time, when the company did. */
+  hoursNote?: string;
   children?: ReactNode;
 }) {
   const data = useData();
+  const feedback = useFeedback();
   const settings = data.useFormSettings();
   const titles = data.useTitles();
   const items = data.useItems(jobId);
@@ -100,7 +106,12 @@ export function ItemEditor({
     .filter((f) => f.active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
   const options = useFormOptions(jobId, value.locationId);
-  const [picker, setPicker] = useState<'room' | 'company' | 'person' | null>(null);
+  const [picker, setPicker] = useState<'room' | 'company' | 'trade' | 'person' | null>(null);
+  // A company typed in on the walk: its trade is asked next, then it is made and picked.
+  const [newCompany, setNewCompany] = useState('');
+  const trades = data.useTrades();
+  const companies = data.useCompanies();
+  const locations = data.useLocations(jobId);
   const people = data.usePeople();
   const [titleFocused, setTitleFocused] = useState(false);
   const [filled, setFilled] = useState(false);
@@ -168,6 +179,7 @@ export function ItemEditor({
   const hasDetails = true;
   const summary = [
     value.priority ? 'Priority' : null,
+    value.hours !== null ? hoursText(value.hours) : null,
     showKind || showPo ? kindText(value) : null,
   ]
     .filter(Boolean)
@@ -402,6 +414,8 @@ export function ItemEditor({
             <ListSwitchRow title="Priority" value={!!value.priority} onValueChange={(priority) => set({ priority })} testID="field-priority" />
           </ListSection>
 
+          <HoursField value={value.hours} onChange={(hours) => set({ hours })} note={hoursNote} />
+
           {customFields.length > 0 ? (
             <ListSection header="More">
               <ExtraFields fields={customFields} value={value.extra} onChange={(extra, typing) => set({ extra }, typing)} />
@@ -420,6 +434,11 @@ export function ItemEditor({
         value={value.locationId || null}
         onSelect={(locationId) => set({ locationId })}
         onClose={() => setPicker(null)}
+        add={{
+          noun: 'Location',
+          // A new one goes on the same floor as the location the item is in now.
+          onAdd: (name) => data.addLocation(jobId, name, locations.find((l) => l.id === value.locationId)?.floor ?? null),
+        }}
       />
       <OptionPicker
         visible={picker === 'company'}
@@ -427,12 +446,42 @@ export function ItemEditor({
         options={options.companyOptions}
         value={value.companyId}
         onSelect={(companyId) => {
-          // The trade follows the company.
+          // The trade follows the company; one not on the job yet joins it, for its usual trade.
           set({ companyId, tradeId: options.tradeFor(companyId, value.tradeId), ...(companyId !== value.companyId ? { visitId: null } : {}) });
           setFilled(false);
+          const usual = companies.find((c) => c.id === companyId)?.defaultTradeId;
+          if (usual && !options.jobCompanies.some((jc) => jc.companyId === companyId)) void data.addCompanyToJob(jobId, companyId, usual).catch(() => undefined);
         }}
         onClose={() => setPicker(null)}
-        footer="Companies on this job. Add more in Job Setup."
+        add={{
+          noun: 'Company',
+          onAdd: async (name) => {
+            setNewCompany(name);
+            setPicker(null);
+            setTimeout(() => setPicker('trade'), 350);
+            return null;
+          },
+        }}
+      />
+      <OptionPicker
+        visible={picker === 'trade'}
+        title={`Trade for ${newCompany}`}
+        options={[...trades].sort((a, b) => a.sortOrder - b.sortOrder).map((t) => ({ value: t.id, label: t.name }))}
+        value={value.tradeId}
+        onSelect={(tradeId) => {
+          void (async () => {
+            try {
+              const companyId = await data.addCompany({ name: newCompany, defaultTradeId: tradeId });
+              await data.addCompanyToJob(jobId, companyId, tradeId).catch(() => undefined);
+              set({ companyId, tradeId, visitId: null });
+              setFilled(false);
+            } catch (e) {
+              feedback.toast({ message: e instanceof Error && e.message ? e.message : 'The company was not added. Try again.' });
+            }
+          })();
+        }}
+        onClose={() => setPicker(null)}
+        footer={`What ${newCompany || 'the company'} does. It is kept with the company for every job.`}
       />
       <OptionPicker
         visible={picker === 'person'}

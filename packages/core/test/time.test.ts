@@ -111,8 +111,8 @@ describe('estimated time', () => {
     const it1 = item({ title: 'Hang door' });
     const look = activityLookups({ people: [{ id: 'jake', email: '', name: 'Jake Ross', active: true, role: 'admin', sees: 'all', phone: null }], items: [it1], locations: rooms, companies: [], trades: [], visits: [], customFields: [] });
     const entry = (before: string | null, after: string | null) => ({ id: 'e', jobId: 'j', itemId: it1.id, personId: 'jake', at: '2026-10-30T10:00:00Z', kind: 'item_changed' as const, field: 'hours', before, after });
-    expect(activityLines([entry(null, '2.50')], look, { forItem: true })[0]?.detail).toBe('Estimated time: 2.5 hours.');
-    expect(activityLines([entry('2.00', null)], look, { forItem: true })[0]?.detail).toBe('Estimated time cleared.');
+    expect(activityLines([entry(null, '2.50')], look, { forItem: true })[0]?.detail).toBe('How long it takes: 2.5 hours.');
+    expect(activityLines([entry('2.00', null)], look, { forItem: true })[0]?.detail).toBe('How long it takes cleared.');
   });
 });
 

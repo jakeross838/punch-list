@@ -548,6 +548,11 @@ export default function CaptureScreen() {
           setThenCommon(false);
         }}
         footer={`${walkedCount > 0 ? `${walkedCount} of ${ordered.length} walked. ` : ""}${thenCommon ? "Its common tasks come next." : "New photos go here until you change it."}`}
+        add={{
+          noun: "Location",
+          // A room typed in on the walk goes on the same floor as the one being walked.
+          onAdd: (name) => data.addLocation(jobId, name, locations.find((l) => l.id === walk.roomId)?.floor ?? null),
+        }}
       />
       <CommonTasks
         jobId={jobId}

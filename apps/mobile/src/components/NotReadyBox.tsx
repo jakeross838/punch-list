@@ -1,14 +1,15 @@
 // Not ready: what has to be done first. Usually one task on the list: this location's tasks come
 // first, the search finds any task on the job, and Add a Task puts a new one on the list right
 // here. For what is not a task (the owner picking a fixture, the design team, the builder) it waits
-// on who. Done keeps it; Cancel leaves the item as it was.
+// on who. Ready By, when it is known, is the day it should be ready: the company sees it on its
+// list. Done keeps it; Cancel leaves the item as it was.
 
 import { checkItem, holdChoices, tidyItem, tidyTitle, type HoldLookups, type Item } from '@punch/core';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { colors, fieldFont, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Checkbox, haptic, Icon, ListRow, ListSection, OptionPicker, SearchField, Sheet, Text, Touchable } from '@/ui';
+import { Checkbox, DateField, haptic, Icon, ListRow, ListSection, OptionPicker, SearchField, Sheet, Text, Touchable } from '@/ui';
 import { blankDraft, useFormOptions } from './ItemForm';
 
 export interface Waiting {
@@ -50,6 +51,7 @@ export function NotReadyBox({
   const options = useFormOptions(jobId, locationId);
   const [tasks, setTasks] = useState<string[]>(value.waitingOnItems);
   const [who, setWho] = useState<string[]>(value.waitingOn);
+  const [date, setDate] = useState<string | null>(value.readyBy);
   const [query, setQuery] = useState('');
   const [addingWho, setAddingWho] = useState(false);
   const [newWho, setNewWho] = useState('');
@@ -62,6 +64,7 @@ export function NotReadyBox({
     setOpened(true);
     setTasks(value.waitingOnItems);
     setWho(value.waitingOn);
+    setDate(value.readyBy);
     setQuery('');
     setAddingWho(false);
     setNewWho('');
@@ -159,7 +162,7 @@ export function NotReadyBox({
         label: 'Done',
         variant: 'prominent',
         disabled: picked === 0,
-        onPress: () => onDone({ waitingOn: who, waitingOnItems: tasks, readyBy: null }),
+        onPress: () => onDone({ waitingOn: who, waitingOnItems: tasks, readyBy: date }),
         testID: 'not-ready-done',
       }}
       testID="not-ready-box"
@@ -294,6 +297,10 @@ export function NotReadyBox({
               <Text color={colors.tint}>Someone Else</Text>
             </Touchable>
           )}
+        </ListSection>
+
+        <ListSection footer="When it should be ready, if you know. The company sees it on its list.">
+          <ListRow title="Ready By" titleLines={1} right={<DateField value={date} onChange={setDate} label="Ready By" testID="not-ready-by" />} />
         </ListSection>
       </ScrollView>
 
