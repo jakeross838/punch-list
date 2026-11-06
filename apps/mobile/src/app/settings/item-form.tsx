@@ -1,18 +1,15 @@
 // Item Form setup: which fields the New Item form shows, what a new item starts as, the fields
-// Ross Built adds of its own, the order of the trades (every list keeps each trade's items
-// together, in that order), and the standard titles with how long each usually takes. The common
-// tasks for each kind of room come from the templates, so there is one place to keep them. Changes
-// apply right away.
+// your company adds of its own, the order of the trades (every list keeps each trade's items
+// together, in that order), and the standard titles. The common tasks for each kind of room come
+// from the templates, so there is one place to keep them. Changes apply right away.
 
 import {
   customFieldKindLabel,
   FORM_FIELDS,
   formShows,
-  hoursText,
   isAdmin,
   KIND_LABELS,
   KINDS as ITEM_KINDS,
-  PICK_HOURS,
   setFieldShown,
   tidyTitle,
   type CustomField,
@@ -55,7 +52,7 @@ export default function ItemFormScreen() {
   const [titlesOpen, setTitlesOpen] = useState(false);
   const [tradesOpen, setTradesOpen] = useState(false);
   const update = (next: FormSettings) => void data.setFormSettings(next);
-  // The fields, the trade order and the titles are Ross Built's setup, changed by admins; the rest is each person's own.
+  // The fields, the trade order and the titles are the company's setup, changed by admins; the rest is each person's own.
   const admin = isAdmin(data.useMe());
 
   return (
@@ -132,8 +129,6 @@ export default function ItemFormScreen() {
     </Page>
   );
 }
-
-const NO_TIME = 'none';
 
 const KINDS: [CustomFieldKind, string][] = [
   ['text', 'Text'],
@@ -213,7 +208,7 @@ function FieldSheet({ visible, field, onClose }: { visible: boolean; field: Cust
             <ListTextField
               multiline
               minLines={4}
-              placeholder={'Owner\nArchitect\nRoss Built'}
+              placeholder={'Owner\nArchitect\nDesigner'}
               value={choices}
               onChangeText={setChoices}
               autoCapitalize="words"
@@ -275,14 +270,9 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
   const [query, setQuery] = useState('');
   const [title, setTitle] = useState('');
   const [tradeId, setTradeId] = useState<string | null>(null);
-  const [hours, setHours] = useState<number | null>(null);
   const [picking, setPicking] = useState(false);
-  /** The usual time being picked: for the new title, or for one on the list. */
-  const [timing, setTiming] = useState<{ id: string | null } | null>(null);
 
   const tradeOptions: Option[] = trades.map((t) => ({ value: t.id, label: t.name }));
-  const timeOptions: Option[] = [{ value: NO_TIME, label: 'No Usual Time' }, ...PICK_HOURS.map((h) => ({ value: String(h), label: hoursText(h) }))];
-  const timed = timing?.id ? (titles.find((t) => t.id === timing.id)?.hours ?? null) : hours;
   const q = query.trim().toLowerCase();
   const groups = useMemo(() => {
     const shown = titles.filter((t) => q === '' || t.title.toLowerCase().includes(q));
@@ -297,10 +287,9 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
 
   async function add() {
     if (!canAdd) return;
-    await data.addTitle({ title: clean, tradeId, hours });
+    await data.addTitle({ title: clean, tradeId });
     haptic.success();
     setTitle('');
-    setHours(null);
   }
 
   return (
@@ -319,14 +308,6 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
             onPress={() => setPicking(true)}
             testID="title-trade"
           />
-          <ListRow
-            title="Usual Time"
-            value={hours !== null ? hoursText(hours) : 'Choose'}
-            valueColor={hours !== null ? colors.secondary : colors.tint}
-            accessory="chevron"
-            onPress={() => setTiming({ id: null })}
-            testID="title-hours"
-          />
           <ListRow title="Add Title" tone="tint" disabled={!canAdd} onPress={() => void add()} testID="title-add" />
         </ListSection>
         <View style={styles.search}>
@@ -335,35 +316,13 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         {groups.map((g) => (
           <ListSection key={g.trade.id} header={g.trade.name}>
             {g.titles.map((t) => (
-              <ListRow
-                key={t.id}
-                title={t.title}
-                value={t.hours !== null ? hoursText(t.hours) : 'No usual time'}
-                valueColor={t.hours !== null ? colors.secondary : colors.placeholder}
-                accessory="chevron"
-                accessibilityLabel={`${t.title}, ${t.hours !== null ? hoursText(t.hours) : 'no usual time'}`}
-                onPress={() => setTiming({ id: t.id })}
-              />
+              <ListRow key={t.id} title={t.title} />
             ))}
           </ListSection>
         ))}
         {groups.length === 0 ? <EmptyState icon="magnifyingglass" title="No Titles" message={q ? `Nothing matches “${query}”.` : 'Add the first standard title.'} /> : null}
       </ScrollView>
       <OptionPicker visible={picking} title="Trade" options={tradeOptions} value={tradeId} onSelect={setTradeId} onClose={() => setPicking(false)} />
-      <OptionPicker
-        visible={!!timing}
-        title="Usual Time"
-        options={timeOptions}
-        value={timed === null ? NO_TIME : String(timed)}
-        onSelect={(v) => {
-          const next = v === NO_TIME ? null : Number(v);
-          if (timing?.id) void data.updateTitle(timing.id, { hours: next });
-          else setHours(next);
-        }}
-        onClose={() => setTiming(null)}
-        footer="How long the work usually takes. Picking the title fills it in as the estimated time."
-        typeFirst={false}
-      />
     </Sheet>
   );
 }

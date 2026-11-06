@@ -63,7 +63,7 @@ describe('comments', () => {
     expect(tidyName('   ')).toBeNull();
   });
 
-  it("keeps each item's thread and the list's own, oldest first, the company's view without Ross Built only notes", () => {
+  it("keeps each item's thread and the list's own, oldest first, the company's view without internal notes", () => {
     expect(itemComments(comments, 'door').map((c) => c.body)).toEqual([
       'The left one drags too.',
       'Coming Tuesday with a new hinge.',
@@ -90,7 +90,7 @@ describe('comments', () => {
     const lookups2 = activityLookups({ people: [{ id: 'jake', email: '', name: 'Jake Ross', active: true, role: 'admin', sees: 'all', phone: null }], items: [door], locations: rooms, companies: lookups.companies, trades: [], visits: [], customFields: [] });
     const lines = activityLines(entries, lookups2);
     expect(lines.map((l) => `${l.who} ${l.action}`).sort()).toEqual([
-      'Jake Ross added a Ross Built only note on Adjust cabinet door',
+      'Jake Ross added an internal note on Adjust cabinet door',
       'Jake Ross commented on the SMS Carpentry list',
       'Mike at SMS Carpentry commented on Adjust cabinet door',
     ]);
@@ -116,7 +116,7 @@ describe('comments', () => {
     expect(activityLines([said('kept', 'The left one drags too.'), said('gone', 'Wrong item.')], look2).map((l) => l.detail)).toEqual(['Kitchen 109. The left one drags too.']);
   });
 
-  it("prints under each item and on the company's list, never the Ross Built only ones", () => {
+  it("prints under each item and on the company's list, never the internal ones", () => {
     const settings = {
       job: { name: 'Fish', address: '' },
       date: new Date(2026, 9, 31),

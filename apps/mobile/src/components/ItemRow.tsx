@@ -1,44 +1,25 @@
 // One item in a list, Site Office style: the square box to check it off, the title, then a status
-// pill (Ready, Waiting, 3 Days Past Due, To Check, Draft, Complete) with a short mono note beside it:
-// what it waits on, when its visit is, who said it is done. Where it is and who does it go under
-// that in lists that are not one location's or one company's. Its photo sits at the end; an open
-// item with no photo yet has an empty dashed slot: tap it to take the photo. How many comments it
-// has shows too. Swipe left for Ready and Remove. Rows sit in a white panel, every other one
-// striped; the first and last close the panel's edges.
+// pill (Ready, Waiting, To Be Quoted, Draft, Complete) with a short mono note beside it: what it
+// waits on, or what a draft still needs. Where it is and who does it go under that in lists that are
+// not one location's or one company's. Its photo sits at the end; an open item with no photo yet has
+// an empty dashed slot: tap it to take the photo. How many comments it has shows too. Swipe left for
+// Ready and Remove. Rows sit in a white panel, every other one striped; the first and last close the
+// panel's edges.
 
-import {
-  commentCountText,
-  dayOfDate,
-  daysBetween,
-  holdText,
-  hoursText,
-  kindText,
-  missingDetails,
-  readyByOf,
-  waitingOnText,
-  type HoldLookups,
-  type Item,
-  type Photo,
-} from '@punch/core';
+import { commentCountText, holdText, kindText, missingDetails, waitingOnText, type HoldLookups, type Item, type Photo } from '@punch/core';
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
-import { CompleteCircle, dayOf, Icon, isBeforeToday, PhotoView, Pill, shortDate, SwipeRow, Text, Touchable, weekdayDate, type PillTone, type SwipeAction } from '@/ui';
+import { CompleteCircle, dayOf, Icon, PhotoView, Pill, SwipeRow, Text, Touchable, type PillTone, type SwipeAction } from '@/ui';
 
 const PHOTO = 44;
-
-/** Past Due's word for an item: how many days, and why when it is not the plain Ready By, like "Visit ended 3 days ago". */
-export type PastDueNote = { days: number; why?: string };
-
-/** "1 Day Past Due", "10 Days Past Due". */
-const daysPastDue = (days: number) => `${days} ${days === 1 ? 'Day' : 'Days'} Past Due`;
 
 /** The pill and the note beside it, for an item as it stands. */
 export function itemStatus(
   item: Item,
-  options: { holds?: HoldLookups; checking?: boolean; late?: PastDueNote; note?: string; completedBy?: string; company?: string },
+  options: { holds?: HoldLookups; checking?: boolean; note?: string; completedBy?: string },
 ): { tone: PillTone; text: string; note?: string } {
-  const { holds, checking, late: pastDue, note, completedBy, company } = options;
+  const { holds, checking, note, completedBy } = options;
   if (item.status === 'complete' || checking) {
     const when = item.completedAt && !Number.isNaN(new Date(item.completedAt).getTime()) ? dayOf(item.completedAt) : null;
     return { tone: 'done', text: 'Complete', note: [when, completedBy].filter(Boolean).join(' · ') || undefined };
@@ -47,22 +28,13 @@ export function itemStatus(
     const needs = missingDetails(item).filter((m) => m !== 'title');
     return { tone: 'draft', text: 'Draft', note: note ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : undefined) };
   }
-  if (item.markedDoneAt) {
-    return { tone: 'check', text: 'To Check', note: `${company ?? 'The company'} says done · ${dayOf(item.markedDoneAt)}` };
-  }
   if (!item.ready) {
-    const late = item.readyBy !== null && isBeforeToday(item.readyBy);
-    const days = pastDue?.days ?? (late && item.readyBy ? daysBetween(item.readyBy, dayOfDate(new Date())) : 0);
     const on = holds ? holdText(item, holds) : waitingOnText(item.waitingOn);
-    const by = holds ? readyByOf(item, holds) : item.readyBy;
-    // Under a Waiting pill the note says what on; under a Past Due one it has to say waiting itself.
-    if (pastDue || late) return { tone: 'late', text: daysPastDue(days), note: [pastDue?.why, on ? `Waiting on ${on}` : null].filter(Boolean).join(' · ') || undefined };
-    return { tone: 'wait', text: 'Waiting', note: [on ? `On ${on}` : null, by ? `Ready by ${shortDate(by)}` : null].filter(Boolean).join(' · ') || undefined };
+    // Beside the Waiting pill the note says what on.
+    return { tone: 'wait', text: 'Waiting', note: on ? `On ${on}` : undefined };
   }
-  if (pastDue) return { tone: 'late', text: daysPastDue(pastDue.days), note: pastDue.why };
-  const visit = item.visitId ? holds?.visits.get(item.visitId) : undefined;
   if (item.kind === 'added_scope' && !item.poOrCo) return { tone: 'quote', text: 'To Be Quoted' };
-  return { tone: 'ok', text: 'Ready', note: visit ? `Visit ${weekdayDate(visit.start)}` : undefined };
+  return { tone: 'ok', text: 'Ready' };
 }
 
 export const ItemRow = memo(function ItemRow({
@@ -71,7 +43,6 @@ export const ItemRow = memo(function ItemRow({
   location,
   company,
   note,
-  late,
   comments = 0,
   holds,
   first = false,
@@ -97,8 +68,6 @@ export const ItemRow = memo(function ItemRow({
   company?: string;
   /** For a draft: said in place of what it still needs, like "Filling in from the photo". */
   note?: string;
-  /** On Past Due: how late it is, and why. */
-  late?: PastDueNote;
   /** How many comments it has. */
   comments?: number;
   /** The job's items and visits: to name the tasks it waits on and when they are scheduled. */
@@ -129,8 +98,7 @@ export const ItemRow = memo(function ItemRow({
   const done = item.status === 'complete' || checking;
   const open = item.status === 'open' && !checking;
   const title = item.title || 'No title yet';
-  const time = item.hours !== null && open ? hoursText(item.hours) : null;
-  const status = itemStatus(item, { holds, checking, late, note, completedBy, company });
+  const status = itemStatus(item, { holds, checking, note, completedBy });
   const kind = item.kind === 'completion' || item.unfinished ? undefined : kindText(item);
   const where = [location, company, kind].filter(Boolean).join(' · ');
   const talk = comments > 0 ? commentCountText(comments) : undefined;
@@ -143,7 +111,7 @@ export const ItemRow = memo(function ItemRow({
         ]
       : [];
   const slot = !photo && !!onAddPhoto && open && !select;
-  const said = [title, item.priority ? 'Priority' : null, time, status.text, status.note, where, talk].filter(Boolean).join(', ');
+  const said = [title, item.priority ? 'Priority' : null, status.text, status.note, where, talk].filter(Boolean).join(', ');
 
   return (
     <SwipeRow actions={actions} style={[styles.swipe, first ? styles.first : null, last ? styles.last : styles.ruled]}>
@@ -179,11 +147,6 @@ export const ItemRow = memo(function ItemRow({
               <Text numberOfLines={2} color={done || !item.title ? colors.secondary : colors.label} style={[styles.title, done ? styles.crossed : null]}>
                 {title}
               </Text>
-              {time ? (
-                <Text variant="label" color={colors.secondary} tabular style={styles.time} testID={`time-${item.id}`}>
-                  {time}
-                </Text>
-              ) : null}
             </View>
             <View style={styles.statusLine}>
               <Pill text={status.text} tone={status.tone} />
@@ -248,7 +211,6 @@ const styles = StyleSheet.create({
   title: { flex: 1 },
   priority: { width: 6, height: 6, marginTop: 7, backgroundColor: colors.destructive },
   crossed: { textDecorationLine: 'line-through', textDecorationColor: colors.secondary },
-  time: { paddingTop: 3 },
   statusLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 5, minWidth: 0 },
   note: { flexShrink: 1, letterSpacing: 1 },
   where: { letterSpacing: 1.1 },

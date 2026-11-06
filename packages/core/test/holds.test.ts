@@ -135,6 +135,7 @@ describe('waiting on other tasks', () => {
     ]);
     expect(plan.noDate.map((g) => g.lines.map((l) => l.item.id))).toEqual([['pulls']]);
     const page = companyPrintout(list, { job: { name: 'Fish', address: '' }, date: new Date(2026, 9, 31) }).body;
-    expect(page).toContain('Waiting on Install range backsplash (Volcano Stone, Kitchen 109), ready by November\u00a05');
+    expect(page).toContain('Waiting on Install range backsplash (Volcano Stone, Kitchen 109)</td>');
+    expect(page).not.toContain('ready by');
   });
 });

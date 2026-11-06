@@ -88,7 +88,7 @@ process.on('exit', () => {
 
 asPostgres('supabase/test/local-stub.sql');
 for (const f of execFileSync('ls', ['supabase/migrations'], { encoding: 'utf8' }).trim().split('\n')) asPostgres(`supabase/migrations/${f}`);
-psql(`insert into public.people (email, name, role, sees) values ('jake@rossbuilt.com', 'Jake Ross', 'admin', 'all'), ('sam@rossbuilt.com', 'Sam Rivera', 'team', 'assigned');`);
+psql(`insert into public.people (org, email, name, role, sees) values ('${ORG}', 'jake@rossbuilt.com', 'Jake Ross', 'admin', 'all'), ('${ORG}', 'sam@rossbuilt.com', 'Sam Rivera', 'team', 'assigned');`);
 
 const people: Person[] = (
   JSON.parse(psql(`select json_agg(json_build_object('id', id, 'email', email, 'name', name, 'role', role, 'sees', sees)) from public.people`)) as Omit<Person, 'active' | 'phone'>[]
@@ -102,6 +102,8 @@ let state: State = {
   me: jake,
   signedIn: true,
   codeFor: null,
+  newAccount: null,
+  org: { id: ORG, name: 'Ross Built' },
   people,
   activity: [],
   jobs: [],
@@ -150,7 +152,9 @@ const keeper: Keeper = {
 
 const api = makeApi(keeper, {
   sendSignInCode: async () => {},
-  verifySignInCode: async () => {},
+  verifySignInCode: async () => 'signed_in',
+  startCompany: async () => {},
+  deleteAccount: async () => {},
   signOut: async () => {},
 });
 
@@ -206,6 +210,9 @@ async function main(): Promise<void> {
   let second = '';
   let third = '';
 
+  await step("the company's name, changed by its admin", async () => {
+    await api.renameOrg('  Ross   Built Custom Homes ');
+  });
   await step('a new job, with Jake as its Project Manager', async () => {
     jobId = await api.createJob({ name: 'Fish', address: '715 North Shore Drive', projectManagerId: jake.id });
   });
@@ -390,6 +397,13 @@ async function main(): Promise<void> {
       stopped = true;
     }
     if (!stopped) failures.push('Sam was let through to add a trade');
+    let renamed = true;
+    try {
+      await api.renameOrg('Sam Built');
+    } catch {
+      renamed = false;
+    }
+    if (renamed) failures.push("Sam was let through to change the company's name");
   });
 
   function id0(): string {
@@ -404,6 +418,8 @@ async function main(): Promise<void> {
     if (got !== expected) failures.push(`database: ${name}: got ${got}, expected ${expected}`);
   };
 
+  check("the company's name, tidied", `select name from public.orgs where id = ${lit(ORG)}`, 'Ross Built Custom Homes');
+  check('every row on the job is the company\'s', `select count(*) from public.items where job_id = ${lit(jobId)} and org <> ${lit(ORG)}`, '0');
   check('every item numbered in the order it arrived', `select string_agg(number::text, ',' order by number) from public.items where job_id = ${lit(jobId)}`, '1,2,3,4,5,6,7');
   check(
     'the trade follows the company',

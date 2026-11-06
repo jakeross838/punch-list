@@ -1,24 +1,20 @@
 // Send Lists: every company with open work on the job, how much of it is ready now, and what is new
-// since its last list. Each company's list goes to its people: by email, with the link to its own
-// page and the scan code on the list, or by text to anyone with only a phone. Tap one to look it
-// over as a PDF; the send button writes the email or text, and Send All goes through every company
-// in one pass. The Schedule Email goes to every company at once, with the Three Week Look Ahead and
-// the Whole Schedule attached: to you, a copy to the rest of the job's team, and a blind copy to the
-// people at every company. It keeps the schedule as it went out, so the Schedule says what moved
-// since. Each list sent is recorded (with Undo), so the next one marks what is new. The owner and
-// the design team get what Ross Built needs from them; the whole job, location by location, is for
-// Ross Built. Make a List makes any other list: it starts from what the job shows now, takes every
-// filter, and lays the page out as picked. A company's list prints each item's comments and the
-// comments on its whole list, the Whole Job prints each item's comments, and so can a list made to
-// order. The owner's and the design team's lists leave them off: they are between Ross Built and
-// the company. Ross Built only notes never print. Nothing is sent from the preview page: it shows
-// the email or text as it would be written, and Mark Sent records it.
+// since its last list. Each company's list goes to its people: by email, or by text to anyone with
+// only a phone. Tap one to look it over as a PDF; the send button writes the email or text, and
+// Send All goes through every company in one pass. Each list sent is recorded (with Undo), so the
+// next one marks what is new. The owner and the design team get what the work waits on from them;
+// the whole job, location by location, is for your own team. Make a List makes any other list: it
+// starts from what the job shows now, takes every filter, and lays the page out as picked. A
+// company's list prints each item's comments and the comments on its whole list, the Whole Job
+// prints each item's comments, and so can a list made to order. The owner's and the design team's
+// lists leave them off: they are between you and the company. Internal notes never print. Nothing
+// is sent from the preview page: it shows the email or text as it would be written, and Mark Sent
+// records it.
 
 import {
   itemsCsv,
   itemsSheet,
   sheetFileName,
-  buildTimeline,
   commentAuthor,
   companiesWithWork,
   companyList,
@@ -34,25 +30,15 @@ import {
   itemComments,
   jobList,
   jobPrintout,
-  lastScheduleSend,
   lastSend,
   LIST_KEYS,
   listComments,
   listRecipients,
   listTitle,
-  lookAheadPrintout,
-  lookAheadStart,
   newSince,
   partiesWaitedOn,
   partyList,
   partyPrintout,
-  printDate,
-  scheduleChanges,
-  scheduleEmail,
-  schedulePrintout,
-  scheduleRecipients,
-  scheduleSnapshot,
-  totalTime,
   type CustomPrintSettings,
   type GroupBy,
   type ListGroupBy,
@@ -63,7 +49,6 @@ import {
   type PrintPhoto,
   type Printout,
   type PrintSettings,
-  type ScheduleSnapshot,
   type ViewSettings,
 } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -75,14 +60,12 @@ import { useFilterNames } from '@/components/FilterBar';
 import { MessagePreview, namesText, type Message } from '@/components/MessagePreview';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { companyPageUrl } from '@/data/links';
 import { useFilterContext, useJobView } from '@/data/view';
 import { composeEmail, composeText, copyText } from '@/export/compose';
 import { DocPreview } from '@/export/DocPreview';
-import { joinPdfs, makePdf, printFonts, printPhoto, sharePdf, showPdf } from '@/export/printing';
-import { scanCode } from '@/export/scanCode';
+import { makePdf, printFonts, printPhoto, sharePdf, showPdf } from '@/export/printing';
 import { shareSpreadsheet } from '@/export/spreadsheet';
-import { Button, EmptyState, haptic, Icon, ListRow, ListSection, ListSwitchRow, Page, shortDate, Sheet, Text, Touchable, useFeedback, weekdayDate, type IconName } from '@/ui';
+import { Button, EmptyState, haptic, Icon, ListRow, ListSection, ListSwitchRow, Page, shortDate, Sheet, Text, Touchable, useFeedback, type IconName } from '@/ui';
 
 const ON_THE_PHONE = Platform.OS !== 'web';
 
@@ -90,18 +73,12 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 /** One list that can go out. */
 interface Target {
-  /** The list key: "job", "company:<id>", "party:<name>", "lookahead", "schedule"; "custom" for one made to order. */
+  /** The list key: "job", "company:<id>", "party:<name>"; "custom" for one made to order. */
   list: string;
   name: string;
-  kind: 'company' | 'party' | 'job' | 'custom' | 'lookahead' | 'schedule';
+  kind: 'company' | 'party' | 'job' | 'custom';
   companyId?: string;
 }
-
-const LOOK_AHEAD: Target = { list: LIST_KEYS.lookahead, name: 'Three Week Look Ahead', kind: 'lookahead' };
-const SCHEDULE: Target = { list: LIST_KEYS.schedule, name: 'every company', kind: 'schedule' };
-
-/** The company that is Ross Built itself: its crew is on the job's team already. */
-const isRossBuilt = (name: string) => name.trim().toLowerCase() === 'ross built';
 
 /** How the job is grouped on screen, as a list made to order groups it. */
 const LIST_GROUP: Record<GroupBy, ListGroupBy> = { room: 'location', company: 'company', waiting: 'waiting' };
@@ -119,15 +96,10 @@ interface Doc {
 
 interface Made {
   target: Target;
-  /** In order: one list, or the look ahead then the whole schedule. */
-  docs: Doc[];
+  doc: Doc;
   itemIds: string[];
-  /** The schedule as it goes out, for the look ahead and the Schedule Email. */
-  snapshot?: ScheduleSnapshot;
   /** Who it goes to and what it says; none for the lists that go from the share sheet. */
   message?: Message;
-  /** Something to know before it goes: who has no email yet. */
-  note?: string;
 }
 
 export default function SendScreen() {
@@ -138,13 +110,13 @@ export default function SendScreen() {
   const job = data.useJobs().find((j) => j.id === jobId);
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId);
-  const visits = data.useVisits(jobId);
   const sends = data.useSends(jobId);
   const locations = data.useLocations(jobId);
   const companies = data.useCompanies();
   const people = data.usePeople();
   const me = data.useMe();
-  const team = data.useTeams();
+  // Whose lists they are, at the top of every page and to sign the emails.
+  const builder = data.useOrg().name;
   const contacts = data.useContacts();
   const comments = data.useComments(jobId);
   const [withPhotos, setWithPhotos] = useState(true);
@@ -157,9 +129,9 @@ export default function SendScreen() {
   const [spreadsheet, setSpreadsheet] = useState<{ csv: string; fileName: string; rows: string[][] } | null>(null);
 
   const today = dayOfDate(new Date());
-  // With the items and visits, every list says which tasks an item waits on and when they are scheduled.
+  // With the items, every list says which tasks an item waits on.
   const trades = data.useTrades();
-  const lookups = useMemo(() => ({ locations, companies, items, visits, today, trades }), [locations, companies, items, visits, today, trades]);
+  const lookups = useMemo(() => ({ locations, companies, items, trades }), [locations, companies, items, trades]);
   const look = useMemo(
     () => ({ people: new Map(people.map((p) => [p.id, p.name])), companies: new Map(companies.map((c) => [c.id, c.name])) }),
     [people, companies],
@@ -200,7 +172,6 @@ export default function SendScreen() {
       companies: new Map(companies.map((c) => [c.id, c.name])),
       people: new Map(people.map((p) => [p.id, p.name])),
       items: new Map(items.map((i) => [i.id, i])),
-      visits: new Map(visits.map((v) => [v.id, v])),
     };
     const csv = itemsCsv(items, look);
     const fileName = sheetFileName(job?.name ?? 'Job', today);
@@ -212,7 +183,6 @@ export default function SendScreen() {
     }
     await shareSheet(csv, fileName);
   }
-  const customTime = totalTime(customLines.filter((l) => l.item.status === 'open').map((l) => l.item));
   /** Make a List starts from what the job shows now. */
   const startList = () => {
     haptic.tap();
@@ -229,12 +199,6 @@ export default function SendScreen() {
     return jobList(items, lookups);
   }
 
-  // The schedule now, and what moved since it last went out.
-  const timeline = useMemo(() => buildTimeline(items, visits, locations, today), [items, visits, locations, today]);
-  const lastSchedule = lastScheduleSend(sends);
-  const hasOpenWork = (companyId: string) => items.some((i) => i.companyId === companyId && i.status === 'open' && !i.unfinished);
-  const changes = lastSchedule?.snapshot ? scheduleChanges(lastSchedule.snapshot, scheduleSnapshot(timeline), lastSchedule.sentAt, hasOpenWork) : null;
-
   /** How a company's list reaches it, as the row says it. */
   function reach(companyId: string): { line: string; icon: IconName } {
     const r = listRecipients(contacts, companyId);
@@ -247,7 +211,6 @@ export default function SendScreen() {
   function sentLine(target: Target): string {
     const last = lastSend(sends, target.list);
     if (!last) return 'Not sent yet';
-    if (target.kind === 'lookahead' || target.kind === 'schedule') return `Sent ${shortDate(last.sentAt.slice(0, 10)).replace(' ', '\u00a0')}`;
     const fresh = newSince(
       linesOf(target).map((l) => l.item.id),
       last,
@@ -277,46 +240,18 @@ export default function SendScreen() {
   const jobOf = () => ({ name: job?.name ?? 'Job', address: job?.address ?? '' });
 
   async function make(target: Target): Promise<Made> {
-    if (target.kind === 'lookahead' || target.kind === 'schedule') {
-      const settings = { job: jobOf(), date: new Date() };
-      const ahead = lookAheadPrintout(timeline, lookups, settings, today);
-      const docs: Doc[] = [{ printout: ahead, footer: footerText(ahead, settings) }];
-      const snapshot = scheduleSnapshot(timeline);
-      if (target.kind === 'lookahead') {
-        const from = lookAheadStart(today);
-        const itemIds = timeline.bars.filter((b) => b.end >= from).flatMap((b) => b.items.map((i) => i.id));
-        return { target, docs, itemIds, snapshot };
-      }
-      const whole = schedulePrintout(timeline, lookups, settings, today, { changes });
-      docs.push({ printout: whole, footer: footerText(whole, settings) });
-      const companyIds = rows.map((r) => r.companyId);
-      const to = scheduleRecipients({ me, jobId, team, people, companyIds, contacts });
-      const mail = scheduleEmail({ job: jobOf(), from: me });
-      const without = to.without.map((id) => companies.find((c) => c.id === id)?.name ?? '').filter((n) => n && !isRossBuilt(n));
-      return {
-        target,
-        docs,
-        itemIds: timeline.bars.flatMap((b) => b.items.map((i) => i.id)),
-        snapshot,
-        message: { by: 'email', to: to.to, cc: to.cc, bcc: to.bcc, subject: mail.subject, body: mail.body, names: [] },
-        note: without.length > 0 ? `No email yet for ${namesText(without)}: add their people to send it to them too.` : undefined,
-      };
-    }
     const lines = linesOf(target);
     const itemIds = lines.map((l) => l.item.id);
     const fresh = newSince(itemIds, lastSend(sends, target.list));
     const prepared = withPhotos ? await printPhotos(itemIds) : null;
-    // A company's list carries its page: the link, and the scan code for it.
-    const url = target.kind === 'company' && target.companyId ? companyPageUrl(await data.companyLink(jobId, target.companyId)) : null;
     const settings: PrintSettings = {
       job: jobOf(),
+      builder,
       date: new Date(),
       photo: prepared ? (id) => prepared.get(id) : undefined,
       isNew: target.kind === 'job' ? undefined : (id) => fresh.has(id),
-      visits: target.kind === 'company' ? visits.filter((v) => v.companyId === target.companyId) : undefined,
       comments: target.kind === 'party' ? undefined : printedOn,
       listComments: target.kind === 'company' && target.companyId ? printed(listComments(comments, target.companyId, { shared: true })) : undefined,
-      link: url ? { url, code: scanCode(url) } : undefined,
     };
     if (target.kind === 'company' && target.companyId) {
       const list = companyList(target.companyId, items, lookups);
@@ -331,15 +266,15 @@ export default function SendScreen() {
               cc: [],
               bcc: [],
               names: r.people.filter((p) => p.email).map((p) => p.name),
-              ...companyListEmail({ job: jobOf(), contacts: r.people.filter((p) => p.email), link: url, from: me, ready }),
+              ...companyListEmail({ job: jobOf(), contacts: r.people.filter((p) => p.email), from: me, company: builder, ready }),
             }
           : r.phones.length > 0
-            ? { by: 'text', phones: r.phones, names: r.people.filter((p) => p.phone).map((p) => p.name || p.phone!), body: companyListText({ job: jobOf(), contacts: r.people, link: url, from: me }) }
+            ? { by: 'text', phones: r.phones, names: r.people.filter((p) => p.phone).map((p) => p.name || p.phone!), body: companyListText({ job: jobOf(), contacts: r.people, from: me, company: builder }) }
             : { by: 'none', company: target.name };
-      return { target, docs: [{ printout, footer: footerText(printout, settings) }], itemIds, message };
+      return { target, doc: { printout, footer: footerText(printout, settings) }, itemIds, message };
     }
     const printout = target.kind === 'party' ? partyPrintout(target.name, lines, settings) : jobPrintout(lines, settings);
-    return { target, docs: [{ printout, footer: footerText(printout, settings) }], itemIds };
+    return { target, doc: { printout, footer: footerText(printout, settings) }, itemIds };
   }
 
   /** The list made to order, as a page: the filters it was made with said under the title. */
@@ -347,14 +282,15 @@ export default function SendScreen() {
     const itemIds = customLines.map((l) => l.item.id);
     const prepared = list.design.details.includes('photo') ? await printPhotos(itemIds) : null;
     const settings: CustomPrintSettings = {
-      job: { name: job?.name ?? 'Job', address: job?.address ?? '' },
+      job: jobOf(),
+      builder,
       date: new Date(),
       photo: prepared ? (id) => prepared.get(id) : undefined,
       comments: printedOn,
       filters: filterChips(list.filters, names).map((c) => c.label),
     };
     const printout = customPrintout(customLines, { ...list.design, title: customTitle }, settings);
-    return { target: { list: 'custom', name: customTitle, kind: 'custom' }, docs: [{ printout, footer: footerText(printout, settings) }], itemIds };
+    return { target: { list: 'custom', name: customTitle, kind: 'custom' }, doc: { printout, footer: footerText(printout, settings) }, itemIds };
   }
 
   async function openCustom(send = false) {
@@ -367,10 +303,9 @@ export default function SendScreen() {
         setPreview({ made, fontCss: await printFonts() });
         return;
       }
-      const doc = made.docs[0]!;
-      const file = await makePdf(doc.printout, doc.footer);
-      if (send) await sharePdf(file, doc.printout.title);
-      else await showPdf(file, doc.printout.title);
+      const file = await makePdf(made.doc.printout, made.doc.footer);
+      if (send) await sharePdf(file, made.doc.printout.title);
+      else await showPdf(file, made.doc.printout.title);
     } catch {
       haptic.warning();
       feedback.toast({ message: 'That list did not come out. Try again.' });
@@ -381,7 +316,7 @@ export default function SendScreen() {
 
   /** Keeps a record that the list went out, with Undo for a share that was cancelled. */
   async function record(made: Made, quiet = false): Promise<string> {
-    const id = await data.recordSend({ jobId, list: made.target.list, itemIds: made.itemIds, snapshot: made.snapshot ?? null });
+    const id = await data.recordSend({ jobId, list: made.target.list, itemIds: made.itemIds, snapshot: null });
     if (!quiet) {
       feedback.toast({ message: `Marked as sent to ${made.target.name}`, action: { label: 'Undo', onPress: () => void data.undoSend(id) } });
     }
@@ -396,21 +331,20 @@ export default function SendScreen() {
     );
 
   /**
-   * On the iPhone: the PDFs, then Mail with the email written, or Messages with the text. Without
+   * On the iPhone: the PDF, then Mail with the email written, or Messages with the text. Without
    * Apple Mail (the Outlook app, say), the addresses are copied and the share sheet opens with the
-   * PDFs as one, to pick the app and paste them in. False when cancelled.
+   * PDF, to pick the app and paste them in. False when cancelled.
    */
   async function deliver(made: Made): Promise<boolean> {
-    const files = [];
-    for (const d of made.docs) files.push(await makePdf(d.printout, d.footer));
+    const file = await makePdf(made.doc.printout, made.doc.footer);
+    const files = [file];
     const m = made.message;
     if (m?.by === 'email' && m.to.length + m.cc.length + m.bcc.length > 0) {
       const went = await composeEmail({ to: m.to, cc: m.cc, bcc: m.bcc, subject: m.subject, body: m.body, files });
       if (went === 'cancelled') return false;
       if (went !== 'unavailable') return true;
       const copied = await copyText([...m.to, ...m.cc, ...m.bcc].join(', '));
-      const where = m.bcc.length > 0 ? 'Bcc, so nobody sees the others' : 'To';
-      const ask = copied ? `The addresses are copied. Pick your email app, then paste them in ${where}.` : 'Pick your email app to send it.';
+      const ask = copied ? 'The addresses are copied. Pick your email app, then paste them in To.' : 'Pick your email app to send it.';
       if (!(await goOn('Mail is not set up on this phone', ask))) return false;
     } else if (m?.by === 'text') {
       const went = await composeText({ phones: m.phones, body: m.body, files });
@@ -419,9 +353,7 @@ export default function SendScreen() {
       const copied = await copyText(m.phones.join(', '));
       if (!(await goOn('Texting is not set up on this phone', copied ? 'The numbers are copied. Pick the app to send it with.' : 'Pick the app to send it with.'))) return false;
     }
-    const title = made.docs[0]!.printout.title;
-    const one = files.length > 1 ? await joinPdfs(files, `${job?.name ?? 'Job'} Construction Schedule, ${printDate(new Date()).replace(',', '')}.pdf`) : files[0]!;
-    await sharePdf(one, title);
+    await sharePdf(file, made.doc.printout.title);
     return true;
   }
 
@@ -438,8 +370,7 @@ export default function SendScreen() {
       if (send) {
         if (await deliver(made)) await record(made);
       } else {
-        const doc = made.docs[0]!;
-        await showPdf(await makePdf(doc.printout, doc.footer), doc.printout.title);
+        await showPdf(await makePdf(made.doc.printout, made.doc.footer), made.doc.printout.title);
       }
     } catch {
       haptic.warning();
@@ -489,16 +420,6 @@ export default function SendScreen() {
       </Touchable>
     ) : undefined;
 
-  // The Schedule Email: who it reaches, when it last went, and what moved since.
-  const reached = rows.filter((r) => listRecipients(contacts, r.companyId).emails.length > 0).length;
-  const moved = changes ? changes.changes.length : 0;
-  const scheduleLine = [
-    `${sentLine(SCHEDULE)}.`,
-    lastSchedule && moved > 0 ? `${plural(moved, 'company', 'companies')} changed since ${weekdayDate(dayOfDate(new Date(lastSchedule.sentAt)))}.` : '',
-    `To ${plural(reached, 'company', 'companies')}.`,
-  ]
-    .filter(Boolean)
-    .join(' ');
   const addPeople = (companyId: string) => {
     setPreview(null);
     router.push({ pathname: '/settings/companies/[companyId]', params: { companyId } });
@@ -511,35 +432,12 @@ export default function SendScreen() {
   return (
     <Page
       title="Send Lists"
-      eyebrow="Lists and the schedule"
+      eyebrow="What is left, company by company"
       crumb={[job?.name ?? 'Job', 'Send']}
       jobSwitch={{ jobId, onChange: (next) => router.setParams({ jobId: next }) }}
       account
       tab={{ active: 'send', jobId }}
     >
-      <ListSection
-        header="For Everyone"
-        footer="The schedule the list builds. The Schedule Email sends the Three Week Look Ahead and the Whole Schedule to every company at once, to confirm their dates. Green is confirmed; blue is our best guess."
-      >
-        <ListRow
-          title="Schedule Email"
-          subtitle={scheduleLine}
-          icon="envelope"
-          accessory="chevron"
-          onPress={() => void openList(SCHEDULE, ON_THE_PHONE)}
-          right={busy === SCHEDULE.list ? <ActivityIndicator color={colors.secondary} /> : undefined}
-          testID="send-schedule"
-        />
-        <ListRow
-          title="Three Week Look Ahead"
-          subtitle={`${sentLine(LOOK_AHEAD)}.`}
-          icon="calendar"
-          accessory={ON_THE_PHONE ? 'none' : 'chevron'}
-          onPress={() => void openList(LOOK_AHEAD)}
-          right={trailing(LOOK_AHEAD)}
-          testID="send-lookahead"
-        />
-      </ListSection>
       <ListSection footer="Make a List takes any filters, grouped your way, with the details you pick on every line. The spreadsheet has every item on the job, for Excel, Numbers or Google Sheets.">
         <ListRow
           title="Make a List"
@@ -555,7 +453,7 @@ export default function SendScreen() {
         <EmptyState icon="checkmark.circle.fill" title="Nothing to Send" message="Every item on this job is complete." />
       ) : (
         <>
-          <ListSection header="Companies" footer="Tap a company to see its list. Each list goes to the company's people, with the link to its own page.">
+          <ListSection header="Companies" footer="Tap a company to see its list. Each list goes to the company's people by email, or by text to anyone with only a phone.">
             {rows.map((r) => {
               const target = companyTarget(r);
               const counts = [
@@ -587,7 +485,7 @@ export default function SendScreen() {
           ) : null}
 
           {parties.length > 0 ? (
-            <ListSection header="Owner, Design Team and Others" footer="What we need from them, and when.">
+            <ListSection header="Owner, Design Team and Others" footer="What the work is waiting on from them.">
               {parties.map((p) => {
                 const target = partyTarget(p.party);
                 return (
@@ -605,7 +503,7 @@ export default function SendScreen() {
             </ListSection>
           ) : null}
 
-          <ListSection header="Ross Built" footer="Every open item by location, with the company on every line.">
+          <ListSection header={builder || 'Your Team'} footer="Every open item by location, with the company on every line.">
             <ListRow
               title="Whole Job"
               subtitle={`${plural(open.length, 'item')} in ${plural(rooms, 'location')}, ${open.filter((i) => i.ready).length} ready now`}
@@ -632,7 +530,7 @@ export default function SendScreen() {
         onSend={() => void openCustom(true)}
         busy={busy === 'custom'}
         suggestedTitle={draft ? listTitle(draft.filters, names) : ''}
-        matching={{ items: customLines.length, time: customTime }}
+        matching={{ items: customLines.length }}
       />
 
       {ON_THE_PHONE ? null : (
@@ -649,7 +547,7 @@ export default function SendScreen() {
         <Sheet
           visible={!!preview}
           onClose={() => setPreview(null)}
-          title={preview ? (preview.made.target.kind === 'schedule' ? 'Schedule Email' : preview.made.docs[0]!.printout.title) : ''}
+          title={preview ? preview.made.doc.printout.title : ''}
           right={{ label: 'Done', variant: 'prominent', onPress: () => setPreview(null), testID: 'preview-done' }}
           testID="list-preview"
         >
@@ -657,32 +555,11 @@ export default function SendScreen() {
             {preview?.made.message ? (
               <MessagePreview
                 message={preview.made.message}
-                attachments={preview.made.docs.map((d) => d.printout.fileName)}
-                note={preview.made.note}
-                onAddPeople={
-                  preview.made.target.companyId
-                    ? () => addPeople(preview.made.target.companyId!)
-                    : preview.made.note
-                      ? () => {
-                          setPreview(null);
-                          router.push('/settings/companies');
-                        }
-                      : undefined
-                }
+                attachments={[preview.made.doc.printout.fileName]}
+                onAddPeople={preview.made.target.companyId ? () => addPeople(preview.made.target.companyId!) : undefined}
               />
             ) : null}
-            {preview
-              ? preview.made.docs.map((d) => (
-                  <View key={d.printout.fileName}>
-                    {preview.made.docs.length > 1 ? (
-                      <Text variant="label" color={colors.secondary} style={styles.docLabel}>
-                        {d.printout.title}
-                      </Text>
-                    ) : null}
-                    <DocPreview printout={d.printout} fontCss={preview.fontCss} />
-                  </View>
-                ))
-              : null}
+            {preview ? <DocPreview printout={preview.made.doc.printout} fontCss={preview.fontCss} /> : null}
             <View style={styles.note}>
               <Text variant="footnote" color={colors.secondary} align="center">
                 {preview?.made.message && preview.made.message.by !== 'none'
@@ -717,5 +594,4 @@ const styles = StyleSheet.create({
   allNote: { paddingHorizontal: 16 },
   note: { paddingHorizontal: layout.inset, paddingBottom: 28, alignItems: 'center', gap: 6 },
   markSent: { height: 44, justifyContent: 'center' },
-  docLabel: { marginHorizontal: 20, marginTop: 14, marginBottom: -2 },
 });

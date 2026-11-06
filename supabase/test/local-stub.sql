@@ -20,5 +20,8 @@ language sql stable as $$
   select nullif(auth.jwt() ->> 'sub', '')::uuid
 $$;
 
+-- The accounts, for deleting one.
+create table auth.users (id uuid primary key, email text);
+
 grant usage on schema public, auth to anon, authenticated, service_role;
 grant execute on all functions in schema auth to anon, authenticated, service_role;

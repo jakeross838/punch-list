@@ -90,7 +90,7 @@ export function missingText(item: Pick<ItemFields, 'title' | 'companyId'> & { lo
 
 /**
  * Deficiencies and completion work are in the company's scope already; additional work is priced,
- * and ready to schedule, once it has its purchase order or change order number.
+ * and ready to go ahead, once it has its purchase order or change order number.
  */
 export function isPriced(item: Pick<ItemFields, 'kind' | 'poOrCo'>): boolean {
   return item.kind !== 'added_scope' || Boolean(item.poOrCo?.trim());
@@ -154,9 +154,9 @@ export class RuleError extends Error {
   }
 }
 
-/** Only an active Ross Built person marks an item complete. */
+/** Only someone switched on at the company marks an item complete. */
 export function complete<T extends ItemFields>(item: T, by: Person, at: Date = new Date()): T {
-  if (!by.active) throw new RuleError('Only Ross Built can mark items complete');
+  if (!by.active) throw new RuleError('Only people at your company can mark items complete');
   if (item.status === 'removed') throw new RuleError('Restore it to the list first');
   if (item.unfinished) throw new RuleError('Finish the draft before you mark it complete');
   // Complete answers the company's word that it is done; Undo puts the word back as it was.

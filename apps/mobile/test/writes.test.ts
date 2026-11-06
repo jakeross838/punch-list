@@ -12,6 +12,8 @@ function state(over: Partial<State> = {}): State {
     me,
     signedIn: true,
     codeFor: null,
+    newAccount: null,
+    org: { id: 'ross_built', name: 'Ross Built' },
     people: [me],
     activity: [],
     jobs: [{ id: 'j1', name: 'Fish', address: '715 North Shore Drive', closed: false }],

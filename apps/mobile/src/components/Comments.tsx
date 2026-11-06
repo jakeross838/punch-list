@@ -1,7 +1,7 @@
 // Comments: the back and forth on an item, or on a company's whole list, oldest first. Each says who
-// wrote it and when; the company's own are set apart, and a Ross Built only note says so. Below,
-// a box to add one. In the app, Ross Built Only keeps a comment inside Ross Built: never on the
-// company's page or a printed list. Tap your own comment to take it back (with Undo).
+// wrote it and when; the company's own are set apart, and an internal note says so. Below, a box to
+// add one. Internal keeps a comment inside your own company: never on a printed list. Tap your own
+// comment to take it back (with Undo).
 
 import { commentAuthor, tidyComment, type Comment } from '@punch/core';
 import { useMemo, useState } from 'react';
@@ -22,10 +22,10 @@ export function CommentThread({
   testID,
 }: {
   comments: Comment[];
-  /** Posts a comment; internal: Ross Built only. */
+  /** Posts a comment; internal: for your own company only. */
   onPost: (body: string, internal: boolean) => void;
   placeholder?: string;
-  /** In the app; the company's page has no Ross Built only notes. */
+  /** In the app; the company's page had no internal notes. */
   allowInternal?: boolean;
   /** Your own comments can be taken back in the app, not from the company's page. */
   canTakeBack?: boolean;
@@ -93,7 +93,7 @@ export function CommentThread({
               <View style={styles.internalTag}>
                 <Icon name="eye.slash" size={11} color={colors.secondary} />
                 <Text variant="stamp" color={colors.secondary}>
-                  Ross Built only
+                  Internal
                 </Text>
               </View>
             ) : null}
@@ -125,7 +125,7 @@ export function CommentThread({
         <View style={styles.boxRow}>
           {allowInternal ? (
             <Chip
-              label="Ross Built Only"
+              label="Internal"
               icon="eye.slash"
               on={internal}
               onPress={() => {
@@ -152,7 +152,7 @@ export function CommentThread({
       </View>
       {hint ? (
         <Text variant="footnote" color={colors.secondary} style={styles.hint}>
-          {internal ? 'Only Ross Built sees this one.' : hint}
+          {internal ? 'Only your own team sees this one.' : hint}
         </Text>
       ) : null}
     </View>

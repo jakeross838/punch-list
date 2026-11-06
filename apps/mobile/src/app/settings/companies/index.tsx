@@ -1,5 +1,5 @@
-// Companies: every company Ross Built works with, its usual trade and its people, who get its lists
-// and the Schedule Email on every job. Tap one for its people. Admins add and change them; everyone
+// Companies: every company you work with, its usual trade and its people, who get its lists on every
+// job. Tap one for its people. Admins add and change them; everyone
 // can look.
 
 import { contactsOf, isAdmin } from '@punch/core';
@@ -30,12 +30,12 @@ export default function CompaniesScreen() {
   const without = companies.filter((c) => contactsOf(contacts, c.id).filter((p) => p.getsLists).length === 0).length;
 
   return (
-    <Page title="Companies" eyebrow="Everyone who works on the jobs" crumb={['Me', 'Companies']} backLabel="Me" search={{ value: query, onChange: setQuery, placeholder: 'Search companies' }} tab={{ active: 'me' }}>
+    <Page title="Companies" eyebrow="Everyone who works on the jobs" crumb={['Me', 'Companies']} backLabel="Me" search={{ value: query, onChange: setQuery, placeholder: 'Search companies' }} tab={{}}>
       {shown.length === 0 ? (
         <EmptyState icon="building" title={query.trim() ? 'No Results' : 'No Companies Yet'} message={query.trim() ? `No company matches “${query.trim()}”.` : 'Companies are added to a job in Job Setup.'} />
       ) : (
         <ListSection
-          footer={`Their people get the company's lists and the Schedule Email, on every job.${without > 0 ? ` ${without === 1 ? '1 company has' : `${without} companies have`} nobody to send to yet.` : ''}${admin ? '' : ' An admin adds them.'}`}
+          footer={`Their people get the company's lists, on every job.${without > 0 ? ` ${without === 1 ? '1 company has' : `${without} companies have`} nobody to send to yet.` : ''}${admin ? '' : ' An admin adds them.'}`}
         >
           {shown.map((c) => {
             const people = contactsOf(contacts, c.id);

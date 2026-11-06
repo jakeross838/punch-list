@@ -10,6 +10,7 @@ import {
   tidyItem,
   tradeForCompany,
   waitingOnChoices,
+  defaultWaitingOnExtras,
   type CustomField,
   type ExtraValue,
   type FormSettings,
@@ -164,6 +165,7 @@ export function useFormOptions(jobId: string, locationId: string) {
   const trades = data.useTrades();
   const jobCompanies = data.useJobCompanies(jobId);
   const extras = data.useWaitingOnExtras(jobId);
+  const builder = data.useOrg().name;
 
   const roomOptions = useMemo<Option[]>(
     () =>
@@ -185,8 +187,8 @@ export function useFormOptions(jobId: string, locationId: string) {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [jobCompanies, companies, trades]);
   const waitingOptions = useMemo<Option[]>(
-    () => waitingOnChoices(jobCompanies, companies, extras.length > 0 ? extras : undefined).map((name) => ({ value: name, label: name })),
-    [jobCompanies, companies, extras],
+    () => waitingOnChoices(jobCompanies, companies, extras.length > 0 ? extras : defaultWaitingOnExtras(builder)).map((name) => ({ value: name, label: name })),
+    [jobCompanies, companies, extras, builder],
   );
 
   /** The trade follows the company: the trade it does on this job. */

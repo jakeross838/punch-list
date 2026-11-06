@@ -1,7 +1,6 @@
-// What goes out to the companies, in Jake's words: short, the attachments carrying the detail. A
-// company's list goes to its people with the link to its page; the Schedule Email goes to every
-// company on the job at once with the Three Week Look Ahead and the Whole Schedule attached. Either
-// can be changed before it goes.
+// What goes out to the companies: short, the attached list carrying the detail. A company's list
+// goes to its people by email, or by text to anyone with only a phone, and either can be changed
+// before it goes. The Schedule Email is kept for when the schedule comes back.
 
 import type { Contact, Job, Person } from './types';
 
@@ -15,8 +14,14 @@ export const jobPlace = (job: Pick<Job, 'name' | 'address'>) => job.address.trim
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? '';
 
-/** Who it is from: the first name of whoever sends it. */
-const signedBy = (from: Pick<Person, 'name'> | null) => firstName(from?.name ?? '') || 'Ross Built';
+/** Who it is from: the first name of whoever sends it, or their company when they have no name yet. */
+const signedBy = (from: Pick<Person, 'name'> | null, company = '') => firstName(from?.name ?? '') || company.trim();
+
+/** The last lines: "Thanks," and who it is from, or only "Thanks." */
+const thanks = (from: Pick<Person, 'name'> | null, company?: string) => {
+  const who = signedBy(from, company);
+  return who ? ['Thanks,', who] : ['Thanks.'];
+};
 
 /** "Hi Mike,", "Hi Mike and Dave,", "Hi everyone," or "Hi," with no names. */
 export function greeting(contacts: Pick<Contact, 'name'>[]): string {
@@ -26,8 +31,8 @@ export function greeting(contacts: Pick<Contact, 'name'>[]): string {
   return 'Hi everyone,';
 }
 
-/** A company's list, to its people. ready: how many of its items can be done any time. */
-export function companyListEmail(input: { job: Pick<Job, 'name' | 'address'>; contacts: Pick<Contact, 'name'>[]; link: string | null; from: Pick<Person, 'name'> | null; ready: number }): Email {
+/** A company's list, to its people. ready: how many of its items can be done any time. company: whose list it is, to sign with when the sender has no name. */
+export function companyListEmail(input: { job: Pick<Job, 'name' | 'address'>; contacts: Pick<Contact, 'name'>[]; from: Pick<Person, 'name'> | null; company?: string; ready: number }): Email {
   const place = jobPlace(input.job);
   const lines = [
     greeting(input.contacts),
@@ -36,22 +41,18 @@ export function companyListEmail(input: { job: Pick<Job, 'name' | 'address'>; co
       input.ready > 0 ? ' Anything marked ready can be done any time, so if you have an open day I would love to get those cleared out.' : ''
     }`,
   ];
-  if (input.link) {
-    lines.push('', 'Your dates and the list with photos are on your page, where you can confirm your dates, ask for other ones, or comment on anything:', input.link);
-  }
-  lines.push('', 'Thanks,', signedBy(input.from));
+  lines.push('', ...thanks(input.from, input.company));
   return { subject: `${place} Completion List`, body: lines.join('\n') };
 }
 
 /** A company's list as a text, for people with a phone and no email. */
-export function companyListText(input: { job: Pick<Job, 'name' | 'address'>; contacts: Pick<Contact, 'name'>[]; link: string | null; from: Pick<Person, 'name'> | null }): string {
+export function companyListText(input: { job: Pick<Job, 'name' | 'address'>; contacts: Pick<Contact, 'name'>[]; from: Pick<Person, 'name'> | null; company?: string }): string {
   const hi = greeting(input.contacts).replace(/,$/, '');
-  const page = input.link ? ` Your dates and photos are on your page: ${input.link}` : '';
-  return `${hi}, here is your current list for ${jobPlace(input.job)}.${page} Thanks, ${signedBy(input.from)}`;
+  return `${hi}, here is your current list for ${jobPlace(input.job)}. Let me know if anything is missing. ${thanks(input.from, input.company).join(' ')}`;
 }
 
 /** The Schedule Email to every company on the job. */
-export function scheduleEmail(input: { job: Pick<Job, 'name' | 'address'>; from: Pick<Person, 'name'> | null }): Email {
+export function scheduleEmail(input: { job: Pick<Job, 'name' | 'address'>; from: Pick<Person, 'name'> | null; company?: string }): Email {
   const place = jobPlace(input.job);
   const body = [
     'Hi everyone,',
@@ -60,8 +61,7 @@ export function scheduleEmail(input: { job: Pick<Job, 'name' | 'address'>; from:
     '',
     'Please look over your dates and let me know if they work, or if anything is missing or needs to change. You can confirm your dates on your page, from the link on your list.',
     '',
-    'Thanks,',
-    signedBy(input.from),
+    ...thanks(input.from, input.company),
   ].join('\n');
   return { subject: `${place} Construction Schedule`, body };
 }

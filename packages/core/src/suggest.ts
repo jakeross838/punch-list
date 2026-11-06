@@ -1,10 +1,9 @@
-// Filling in an item from its photo. Claude is told the room, the job's standard titles (with how
-// long each usually takes), the companies on the job and what the marks point at, and asked for the
-// item the way Ross Built writes them, with about how long it takes. Its answer only fills in the
-// form; the person checks it before it is kept.
+// Filling in an item from its photo. Claude is told the room, the job's standard titles, the
+// companies on the job and what the marks point at, and asked for the item the way a builder writes
+// it on a punch list. Its answer only fills in the form; the person checks it before it is kept.
 
 import { TITLE_MAX } from './rules';
-import { hoursText, tidyHours } from './time';
+import { tidyHours } from './time';
 import { tidyTitle } from './titles';
 import type { Company, Item, JobCompany, Mark, MarkColor, StandardTitle, Trade } from './types';
 
@@ -73,13 +72,13 @@ export function suggestPrompt(ctx: SuggestContext): string {
   const spots = ctx.marks.filter((m) => m.tool === 'number').length;
   const sized = ctx.marks.some((m) => m.tool === 'measure' && m.text.trim() !== '');
   return [
-    'You are filling in one item on the running list of work that still needs to be done on a Ross Built Custom Homes job site, from one photo.',
+    'You are filling in one item on the running list of work that still needs to be done on a home builder\'s job site, from one photo.',
     `The photo was taken in ${ctx.room}.`,
     marks.length > 0
       ? `The superintendent marked the photo to show the problem:\n${marks.map((m) => `- ${m}`).join('\n')}`
       : 'The photo has no marks. Find the most likely unfinished work or problem in it.',
     '',
-    'Write the item the way Ross Built writes them:',
+    'Write the item the way a builder writes it on a punch list:',
     '- title: a verb and the thing, as short as possible, like "Install toilet" or "Touch up paint". No room, no trade, no sizes, no brands. When one of the standard titles below fits, use it word for word.',
     '- description: where exactly and what is involved, in one short sentence with proper capitalization, or an empty string when the title says it all. Do not name the room.',
     ...(spots > 1
@@ -88,17 +87,16 @@ export function suggestPrompt(ctx: SuggestContext): string {
     ...(sized ? ['- A size marked on the photo goes in the description as it is written, like "24 inches left of the vanity."'] : []),
     '- trade: one of the trades below, or null when unsure.',
     '- company: the company on this job for that trade, from the list below, or null when unsure.',
-    '- hours: about how long the work takes the company once it is on site, in hours, counting setup and cleanup: 0.25 for 15 minutes, 0.5 for 30 minutes, 8 for a full working day. When the standard title you use lists a usual time, use that time. Null when you cannot tell.',
     '',
-    'Standard titles (title, trade, usual time):',
-    ...ctx.titles.slice(0, 150).map((t) => `- ${t.title}${t.trade || t.hours ? ` (${[t.trade, t.hours ? `usually ${hoursText(t.hours)}` : null].filter(Boolean).join(', ')})` : ''}`),
+    'Standard titles (title, trade):',
+    ...ctx.titles.slice(0, 150).map((t) => `- ${t.title}${t.trade ? ` (${t.trade})` : ''}`),
     '',
     `Trades: ${ctx.trades.join(', ')}`,
     '',
     'Companies on this job (company, trade):',
     ...ctx.companies.map((c) => `- ${c.name} (${c.trade})`),
     '',
-    'Reply with only JSON, like {"title": "Touch up paint", "description": "Ceiling at the hood soffit.", "trade": "Painting", "company": "Triple H Painting", "hours": 0.5}.',
+    'Reply with only JSON, like {"title": "Touch up paint", "description": "Ceiling at the hood soffit.", "trade": "Painting", "company": "Triple H Painting"}.',
   ].join('\n');
 }
 

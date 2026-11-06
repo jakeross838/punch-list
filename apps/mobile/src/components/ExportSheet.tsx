@@ -1,9 +1,9 @@
 // Make a List: a list to print or send, made to order, kept simple. It starts from what the job
 // shows now, so most lists are Make a List, then Preview. The filters already on show as chips;
 // Change the Filters opens every filter (status, type, company, level, location, what it waits on,
-// who added it, estimated or not, scheduled or not, photo or not). It groups by location, company
-// or what it waits on, shows the details picked on every line, and can add blank
-// lines and a line for the days each group takes. The count and the time update as it changes.
+// who added it, who it is assigned to, photo or not). It groups by location, company or what it
+// waits on, shows the details picked on every line, and can add blank lines to write in anything
+// missing. The count updates as it changes.
 
 import {
   filterChips,
@@ -11,12 +11,10 @@ import {
   LIST_DETAILS,
   LIST_GROUP_LABELS,
   NO_FILTERS,
-  totalText,
   type ItemFilters,
   type ListDesign,
   type ListDetail,
   type ListGroupBy,
-  type TimeTotal,
 } from '@punch/core';
 import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
@@ -58,8 +56,8 @@ export function ExportSheet({
   busy: boolean;
   /** The title the filters suggest, used when none is typed. */
   suggestedTitle: string;
-  /** What the list holds now: how many items, and the open work's time. */
-  matching: { items: number; time: TimeTotal };
+  /** What the list holds now: how many items. */
+  matching: { items: number };
 }) {
   const d = draft;
   const names = useFilterNames(jobId);
@@ -81,8 +79,7 @@ export function ExportSheet({
   };
   const count = d ? filterCount(d.filters) : 0;
   const chips = d ? filterChips(d.filters, names) : [];
-  const time = totalText(matching.time);
-  const summary = `${matching.items === 1 ? '1 item' : `${matching.items} items`}${time ? ` · ${time}` : ''}`;
+  const summary = matching.items === 1 ? '1 item' : `${matching.items} items`;
 
   return (
     <Sheet
@@ -190,18 +187,9 @@ export function ExportSheet({
               }}
               testID="export-blank"
             />
-            <Chip
-              label="How Many Days"
-              on={d.design.daysLines}
-              onPress={() => {
-                haptic.selection();
-                design({ daysLines: !d.design.daysLines });
-              }}
-              testID="export-days"
-            />
           </Facet>
           <Text variant="footnote" color={colors.secondary} style={styles.note}>
-            Blank lines under each group to add anything missing, and a line for the company to write how many days each group takes.
+            Blank lines under each group, to write in anything missing.
           </Text>
 
           {ON_THE_PHONE ? (

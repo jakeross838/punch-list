@@ -221,23 +221,23 @@ describe('what goes out', () => {
     expect(greeting([{ name: '' }])).toBe('Hi,');
   });
 
-  it('writes a company its list, short, with the link to its page and no dashes', () => {
-    const link = 'https://link.rossbuilt.com/c/abc123';
-    const mail = companyListEmail({ job, contacts: [{ name: 'Mike Smith' }], link, from: { name: 'Jake Ross' }, ready: 3 });
+  it('writes a company its list, short and with no dashes', () => {
+    const mail = companyListEmail({ job, contacts: [{ name: 'Mike Smith' }], from: { name: 'Jake Ross' }, company: 'Ross Built', ready: 3 });
     expect(mail.subject).toBe('715 North Shore Drive Completion List');
     expect(mail.body.startsWith('Hi Mike,\n\nHere is your current list for 715 North Shore Drive.')).toBe(true);
     expect(mail.body).toContain('Anything marked ready can be done any time');
-    expect(mail.body).toContain(link);
+    expect(mail.body).not.toContain('http');
     expect(mail.body.endsWith('Thanks,\nJake')).toBe(true);
     expect(noDashes(mail.body)).toBeNull();
-    // Nothing ready, no link: none of that is said.
-    const plain = companyListEmail({ job: { name: 'Fish', address: '' }, contacts: [], link: null, from: null, ready: 0 });
+    // Nothing ready: that is not said. No name yet: it is from the company.
+    const plain = companyListEmail({ job: { name: 'Fish', address: '' }, contacts: [], from: { name: '' }, company: 'Gulf Coast Homes', ready: 0 });
     expect(plain.subject).toBe('Fish Completion List');
     expect(plain.body).not.toContain('marked ready');
-    expect(plain.body).not.toContain('your page');
-    expect(plain.body.endsWith('Thanks,\nRoss Built')).toBe(true);
-    const text = companyListText({ job, contacts: [{ name: 'Dave' }], link, from: { name: 'Jake Ross' } });
-    expect(text).toBe(`Hi Dave, here is your current list for 715 North Shore Drive. Your dates and photos are on your page: ${link} Thanks, Jake`);
+    expect(plain.body.endsWith('Thanks,\nGulf Coast Homes')).toBe(true);
+    expect(companyListEmail({ job, contacts: [], from: null, ready: 0 }).body.endsWith('\n\nThanks.')).toBe(true);
+    const text = companyListText({ job, contacts: [{ name: 'Dave' }], from: { name: 'Jake Ross' } });
+    expect(text).toBe('Hi Dave, here is your current list for 715 North Shore Drive. Let me know if anything is missing. Thanks, Jake');
+    expect(noDashes(text)).toBeNull();
   });
 
   it('writes the Schedule Email to every company', () => {
@@ -252,19 +252,12 @@ describe('what goes out', () => {
 describe('the printed pages', () => {
   const lookups = { locations, companies };
 
-  it("puts the company's page on its list: the scan code and the link", () => {
+  it("puts no page link or scan code on a company's list, and another builder's name on top", () => {
     const list = companyList('sms', [item({ title: 'Install shoe molding' })], lookups);
-    const code = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><path d="M0 0h7v7H0z"/></svg>';
-    const page = companyPrintout(list, { job: { name: 'Fish', address: '' }, date: new Date(2026, 9, 30), link: { url: 'https://link.rossbuilt.com/c/a<b', code } });
-    expect(page.body).toContain('<div class="rb-qr"><svg');
-    expect(page.body).toContain('<b>Your Page</b>');
-    expect(page.body).toContain('https://link.rossbuilt.com/c/a&lt;b');
-    // Anything but a plain drawing is left off; the link still prints.
-    const odd = companyPrintout(list, { job: { name: 'Fish', address: '' }, date: new Date(2026, 9, 30), link: { url: 'https://x.test/c/1', code: '<img src=x onerror=alert(1)>' } });
-    expect(odd.body).not.toContain('rb-qr');
-    expect(odd.body).toContain('https://x.test/c/1');
-    // Without a link: no block.
-    expect(companyPrintout(list, { job: { name: 'Fish', address: '' }, date: new Date(2026, 9, 30) }).body).not.toContain('Your Page');
+    const page = companyPrintout(list, { job: { name: 'Fish', address: '' }, builder: 'Gulf & Bay <Homes>', date: new Date(2026, 9, 30) });
+    expect(page.body).not.toContain('Your Page');
+    expect(page.body).not.toContain('rb-qr');
+    expect(page.body).toContain('<div class="rb-brand-name">GULF &amp; BAY &lt;HOMES&gt;</div>');
   });
 
   it('prints the Whole Schedule: week by week to the finish, every visit, what moved and what is not on it yet', () => {

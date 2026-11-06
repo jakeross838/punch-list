@@ -40,8 +40,6 @@ export interface CaptureState {
   last: { itemId: string; uri: string; width: number; height: number } | null;
   /** The walk to carry on with once the photo is on its item. */
   resume: CaptureState | null;
-  /** When everything with a date was done as this walk began, to say how far the walk moved it; undefined until noted. */
-  startFinish?: string | null;
 }
 
 const EMPTY: CaptureState = {
@@ -150,10 +148,6 @@ export const capture = {
   /** A note over the viewfinder: "Kitchen 109 walked. Now in Pantry 110." */
   say(text: string): void {
     set({ ...state, lastSaved: note(text) });
-  },
-  /** The finish date as the walk begins, noted once. */
-  noteFinish(finish: string | null): void {
-    if (state.startFinish === undefined && state.jobId) set({ ...state, startFinish: finish });
   },
   /** The walk's last item is gone (put on another item, or removed): the camera stops offering it. */
   forget(itemId: string): void {

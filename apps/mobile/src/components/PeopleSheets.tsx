@@ -1,4 +1,4 @@
-// Adding someone at Ross Built, and the invite that tells them how to sign in. Admins add people:
+// Adding someone at your company, and the invite that tells them how to sign in. Admins add people:
 // a name and the email they sign in with, Admin or Team, and whether they see every job or only the
 // jobs they are on. Nobody is ever deleted; switched off, they can no longer sign in.
 
@@ -10,16 +10,18 @@ import { useData } from '@/data/api';
 import { haptic, ListRow, ListSection, ListTextField, Sheet, useFeedback } from '@/ui';
 
 /** The invite, sent by whoever added them: short, and how to get in. */
-export function inviteText(person: Pick<Person, 'name' | 'email'>): string {
+export function inviteText(person: Pick<Person, 'name' | 'email'>, company: string): string {
   const first = person.name.trim().split(/\s+/)[0] ?? person.name;
-  return `Hi ${first}, I set you up on ${APP_NAME}, the app we use for every job's list. Once it is on your phone, sign in with ${person.email} and your jobs will be there.`;
+  const at = company.trim() ? ` for ${company.trim()}` : '';
+  return `Hi ${first}, I set you up on ${APP_NAME}${at}, the app we use for every job's list. Once it is on your phone, sign in with ${person.email} and your jobs will be there.`;
 }
 
 /** Opens the share sheet with the invite; where sharing is not offered, says the invite instead. */
 export function useInvite() {
   const feedback = useFeedback();
+  const company = useData().useOrg().name;
   return async (person: Pick<Person, 'name' | 'email'>) => {
-    const message = inviteText(person);
+    const message = inviteText(person, company);
     try {
       await Share.share({ message });
     } catch {

@@ -14,6 +14,12 @@ export type Role = 'admin' | 'team';
 /** Which jobs a person sees: every job, or only the jobs they are on. Admins see every job. */
 export type Sees = 'all' | 'assigned';
 
+/** The company using the app: its people, its jobs and its own setup. Its name goes on every list it sends. */
+export interface Org {
+  id: string;
+  name: string;
+}
+
 export interface Person {
   id: string;
   email: string;
@@ -90,7 +96,7 @@ export interface Item {
   locationId: string;
   /** Job-wide, assigned by the database on first sync. Null until then. */
   number: number | null;
-  /** The person at Ross Built it is assigned to, if anyone: it shows on their My Items. */
+  /** The person at the company it is assigned to, if anyone: it shows on their My Items. */
   assignedTo: string | null;
   title: string;
   description: string;
@@ -98,7 +104,7 @@ export interface Item {
   companyId: string | null;
   kind: ItemKind;
   ready: boolean;
-  /** Who it waits on, for what is not a task on the list: the owner, the design team, Ross Built, someone else. */
+  /** Who it waits on, for what is not a task on the list: the owner, the design team, your own company, someone else. */
   waitingOn: string[];
   /** The tasks that have to be done first, usually one: the ids of other items on the job. */
   waitingOnItems: string[];
@@ -127,8 +133,8 @@ export interface Item {
   /** Empty until the Buildertrend connection is turned on. */
   btExternalId: string | null;
   /**
-   * When the company said the work is done, from its own page: the item is To Check until someone
-   * at Ross Built looks and marks it Complete or Not Done. Only Ross Built completes an item.
+   * When the company said the work is done, from its own page (out of the app for now): the item
+   * waited for someone at your company to look. Only your own team completes an item.
    */
   markedDoneAt?: string | null;
   /** Wanted first: it sorts to the top of its list and shows a red mark. */
@@ -182,7 +188,7 @@ export interface Visit {
   confirmed: boolean;
   note: string;
   removed: boolean;
-  /** Other dates the company asked for from its page, until Ross Built moves the visit or keeps it. */
+  /** Other dates the company asked for from its page, until the visit is moved or kept as it is. */
   askedStart: string | null;
   askedDays: number | null;
   /** The name the company's person typed. */
@@ -249,7 +255,7 @@ export interface Contact {
 // ---------- comments ----------
 
 /**
- * A comment on an item, or on a company's whole list on a job: a back and forth between Ross Built
+ * A comment on an item, or on a company's whole list on a job: a back and forth between your team
  * and the company doing the work. Never deleted; taking one back marks it removed.
  */
 export interface Comment {
@@ -260,13 +266,13 @@ export interface Comment {
   /** The company the conversation is with. */
   companyId: string | null;
   body: string;
-  /** Who at Ross Built wrote it; null when the company did. */
+  /** Who at your company wrote it; null when the company doing the work did. */
   personId: string | null;
   /** The company wrote it, from its page. */
   fromCompany: boolean;
   /** The name the company's person typed on the page. */
   authorName: string | null;
-  /** Ross Built only: never on the company's page or a printed list. */
+  /** Internal: only your own company sees it, never on a printed list. */
   internal: boolean;
   removed: boolean;
   createdAt: string;
@@ -326,7 +332,7 @@ export type RoomKind = 'bathroom' | 'kitchen' | 'laundry' | 'bedroom' | 'closet'
 
 export type CustomFieldKind = 'text' | 'list' | 'yes_no' | 'date';
 
-/** A field Ross Built adds to the form in Item Form setup, like Found By. */
+/** A field your company adds to the form in Item Form setup, like Found By. */
 export interface CustomField {
   id: string;
   label: string;

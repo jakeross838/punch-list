@@ -1,5 +1,5 @@
 // What covers additional work once it is priced: a purchase order to the company, a variance
-// purchase order for a cost Ross Built carries, or a change order with the owner, with its number.
+// purchase order for a cost the builder carries, or a change order with the owner, with its number.
 // Until it has one, additional work is to be quoted. Kept as one short reference, "CO 14", the way
 // Buildertrend writes it, and always said in full on screen and on paper: "Change Order 14".
 

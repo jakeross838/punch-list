@@ -1,20 +1,30 @@
 // The iPhone's backend once the project is set up: the real database, through PowerSync. Every
 // change is made on the phone first and goes up when there is a signal, so the app works the same
-// on a job site with no signal. Signing in connects the phone; signing out clears it.
+// on a job site with no signal. Signing in connects the phone; signing out clears it. Someone new
+// signs in, starts their company and is its admin; deleting an account clears the phone too.
 
 import { PowerSyncContext, useQuery, useStatus } from '@powersync/react-native';
-import { tidyComment, tidyEmail, type Activity } from '@punch/core';
+import { companyNameProblem, tidyComment, tidyCompanyName, tidyEmail, yourNameProblem, type Activity } from '@punch/core';
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { DataContext, type DataApi, type SyncInfo } from '../api';
 import { latestFirst, makeApi, UPDATES_KEPT, type Keeper } from '../engine';
 import { keepPhoto } from '../photoFiles';
 import { SupabaseConnector } from '../powersync/connector';
-import { NOT_SET_UP, sendSignInCode, signOutOfSupabase, supabase, verifySignInCode } from '../powersync/supabase';
+import {
+  deleteAccountOnServer,
+  deletePhotosOnServer,
+  myAccount,
+  sendSignInCode,
+  signOutOfSupabase,
+  startCompanyOnServer,
+  supabase,
+  verifySignInCode,
+} from '../powersync/supabase';
 import { rowToItemHistory, rowToJobActivity } from '../rows';
 import { db } from './db';
-import { deletePhotoFiles, photosWaiting, startPhotos, stopPhotos } from './photos';
-import { changed, loadEverything, reset, save, sessionEmail, setSessionEmail, store, WATCHED_TABLES } from './store';
+import { BUCKET, deletePhotoFiles, photosWaiting, startPhotos, stopPhotos } from './photos';
+import { changed, loadEverything, reset, save, sessionEmail, setNewAccount, setSessionEmail, store, WATCHED_TABLES } from './store';
 
 type Row = Record<string, unknown>;
 
@@ -46,6 +56,30 @@ async function follow(email: string | null): Promise<void> {
   }
 }
 
+/** The sentence for someone switched off at their company. */
+const switchedOff = (company: string) => `That email is switched off at ${company || 'its company'}. Ask an admin there to switch it back on.`;
+
+/**
+ * Signed in, but nobody on the phone yet: someone new who has not started their company (they
+ * start it on the sign in screen), or someone switched off since (the phone is cleared).
+ */
+async function checkAccount(clean: string): Promise<void> {
+  const account = await myAccount();
+  if (!account || sessionEmail() !== clean || store.get().signedIn) return;
+  if (account.state === 'none') setNewAccount(clean);
+  else if (account.state === 'off') await clearPhone();
+}
+
+/** Waits for the signed-in person's row to come down to the phone. True once it is here. */
+async function personArrives(clean: string, ms: number): Promise<boolean> {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    if (await db.getOptional('SELECT id FROM people WHERE email = ? AND active = 1', [clean])) return true;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return false;
+}
+
 let starting: Promise<void> | null = null;
 
 function start(): Promise<void> {
@@ -54,7 +88,9 @@ function start(): Promise<void> {
     await loadEverything();
     db.onChange({ onChange: (e) => changed(e.changedTables) }, { tables: WATCHED_TABLES, throttleMs: 30 });
     const { data } = await supabase.auth.getSession();
-    await follow(data.session?.user.email ?? null);
+    const email = data.session?.user.email ?? null;
+    await follow(email);
+    if (email && !store.get().signedIn) void checkAccount(tidyEmail(email));
     supabase.auth.onAuthStateChange((_event, session) => {
       // Not inside the callback: Supabase asks that its own calls wait until it returns.
       setTimeout(() => void follow(session?.user.email ?? null), 0);
@@ -82,6 +118,7 @@ const THINGS: Record<string, string> = {
   list_sends: 'A list sent',
   locations: 'A location',
   jobs: 'A job',
+  orgs: 'The company name',
   people: 'A person',
   job_team: 'Someone on a team',
   companies: 'A company',
@@ -120,7 +157,17 @@ const liveApi: DataApi = makeApi(keeper, {
   async verifySignInCode(email, code) {
     await verifySignInCode(email, code);
     const clean = tidyEmail(email);
+    const account = await myAccount();
+    if (account?.state === 'off') {
+      await clearPhone();
+      throw new Error(switchedOff(account.company));
+    }
     await follow(clean);
+    // Someone new: they start their company next, on the sign in screen.
+    if (account?.state === 'none') {
+      setNewAccount(clean);
+      return 'new';
+    }
     // The first time, everything comes down before the app opens; past a while it carries on with
     // Getting Your Jobs on this screen.
     const enough = new AbortController();
@@ -132,10 +179,43 @@ const liveApi: DataApi = makeApi(keeper, {
     }
     const me = await db.getOptional('SELECT id FROM people WHERE email = ? AND active = 1', [clean]);
     if (db.currentStatus.hasSynced && !me) {
-      // Synced, and not one of Ross Built's people (or switched off since the account was made).
-      await clearPhone();
-      throw new Error(NOT_SET_UP);
+      // Synced and not with a company: the server could not be asked before, so start one now.
+      setNewAccount(clean);
+      return 'new';
     }
+    return 'signed_in';
+  },
+  async startCompany({ company, name }) {
+    const clean = store.get().newAccount ?? sessionEmail();
+    if (!clean) throw new Error('Sign in first.');
+    const problem = companyNameProblem(company) ?? yourNameProblem(name);
+    if (problem) throw new Error(`${problem}.`);
+    await startCompanyOnServer(tidyCompanyName(company), tidyCompanyName(name));
+    // A fresh connection brings the new company down.
+    await db.disconnect();
+    db.connect(connector).catch((e: unknown) => console.warn('Connecting the phone', e));
+    if (!(await personArrives(clean, 30_000))) {
+      throw new Error('Your company is set up. It has not come down to this phone yet: check the signal, then tap Start again.');
+    }
+    setNewAccount(null);
+  },
+  async deleteAccount() {
+    const changes = (await db.getUploadQueueStats()).count + (await photosWaiting());
+    if (changes > 0) {
+      throw new Error(
+        `${changes === 1 ? 'A change' : `${changes} changes`} made on this phone ${changes === 1 ? 'has' : 'have'} not gone up yet. Get a signal and wait a moment, then delete your account.`,
+      );
+    }
+    // The last one at the company takes it with them: its photos first, from storage.
+    const s = store.get();
+    if (!s.people.some((p) => p.active && p.id !== s.me.id)) {
+      const rows = await db.getAll<Row>(
+        "SELECT storage_path FROM photos WHERE coalesce(storage_path, '') <> '' UNION SELECT storage_path FROM plan_sheets WHERE coalesce(storage_path, '') <> ''",
+      );
+      await deletePhotosOnServer(BUCKET, rows.map((r) => String(r.storage_path)));
+    }
+    await deleteAccountOnServer();
+    await clearPhone();
   },
   async signOut() {
     const changes = (await db.getUploadQueueStats()).count + (await photosWaiting());
@@ -183,6 +263,7 @@ const liveApi: DataApi = makeApi(keeper, {
     await db.execute('DELETE FROM rejected_changes');
   },
   // The company's page, from the app: through the database's functions for the page, with the link.
+  // The page is out of the app for now, and the database keeps these functions closed.
   async addCompanyComment({ jobId, companyId, itemId, body, name }) {
     const text = tidyComment(body);
     if (text === '') return '';

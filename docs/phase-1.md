@@ -6,6 +6,19 @@
 
 **Design:** [Punch List App Design](https://claude.ai/artifact/MkYkFBRyhwxCDGG488omuC), the approved canvas. Jake's review asked for less text up front, the rest one tap in, very calm and easy to use, with a clear way to check things complete.
 
+## The simple app, for any company (6 November 2026)
+
+Jake's direction: "Remove the schedule feature for now, this is an app that allows anyone to walk into a job and take pictures of what's left to do or deficiencies or such and be able to keep a running list with marked up pictures. That's it for now, very simple. Needs to be fully capable of having companies onboard their people to use it." Ready or not and comments stay; supers and PMs use it to get lists to subcontractors so they know what work is left.
+
+- **Out for now:** the Schedule tab and everything under it (visits, Past Due, Ready By dates, estimated time, the Schedule Email and the Three Week Look Ahead), plans with pins, the Updates bell, To Check and the company pages reached through a link. The bottom bar is Jobs, Capture and Send. The printed lists have no dates, no time, no lines for the days and no link. Their tables stay in the database, so nothing already kept is lost.
+- **Stays:** jobs and locations, the camera walk, photos with markup, the running list, Ready and Waiting On, comments (internal notes stay inside the company), checklists and priority, and each company's list to send, the owner's and the whole job, the spreadsheet and Make a List.
+- **Sign up:** anyone signs in with their email and a six digit code. Someone new names their company and is its admin, then adds their people under People and sends each an invite; someone an admin added goes straight in. The company's name is at the top of every list and signs the emails; an admin changes it in Me. A new company starts with the usual trades.
+- **Each company sees only its own:** the database checks every read and write against the signed-in person's company and fills in the company on every row itself; each phone gets only its own company's rows; names are unique within a company. Checked with two companies side by side (`npm run test:db`).
+- **Delete My Account,** in Me: the sign in goes for good, and the person's name, email and phone come off their records, which stay with the company under Deleted Account. An admin with people still at the company makes someone else an admin first. The last one at a company takes the whole company with them: its jobs, items, photos and lists.
+- **Before others can sign up:** the sign in emails need the project's own sender (custom SMTP), since Supabase's own only reaches the project's team.
+
+The sections below are the history of how the app got here, schedule included.
+
 ## The walk
 
 1. **Jobs** opens to the job.

@@ -22,6 +22,7 @@ export * from './filters';
 export * from './comments';
 export * from './roomTasks';
 export * from './people';
+export * from './company';
 export * from './copy';
 export * from './templates';
 export * from './tracking';

@@ -16,7 +16,7 @@ export default function PersonScreen() {
   if (!person) {
     return (
       <Page title="Person" backLabel="People">
-        <EmptyState icon="person" title="Not Found" message="This person is not at Ross Built." />
+        <EmptyState icon="person" title="Not Found" message="This person is not at your company." />
       </Page>
     );
   }
@@ -97,7 +97,7 @@ function PersonDetail({ person }: { person: Person }) {
   const notOn = jobs.filter((j) => !j.closed && !team.some((t) => t.jobId === j.id));
 
   return (
-    <Page title={person.name} eyebrow="Person" crumb={['Me', 'People', person.name]} backLabel="People" subtitle={person.active ? undefined : 'Switched off'} tab={{ active: 'me' }}>
+    <Page title={person.name} eyebrow="Person" crumb={['Me', 'People', person.name]} backLabel="People" subtitle={person.active ? undefined : 'Switched off'} tab={{}}>
       <ListSection header="Contact">
         <ListLabeledField
           label="Name"

@@ -232,7 +232,7 @@ export interface Tile {
   testID?: string;
 }
 
-/** The big square buttons on a job: Walk, Plans, Send Lists. */
+/** The big square buttons on a job: Walk and Send Lists. */
 export function Tiles({ tiles, style }: { tiles: Tile[]; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.tiles, style]}>

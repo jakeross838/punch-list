@@ -1,25 +1,23 @@
 // One item, everything about it in one calm place, Site Office style, and every part of it changes
 // right where it is: retype the title, tick Ready, pick another location, mark up a photo. Each
 // change saves as it is made. Up front: the photo, the status and the company, then the title, the
-// location, the company and Ready; the time, the type, the order, Priority, the added fields and the
-// visit wait under Details. The checklist, the comments and the history follow. Complete is the big
-// button along the bottom; when the company says the work is done it sits beside Not Done. Only Ross
-// Built marks items complete, and removing never deletes. A draft says what it still needs (or that
-// Claude is filling it in from the photo) and steps to the next one, for checking them sitting down
-// after a walk: Next puts a draft that has everything it needs on the lists. Opened from the camera
-// on a walk, Done goes back to the camera. A draft whose photo is of something already on the list
-// can put the photo on that item instead. More pins it on the plan, makes it a priority or copies it.
+// location, the company and Ready; the type, the order, Priority and the added fields wait under
+// Details. The checklist, the comments and the history follow. Complete is the big button along the
+// bottom. Only your own team marks items complete, and removing never deletes. A draft says what it
+// still needs (or that Claude is filling it in from the photo) and steps to the next one, for
+// checking them sitting down after a walk: Next puts a draft that has everything it needs on the
+// lists. Opened from the camera on a walk, Done goes back to the camera. A draft whose photo is of
+// something already on the list can put the photo on that item instead. More makes it a priority or
+// copies it.
 
 import {
   checkItem,
   commentAuthor,
   complete,
-  dayOfDate,
   itemComments,
   kindText,
   itemNumberLabel,
   missingText,
-  pastDue,
   remove,
   reopen,
   restore,
@@ -27,7 +25,6 @@ import {
   sortItems,
   tradeRanks,
   tidyItem,
-  visitEnd,
   type Item,
   type ItemFields,
   type Mark,
@@ -67,7 +64,6 @@ import {
   PhotoView,
   PhotoViewer,
   Pill,
-  shortDate,
   Text,
   Touchable,
   useFeedback,
@@ -127,7 +123,7 @@ function useLiveItem(item: Item) {
       setTyped((t) => ({ ...t, ...patch }));
       return;
     }
-    // A visit belongs to one company: a new company takes the item off its visit.
+    // A new company takes the item off any visit it was on: a visit belongs to one company.
     const move = 'companyId' in patch && patch.companyId !== value.companyId && value.visitId ? { visitId: null } : {};
     const next = tidyItem({ ...value, ...patch, ...move });
     const changes: Partial<ItemDraft> = {};
@@ -170,7 +166,6 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   const room = data.useLocations(jobId).find((l) => l.id === item.locationId);
   const companies = data.useCompanies();
   const company = companies.find((c) => c.id === item.companyId);
-  const visit = data.useVisits(jobId).find((v) => v.id === item.visitId);
   const live = useLiveItem(item);
   const release = useRelease(jobId);
   const filler = useFillIn(jobId);
@@ -285,11 +280,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
     else router.back();
   }
 
-  const openPlan = () => {
-    if (item.companyId) router.push({ pathname: '/jobs/[jobId]/plan/[companyId]', params: { jobId, companyId: item.companyId } });
-  };
-
-  const who = people.find((p) => p.id === item.completedBy)?.name ?? 'Ross Built';
+  const who = people.find((p) => p.id === item.completedBy)?.name ?? 'Someone';
   function draftDetail() {
     if (filling) return 'Claude is filling it in from the photo.';
     const missing = missingText(live.value);
@@ -305,15 +296,6 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
           ? { icon: 'pencil.tip', color: colors.tint, line: 'Draft', detail: draftDetail() }
           : null;
 
-  const notDone = () => {
-    const was = item.markedDoneAt ?? null;
-    haptic.tap();
-    void data.updateItem(item.id, { markedDoneAt: null });
-    feedback.toast({
-      message: `Back on ${company?.name ?? 'the company'}'s list as not done`,
-      action: { label: 'Undo', onPress: () => void data.updateItem(item.id, { markedDoneAt: was }) },
-    });
-  };
   const bottom: BarButton[] = fromCamera
     ? [{ kind: 'button', label: 'Done', icon: 'checkmark', variant: 'prominent', onPress: goNext, testID: 'done-camera' }]
     : stepping
@@ -321,10 +303,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
         ? [{ kind: 'button', label: `Next (${unfinished.length} more)`, icon: 'chevron.right', variant: 'prominent', onPress: goNext, testID: 'next-unfinished' }]
         : [{ kind: 'button', label: 'Done', icon: 'checkmark', variant: 'prominent', onPress: goNext, testID: 'done-unfinished' }]
       : item.status === 'open'
-        ? [
-            ...(item.markedDoneAt ? [{ kind: 'button' as const, label: 'Not Done', variant: 'plain' as const, onPress: notDone, testID: 'not-done' }] : []),
-            { kind: 'button', label: 'Complete', icon: 'checkmark', variant: 'prominent', onPress: () => void markComplete(), testID: 'mark-complete' },
-          ]
+        ? [{ kind: 'button', label: 'Complete', icon: 'checkmark', variant: 'prominent', onPress: () => void markComplete(), testID: 'mark-complete' }]
         : item.status === 'complete'
           ? [{ kind: 'button', label: 'Reopen', icon: 'undo', variant: 'plain', onPress: () => void setStatus(reopen), testID: 'reopen' }]
           : [{ kind: 'button', label: 'Restore to List', icon: 'undo', variant: 'plain', onPress: () => void setStatus(restore), testID: 'restore' }];
@@ -339,7 +318,6 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
         actions: [
           ...(item.status === 'open'
             ? [
-                { label: item.planId ? 'Move the Pin on the Plan' : 'Pin on the Plan', icon: 'pin' as IconName, onPress: () => router.push({ pathname: '/jobs/[jobId]/plans', params: { jobId, pin: item.id } }), testID: 'pin-on-plan' },
                 {
                   label: 'Priority',
                   icon: 'bolt' as IconName,
@@ -367,32 +345,10 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
       ...(item.status !== 'removed' ? [{ actions: [{ label: 'Remove from List', icon: 'trash' as IconName, destructive: true, onPress: () => void removeItem(), testID: 'remove' }] }] : []),
     ],
   };
-  const today = dayOfDate(new Date());
-  // Past due as Past Due counts it: its own Ready By, or a visit that ended with it open.
-  const overdue = item.status === 'open' && !item.unfinished ? pastDue([item], visit ? [visit] : [], today)[0] : undefined;
-  const days = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`;
-  const st = itemStatus(item, {
-    holds,
-    company: company?.name,
-    late: overdue ? { days: overdue.days, why: overdue.reason === 'visit' ? `Visit ended ${days(overdue.days)} ago` : undefined } : undefined,
-  });
-  // Under the pill, in a sentence, what the Ready row below does not already say.
-  const openNote =
-    item.status !== 'open' || item.unfinished
-      ? undefined
-      : item.markedDoneAt
-        ? `${company?.name ?? 'The company'} said it is done on ${dayOf(item.markedDoneAt)}. Check it, then tap Complete, or Not Done to put it back on their list.`
-        : item.ready && overdue?.reason === 'visit'
-          ? `Its visit ended ${days(overdue.days)} ago and it is still open.`
-          : undefined;
+  const st = itemStatus(item, { holds });
   const creator = people.find((p) => p.id === item.createdBy)?.name;
   const addedOn = item.createdAt && !Number.isNaN(new Date(item.createdAt).getTime()) ? dayOf(item.createdAt) : null;
   const added = ['Added', addedOn ? `on ${addedOn}` : null, creator ? `by ${creator}` : null].filter(Boolean).join(' ');
-
-  const scheduled = item.status === 'open' && !item.unfinished && !!company;
-  const visitText = visit
-    ? `${shortDate(visit.start)}${visit.days > 1 ? ` to ${shortDate(visitEnd(visit))}` : ''}, ${visit.confirmed ? 'confirmed' : 'best guess'}${visitEnd(visit) < today && item.status === 'open' ? ', past due' : ''}`
-    : 'Not scheduled';
 
   // Comments and History each fold into one row with the latest in it; a tap opens them.
   const look = { people: new Map(people.map((p) => [p.id, p.name])), companies: new Map(companies.map((c) => [c.id, c.name])) };
@@ -484,8 +440,6 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
         <View testID="item-status">
           <Banner>{status.detail ? `${status.line}. ${status.detail}` : status.line}</Banner>
         </View>
-      ) : openNote ? (
-        <Banner>{openNote}</Banner>
       ) : null}
 
       <View style={styles.editor}>
@@ -498,14 +452,6 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
           showReady={item.status === 'open'}
           fillIn={filler.can && photo && !filling ? { busy: filler.busy, onPress: () => void filler.fillIn(photo, live.value, (patch) => live.set(patch)) } : undefined}
           onTwin={item.unfinished && item.status === 'open' && photos.length > 0 ? { label: 'Add the photo to it instead.', onPress: (twin) => void moveTo(twin) } : undefined}
-          detailWords={scheduled ? [visit ? `Visit ${shortDate(visit.start)}` : 'Not scheduled'] : undefined}
-          details={
-            scheduled ? (
-              <ListSection header="Visit">
-                <ListRow title="Visit" field value={visitText} valueColor={visit ? colors.secondary : colors.tint} accessory="chevron" onPress={openPlan} testID="item-visit" />
-              </ListSection>
-            ) : null
-          }
         >
           {targets.length > 0 ? (
             <ListSection footer="When this photo is of something already on the list, it goes on that item and this draft comes off the list.">
@@ -535,7 +481,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
               <CommentThread
                 comments={thread}
                 onPost={(body, internal) => void data.addComment({ jobId, itemId: item.id, companyId: item.companyId, body, internal })}
-                hint={company ? `${company.name} sees comments on its page and on its next list.` : 'The company sees comments on its page and on its next list.'}
+                hint={company ? `${company.name} sees comments on its next list.` : 'The company sees comments on its next list.'}
                 testID="item-comments"
               />
             </View>

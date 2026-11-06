@@ -4,8 +4,7 @@
 // (item History and the job's Activity) is read where it is shown, not kept here.
 
 import { randomUUID } from 'expo-crypto';
-import { DEFAULT_FORM, DEFAULT_VIEW, KINDS, readViewSettings, type FormSettings, type ItemKind, type Person } from '@punch/core';
-import { ORG } from '../config';
+import { DEFAULT_FORM, DEFAULT_VIEW, KINDS, readViewSettings, type FormSettings, type ItemKind, type Org, type Person } from '@punch/core';
 import type { State } from '../engine';
 import {
   rowToComment,
@@ -63,7 +62,7 @@ const LISTS = {
 } as const;
 
 type ListKey = keyof typeof LISTS;
-type Part = ListKey | 'waitingOn' | 'settings';
+type Part = ListKey | 'waitingOn' | 'settings' | 'org';
 
 /** Which parts of the state each table fills. */
 const TABLE_PARTS: Record<string, Part[]> = {
@@ -89,19 +88,24 @@ const TABLE_PARTS: Record<string, Part[]> = {
   templates: ['templates'],
   template_items: ['templateItems'],
   person_settings: ['settings'],
+  orgs: ['org'],
 };
 
 export const WATCHED_TABLES = Object.keys(TABLE_PARTS);
-const ALL_PARTS: Part[] = [...(Object.keys(LISTS) as ListKey[]), 'waitingOn', 'settings'];
+const ALL_PARTS: Part[] = [...(Object.keys(LISTS) as ListKey[]), 'waitingOn', 'settings', 'org'];
 
 /** Nobody signed in. */
 const NOBODY: Person = { id: '', email: '', name: '', active: false, role: 'team', sees: 'assigned', phone: null };
+/** No company yet. */
+const NO_ORG: Org = { id: '', name: '' };
 
 export function emptyState(): State {
   return {
     me: NOBODY,
     signedIn: false,
     codeFor: null,
+    newAccount: null,
+    org: NO_ORG,
     people: [],
     activity: [],
     jobs: [],
@@ -169,6 +173,12 @@ export function setSessionEmail(next: string | null): void {
 
 export const sessionEmail = () => email;
 
+/** Signed in with an email that is not with a company yet, or null. */
+export function setNewAccount(next: string | null): void {
+  if (next === state.newAccount) return;
+  setState({ ...state, newAccount: next });
+}
+
 // ---------- reading the phone's database ----------
 
 /** Each list's records by id, with the row each was read from, so a record that did not change stays the same record. */
@@ -232,6 +242,11 @@ async function loadParts(parts: Set<Part>): Promise<Partial<State>> {
       out.waitingOn = waitingOn;
     } else if (part === 'settings') {
       settingsRows = await db.getAll<Row>('SELECT * FROM person_settings');
+    } else if (part === 'org') {
+      // Only the signed-in person's company comes down.
+      const row = await db.getOptional<Row>('SELECT id, name FROM orgs LIMIT 1');
+      const org: Org = row ? { id: String(row.id), name: String(row.name ?? '') } : NO_ORG;
+      out.org = org.id === state.org.id && org.name === state.org.name ? state.org : org;
     } else {
       (out as Record<string, unknown>)[part] = await loadList(part);
     }
@@ -289,7 +304,7 @@ async function readAgain(): Promise<void> {
 /** Every table changed: the phone's database was just opened, or cleared. */
 export async function loadEverything(): Promise<void> {
   const loaded = await loadParts(new Set(ALL_PARTS));
-  const next = withMe({ ...emptyState(), ...loaded });
+  const next = withMe({ ...emptyState(), ...loaded, newAccount: state.newAccount });
   setState({ ...next, ...settingsFor(next) });
 }
 
@@ -316,6 +331,7 @@ export function reset(): void {
 
 /** The parts of the state that are the app's own; the rest the phone works out. */
 const KEPT: (keyof State)[] = [
+  'org',
   'people',
   'jobs',
   'team',
@@ -366,7 +382,7 @@ export async function save(next: Partial<State>): Promise<void> {
   try {
     await db.writeTransaction(async (tx) => {
       for (const w of plan.writes) {
-        const { sql, params } = toSql(w, ORG);
+        const { sql, params } = toSql(w, before.org.id);
         await tx.execute(sql, params);
       }
     });

@@ -1,7 +1,7 @@
 // The lists that go out: one per company for the subs, one for the owner and design team, and the
-// whole job for Ross Built. Open, finished items only, the room on every line. A company's list says
+// whole job for your own team. Open, finished items only, the room on every line. A company's list says
 // what is ready now, then what is waiting, grouped by what it waits on and soonest first, then
-// additional work to be quoted, so the work can be scheduled in batches and in the right order.
+// additional work to be quoted, so the work can be done in batches and in the right order.
 
 import { matchesFilters, type FilterContext, type ItemFilters } from './filters';
 import { holdLookups, holdText, readyByOf, type HoldLookups } from './holds';
@@ -157,7 +157,7 @@ export function companiesWithWork(items: Item[], lookups: ListLookups): CompanyW
 
 /**
  * Who else work waits on: the owner, the design team, anyone who is not a company on the job and
- * not Ross Built. Their list is what Ross Built needs from them, the soonest needed first.
+ * not your own company. Their list is what the work waits on from them, the soonest needed first.
  */
 export function partiesWaitedOn(items: Item[], lookups: ListLookups): { party: string; lines: number }[] {
   const companies = new Set(lookups.companies.map((c) => c.name.trim().toLowerCase()));

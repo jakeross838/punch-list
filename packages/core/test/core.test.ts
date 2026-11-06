@@ -16,6 +16,7 @@ import {
   RuleError,
   SHARED_AREAS,
   tidyItem,
+  defaultWaitingOnExtras,
   waitingOnChoices,
   type ItemFields,
   type Person,
@@ -204,6 +205,8 @@ describe('Waiting On choices', () => {
       { id: 'c3', name: 'Ross Built', defaultTradeId: null, phone: null, email: null, active: true },
     ];
     const jobCompanies = companies.map((c) => ({ jobId: 'j1', companyId: c.id, tradeId: 't1' }));
+    expect(defaultWaitingOnExtras(' Ross Built ')).toEqual(['Ross Built', 'Owner']);
+    expect(defaultWaitingOnExtras('')).toEqual(['Owner']);
     expect(waitingOnChoices(jobCompanies, companies, ['Ross Built', 'Owner', 'Cortney Bishop Design'])).toEqual([
       'Ross Built',
       'Owner',

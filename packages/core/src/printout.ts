@@ -1,18 +1,15 @@
 // The lists as printed pages, to the house document standard: US Letter, Nunito Sans at 10 point,
 // the five house colors, and tables that carry the content (dark slate header rows, light blue
-// group bands, white and cream rows).
+// group bands, white and cream rows). The builder's own name is at the top of every page.
 //
-// A company's list: each scheduled visit with the items on it, then what is ready now and not
-// scheduled, then what is waiting, grouped by what it waits on, each group with a line for the days
-// it takes (one duration per batch, as the schedule bars carry), then additional work that needs a
-// price (to be quoted, with a line for the price), then blank lines to add anything missing. Items new since the last list say so. The owner's
-// list says what Ross Built needs from them and by when. The whole job list goes location by
-// location with the company on every line. A list made to order takes any filters, groups by
-// location, company or what it waits on, shows the details picked on every line,
-// and totals each group's estimated time. The three week look ahead is the schedule for everyone:
-// each company's visits across the next three weeks, green once confirmed and blue for our best
-// guess, what each visit covers, and what has no date yet.
-// Plain HTML, so the phone turns it into a PDF and the preview page shows the very same thing.
+// A company's list: what is ready now, then what is waiting, grouped by what it waits on, then
+// additional work that needs a price (to be quoted, with a line for the price), then blank lines to
+// add anything missing. Items new since the last list say so. The owner's list says what the builder
+// needs from them. The whole job list goes location by location with the company on every line. A
+// list made to order takes any filters, groups by location, company or what it waits on, and shows
+// the details picked on every line. The schedule pages further down are kept for when the schedule
+// comes back. Plain HTML, so the phone turns it into a PDF and the preview page shows the very same
+// thing.
 
 import { addDays, dayOfDate, daysBetween, holidayGroups, holidayOn, holidaysBetween, isDay, mondayOf, visitEnd } from './dates';
 import { holdText } from './holds';
@@ -22,7 +19,6 @@ import { timelineRows, workingIndex, type Timeline, type TimelineBar } from './t
 import { anyChange, changeText, movedText, type ScheduleChanges } from './tracking';
 import { markShapes, type MarkShape } from './marks';
 import { isPriced } from './rules';
-import { daysText, hoursText, totalText, totalTime } from './time';
 import type { Item, Mark, Visit } from './types';
 import { itemNumberLabel } from './views';
 
@@ -36,20 +32,18 @@ export interface PrintPhoto {
 
 export interface PrintSettings {
   job: { name: string; address: string };
+  /** Whose list it is, at the top of every page: the company using the app. */
+  builder?: string;
   /** The day the list is made. */
   date: Date;
   /** An item's photo, when photos are included. */
   photo?: (itemId: string) => PrintPhoto | undefined;
   /** Items that were not on the last list sent. */
   isNew?: (itemId: string) => boolean;
-  /** The company's scheduled visits; their items print under them instead of under Ready Now. */
-  visits?: Visit[];
-  /** Each item's comments to print, oldest first: only ones the company may see, never Ross Built only notes. */
+  /** Each item's comments to print, oldest first: only ones the company may see, never internal notes. */
   comments?: (itemId: string) => PrintComment[];
   /** Comments on the company's whole list, the same way. */
   listComments?: PrintComment[];
-  /** The company's own page: its link, and the scan code for it as an SVG. */
-  link?: { url: string; code: string | null };
 }
 
 /** A comment ready to print: who wrote it, when (an ISO time) and what it says. */
@@ -161,44 +155,22 @@ function workCell(line: ListLine, settings: PrintSettings): string {
   return parts.join('');
 }
 
-/** Ready, or what it waits on and when it should be ready; past due only by its own Ready By. */
-function readyCell(line: ListLine, today: Date): string {
-  const { item } = line;
-  if (item.ready) return 'Ready';
-  let text = `Waiting on ${line.waiting || 'something not named'}`;
-  if (isDay(line.readyBy)) {
-    text += `, ready by ${dayText(line.readyBy, today)}`;
-    const late = line.readyBy === item.readyBy ? daysBetween(line.readyBy, dayOfDate(today)) : 0;
-    if (late > 0) return `${esc(text)}, <span class="rb-late">${late} ${late === 1 ? 'day' : 'days'} past due</span>`;
-  }
-  return esc(text);
+/** Ready, or what it waits on. */
+function readyCell(line: ListLine): string {
+  if (line.item.ready) return 'Ready';
+  return esc(`Waiting on ${line.waiting || 'something not named'}`);
 }
 
 function header(settings: PrintSettings, kind: string, title: string, summary: string): string {
   const { job, date } = settings;
   return [
     '<div class="rb-head">',
-    '<div class="rb-brand"><div class="rb-brand-name">ROSS BUILT</div><div class="rb-brand-sub">CUSTOM HOMES</div></div>',
+    `<div class="rb-brand"><div class="rb-brand-name">${esc((settings.builder ?? '').toUpperCase())}</div><div class="rb-brand-sub">PUNCH LIST</div></div>`,
     `<div class="rb-head-right"><b>${esc(kind)}</b>${esc(printDate(date))}</div>`,
     '</div>',
     `<h1 class="rb-title">${esc(title)}</h1>`,
     `<p class="rb-job">${esc([job.name, job.address].filter(Boolean).join(', '))}</p>`,
     `<p class="rb-summary">${esc(summary)}</p>`,
-  ].join('');
-}
-
-/** The company's page: the scan code and the link, to see its dates and photos, answer and comment. */
-function linkBlock(link: PrintSettings['link']): string {
-  if (!link) return '';
-  // The code is drawn here from the link, never typed by anyone: only a plain SVG goes on the page.
-  const code = link.code && /^<svg[\s>]/.test(link.code.trim()) && !/<script|<foreignObject|\son[a-z]+\s*=|javascript:/i.test(link.code) ? `<div class="rb-qr">${link.code}</div>` : '';
-  return [
-    '<div class="rb-link">',
-    code,
-    '<div class="rb-link-text"><b>Your Page</b>',
-    'Scan the code or open the link for your dates and this list with photos. Confirm your dates or ask for others, and comment on anything.',
-    `<div class="rb-url">${esc(link.url)}</div>`,
-    '</div></div>',
   ].join('');
 }
 
@@ -228,10 +200,6 @@ const band = (span: number, text: string) => `<tr class="rb-band"><td colspan="$
 const blanks = (span: number, count: number) =>
   Array.from({ length: count }, () => `<tr class="rb-blank">${'<td></td>'.repeat(span)}</tr>`).join('');
 
-/** A line for the sub to write how many days a batch takes: one duration per batch. */
-const daysLine = (span: number, count: number) =>
-  `<tr class="rb-days"><td colspan="${span}">How many days for ${count === 1 ? 'this item' : `these ${count} items`}?<span class="rb-fill"></span></td></tr>`;
-
 const photoColumn = (settings: PrintSettings): Column[] =>
   settings.photo ? [{ label: 'Photo', width: `${PHOTO_WIDTH + 0.16}in`, cell: (l: ListLine) => photoCell(settings.photo?.(l.item.id)) }] : [];
 
@@ -244,24 +212,10 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
     ...photoColumn(settings),
   ];
   const span = columns.length;
-
-  // Items on a scheduled visit print under the visit, not again under Ready Now or Waiting.
-  const all = [...list.ready, ...list.waiting.flatMap((g) => g.lines), ...list.needsPrice];
-  const planned = (settings.visits ?? [])
-    .filter((v) => !v.removed)
-    .sort((a, b) => a.start.localeCompare(b.start))
-    .map((visit) => ({ visit, lines: all.filter((l) => l.item.visitId === visit.id) }))
-    .filter((v) => v.lines.length > 0);
-  const booked = new Set(planned.flatMap((v) => v.lines.map((l) => l.item.id)));
-  const ready = list.ready.filter((l) => !booked.has(l.item.id));
-  const waiting = list.waiting
-    .map((g) => ({ ...g, lines: g.lines.filter((l) => !booked.has(l.item.id)) }))
-    .filter((g) => g.lines.length > 0);
-  const needsPrice = list.needsPrice.filter((l) => !booked.has(l.item.id));
+  const { ready, waiting, needsPrice } = list;
 
   const waitingCount = waiting.reduce((n, g) => n + g.lines.length, 0);
   const counts = [
-    booked.size > 0 ? `${booked.size} scheduled` : '',
     ready.length > 0 ? `${ready.length} ready now` : '',
     waitingCount > 0 ? `${waitingCount} waiting` : '',
     needsPrice.length > 0 ? `${needsPrice.length} to be quoted` : '',
@@ -273,49 +227,24 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
         ? `${plural(list.open, 'open item')}, all ready now.`
         : `${plural(list.open, 'open item')}, ${andList(counts)}.`;
   const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-  const parts = [header(settings, 'Completion List', list.company, sentence(summary)), linkBlock(settings.link)];
+  const parts = [header(settings, 'Completion List', list.company, sentence(summary))];
 
   if (settings.listComments && settings.listComments.length > 0) {
     parts.push('<h2 class="rb-section">Comments</h2>');
     parts.push(commentsHtml(settings.listComments, settings.date));
   }
 
-  if (planned.length > 0) {
-    parts.push('<h2 class="rb-section">Scheduled Visits</h2>');
-    parts.push(
-      `<p class="rb-section-note">Say whether these dates work on your page, from ${settings.link ? 'the code or link at the top' : 'the link with this list'}: These Dates Work, or Other Dates.</p>`,
-    );
-    const body = planned
-      .map(({ visit, lines }) => {
-        const end = visitEnd(visit);
-        const when = end === visit.start ? dayText(visit.start, settings.date, true) : `${dayText(visit.start, settings.date, true)} to ${dayText(end, settings.date, true)}`;
-        return band(span, `${when}, ${plural(visit.days, 'day')}, ${visit.confirmed ? 'confirmed' : 'our best guess'}`) + rows(columns, lines);
-      })
-      .join('');
-    parts.push(table(columns, body));
-  }
-
-  // With visits scheduled and nothing else ready, the section is left off.
-  if (ready.length > 0 || planned.length === 0) {
-    parts.push(`<h2 class="rb-section">${planned.length > 0 ? 'Ready, Not Scheduled Yet' : 'Ready'}</h2>`);
-    if (ready.length > 0) {
-      parts.push('<p class="rb-section-note">These can be done any time.</p>');
-      parts.push(table(columns, rows(columns, ready) + daysLine(span, ready.length)));
-    } else {
-      parts.push('<p class="rb-section-note">Nothing is ready yet.</p>');
-    }
+  parts.push('<h2 class="rb-section">Ready</h2>');
+  if (ready.length > 0) {
+    parts.push('<p class="rb-section-note">These can be done any time.</p>');
+    parts.push(table(columns, rows(columns, ready)));
+  } else {
+    parts.push('<p class="rb-section-note">Nothing is ready yet.</p>');
   }
 
   if (waiting.length > 0) {
     parts.push('<h2 class="rb-section">Waiting</h2>');
-    const body = waiting
-      .map(
-        (g) =>
-          band(span, `Waiting on ${g.on}${g.readyBy ? `, ready by ${dayText(g.readyBy, settings.date)}` : ''}`) +
-          rows(columns, g.lines) +
-          daysLine(span, g.lines.length),
-      )
-      .join('');
+    const body = waiting.map((g) => band(span, `Waiting on ${g.on}`) + rows(columns, g.lines)).join('');
     parts.push(table(columns, body));
   }
 
@@ -327,7 +256,7 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
       ...columns.filter((c) => c.label === 'Photo'),
     ];
     parts.push('<h2 class="rb-section">To Be Quoted</h2>');
-    parts.push('<p class="rb-section-note">Extra work we would love a price for, item by item. It goes on the schedule once the order is in.</p>');
+    parts.push('<p class="rb-section-note">Extra work we would love a price for, item by item.</p>');
     parts.push(table(quoteColumns, rows(quoteColumns, needsPrice)));
   }
 
@@ -344,13 +273,12 @@ export function companyPrintout(list: CompanyList, settings: PrintSettings): Pri
   };
 }
 
-/** What Ross Built needs from the owner or the design team, the soonest needed first. */
+/** What the builder needs from the owner or the design team. */
 export function partyPrintout(party: string, lines: ListLine[], settings: PrintSettings): Printout {
   const columns: Column[] = [
     { label: 'Item', width: '0.55in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
     { label: 'Location', width: '1.3in', cell: (l) => esc(l.room) },
     { label: 'Work', cell: (l) => workCell(l, settings) },
-    { label: 'Needed By', width: '1.05in', cell: (l) => esc(isDay(l.readyBy) ? dayText(l.readyBy, settings.date) : 'When you can') },
     ...photoColumn(settings),
   ];
   const summary =
@@ -360,7 +288,7 @@ export function partyPrintout(party: string, lines: ListLine[], settings: PrintS
   const parts = [header(settings, 'Decisions Needed', party, summary)];
   if (lines.length > 0) {
     parts.push('<h2 class="rb-section">Decisions Needed</h2>');
-    parts.push('<p class="rb-section-note">An answer by the date shown keeps the work on schedule.</p>');
+    parts.push('<p class="rb-section-note">An answer on each of these lets the work go ahead.</p>');
     parts.push(table(columns, rows(columns, lines)));
   }
   return {
@@ -374,7 +302,7 @@ export function partyPrintout(party: string, lines: ListLine[], settings: PrintS
 // ---------- a list made to order ----------
 
 export type ListGroupBy = 'location' | 'company' | 'waiting';
-export type ListDetail = 'description' | 'location' | 'company' | 'type' | 'status' | 'time' | 'comments' | 'photo';
+export type ListDetail = 'description' | 'location' | 'company' | 'type' | 'status' | 'comments' | 'photo';
 
 export const LIST_GROUP_LABELS: Record<ListGroupBy, string> = { location: 'Location', company: 'Company', waiting: 'Waiting On' };
 
@@ -385,7 +313,6 @@ export const LIST_DETAILS: { detail: ListDetail; label: string }[] = [
   { detail: 'company', label: 'Company' },
   { detail: 'type', label: 'Type' },
   { detail: 'status', label: 'Ready or Waiting' },
-  { detail: 'time', label: 'Estimated Time' },
   { detail: 'comments', label: 'Comments' },
   { detail: 'photo', label: 'Photo' },
 ];
@@ -397,8 +324,6 @@ export interface ListDesign {
   groupBy: ListGroupBy;
   /** What each line shows, besides the item number and the title. */
   details: ListDetail[];
-  /** A line under each group for the company to write how many days it takes. */
-  daysLines: boolean;
   /** Blank lines under each group, to add anything missing. */
   blankLines: boolean;
 }
@@ -406,8 +331,7 @@ export interface ListDesign {
 export const DEFAULT_LIST_DESIGN: ListDesign = {
   title: '',
   groupBy: 'location',
-  details: ['description', 'company', 'type', 'status', 'time', 'comments', 'photo'],
-  daysLines: false,
+  details: ['description', 'company', 'type', 'status', 'comments', 'photo'],
   blankLines: false,
 };
 
@@ -428,11 +352,10 @@ interface LineGroup {
 const openFirst = (lines: ListLine[]) => [...lines.filter((l) => l.item.status !== 'complete'), ...lines.filter((l) => l.item.status === 'complete')];
 
 function groupLines(lines: ListLine[], by: ListGroupBy): LineGroup[] {
-  const groups = new Map<string, LineGroup & { readyBy?: string | null; order: number }>();
-  const add = (key: string, label: string, line: ListLine, order: number, extra: Partial<LineGroup & { readyBy: string | null }> = {}) => {
+  const groups = new Map<string, LineGroup & { order: number }>();
+  const add = (key: string, label: string, line: ListLine, order: number, extra: Partial<LineGroup> = {}) => {
     const group = groups.get(key) ?? { label, lines: [], order, ...extra };
     group.lines.push(line);
-    if (extra.readyBy && (!group.readyBy || extra.readyBy < group.readyBy)) group.readyBy = extra.readyBy;
     groups.set(key, group);
   };
   for (const line of lines) {
@@ -450,7 +373,7 @@ function groupLines(lines: ListLine[], by: ListGroupBy): LineGroup[] {
         else if (item.ready) add('ready', 'Ready', line, 0);
         else {
           const on = line.waitingGroup || 'something not named';
-          add(`waiting:${on.toLowerCase()}`, `Waiting on ${on}`, line, 1, { readyBy: isDay(line.readyBy) ? line.readyBy : null });
+          add(`waiting:${on.toLowerCase()}`, `Waiting on ${on}`, line, 1);
         }
         break;
       }
@@ -458,11 +381,8 @@ function groupLines(lines: ListLine[], by: ListGroupBy): LineGroup[] {
   }
   const list = [...groups.values()];
   if (by === 'company') list.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
-  if (by === 'waiting') {
-    list.sort(
-      (a, b) => a.order - b.order || (a.readyBy ?? '9999').localeCompare(b.readyBy ?? '9999') || b.lines.length - a.lines.length || a.label.localeCompare(b.label),
-    );
-  }
+  // Ready first, then what waits (the biggest group first), what needs a price, and what is done.
+  if (by === 'waiting') list.sort((a, b) => a.order - b.order || b.lines.length - a.lines.length || a.label.localeCompare(b.label));
   return list.map((g) => ({ label: g.label, floor: g.floor, lines: openFirst(g.lines) }));
 }
 
@@ -478,38 +398,23 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
       .filter((x): x is string => !!x)
       .join(' \u00b7 ');
     if (meta) parts.push(`<div class="rb-meta">${esc(meta)}</div>`);
-    // Whether additional work is priced always shows: it decides whether it can be scheduled.
+    // Whether additional work is priced always shows: it decides whether it can go ahead.
     if (!has('type') && item.kind === 'added_scope') parts.push(`<div class="rb-note">${esc(kindText(item))}</div>`);
     if (has('comments')) parts.push(commentsHtml(settings.comments?.(item.id), today));
     return parts.join('');
   };
   const status = (line: ListLine) =>
-    line.item.status === 'complete' && line.item.completedAt ? esc(`Completed ${dayText(line.item.completedAt.slice(0, 10), today)}`) : readyCell(line, today);
-  const time = (line: ListLine) => (line.item.hours !== null ? esc(hoursText(line.item.hours)) : '<span class="rb-quiet">Not estimated</span>');
+    line.item.status === 'complete' && line.item.completedAt ? esc(`Completed ${dayText(line.item.completedAt.slice(0, 10), today)}`) : readyCell(line);
   const columns: Column[] = [
     { label: 'Item', width: '0.5in', cell: (l) => numberCell(l, settings), className: 'rb-num' },
     { label: 'Work', cell: work },
     ...(has('status') ? [{ label: 'Ready', width: '1.45in', cell: status, className: 'rb-small' }] : []),
-    ...(has('time') ? [{ label: 'Time', width: '0.85in', cell: time, className: 'rb-small' }] : []),
     ...(has('photo') ? photoColumn(settings) : []),
   ];
   const span = columns.length;
   const openOf = (list: ListLine[]) => list.filter((l) => l.item.status === 'open');
-  const bandText = (group: LineGroup) => {
-    const parts = [group.label, plural(group.lines.length, 'item')];
-    const t = totalTime(openOf(group.lines).map((l) => l.item));
-    if (has('time') && t.timed + t.untimed > 0) parts.push(totalText(t));
-    return parts.join(' \u00b7 ');
-  };
-  const groupBody = (group: LineGroup) => {
-    const open = openOf(group.lines).length;
-    return (
-      band(span, bandText(group)) +
-      rows(columns, group.lines) +
-      (design.daysLines && open > 0 ? daysLine(span, open) : '') +
-      (design.blankLines ? blanks(span, 2) : '')
-    );
-  };
+  const groupBody = (group: LineGroup) =>
+    band(span, `${group.label} \u00b7 ${plural(group.lines.length, 'item')}`) + rows(columns, group.lines) + (design.blankLines ? blanks(span, 2) : '');
 
   const title = design.title.trim() || 'Whole Job';
   const open = openOf(lines);
@@ -518,7 +423,6 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
   const price = open.filter((l) => !isPriced(l.item)).length;
   const ready = open.filter((l) => l.item.ready && isPriced(l.item)).length;
   const waiting = open.length - ready - price;
-  const t = totalTime(open.map((l) => l.item));
   const counts = [
     ready > 0 ? `${ready} ready now` : '',
     waiting > 0 ? `${waiting} waiting` : '',
@@ -528,9 +432,6 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
   if (lines.length === 0) sentences.push('Nothing matches right now.');
   else if (open.length > 0) sentences.push(`${plural(open.length, 'open item')} in ${plural(places, 'location')}: ${andList(counts)}.`);
   else sentences.push(`${plural(done, 'completed item')} in ${plural(places, 'location')}.`);
-  if (has('time') && t.timed > 0) {
-    sentences.push(`About ${hoursText(t.hours)} of work, or ${daysText(t.hours)}${t.untimed > 0 ? `, with ${t.untimed} not estimated` : ''}.`);
-  }
   if (done > 0 && open.length > 0) sentences.push(`Also ${plural(done, 'completed item')}.`);
   const parts = [header(settings, 'Completion List', title, sentences.join(' '))];
   if (settings.filters && settings.filters.length > 0) parts.push(`<p class="rb-filters">Filters: ${esc(settings.filters.join(', '))}.</p>`);
@@ -562,12 +463,11 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
   };
 }
 
-/** The whole job, for Ross Built: level by level, location by location, every detail on every line, photos included when given. */
+/** The whole job, for the builder: level by level, location by location, every detail on every line, photos included when given. */
 export const WHOLE_JOB_DESIGN: ListDesign = {
   title: 'Whole Job',
   groupBy: 'location',
-  details: ['description', 'company', 'type', 'status', 'time', 'comments', 'photo'],
-  daysLines: false,
+  details: ['description', 'company', 'type', 'status', 'comments', 'photo'],
   blankLines: true,
 };
 
@@ -913,8 +813,6 @@ export const PRINT_CSS = `
 .rb-table tr.rb-alt td{background:#F7F5EC}
 .rb-table tr.rb-band td{background:#CBD8DB;font-weight:700;padding:4pt 6pt;page-break-after:avoid;break-after:avoid}
 .rb-table tr.rb-blank td{height:26pt}
-.rb-table tr.rb-days td{text-align:right;font-size:9pt;font-weight:600;color:#4E7A8C;padding:8pt 6pt 9pt}
-.rb-fill{display:inline-block;width:0.9in;margin-left:6pt;border-bottom:0.75pt solid #5B8699;vertical-align:baseline}
 .rb-price{display:inline-block;width:0.72in;margin-left:3pt;border-bottom:0.75pt solid #5B8699;vertical-align:baseline}
 .rb-num{font-weight:700;font-variant-numeric:tabular-nums}
 .rb-new{display:inline-block;margin-top:3pt;padding:0 3pt;border:0.75pt solid #4E7A8C;border-radius:2pt;font-size:7pt;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#4E7A8C}
@@ -924,7 +822,6 @@ export const PRINT_CSS = `
 .rb-desc{margin-top:1pt}
 .rb-note{margin-top:2pt;font-size:9pt;color:#4E7A8C}
 .rb-meta{margin-top:2pt;font-size:9pt;color:#4E7A8C}
-.rb-quiet{color:#5B8699}
 .rb-filters{margin:4pt 0 0;font-size:9pt;color:#4E7A8C}
 .rb-comments{margin-top:4pt;padding-left:6pt;border-left:1.5pt solid #CBD8DB}
 .rb-comment{font-size:8.5pt;line-height:1.3;margin-top:2pt;overflow-wrap:break-word}

@@ -1,10 +1,10 @@
-// A job, Site Office style: its counts in a grid (Open, Ready, To Check, Late, each a tap into its
-// list), the big tiles for the walk, the plans and sending the lists, the search with Filter beside
-// it, and chips for how the list is grouped: by location, by company or by what items wait on. Drafts
-// and copied items show as a note above the list. The levels follow, each location with how much is
-// open, how much is ready, what is late and a bar for how much is done. Tap a location for its
-// items. Capture in the bottom bar walks the job. Add From a Template puts a template's tasks in every
-// location they fit; copied items paste here into a location picked from the job.
+// A job, Site Office style: its counts (Open, Ready and Waiting, the last two a tap into their
+// list), the big tiles for the walk and for sending the lists, the search with Filter beside it, and
+// chips for how the list is grouped: by location, by company or by what items wait on. Drafts and
+// copied items show as a note above the list. The levels follow, each location with how much is
+// open, how much is ready and a bar for how much is done. Tap a location for its items. Capture in
+// the bottom bar walks the job. Add From a Template puts a template's tasks in every location they
+// fit; copied items paste here into a location picked from the job.
 
 import {
   byFloor,
@@ -14,10 +14,6 @@ import {
   groupItems,
   isFiltered,
   NO_FILTERS,
-  pastDue,
-  scheduleEmailDue,
-  totalText,
-  totalTime,
   type GroupBy,
   type Item,
   type ItemGroup,
@@ -41,7 +37,7 @@ import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
 import { setCurrentJob } from '@/data/currentJob';
 import { clipboard, itemsTitle, itemsWord, useClipboard } from '@/data/clipboard';
-import { useFilterContext, useHolds, useJobView, useTimeline } from '@/data/view';
+import { useFilterContext, useHolds, useJobView } from '@/data/view';
 import {
   Button,
   ChipRow,
@@ -54,7 +50,6 @@ import {
   Page,
   ProgressBar,
   SectionLabel,
-  shortDate,
   Stamp,
   Text,
   Tiles,
@@ -107,33 +102,17 @@ export default function JobScreen() {
   const trades = data.useTrades();
   const companies = data.useCompanies();
   const jobCompanies = data.useJobCompanies(jobId);
-  const visits = data.useVisits(jobId);
   const titles = data.useTitles();
   const canFill = useCanSuggest();
   const saved = data.useViewSettings();
   const context = useFilterContext(jobId);
-  const timeline = useTimeline(jobId);
-  // When each location's open work is done: the last day of its visits, when all of it has a date.
-  const doneBy = useMemo(() => {
-    const end = new Map<string, string>();
-    for (const b of timeline.bars) for (const i of b.items) if (!end.has(i.id) || b.end > end.get(i.id)!) end.set(i.id, b.end);
-    const out = new Map<string, string | null>();
-    for (const i of items) {
-      if (i.status !== 'open' || i.unfinished || out.get(i.locationId) === null) continue;
-      const e = end.get(i.id);
-      const was = out.get(i.locationId);
-      out.set(i.locationId, !e ? null : !was || e > was ? e : was);
-    }
-    return out;
-  }, [timeline, items]);
-  const today = context.today;
   const [view, setView] = useJobView(jobId, saved);
   const [query, setQuery] = useState('');
   const [sheet, setSheet] = useState(false);
   const actions = useItemActions(jobId);
   const commentsOn = commentCounts(data.useComments(jobId));
   const holds = useHolds(jobId);
-  // The bottom bar's Schedule, Capture and Send work on the job you were in last.
+  // The bottom bar's Capture and Send work on the job you were in last.
   useEffect(() => {
     if (job) setCurrentJob(job.id);
   }, [job]);
@@ -171,9 +150,6 @@ export default function JobScreen() {
   const groups = useMemo(() => groupItems(items, view.groupBy, lookups, { filters, context }), [items, view.groupBy, lookups, filters, context]);
   const draftItems = items.filter((i) => i.unfinished && i.status === 'open');
   const drafts = draftItems.length;
-  const lateIds = useMemo(() => new Set(pastDue(items, visits, today).map((p) => p.item.id)), [items, visits, today]);
-  const late = lateIds.size;
-  const sends = data.useSends(jobId);
   const rows: Row[] = groups.map((group) => ({ group })).filter((r) => r.group.open > 0 || (view.groupBy === 'room' && !narrowed));
 
   // An item waiting on two things shows under both, but counts once.
@@ -189,7 +165,7 @@ export default function JobScreen() {
     const totalsOf = (list: Row[]) => {
       const open = list.flatMap((r) => r.group.items.filter((i) => i.status === 'open'));
       if (open.length === 0) return '';
-      return [openWords(open.length), totalText(totalTime(open))].filter(Boolean).join(' · ');
+      return openWords(open.length);
     };
     if (view.groupBy !== 'room') return [{ key: 'all', title: null, totals: '', data: rows }];
     return byFloor(rows, (r) => locationById.get(r.group.key)).map((f) => ({ key: f.floor, title: f.floor, totals: totalsOf(f.rows), data: f.rows }));
@@ -359,40 +335,19 @@ export default function JobScreen() {
       }))}
     />
   );
-  const readyCount = allOpen.filter((i) => i.ready && !i.unfinished && !i.markedDoneAt).length;
-  // Thursday and Friday, until the Schedule Email goes out this week.
-  const fridayRow = scheduleEmailDue(sends, today, total > 0) ? (
-    <Touchable
-      feedback="highlight"
-      onPress={openSend}
-      accessibilityRole="button"
-      accessibilityLabel="The Schedule Email has not gone out this week. Send it"
-      testID="friday-reminder"
-      style={[styles.note, styles.friday]}
-    >
-      <Stamp color={colors.destructive} size={8} />
-      <Text variant="label" weight="600" style={{ flex: 1 }}>
-        The Schedule Email has not gone out this week
-      </Text>
-      <Text variant="label" color={colors.tint}>
-        Send
-      </Text>
-      <Icon name="chevron.right" size={11} color={colors.tint} weight="semibold" />
-    </Touchable>
-  ) : null;
   // The figures count what the list below shows: the whole job, or what the filters leave.
-  const toCheck = allOpen.filter((i) => !i.unfinished && i.markedDoneAt).length;
-  const lateShown = narrowed ? allOpen.filter((i) => lateIds.has(i.id)).length : late;
-  const openState = (state: 'ready' | 'waiting' | 'check') =>
+  const readyCount = allOpen.filter((i) => i.ready && !i.unfinished).length;
+  const waitingCount = allOpen.filter((i) => !i.ready && !i.unfinished).length;
+  const openState = (state: 'ready' | 'waiting') =>
     router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'state', key: state } });
   const top = (
     <View>
       <Figures
+        columns={3}
         cells={[
           { label: 'Open', value: String(total), testID: 'count-open' },
           { label: 'Ready', value: String(readyCount), color: colors.ok, onPress: () => openState('ready'), testID: 'count-ready' },
-          { label: 'To Check', value: String(toCheck), color: colors.tint, onPress: () => openState('check'), testID: 'count-check' },
-          { label: 'Past Due', value: String(lateShown), color: lateShown > 0 ? colors.destructive : colors.label, onPress: () => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'due', key: 'all' } }), testID: 'count-late' },
+          { label: 'Waiting', value: String(waitingCount), onPress: () => openState('waiting'), testID: 'count-waiting' },
         ]}
       />
       <Tiles
@@ -406,7 +361,6 @@ export default function JobScreen() {
             onPress: () => (walked > 0 && !nextToWalk ? newWalk() : openCamera(nextToWalk?.id ?? null)),
             testID: 'walk',
           },
-          { icon: 'map', label: 'Plans', onPress: () => router.push({ pathname: '/jobs/[jobId]/plans', params: { jobId } }), testID: 'plans' },
           { icon: 'send', label: 'Send Lists', onPress: openSend, testID: 'send' },
         ]}
       />
@@ -429,7 +383,7 @@ export default function JobScreen() {
           placeholder: `Search ${total} ${total === 1 ? 'item' : 'items'}`,
           filter: { onPress: () => setSheet(true), count: filterCount + (view.showCompleted ? 1 : 0) || undefined },
         }}
-        tab={{ active: 'jobs', jobId, late }}
+        tab={{ active: 'jobs', jobId }}
         beforeSearch={top}
         list={(scroll) =>
           q ? (
@@ -480,7 +434,6 @@ export default function JobScreen() {
                   {scroll.header}
                   {groupChips}
                   {filterBar}
-                  {fridayRow}
                   {pasteRow}
                   {draftsRow}
                 </View>
@@ -499,7 +452,6 @@ export default function JobScreen() {
                   row={row}
                   by={view.groupBy}
                   location={locationById.get(row.group.key)}
-                  doneBy={view.groupBy === 'room' ? doneBy.get(row.group.key) : undefined}
                   share={doneShare.get(row.group.key)}
                   first={index === 0}
                   last={index === section.data.length - 1}
@@ -539,7 +491,6 @@ function GroupRow({
   row,
   by,
   location,
-  doneBy,
   share,
   first,
   last,
@@ -550,8 +501,6 @@ function GroupRow({
   row: Row;
   by: GroupBy;
   location?: Location;
-  /** When the location's open work is done, when all of it has a date. */
-  doneBy?: string | null;
   /** How many of its items are complete, of all of them. */
   share?: { done: number; all: number };
   first: boolean;
@@ -564,10 +513,8 @@ function GroupRow({
   const { group } = row;
   const count = group.open;
   const label = by === 'room' && location ? location.label : group.label;
-  const time = totalText(group.time);
   const pct = share && share.all > 0 ? share.done / share.all : count === 0 ? 1 : 0;
-  const late = group.late > 0 ? `${group.late} ${group.late === 1 ? 'day' : 'days'} past due` : group.pastDue > 0 ? `${group.pastDue} past due` : '';
-  const said = [label, count === 0 ? 'nothing open' : `${count} open`, sayReady && count > 0 ? `${group.ready} ready` : '', late, time, doneBy && count > 0 ? `done by ${shortDate(doneBy)}` : '', `${Math.round(pct * 100)} percent complete`]
+  const said = [label, count === 0 ? 'nothing open' : `${count} open`, sayReady && count > 0 ? `${group.ready} ready` : '', `${Math.round(pct * 100)} percent complete`]
     .filter(Boolean)
     .join(', ');
   return (
@@ -598,9 +545,6 @@ function GroupRow({
               : [
                   { text: `${count} open`, color: colors.label },
                   sayReady ? { text: `${group.ready} ready`, color: colors.ok } : null,
-                  late ? { text: late, color: colors.destructive } : null,
-                  time || null,
-                  doneBy ? `Done by ${shortDate(doneBy)}` : null,
                 ]
           }
         />

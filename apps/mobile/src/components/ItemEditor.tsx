@@ -1,19 +1,17 @@
 // One simple form for an item, the same when making one and when looking at one later. Up front:
-// the title (typing offers the standard titles, and picking one fills in the company and the usual
-// time), the description, the location, the company and Ready as a checkbox. Everything else waits
-// under Details, with a line saying what is in it: the estimated time, the type (Deficiency,
-// Incomplete or Additional, with its order only for additional work), the added fields and the
-// visit. The trade is not asked for: it follows the company's trade on the job. On an item that
-// already exists, every change saves as it is made. Fill In From Photo asks Claude for what is
-// still blank; the same title already in the location is pointed out.
+// the title (typing offers the standard titles, and picking one fills in the company), the
+// description, the location, the company and Ready as a checkbox. Everything else waits under
+// Details, with a line saying what is in it: priority, the type (Deficiency, Incomplete or
+// Additional, with its order only for additional work) and the added fields. The trade is not asked
+// for: it follows the company's trade on the job. On an item that already exists, every change saves
+// as it is made. Fill In From Photo asks Claude for what is still blank; the same title already in
+// the location is pointed out.
 
 import {
   companyForTrade,
-  DEFAULT_WAITING_ON_EXTRAS,
+  defaultWaitingOnExtras,
   duplicatesOf,
   formShows,
-  hoursForTitle,
-  hoursText,
   itemNumberLabel,
   KIND_HINTS,
   KIND_LABELS,
@@ -41,7 +39,6 @@ import { colors, fieldFont, layout, type as typeScale } from '@/constants/theme'
 import { useData } from '@/data/api';
 import { usePersonOptions } from './people';
 import { haptic, Icon, ListLabeledField, ListRow, ListSection, ListSwitchRow, OptionPicker, PhotoView, Segmented, Text, Touchable } from '@/ui';
-import { EstimateField } from './EstimateField';
 import { ExtraFields, useFormOptions, type ItemDraft } from './ItemForm';
 import { ReadyRow } from './ReadyRow';
 
@@ -71,8 +68,6 @@ export function ItemEditor({
   itemId,
   fillIn,
   onTwin,
-  details,
-  detailWords,
   children,
 }: {
   jobId: string;
@@ -92,10 +87,6 @@ export function ItemEditor({
   fillIn?: { busy: boolean; onPress: () => void };
   /** What to offer when the same title is already in the location: putting the photo on it instead. */
   onTwin?: { label: string; onPress: (twin: Item) => void };
-  /** More rows under Details, after the fields: the visit, on an item that exists. */
-  details?: ReactNode;
-  /** What those rows add to the line under Details: "Scheduled November 4". */
-  detailWords?: string[];
   children?: ReactNode;
 }) {
   const data = useData();
@@ -103,6 +94,7 @@ export function ItemEditor({
   const titles = data.useTitles();
   const items = data.useItems(jobId);
   const extras = data.useWaitingOnExtras(jobId);
+  const builder = data.useOrg().name;
   const customFields = data
     .useCustomFields()
     .filter((f) => f.active)
@@ -112,8 +104,6 @@ export function ItemEditor({
   const people = data.usePeople();
   const [titleFocused, setTitleFocused] = useState(false);
   const [filled, setFilled] = useState(false);
-  // The estimate came from the title: a different title brings its own.
-  const [timeFromTitle, setTimeFromTitle] = useState(false);
   const [open, setOpen] = useState(false);
 
   const shows = (field: FormField) => formShows(settings, field);
@@ -130,7 +120,6 @@ export function ItemEditor({
 
   // The order is for additional work; one already there always shows, so nothing is hidden.
   const showPo = value.kind === 'added_scope' || !!value.poOrCo;
-  const showHours = shows('hours') || value.hours !== null;
   const showKind = shows('kind');
   // The order: a purchase order, variance purchase order or change order, and its number.
   const order = readOrder(value.poOrCo);
@@ -149,16 +138,9 @@ export function ItemEditor({
     return { tradeId, companyId: companyId ?? (value.tradeId === tradeId ? value.companyId : null) };
   }
 
-  /** The title's usual time, unless a time was given some other way. */
-  function timeFor(hours: number | null): Partial<ItemDraft> {
-    if (hours === null || (value.hours !== null && !timeFromTitle)) return {};
-    setTimeFromTitle(true);
-    return { hours };
-  }
-
   function pickTitle(s: TitleSuggestion) {
     haptic.selection();
-    set({ title: s.title, ...fillFrom(s.tradeId), ...timeFor(s.hours) });
+    set({ title: s.title, ...fillFrom(s.tradeId) });
     setTitleFocused(false);
     Keyboard.dismiss();
   }
@@ -170,7 +152,6 @@ export function ItemEditor({
     set({
       title,
       ...(!value.companyId ? fillFrom(tradeForTitle(title, titles)) : {}),
-      ...timeFor(hoursForTitle(title, titles, items)),
     });
   }
 
@@ -180,16 +161,14 @@ export function ItemEditor({
   // The same thing in this location already: one on the lists first, then a draft.
   const twins = !titleFocused && value.title.trim() ? duplicatesOf(value.title, value.locationId, items, itemId) : [];
   const twin = twins.find((t) => !t.unfinished) ?? twins[0];
-  const blanks = !value.title.trim() || !value.companyId || (shows('hours') && value.hours === null);
+  const blanks = !value.title.trim() || !value.companyId;
 
   // Details: what is in it, in a line, and open on its own when something in it needs fixing.
-  const detailProblem = problem('hours') ?? problem('poOrCo');
+  const detailProblem = problem('poOrCo');
   const hasDetails = true;
   const summary = [
     value.priority ? 'Priority' : null,
     showKind || showPo ? kindText(value) : null,
-    showHours ? (value.hours !== null ? hoursText(value.hours) : 'No time yet') : null,
-    ...(detailWords ?? []),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -311,9 +290,9 @@ export function ItemEditor({
                 <Text numberOfLines={1} style={{ flex: 1 }}>
                   {s.title}
                 </Text>
-                {company || s.hours ? (
+                {company ? (
                   <Text variant="subheadline" color={colors.secondary} numberOfLines={1} style={styles.suggestionHint}>
-                    {[company, s.hours ? hoursText(s.hours) : null].filter(Boolean).join(' · ')}
+                    {company}
                   </Text>
                 ) : null}
               </Touchable>
@@ -368,8 +347,8 @@ export function ItemEditor({
             locationId={value.locationId}
             value={{ ready: value.ready, waitingOn: value.waitingOn, waitingOnItems: value.waitingOnItems, readyBy: value.readyBy }}
             onChange={(next) => set(next)}
-            extras={extras.length > 0 ? extras : [...DEFAULT_WAITING_ON_EXTRAS]}
-            onAddChoice={(label) => void data.setWaitingOnExtras(jobId, [...(extras.length > 0 ? extras : DEFAULT_WAITING_ON_EXTRAS), label])}
+            extras={extras.length > 0 ? extras : defaultWaitingOnExtras(builder)}
+            onAddChoice={(label) => void data.setWaitingOnExtras(jobId, [...(extras.length > 0 ? extras : defaultWaitingOnExtras(builder)), label])}
           />
         </ListSection>
       ) : null}
@@ -392,17 +371,6 @@ export function ItemEditor({
       ) : null}
       {hasDetails && detailsOpen ? (
         <View testID="item-details-open">
-          {showHours ? (
-            <EstimateField
-              value={value.hours}
-              onChange={(hours) => {
-                setTimeFromTitle(false);
-                set({ hours });
-              }}
-              note={timeFromTitle && value.hours !== null ? 'The usual time for this title. Change it if this one is different.' : undefined}
-            />
-          ) : null}
-
           {showKind ? (
             <ListSection header="Type" footer={KIND_HINTS[value.kind]}>
               <View style={styles.kind}>
@@ -440,7 +408,6 @@ export function ItemEditor({
             </ListSection>
           ) : null}
 
-          {details}
         </View>
       ) : null}
 
@@ -460,7 +427,7 @@ export function ItemEditor({
         options={options.companyOptions}
         value={value.companyId}
         onSelect={(companyId) => {
-          // The trade follows the company. A visit belongs to one company: a new company takes the item off it.
+          // The trade follows the company.
           set({ companyId, tradeId: options.tradeFor(companyId, value.tradeId), ...(companyId !== value.companyId ? { visitId: null } : {}) });
           setFilled(false);
         }}

@@ -1,5 +1,5 @@
-// One of a company's people: a name, an email, a phone, and whether they get the company's lists
-// and the Schedule Email. Lists go by email to everyone with one, and by text to anyone with only a
+// One of a company's people: a name, an email, a phone, and whether they get the company's lists.
+// Lists go by email to everyone with one, and by text to anyone with only a
 // phone. Admins add and change them; nobody is deleted, they are switched off.
 
 import { contactProblem, type Contact } from '@punch/core';
@@ -101,7 +101,7 @@ export function ContactSheet({
           />
           <ListTextField placeholder="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" textContentType="telephoneNumber" accessibilityLabel="Phone" testID="field-contact-phone" />
         </ListSection>
-        <ListSection footer="The company's list on every job, and the Schedule Email each week.">
+        <ListSection footer="The company's list on every job.">
           <ListSwitchRow title="Gets the Lists" value={getsLists} onValueChange={setGetsLists} testID="switch-contact-lists" />
         </ListSection>
         {contact ? (

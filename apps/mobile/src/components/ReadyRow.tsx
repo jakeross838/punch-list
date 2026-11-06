@@ -1,12 +1,12 @@
 // Ready, as a checkbox. Checked: it can be done now. Unchecking opens Not Ready to say what has to
-// be done first (usually one task) and when; tap the line under it to change that later.
+// be done first (usually one task); tap the line under it to change that later.
 
-import { dayOfDate, daysBetween, holdText, pastDueText, readyByOf } from '@punch/core';
+import { holdText } from '@punch/core';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useHolds } from '@/data/view';
-import { Checkbox, haptic, isBeforeToday, shortDate, Text, Touchable } from '@/ui';
+import { Checkbox, haptic, Text, Touchable } from '@/ui';
 import { NotReadyBox } from './NotReadyBox';
 
 export interface ReadyState {
@@ -31,18 +31,14 @@ export function ReadyRow({
   locationId: string;
   value: ReadyState;
   onChange: (next: ReadyState) => void;
-  /** Who things can wait on that is not a task: Ross Built, Owner, the design team. */
+  /** Who things can wait on that is not a task: the owner, the design team, the builder. */
   extras: string[];
   onAddChoice: (label: string) => void;
 }) {
   const holds = useHolds(jobId);
   const [asking, setAsking] = useState(false);
-  const own = value.readyBy;
-  const late = !value.ready && own !== null && isBeforeToday(own);
-  const lateText = late && own ? `, ${pastDueText(daysBetween(own, dayOfDate(new Date())))}` : '';
-  const by = value.ready ? null : readyByOf({ ...value }, holds);
   const on = holdText({ ...value, locationId }, holds);
-  const summary = value.ready ? 'It can be done now.' : `Waiting on ${on || 'something'}${by ? `, ready by ${shortDate(by)}${lateText}` : ''}`;
+  const summary = value.ready ? 'It can be done now.' : `Waiting on ${on || 'something'}`;
 
   function tapBox() {
     if (value.ready) {
@@ -65,7 +61,7 @@ export function ReadyRow({
         style={styles.text}
       >
         <Text>Ready</Text>
-        <Text variant="subheadline" color={value.ready ? colors.secondary : late ? colors.destructive : colors.label} numberOfLines={3}>
+        <Text variant="subheadline" color={value.ready ? colors.secondary : colors.label} numberOfLines={3}>
           {summary}
         </Text>
       </Touchable>

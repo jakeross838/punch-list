@@ -1,7 +1,6 @@
-// Comments: a back and forth on an item, or on a company's whole list on a job, between Ross Built
-// and the company doing the work. Ross Built writes from the app; the company writes from the
-// private page its list links to, under the name it types. A comment marked Ross Built only stays
-// inside Ross Built: never on the company's page or a printed list.
+// Comments: a back and forth on an item, or on a company's whole list on a job, between your team
+// and the company doing the work. Your team writes from the app; the company's comments come in
+// under the name it gives. An internal note stays inside your own company: never on a printed list.
 
 import type { Comment } from './types';
 
@@ -24,7 +23,7 @@ export function tidyName(text: string | null | undefined): string | null {
   return t === '' ? null : t;
 }
 
-/** Shown to the company: not Ross Built only, and not taken back. */
+/** Shown to the company: not internal, and not taken back. */
 export const isShared = (c: Pick<Comment, 'internal' | 'removed'>) => !c.internal && !c.removed;
 
 const oldestFirst = (a: Comment, b: Comment) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
@@ -39,7 +38,7 @@ export function listComments(comments: Comment[], companyId: string, options: { 
   return comments.filter((c) => c.itemId === null && c.companyId === companyId && !c.removed && (!options.shared || !c.internal)).sort(oldestFirst);
 }
 
-/** How many comments each item has, Ross Built only ones included. */
+/** How many comments each item has, internal notes included. */
 export function commentCounts(comments: Comment[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const c of comments) if (c.itemId && !c.removed) out.set(c.itemId, (out.get(c.itemId) ?? 0) + 1);
@@ -48,7 +47,7 @@ export function commentCounts(comments: Comment[]): Map<string, number> {
 
 /** Who wrote it, as it reads: "Jake Ross", "Mike at SMS Carpentry", "SMS Carpentry". */
 export function commentAuthor(c: Pick<Comment, 'fromCompany' | 'authorName' | 'personId' | 'companyId'>, look: { people: Map<string, string>; companies: Map<string, string> }): string {
-  if (!c.fromCompany) return look.people.get(c.personId ?? '') ?? 'Ross Built';
+  if (!c.fromCompany) return look.people.get(c.personId ?? '') ?? 'Someone';
   const company = look.companies.get(c.companyId ?? '') ?? 'The company';
   return c.authorName ? `${c.authorName} at ${company}` : company;
 }

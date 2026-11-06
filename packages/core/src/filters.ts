@@ -215,11 +215,15 @@ export const FILTER_KINDS: ItemKind[] = KINDS;
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 const yesNo = (v: unknown): YesNo => (typeof v === 'boolean' ? v : null);
 
-/** Filters as saved, checked: anything that is not a filter is dropped (trades, from before the trade was left off the item). */
+/**
+ * Filters as saved, checked: anything that is not a filter is dropped (trades, from before the trade
+ * was left off the item). Past Due, Scheduled and Estimated are dropped too while the schedule is out
+ * of the app, so a list saved with one of them never hides items with no way to see why.
+ */
 export function readFilters(raw: unknown): ItemFilters {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   return {
-    states: strings(r.states).filter((s): s is StateFilter => (STATES as string[]).includes(s)),
+    states: strings(r.states).filter((s): s is StateFilter => (STATES as string[]).includes(s) && s !== 'past_due'),
     kinds: strings(r.kinds).filter((k): k is ItemKind => (KINDS as string[]).includes(k)),
     companyIds: strings(r.companyIds),
     floors: strings(r.floors),
@@ -228,8 +232,8 @@ export function readFilters(raw: unknown): ItemFilters {
     addedBy: strings(r.addedBy),
     assignedTo: strings(r.assignedTo),
     photo: yesNo(r.photo),
-    scheduled: yesNo(r.scheduled),
-    estimated: yesNo(r.estimated),
+    scheduled: null,
+    estimated: null,
   };
 }
 

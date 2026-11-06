@@ -1,7 +1,7 @@
 // My Items: what is assigned to you, on every job you see, each job under its own heading with the
 // open work in location order. Check items off here like anywhere else; tap one to open it.
 
-import { assignedTo, commentCounts, sortItems, totalText, totalTime, tradeRanks, type Item, type Job, type Photo } from '@punch/core';
+import { assignedTo, commentCounts, sortItems, tradeRanks, type Item, type Job, type Photo } from '@punch/core';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -18,9 +18,8 @@ export default function MyItemsScreen() {
   const jobs = data.useJobs();
   const mine = assignedTo(data.useAssigned(me?.id ?? ''), me?.id ?? '');
   const byJob = jobs.map((job) => ({ job, items: mine.filter((i) => i.jobId === job.id) })).filter((g) => g.items.length > 0);
-  const time = totalText(totalTime(mine));
   return (
-    <Page title="My Items" eyebrow="Assigned to you" crumb={['Home', 'My Items']} backLabel="Jobs" subtitle={[`${mine.length} open`, time].filter(Boolean).join(' · ')} tab={{ active: 'jobs' }}>
+    <Page title="My Items" eyebrow="Assigned to you" crumb={['Home', 'My Items']} backLabel="Jobs" subtitle={`${mine.length} open`} tab={{ active: 'jobs' }}>
       {byJob.length === 0 ? (
         <EmptyState icon="person" title="Nothing Assigned to You" message="Items assigned to you on any job show here." />
       ) : (
@@ -46,7 +45,6 @@ function JobBlock({ job, items }: { job: Job; items: Item[] }) {
   // Location order, as the walk goes, then the list's own order within each location.
   const order = new Map(locations.map((l) => [l.id, l.sortOrder]));
   const rows = sortItems(items, tradeRanks(data.useTrades())).sort((a, b) => (order.get(a.locationId) ?? 0) - (order.get(b.locationId) ?? 0));
-  const time = totalText(totalTime(rows));
   return (
     <View style={styles.block} testID={`my-job-${job.id}`}>
       <View style={styles.header}>
@@ -54,7 +52,7 @@ function JobBlock({ job, items }: { job: Job; items: Item[] }) {
           {job.name}
         </Text>
         <Text variant="subheadline" color={colors.secondary} tabular>
-          {[`${rows.length} open`, time].filter(Boolean).join(' · ')}
+          {`${rows.length} open`}
         </Text>
       </View>
       {rows.map((item, index) => (

@@ -3,14 +3,12 @@
 // short note. Completed items wait under Completed at the end, which opens and closes with a tap
 // (open from the start when View has Show Completed on). In a location the end of the list has New
 // Item, Common Tasks and the next location of the walk; Capture in the bottom bar takes the photo
-// here. Ready, Waiting and To Check list the job's items by state, by company, with each company's
-// schedule a tap away; To Check is the work the companies say is done, for Ross Built to mark
-// Complete or Not Done. Past Due lists everything late, the latest first. Drafts lists what was saved
-// to finish later, filling in from the photos while it shows. A Waiting On list can stop the wait for
-// all its items at once, or move their Ready By together. Select (or a long press on an item) picks
-// items to move, copy, assign, complete or save as a template all at once; in a location, the lines
-// at the end of each row drag it into order, with the others picked along with it. Copied items
-// paste into any location, on this job or another.
+// here. Ready and Waiting list the job's items by state, by company. Drafts lists what was saved to
+// finish later, filling in from the photos while it shows. A Waiting On list can stop the wait for
+// all its items at once. Select (or a long press on an item) picks items to move, copy, assign,
+// complete or save as a template all at once; in a location, the lines at the end of each row drag
+// it into order, with the others picked along with it. Copied items paste into any location, on this
+// job or another.
 
 import {
   clearHoldup,
@@ -25,11 +23,8 @@ import {
   groupItems,
   isFiltered,
   neighborRooms,
-  pastDue,
   SHARED_GROUP,
   sortItems,
-  totalText,
-  totalTime,
   type GroupBy,
   type Item,
   type Photo,
@@ -38,7 +33,6 @@ import { randomUUID } from "expo-crypto";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { SectionList, StyleSheet, View } from "react-native";
-import { ToCheckRow } from "@/components/ToCheckRow";
 import { CommonTasks } from "@/components/CommonTasks";
 import { DragList } from "@/components/DragList";
 import { fieldsOf, useFormOptions } from "@/components/ItemForm";
@@ -47,7 +41,7 @@ import { SelectionBar } from "@/components/SelectionBar";
 import { AddTemplateSheet, SaveTemplateSheet } from "@/components/TemplateSheets";
 import { isFilling, useDraftFill } from "@/components/draftFill";
 import { FilterBar } from "@/components/FilterBar";
-import { ItemRow, type PastDueNote } from "@/components/ItemRow";
+import { ItemRow } from "@/components/ItemRow";
 import { useItemActions } from "@/components/useItemActions";
 import { colors, layout } from "@/constants/theme";
 import { useData } from "@/data/api";
@@ -55,7 +49,6 @@ import { capture } from "@/data/capture";
 import { clipboard, itemsTitle, itemsWord, useClipboard } from "@/data/clipboard";
 import { useFilterContext, useHolds, useJobView } from "@/data/view";
 import {
-  DateField,
   EmptyState,
   haptic,
   Icon,
@@ -76,22 +69,20 @@ interface Section {
   key: string;
   kind: "open" | "done";
   title: string | null;
-  /** The company the section is, for its schedule link. */
+  /** The company the section is. */
   companyId?: string | null;
   data: Item[];
 }
 
-type State = "ready" | "waiting" | "check";
+type State = "ready" | "waiting";
 const STATES: readonly (readonly [State, string])[] = [
   ["ready", "Ready"],
   ["waiting", "Waiting"],
-  ["check", "To Check"],
 ];
 
-/** Which state an open item is in, for the Ready, Waiting and To Check lists. */
+/** Which state an open item is in, for the Ready and Waiting lists. */
 export function stateOf(item: Item): State | null {
   if (item.status !== "open" || item.unfinished) return null;
-  if (item.markedDoneAt) return "check";
   return item.ready ? "ready" : "waiting";
 }
 
@@ -102,16 +93,13 @@ export default function GroupScreen() {
     key: string;
   }>();
   const { jobId, key } = params;
-  const due = params.by === "due";
   const drafts = params.by === "drafts";
   const stateList: State | null = params.by === "state" ? (STATES.some(([v]) => v === key) ? (key as State) : "ready") : null;
   const by: GroupBy =
     params.by === "company" || params.by === "waiting" ? params.by : "room";
   const data = useData();
   const feedback = useFeedback();
-  const visits = data.useVisits(jobId);
   const context = useFilterContext(jobId);
-  const today = context.today;
   const jobs = data.useJobs();
   const job = jobs.find((j) => j.id === jobId);
   const items = data.useItems(jobId);
@@ -149,14 +137,6 @@ export default function GroupScreen() {
       ).find((g) => g.key === key),
     [items, by, key, filters, context, locations, companies, trades],
   );
-  const late = useMemo(
-    () => (due ? pastDue(items, visits, today) : []),
-    [due, items, visits, today],
-  );
-  const lateBy = useMemo(
-    () => new Map(late.map((p) => [p.item.id, p])),
-    [late],
-  );
   const firstPhoto = useMemo(() => {
     const map = new Map<string, Photo>();
     for (const p of photos) if (!map.has(p.itemId)) map.set(p.itemId, p);
@@ -176,20 +156,18 @@ export default function GroupScreen() {
   );
 
   const stateCounts = useMemo(() => {
-    const n: Record<State, number> = { ready: 0, waiting: 0, check: 0 };
+    const n: Record<State, number> = { ready: 0, waiting: 0 };
     for (const i of items) {
       const st = stateOf(i);
       if (st) n[st] += 1;
     }
     return n;
   }, [items]);
-  const listed = due
-    ? late.map((p) => p.item)
-    : drafts
-      ? sortItems(items.filter((i) => i.unfinished && i.status === "open"))
-      : stateList
-        ? sortItems(items.filter((i) => stateOf(i) === stateList))
-        : (group?.items ?? []);
+  const listed = drafts
+    ? sortItems(items.filter((i) => i.unfinished && i.status === "open"))
+    : stateList
+      ? sortItems(items.filter((i) => stateOf(i) === stateList))
+      : (group?.items ?? []);
   const open = listed.filter(
     (i) => i.status !== "complete" || actions.checking.has(i.id),
   );
@@ -198,7 +176,7 @@ export default function GroupScreen() {
   );
   const doneShown = doneOpen ?? view.showCompleted;
   // In a location and on the state lists, the open items go by company, in the order they come.
-  const byCompany = (by === "room" && !due && !drafts) || !!stateList;
+  const byCompany = (by === "room" && !drafts) || !!stateList;
   const openSections: Section[] = [];
   if (byCompany) {
     for (const item of open) {
@@ -232,55 +210,39 @@ export default function GroupScreen() {
     by === "waiting" && group && key.startsWith("waiting:")
       ? group.label
       : null;
-  const title = due
-    ? "Past Due"
-    : drafts
-      ? "Drafts"
-      : stateList
-        ? (STATES.find(([v]) => v === stateList)?.[1] ?? "Ready")
-        : (room?.label ??
-          (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
-  const openTime = totalText(
-    totalTime(open.filter((i) => i.status === "open")),
-  );
+  const title = drafts
+    ? "Drafts"
+    : stateList
+      ? (STATES.find(([v]) => v === stateList)?.[1] ?? "Ready")
+      : (room?.label ??
+        (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
   const subtitle = drafts
     ? `${open.length} ${open.length === 1 ? "draft" : "drafts"}. ${open.some((i) => isFilling(fill, i.id)) ? (open.length === 1 ? "Filling in from the photo." : "Filling in from the photos.") : open.length === 1 ? "Tap it to finish it." : "Tap one to finish it."}`
     : undefined;
   const openNow = open.filter((i) => i.status === "open");
   const readyNow = openNow.filter((i) => i.ready && !i.unfinished).length;
-  const lateNow = due ? 0 : pastDue(openNow, visits, today).length;
   const companiesNow = new Set(openNow.map((i) => i.companyId).filter(Boolean)).size;
   const meta = drafts ? null : (
     <MetaLine
       facts={[
-        { text: `${openNow.length} ${stateList === "check" ? "to check" : stateList === "ready" ? "ready" : "open"}`, color: stateList === "ready" ? colors.ok : stateList === "check" ? colors.tint : colors.label },
+        { text: `${openNow.length} ${stateList === "ready" ? "ready" : stateList === "waiting" ? "waiting" : "open"}`, color: stateList === "ready" ? colors.ok : colors.label },
         !stateList && readyNow > 0 ? { text: `${readyNow} ready`, color: colors.ok } : null,
-        !due && lateNow > 0 ? { text: `${lateNow} past due`, color: colors.destructive } : null,
         stateList ? `${companiesNow} ${companiesNow === 1 ? "company" : "companies"}` : null,
-        openTime ? `About ${openTime}` : null,
       ]}
     />
   );
   // Each row says what the list does not already: the location outside a location's list, the company outside a company's.
-  const inRoom = by === "room" && !due && !drafts && !stateList;
+  const inRoom = by === "room" && !drafts && !stateList;
   const locationFor = (item: Item) =>
     inRoom ? undefined : roomName.get(item.locationId);
   const companyFor = (item: Item) =>
-    drafts || byCompany || (by === "company" && !due)
+    drafts || byCompany || by === "company"
       ? undefined
       : (companyName.get(item.companyId ?? "") ?? undefined);
   const noteFor = (item: Item) =>
     drafts && isFilling(fill, item.id)
       ? "Filling in from the photo"
       : undefined;
-  const lateFor = (item: Item): PastDueNote | undefined => {
-    const p = lateBy.get(item.id);
-    if (!p) return undefined;
-    return {
-      days: p.days,
-      why: p.reason === "visit" ? `Visit ended ${p.days === 1 ? "1 day" : `${p.days} days`} ago` : undefined,
-    };
-  };
 
   // What it waits on, for every open item it holds up at once.
   const heldUp = holdup
@@ -308,7 +270,6 @@ export default function GroupScreen() {
                 ready: i.ready,
                 waitingOn: i.waitingOn,
                 waitingOnItems: i.waitingOnItems,
-                readyBy: i.readyBy,
               },
             }));
             void data.updateItems(
@@ -330,14 +291,6 @@ export default function GroupScreen() {
       ],
     });
   }
-  function setAllReadyBy(readyBy: string | null) {
-    if (heldUp.length === 0) return;
-    haptic.tap();
-    void data.updateItems(
-      heldUp.map((i) => ({ id: i.id, patch: { readyBy } })),
-    );
-  }
-  const groupReadyBy = heldUp.find((i) => i.readyBy)?.readyBy ?? null;
   // Filling in after a walk: each draft steps to the next one.
   const openUnfinished = (item: Item) =>
     router.push({
@@ -370,7 +323,7 @@ export default function GroupScreen() {
   const personOptions = usePersonOptions(jobId);
   const pickable = open.filter((i) => i.status === "open" || picked.has(i.id));
   const pickedItems = items.filter((i) => picked.has(i.id));
-  const canDrag = selecting && !!room && !due && !drafts;
+  const canDrag = selecting && !!room && !drafts;
   const startPicking = (first?: Item) => {
     haptic.tap();
     setSelecting(true);
@@ -479,7 +432,7 @@ export default function GroupScreen() {
       feedback.toast({ message: e instanceof Error ? e.message : "That did not paste. Try again." });
     }
   };
-  const inLocation = !!room && !due && !drafts && !stateList;
+  const inLocation = !!room && !drafts && !stateList;
   const right: BarItem[] = selecting
     ? [{ kind: "button", label: "Done", variant: "prominent", onPress: stopPicking, testID: "select-done" }]
     : [
@@ -504,42 +457,25 @@ export default function GroupScreen() {
           : []),
       ];
 
-  const crumbWhere = due ? "Past Due" : drafts ? "Drafts" : stateList ? title : room ? null : title;
+  const crumbWhere = drafts ? "Drafts" : stateList ? title : room ? null : title;
   const crumb = [job?.name ?? "Job", ...(room ? [room.kind === "shared" ? SHARED_GROUP : (room.floor ?? ""), room.label].filter(Boolean) : crumbWhere ? [crumbWhere] : [])];
-  const eyebrow = due
-    ? "Schedule"
-    : drafts
-      ? "Saved to finish later"
-      : stateList === "ready"
-        ? "Can be done now"
-        : stateList === "waiting"
-          ? "Waiting on something first"
-          : stateList === "check"
-            ? "Companies say these are done"
-            : room
-              ? `Location · ${room.kind === "shared" ? SHARED_GROUP : (room.floor ?? "On the job")}`
-              : by === "company"
-                ? "Company"
-                : by === "waiting"
-                  ? "Waiting on"
-                  : undefined;
-  const marker = stateList === "ready" ? colors.okFill : stateList === "check" ? colors.tint : due ? colors.destructive : undefined;
+  const eyebrow = drafts
+    ? "Saved to finish later"
+    : stateList === "ready"
+      ? "Can be done now"
+      : stateList === "waiting"
+        ? "Waiting on something first"
+        : room
+          ? `Location · ${room.kind === "shared" ? SHARED_GROUP : (room.floor ?? "On the job")}`
+          : by === "company"
+            ? "Company"
+            : by === "waiting"
+              ? "Waiting on"
+              : undefined;
+  const marker = stateList === "ready" ? colors.okFill : undefined;
   const noneOpen = open.length === 0 && !selecting;
 
-  const renderRow = ({ item, index, section }: { item: Item; index: number; section: Section }) =>
-    stateList === "check" && !selecting ? (
-      <ToCheckRow
-        item={item}
-        photo={firstPhoto.get(item.id)}
-        location={roomName.get(item.locationId)}
-        company={companyName.get(item.companyId ?? "")}
-        first={index === 0}
-        last={index === section.data.length - 1}
-        stripe={index % 2 === 1}
-        onOpen={actions.onOpen}
-        onComplete={actions.onCheck}
-      />
-    ) : (
+  const renderRow = ({ item, index, section }: { item: Item; index: number; section: Section }) => (
       <ItemRow
         item={item}
         photo={firstPhoto.get(item.id)}
@@ -548,7 +484,6 @@ export default function GroupScreen() {
         location={locationFor(item)}
         company={companyFor(item)}
         note={noteFor(item)}
-        late={lateFor(item)}
         first={index === 0}
         last={index === section.data.length - 1}
         stripe={index % 2 === 1}
@@ -559,7 +494,7 @@ export default function GroupScreen() {
         onReady={actions.onReady}
         onRemove={actions.onRemove}
         onAddPhoto={addPhoto}
-        onLongPress={drafts || due ? undefined : (i) => startPicking(i)}
+        onLongPress={drafts ? undefined : (i) => startPicking(i)}
         select={selecting ? { picked: picked.has(item.id), onToggle: togglePick } : undefined}
       />
     );
@@ -575,7 +510,7 @@ export default function GroupScreen() {
         crumb={crumb}
         backLabel={job?.name}
         right={right}
-        tab={selecting ? undefined : { active: due ? "schedule" : "jobs", jobId, locationId: room?.id ?? null }}
+        tab={selecting ? undefined : { active: "jobs", jobId, locationId: room?.id ?? null }}
         footerHeight={selecting ? 74 : 0}
         footer={
           selecting ? (
@@ -610,20 +545,6 @@ export default function GroupScreen() {
                     style={styles.states}
                     testID="state-tabs"
                   />
-                ) : null}
-                {stateList === "check" ? (
-                  <Text variant="subheadline" color={colors.secondary} style={styles.explain}>
-                    A company marks its work done from its own page. Only Ross Built marks it complete, once you have looked.
-                  </Text>
-                ) : null}
-                {inLocation && !selecting ? (
-                  <Touchable feedback="opacity" onPress={() => router.push({ pathname: "/jobs/[jobId]/plans", params: { jobId, floor: room?.floor ?? "" } })} accessibilityRole="link" testID="see-on-plan" style={styles.planLink}>
-                    <Icon name="map" size={15} color={colors.tint} />
-                    <Text variant="label" color={colors.tint}>
-                      See it on the plan
-                    </Text>
-                    <Icon name="chevron.right" size={11} color={colors.tint} weight="semibold" />
-                  </Touchable>
                 ) : null}
                 {inLocation && copied && !selecting ? (
                   <View style={styles.paste} testID="paste-banner">
@@ -682,7 +603,7 @@ export default function GroupScreen() {
                     )}
                   />
                 ) : null}
-                {due || drafts || selecting || stateList ? null : (
+                {drafts || selecting || stateList ? null : (
                   <FilterBar
                     jobId={jobId}
                     filters={filters}
@@ -691,11 +612,6 @@ export default function GroupScreen() {
                 )}
                 {holdup && heldUp.length > 0 ? (
                   <Panel style={styles.holdup}>
-                    <LedgerRow trail={<DateField value={groupReadyBy} onChange={setAllReadyBy} label={`Ready By for everything waiting on ${holdup}`} testID="holdup-ready-by" />}>
-                      <Text variant="label" color={colors.secondary}>
-                        Ready By
-                      </Text>
-                    </LedgerRow>
                     <LedgerRow last onPress={clearAll} chevron={false} lead={<Icon name="checkmark.circle.fill" size={18} color={colors.tint} />} testID="holdup-clear">
                       <Text color={colors.tint}>Stop Waiting on {holdup}</Text>
                     </LedgerRow>
@@ -704,17 +620,15 @@ export default function GroupScreen() {
                 {noneOpen ? (
                   <EmptyState
                     icon="checkmark.circle.fill"
-                    title={drafts ? "No Drafts" : stateList === "check" ? "Nothing to Check" : "Nothing Open"}
+                    title={drafts ? "No Drafts" : "Nothing Open"}
                     message={
                       drafts
                         ? "Photos saved to finish later wait here to be filled in."
-                        : stateList === "check"
-                          ? "When a company marks its work done from its page, it shows here."
-                          : room
-                            ? isFiltered(filters)
-                              ? "Nothing here fits the filters. Take a photo, or tap New Item to type one in."
-                              : "Take a photo with Capture, or tap New Item to type one in."
-                            : "No open items here right now."
+                        : room
+                          ? isFiltered(filters)
+                            ? "Nothing here fits the filters. Take a photo, or tap New Item to type one in."
+                            : "Take a photo with Capture, or tap New Item to type one in."
+                          : "No open items here right now."
                     }
                   />
                 ) : null}
@@ -743,8 +657,7 @@ export default function GroupScreen() {
               ) : section.title ? (
                 <SectionLabel
                   label={section.title}
-                  right={stateList && section.companyId ? "Schedule" : String(section.data.length)}
-                  onPress={stateList && section.companyId ? () => router.push({ pathname: "/jobs/[jobId]/plan/[companyId]", params: { jobId, companyId: section.companyId! } }) : undefined}
+                  right={String(section.data.length)}
                   style={styles.sectionLabel}
                   testID={`section-${section.key}`}
                 />
@@ -820,8 +733,6 @@ export default function GroupScreen() {
 
 const styles = StyleSheet.create({
   states: { marginHorizontal: layout.margin, marginTop: 2 },
-  explain: { marginHorizontal: layout.inset, marginTop: 12 },
-  planLink: { flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: layout.inset, marginTop: 2, marginBottom: 4, alignSelf: "flex-start", minHeight: 30 },
   paste: {
     minHeight: 48,
     marginHorizontal: layout.margin,

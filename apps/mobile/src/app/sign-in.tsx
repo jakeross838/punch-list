@@ -1,11 +1,13 @@
-// Sign in: your Ross Built email, then the six digit code it gets. Only people an admin has added
-// under People get a code, so there is no password and no account to make. The code goes in six
-// square boxes that never move while you type; on the iPhone it fills in from Mail. On the preview
-// page no email is sent: an email from People and any six digits sign in. On the iPhone, the first
-// sign in waits here while the jobs come down to the phone.
+// Sign in: your email, then the six digit code it gets. There is no password. Someone an admin has
+// added under People goes straight in; someone new names their company next and is its admin,
+// then adds their people. The code goes in six square boxes that never move while you type; on the
+// iPhone it fills in from Mail. On the preview page no email is sent and any six digits sign in. On
+// the iPhone, the first sign in waits here while the jobs come down to the phone.
 
+import { companyNameProblem, yourNameProblem } from '@punch/core';
 import { useRef, useState, type ComponentRef } from 'react';
 import { Platform, StyleSheet, TextInput, View } from 'react-native';
+import { APP_NAME } from '@/constants/app';
 import { colors, fieldFont, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { Banner, Button, Eyebrow, haptic, Icon, ListRow, ListSection, ListTextField, Page, Text, Touchable } from '@/ui';
@@ -34,7 +36,11 @@ function Step({ n, label, state }: { n: string; label: string; state: 'on' | 'do
 export default function SignInScreen() {
   const data = useData();
   const sync = data.useSync();
+  // Signed in with an email that is not with a company yet: they start one here.
+  const newAccount = data.useNewAccount();
   const [email, setEmail] = useState('');
+  const [company, setCompany] = useState('');
+  const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [problem, setProblem] = useState<string | null>(null);
@@ -66,8 +72,8 @@ export default function SignInScreen() {
     setBusy(true);
     setProblem(null);
     try {
+      // Signed in: the stack opens Jobs on its own. Someone new starts their company next.
       await data.verifySignInCode(email, typed);
-      // Signed in: the stack opens Jobs on its own.
       haptic.success();
     } catch (e) {
       haptic.warning();
@@ -75,6 +81,34 @@ export default function SignInScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function startCompany() {
+    if (busy) return;
+    const wrong = companyNameProblem(company) ?? yourNameProblem(name);
+    if (wrong) {
+      haptic.warning();
+      setProblem(`${wrong}.`);
+      return;
+    }
+    setBusy(true);
+    setProblem(null);
+    try {
+      await data.startCompany({ company, name });
+      haptic.success();
+    } catch (e) {
+      haptic.warning();
+      setProblem(e instanceof Error ? e.message : 'That did not go. Check the signal and try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function otherEmail() {
+    setProblem(null);
+    setStep('email');
+    setCode('');
+    data.signOut().catch((e: unknown) => setProblem(e instanceof Error ? e.message : 'That did not go. Try again.'));
   }
 
   const typeCode = (text: string) => {
@@ -85,17 +119,69 @@ export default function SignInScreen() {
   };
 
   return (
-    <Page title="Sign In" hideHeader back={false} bell={false}>
+    <Page title="Sign In" hideHeader back={false}>
       <View style={styles.head}>
-        <Eyebrow text="Ross Built · Field" />
+        <Eyebrow text={APP_NAME} />
         <Text variant="largeTitle" accessibilityRole="header" style={styles.title}>
-          Sign In
+          {newAccount ? 'Start Your Company' : 'Sign In'}
         </Text>
         <Text variant="callout" color={colors.secondary} style={styles.lead}>
-          Ross Built people only. No password: we email you a code.
+          {newAccount ? 'You are new here. Name your company: you are its admin, and you add your people next.' : 'No password: we email you a code.'}
         </Text>
       </View>
-      {sync.gettingJobs ? (
+      {newAccount ? (
+        <>
+          <View style={styles.steps}>
+            <Step n="01" label="Email" state="done" />
+            <Step n="02" label="Code" state="done" />
+            <Step n="03" label="Company" state="on" />
+          </View>
+          <ListSection
+            header="Your Company"
+            footer={problem ?? 'Its name goes at the top of every list you send.'}
+            footerTone={problem ? 'danger' : 'default'}
+          >
+            <ListTextField
+              placeholder="Company Name"
+              value={company}
+              onChangeText={setCompany}
+              autoCapitalize="words"
+              autoFocus
+              textContentType="organizationName"
+              returnKeyType="next"
+              accessibilityLabel="Company name"
+              testID="sign-up-company"
+            />
+            <ListTextField
+              placeholder="Your Name"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              textContentType="name"
+              autoComplete="name"
+              returnKeyType="go"
+              onSubmitEditing={() => void startCompany()}
+              accessibilityLabel="Your name"
+              testID="sign-up-name"
+            />
+          </ListSection>
+          <View style={styles.button}>
+            <Button
+              label={busy ? 'Starting' : 'Start'}
+              icon="arrow"
+              onPress={() => void startCompany()}
+              disabled={busy || company.trim() === '' || name.trim() === ''}
+              testID="sign-up-start"
+            />
+          </View>
+          <Text variant="footnote" color={colors.secondary} style={styles.joinNote}>
+            {`Joining a company that already uses ${APP_NAME}? Ask its admin to add you under People with ${newAccount}, then sign in again.`}
+          </Text>
+          <View style={styles.resend}>
+            <Button label="Use Another Email" variant="plain" onPress={otherEmail} testID="sign-up-other" />
+          </View>
+        </>
+      ) : sync.gettingJobs ? (
         <ListSection
           header="Signed In"
           footer={
@@ -126,12 +212,12 @@ export default function SignInScreen() {
           {step === 'email' ? (
             <>
               <ListSection
-                header="Your Ross Built email"
-                footer={problem ?? 'We send it a six digit code to sign in.'}
+                header="Your work email"
+                footer={problem ?? 'We send it a six digit code to sign in. New here? The same email starts your company.'}
                 footerTone={problem ? 'danger' : 'default'}
               >
                 <ListTextField
-                  placeholder="name@rossbuilt.com"
+                  placeholder="name@company.com"
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
@@ -221,7 +307,9 @@ export default function SignInScreen() {
           )}
         </>
       )}
-      {data.mode === 'preview' ? <Banner>Preview: no email is sent. Use an email from People, like jake@rossbuilt.com or sam@rossbuilt.com, then any six digits.</Banner> : null}
+      {data.mode === 'preview' ? (
+        <Banner>Preview: no email is sent and any six digits sign in. An email from People, like jake@rossbuilt.com, opens the sample company; any other email starts a new one.</Banner>
+      ) : null}
     </Page>
   );
 }
@@ -256,4 +344,5 @@ const styles = StyleSheet.create({
   // The real field, over the boxes and out of sight: it takes the typing and the code from Mail.
   hiddenField: { ...fieldFont('mono'), position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.02, color: 'transparent', outlineWidth: 0 },
   codeNote: { marginHorizontal: 24, marginTop: 10, marginBottom: 18 },
+  joinNote: { marginHorizontal: 24, marginTop: 18 },
 });

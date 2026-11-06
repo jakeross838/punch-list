@@ -1,15 +1,14 @@
 // Not ready: what has to be done first. Usually one task on the list: this location's tasks come
 // first, the search finds any task on the job, and Add a Task puts a new one on the list right
-// here. For what is not a task (the owner picking a fixture, the design team, Ross Built) it waits
-// on who. Ready By is optional: without it, the item is ready by the day the tasks it waits on are
-// scheduled to be done. Done keeps it; Cancel leaves the item as it was.
+// here. For what is not a task (the owner picking a fixture, the design team, the builder) it waits
+// on who. Done keeps it; Cancel leaves the item as it was.
 
-import { checkItem, holdChoices, hoursForTitle, readyByOf, tidyItem, tidyTitle, type HoldLookups, type Item } from '@punch/core';
+import { checkItem, holdChoices, tidyItem, tidyTitle, type HoldLookups, type Item } from '@punch/core';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { colors, fieldFont, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Checkbox, DateField, haptic, Icon, ListRow, ListSection, OptionPicker, SearchField, Sheet, shortDate, Text, Touchable } from '@/ui';
+import { Checkbox, haptic, Icon, ListRow, ListSection, OptionPicker, SearchField, Sheet, Text, Touchable } from '@/ui';
 import { blankDraft, useFormOptions } from './ItemForm';
 
 export interface Waiting {
@@ -39,7 +38,7 @@ export function NotReadyBox({
   locationId: string;
   value: Waiting;
   holds: HoldLookups;
-  /** Who it can wait on that is not a task: Ross Built, Owner, the design team. */
+  /** Who it can wait on that is not a task: your own company, the owner, the design team. */
   extras: string[];
   /** Keeps someone new on the job's list of who things wait on. */
   onAddChoice: (label: string) => void;
@@ -48,11 +47,9 @@ export function NotReadyBox({
 }) {
   const data = useData();
   const items = data.useItems(jobId);
-  const titles = data.useTitles();
   const options = useFormOptions(jobId, locationId);
   const [tasks, setTasks] = useState<string[]>(value.waitingOnItems);
   const [who, setWho] = useState<string[]>(value.waitingOn);
-  const [date, setDate] = useState<string | null>(value.readyBy);
   const [query, setQuery] = useState('');
   const [addingWho, setAddingWho] = useState(false);
   const [newWho, setNewWho] = useState('');
@@ -65,7 +62,6 @@ export function NotReadyBox({
     setOpened(true);
     setTasks(value.waitingOnItems);
     setWho(value.waitingOn);
-    setDate(value.readyBy);
     setQuery('');
     setAddingWho(false);
     setNewWho('');
@@ -90,7 +86,6 @@ export function NotReadyBox({
   const elsewhere = q ? [] : tasks.map((id) => items.find((i) => i.id === id)).filter((t): t is Item => !!t && t.locationId !== locationId);
   const whoShown = [...extras, ...who.filter((w) => !extras.some((e) => same(e, w)))];
   const picked = tasks.length + who.length;
-  const follows = !date && tasks.length > 0 ? readyByOf({ ready: false, readyBy: null, waitingOnItems: tasks, waitingOn: who }, holds) : null;
 
   const toggleTask = (id: string) => {
     haptic.selection();
@@ -117,7 +112,6 @@ export function NotReadyBox({
       title,
       companyId: newTask.companyId,
       tradeId: options.tradeFor(newTask.companyId, null),
-      hours: hoursForTitle(title, titles, items),
     });
     const id = await data.createItem({ ...fields, jobId, source: 'typed', unfinished: checkItem({ ...fields, unfinished: false }).length > 0 });
     haptic.success();
@@ -127,10 +121,9 @@ export function NotReadyBox({
 
   const taskRow = (t: Item, i: number) => {
     const on = tasks.includes(t.id);
-    const visit = t.visitId ? holds.visits.get(t.visitId) : undefined;
     const company = t.companyId ? holds.companies.get(t.companyId) : undefined;
     const where = t.locationId !== locationId ? holds.locations.get(t.locationId) : undefined;
-    const state = visit ? `Scheduled ${shortDate(visit.start)}` : t.ready ? 'Ready' : 'Not ready';
+    const state = t.ready ? 'Ready' : 'Not ready';
     return (
       <Touchable
         key={t.id}
@@ -166,7 +159,7 @@ export function NotReadyBox({
         label: 'Done',
         variant: 'prominent',
         disabled: picked === 0,
-        onPress: () => onDone({ waitingOn: who, waitingOnItems: tasks, readyBy: date }),
+        onPress: () => onDone({ waitingOn: who, waitingOnItems: tasks, readyBy: null }),
         testID: 'not-ready-done',
       }}
       testID="not-ready-box"
@@ -301,20 +294,6 @@ export function NotReadyBox({
               <Text color={colors.tint}>Someone Else</Text>
             </Touchable>
           )}
-        </ListSection>
-
-        <ListSection
-          footer={
-            date
-              ? undefined
-              : follows
-                ? `Leave it empty to follow the tasks: ready by ${shortDate(follows)}, when their visits are done.`
-                : tasks.length > 0
-                  ? 'Leave it empty to follow the tasks: it gets a date once they are scheduled.'
-                  : undefined
-          }
-        >
-          <ListRow title="Ready By" titleLines={1} right={<DateField value={date} onChange={setDate} label="Ready By" testID="not-ready-by" />} />
         </ListSection>
       </ScrollView>
 

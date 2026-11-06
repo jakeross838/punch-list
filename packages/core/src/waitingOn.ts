@@ -1,15 +1,14 @@
-// The Waiting On choices for a job: the job's own extras first (Ross Built, Owner, the design team
-// by name), then every company on the job, each name once.
+// The Waiting On choices for a job: the job's own extras first (your own company, the owner, the
+// design team by name), then every company on the job, each name once.
 
 import type { Company, JobCompany } from './types';
 
-export const DEFAULT_WAITING_ON_EXTRAS = ['Ross Built', 'Owner'] as const;
+/** A job's extras before any are set: your own company and the owner. */
+export function defaultWaitingOnExtras(builder: string): string[] {
+  return [builder.trim(), 'Owner'].filter((x) => x !== '');
+}
 
-export function waitingOnChoices(
-  jobCompanies: JobCompany[],
-  companies: Company[],
-  extras: string[] = [...DEFAULT_WAITING_ON_EXTRAS],
-): string[] {
+export function waitingOnChoices(jobCompanies: JobCompany[], companies: Company[], extras: string[]): string[] {
   const byId = new Map(companies.map((c) => [c.id, c]));
   const names = jobCompanies
     .map((jc) => byId.get(jc.companyId)?.name)
@@ -26,7 +25,7 @@ export function waitingOnChoices(
   return out;
 }
 
-/** Waiting On as it reads in a sentence: "Owner", "Owner and Volcano Stone", "Owner, Ross Built and Volcano Stone". */
+/** Waiting On as it reads in a sentence: "Owner", "Owner and Volcano Stone", "Owner, the architect and Volcano Stone". */
 export function waitingOnText(list: string[]): string {
   if (list.length <= 1) return list[0] ?? '';
   return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;

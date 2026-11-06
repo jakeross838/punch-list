@@ -4,7 +4,6 @@
 // any job. Admins save templates; anyone on the job adds from one.
 
 import {
-  hoursText,
   placeHeading,
   placeLabel,
   TEMPLATE_PLACES,
@@ -115,7 +114,7 @@ export function AddTemplateSheet({
               <ListSection header={`What It Adds to ${label(locationId)}`} footer={notes.join(' ') || undefined}>
                 {plan.items.length === 0 ? <ListRow title="Nothing new for this location" /> : null}
                 {plan.items.map((i) => (
-                  <ListRow key={i.id} title={i.title} value={i.hours !== null ? hoursText(i.hours) : undefined} />
+                  <ListRow key={i.id} title={i.title} />
                 ))}
               </ListSection>
             ) : (
@@ -167,8 +166,7 @@ export function SaveTemplateSheet({ jobId, items, visible, onClose, onSaved }: {
     }
   }
 
-  const sub = (tradeId: string | null, hours: number | null) =>
-    [trades.find((t) => t.id === tradeId)?.name, hours !== null ? hoursText(hours) : null].filter(Boolean).join(' · ') || undefined;
+  const sub = (tradeId: string | null) => trades.find((t) => t.id === tradeId)?.name;
 
   return (
     <Sheet
@@ -198,7 +196,7 @@ export function SaveTemplateSheet({ jobId, items, visible, onClose, onSaved }: {
         {byPlace.map((g) => (
           <ListSection key={g.place} header={placeLabel(g.place)}>
             {g.tasks.map((t) => (
-              <ListRow key={t.key} title={t.title} subtitle={sub(t.tradeId, t.hours)} />
+              <ListRow key={t.key} title={t.title} subtitle={sub(t.tradeId)} />
             ))}
           </ListSection>
         ))}

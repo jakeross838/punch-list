@@ -8,6 +8,3 @@ export const config = {
 };
 
 export const isConfigured = Boolean(config.supabaseUrl && config.supabaseAnonKey && config.powersyncUrl);
-
-/** Every row carries the company it belongs to; the phone sync is limited to it. */
-export const ORG = 'ross_built';

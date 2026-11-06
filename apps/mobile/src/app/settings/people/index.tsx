@@ -1,4 +1,4 @@
-// People: everyone at Ross Built, admins first, then the team, then anyone switched off. Each says
+// People: everyone at your company, admins first, then the team, then anyone switched off. Each says
 // what they see and how many jobs they are on. Admins add people here; everyone can look.
 
 import { isAdmin, peopleInOrder, ROLE_LABELS, SEES_LABELS, type Person } from '@punch/core';
@@ -12,6 +12,7 @@ const jobsWords = (n: number) => (n === 0 ? 'No jobs' : n === 1 ? '1 job' : `${n
 
 export default function PeopleScreen() {
   const data = useData();
+  const company = data.useOrg().name || 'Your Company';
   const me = data.useMe();
   const people = peopleInOrder(data.usePeople());
   const team = data.useTeams();
@@ -27,10 +28,10 @@ export default function PeopleScreen() {
   return (
     <Page
       title="People"
-      eyebrow="Ross Built"
+      eyebrow={company}
       crumb={['Me', 'People']}
       backLabel="Me"
-      tab={{ active: 'me' }}
+      tab={{}}
       right={admin ? [{ kind: 'button', label: 'Add Person', icon: 'plus', iconOnly: true, onPress: () => setAdding(true), testID: 'add-person' }] : []}
     >
       {groups

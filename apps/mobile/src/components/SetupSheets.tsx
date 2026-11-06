@@ -222,7 +222,7 @@ export function CompanySheet({ jobId, pairing, visible, onClose }: { jobId: stri
           />
         </ListSection>
         {company ? (
-          <ListSection footer="Who gets its lists and the Schedule Email, on every job.">
+          <ListSection footer="Who gets its lists, on every job.">
             <ListRow
               title="People"
               value={people > 0 ? String(people) : 'None yet'}

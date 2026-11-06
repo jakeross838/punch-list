@@ -1,5 +1,5 @@
 // Fills in an item from its photo. The phone sends the prompt (built by @punch/core's suggestPrompt)
-// and the photo; this checks the caller is an active Ross Built person, asks Claude, and returns
+// and the photo; this checks the caller is switched on at a company, asks Claude, and returns
 // its answer as text for the phone to read. The Claude key stays here, as a function secret.
 //
 //   supabase secrets set ANTHROPIC_API_KEY=...   (and optionally SUGGEST_MODEL)
@@ -19,7 +19,7 @@ Deno.serve(async (req: Request) => {
     global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
   });
   const { data: active } = await supabase.rpc('is_active_person');
-  if (active !== true) return reply({ error: 'Only active Ross Built people can use this' }, 403);
+  if (active !== true) return reply({ error: 'Sign in to your company to use this' }, 403);
 
   const { prompt, image } = (await req.json().catch(() => ({}))) as { prompt?: unknown; image?: unknown };
   if (typeof prompt !== 'string' || prompt.length > 60_000 || typeof image !== 'string' || image.length === 0 || image.length > 8_000_000) {

@@ -1,15 +1,15 @@
 // Every screen's frame, the same on the iPhone and the preview page, in Nightwork's Site Office
 // style. The slate bar across the top: back with the last screen's name (or the wordmark on Jobs,
-// or the job's name on Schedule and Send), square buttons, the Updates bell and Me on the right.
-// Under it a crumb of where you are, then the header: a small eyebrow, the title, a line of counts.
-// The content sits on sand. At the bottom, either the screen's own buttons or the bar with Jobs,
-// Schedule, Capture, Send and Me. A sheet has a head of its own instead of the bar.
+// or the job's name on Send), square buttons, and Me on the right. Under it a crumb of where you
+// are, then the header: a small eyebrow, the title, a line of counts. The content sits on sand. At
+// the bottom, either the screen's own buttons or the bar with Jobs, Capture and Send. A sheet has a
+// head of its own instead of the bar.
 
 import { router, useCanGoBack, useNavigation } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AccountButton, JobSwitch, UpdatesBell } from '@/components/AppBar';
+import { AccountButton, JobSwitch } from '@/components/AppBar';
 import { TabBar } from '@/components/TabBar';
 import { colors, layout } from '@/constants/theme';
 import { BarButtonView } from './BarButton';
@@ -126,7 +126,6 @@ export function Page({
   back = true,
   left,
   right,
-  bell,
   account,
   jobSwitch,
   bottom,
@@ -150,7 +149,6 @@ export function Page({
   }, [navigation, sheet, dismissible]);
 
   const showBack = !sheet && back && canGoBack && !jobSwitch;
-  const showBell = bell ?? !sheet;
   const hasBottom = !!bottom?.length;
 
   const header = (
@@ -240,7 +238,6 @@ export function Page({
             </View>
             <View style={styles.barRight}>
               {right?.map((item) => barItem(item, 'dark'))}
-              {showBell ? <UpdatesBell /> : null}
               {account ? <AccountButton /> : null}
             </View>
           </View>

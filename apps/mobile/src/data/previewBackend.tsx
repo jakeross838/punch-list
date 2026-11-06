@@ -1,14 +1,17 @@
 // Preview backend: sample data in memory, for the preview link and for the phone before it is set
 // up. Nothing leaves the browser tab and a reload starts over. Every change is logged the way the
 // database logs it (a row for each item field that changed, and a row for photos, visits, lists
-// sent and job setup), so Activity and each item's History show what the real app will.
+// sent and job setup), so Activity and each item's History show what the real app will. Signing in
+// works as it does on the iPhone, with any six digits: an email from People opens the sample
+// company, and any other email starts a company of its own.
 
-import { isEmail, itemChanges, tidyEmail, type Activity } from '@punch/core';
+import { companyNameProblem, isAdmin, isEmail, itemChanges, tidyCompanyName, tidyEmail, yourNameProblem, type Activity } from '@punch/core';
+import { randomUUID } from 'expo-crypto';
 import type { ReactNode } from 'react';
 import { DataContext, type DataApi } from './api';
 import { makeApi, type Happened, type Keeper, type State } from './engine';
 import { keepPhoto } from './photoFiles';
-import { sampleState } from './sample';
+import { newCompanyState, sampleState } from './sample';
 
 let state: State = sampleState();
 const listeners = new Set<() => void>();
@@ -69,17 +72,40 @@ export const previewApi: DataApi = makeApi(keeper, {
   async sendSignInCode(email) {
     const clean = tidyEmail(email);
     if (!isEmail(clean)) throw new Error('That email does not look right.');
-    // As the server does: a code only for someone Ross Built has added and not switched off.
-    if (!state.people.some((p) => p.active && p.email === clean)) throw new Error('That email is not set up at Ross Built. Ask an admin to add you under People.');
+    // As the server does: anyone may sign up, and someone switched off is told so.
+    if (state.people.some((p) => !p.active && p.email === clean)) {
+      throw new Error(`That email is switched off at ${state.org.name}. Ask an admin there to switch it back on.`);
+    }
     setState({ ...state, codeFor: clean });
   },
   async verifySignInCode(email, code) {
     const clean = tidyEmail(email);
-    const person = state.people.find((p) => p.active && p.email === clean);
     // The preview sends no email: any six digits sign in.
-    if (!person || state.codeFor !== clean) throw new Error('Send a code to that email first.');
+    if (state.codeFor !== clean) throw new Error('Send a code to that email first.');
     if (!/^\d{6}$/.test(code.trim())) throw new Error('That code did not work. Check it, or send a new one.');
-    setState({ ...state, me: person, signedIn: true, codeFor: null });
+    const person = state.people.find((p) => p.active && p.email === clean);
+    if (person) {
+      setState({ ...state, me: person, signedIn: true, codeFor: null, newAccount: null });
+      return 'signed_in';
+    }
+    setState({ ...state, codeFor: null, newAccount: clean });
+    return 'new';
+  },
+  async startCompany({ company, name }) {
+    const email = state.newAccount;
+    if (!email) throw new Error('Sign in first.');
+    const problem = companyNameProblem(company) ?? yourNameProblem(name);
+    if (problem) throw new Error(`${problem}.`);
+    const me = { id: randomUUID(), email, name: tidyCompanyName(name), active: true, role: 'admin' as const, sees: 'all' as const, phone: null };
+    setState(newCompanyState({ id: randomUUID(), name: tidyCompanyName(company) }, me));
+  },
+  async deleteAccount() {
+    // As the server does: a company with people still in it keeps an admin.
+    const me = state.me;
+    const others = state.people.filter((p) => p.active && p.id !== me.id);
+    if (isAdmin(me) && others.length > 0 && !others.some(isAdmin)) throw new Error('Make someone else an admin first: your company needs one.');
+    // Nothing is kept on the preview page: it starts over, signed out.
+    setState({ ...sampleState(), signedIn: false });
   },
   async signOut() {
     // What was on the phone is cleared, as it is on the iPhone.

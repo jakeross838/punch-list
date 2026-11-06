@@ -82,50 +82,48 @@ describe('a list made to order', () => {
     expect(listTitle({ ...NO_FILTERS, states: ['ready'] }, names)).toBe('Whole Job');
   });
 
-  it('goes level by level and location by location, the details on every line, each group with its time', () => {
+  it('goes level by level and location by location, the details on every line', () => {
     const lines = filteredLines(items, NO_FILTERS, lookups, { completed: true });
     const page = customPrintout(lines, design({ title: 'Fish Open Work' }), { ...settings, filters: ['Ready', 'SMS Carpentry'] });
     expect(page.title).toBe('Fish Open Work');
     expect(page.fileName).toBe('Fish Fish Open Work, October 31 2026.pdf');
     const body = page.body;
     expect(body).toContain('4 open items in 2 locations: 2 ready now, 1 waiting and 1 to be quoted.');
-    expect(body).toContain('About 6.5 hours of work, or 1 day, with 1 not estimated.');
+    // No time and no dates: the schedule is not part of the list for now.
+    expect(body).not.toContain('hours');
+    expect(body).not.toContain('ready by');
     expect(body).toContain('Also 1 completed item.');
     expect(body).toContain('Filters: Ready, SMS Carpentry.');
     expect(body).toContain('<h2 class="rb-section">Level 1</h2>');
-    expect(body).toContain('Kitchen 109 · 2 items · 4.5 hours');
-    expect(body).toContain('Bathroom 207 · 3 items · 2 hours, 1 not estimated');
+    expect(body).toContain('Kitchen 109 · 2 items</td>');
+    expect(body).toContain('Bathroom 207 · 3 items</td>');
     // The company and type on every line, never only on the first one of a group.
     expect(body.match(/SMS Carpentry · Incomplete/g)?.length).toBe(3);
     expect(body).toContain('Triple H Painting · Deficiency');
     expect(body).toContain('SMS Carpentry · Additional, to be quoted');
-    expect(body).toContain('Waiting on Volcano Stone, ready by November\u00a02');
+    expect(body).toContain('<td class="rb-small">Waiting on Volcano Stone</td>');
     expect(body).toContain('Completed October\u00a028');
-    expect(body).toContain('<span class="rb-quiet">Not estimated</span>');
     expect(body).toContain('Both long walls.');
     // The completed item comes after the open ones in its location.
     expect(body.indexOf('Install closet system')).toBeLessThan(body.indexOf('Grout shower floor'));
   });
 
-  it('shows only the details picked, and leaves the time and status columns off when they are off', () => {
+  it('shows only the details picked, and leaves the status column off when it is off', () => {
     const lines = filteredLines(items, NO_FILTERS, lookups);
     const body = customPrintout(lines, design({ details: ['location'] }), settings).body;
     expect(body).not.toContain('<th>Ready</th>');
-    expect(body).not.toContain('<th>Time</th>');
     expect(body).not.toContain('Both long walls.');
-    expect(body).not.toContain('About ');
     expect(body).toContain('<div class="rb-meta">Kitchen 109</div>');
     // Additional work always says whether it is priced.
     expect(body).toContain('<div class="rb-note">Additional, to be quoted</div>');
     expect(customPrintout(lines, design(), settings).title).toBe('Whole Job');
   });
 
-  it('groups by company or what it waits on, with lines for the days and to add items', () => {
+  it('groups by company or what it waits on, with lines to add items', () => {
     const lines = filteredLines(items, NO_FILTERS, lookups, { completed: true });
-    const byCompany = customPrintout(lines, design({ groupBy: 'company', daysLines: true, blankLines: true }), settings).body;
+    const byCompany = customPrintout(lines, design({ groupBy: 'company', blankLines: true }), settings).body;
     expect(byCompany).toContain('SMS Carpentry · 4 items');
-    expect(byCompany).toContain('How many days for these 3 items?');
-    expect(byCompany).toContain('How many days for this item?');
+    expect(byCompany).not.toContain('How many days');
     expect(byCompany.match(/rb-blank/g)?.length).toBe(4);
     const byWaiting = customPrintout(lines, design({ groupBy: 'waiting' }), settings).body;
     const order = ['Ready · 2 items', 'Waiting on Volcano Stone · 1 item', 'To Be Quoted · 1 item', 'Completed · 1 item'].map((x) => byWaiting.indexOf(x));

@@ -52,7 +52,6 @@ const FONTS = {
 const SCREENS = [
   'index',
   'my',
-  'updates',
   'settings/people/index',
   'settings/people/[personId]',
   'settings/companies/index',
@@ -63,13 +62,9 @@ const SCREENS = [
   'jobs/[jobId]/index',
   'jobs/[jobId]/setup',
   'jobs/[jobId]/send',
-  'jobs/[jobId]/plans',
   'jobs/[jobId]/list/[by]/[key]',
   'jobs/[jobId]/items/[itemId]/index',
-  'jobs/[jobId]/schedule',
-  'jobs/[jobId]/plan/[companyId]',
   'jobs/[jobId]/activity',
-  'jobs/[jobId]/company/[companyId]',
 ] as const;
 const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'settings/item-form'] as const;
 const CAMERA = 'jobs/[jobId]/capture';

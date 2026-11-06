@@ -297,7 +297,7 @@ function TeamTab({ jobId, admin }: { jobId: string; admin: boolean }) {
         <View style={styles.action}>
           <Button variant="tinted" icon="plus" label="Add Person" onPress={() => setAdding(true)} disabled={off.length === 0} testID="add-team" />
           <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
-            {off.length === 0 ? 'Everyone at Ross Built is on this job.' : 'Assigning an item to someone puts them on the team too.'}
+            {off.length === 0 ? 'Everyone at your company is on this job.' : 'Assigning an item to someone puts them on the team too.'}
           </Text>
         </View>
       ) : null}

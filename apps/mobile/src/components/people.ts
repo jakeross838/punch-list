@@ -1,5 +1,5 @@
 // Who an item can be assigned to: No One, then the job's team as it reads on the job, then everyone
-// else at Ross Built who is switched on.
+// else at the company who is switched on.
 
 import { PART_LABELS, peopleInOrder, teamInOrder } from '@punch/core';
 import { useData } from '@/data/api';

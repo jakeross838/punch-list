@@ -1,15 +1,15 @@
 // Jobs: the first screen. My Items at the top when anything is assigned to you, then the jobs:
-// yours, all of them, or the closed ones, each with how much is open, how much is ready and what is
-// late. A job with no locations yet says Set Up. Admins make jobs with the plus in the bar. People,
-// Companies, Templates, Item Form and your Account are under Me.
+// yours, all of them, or the closed ones, each with how much is open, how much is ready and how much
+// waits. A job with no locations yet says Set Up. Admins make jobs with the plus in the bar. People,
+// Companies, Templates, Item Form and your account are under Me, the round button in the bar.
 
-import { assignedTo, isAdmin, pastDue, totalText, totalTime, type Job } from '@punch/core';
+import { assignedTo, isAdmin, type Job } from '@punch/core';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Button, ChipRow, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, SectionLabel, Stamp, Text, todayIso, type BarItem } from '@/ui';
+import { Button, ChipRow, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, SectionLabel, Stamp, Text, type BarItem } from '@/ui';
 
 const newJob = () => router.push('/jobs/new');
 
@@ -99,7 +99,6 @@ function MyItemsRow({ personId }: { personId: string }) {
   if (mine.length === 0) return null;
   const ready = mine.filter((i) => i.ready).length;
   const jobs = new Set(mine.map((i) => i.jobId)).size;
-  const time = totalText(totalTime(mine));
   return (
     <>
       <SectionLabel label="Assigned to you" right={`${mine.length} open`} />
@@ -117,7 +116,6 @@ function MyItemsRow({ personId }: { personId: string }) {
               { text: `${mine.length} open`, color: colors.label },
               ready > 0 ? { text: `${ready} ready`, color: colors.ok } : null,
               jobs > 1 ? `Across ${jobs} jobs` : null,
-              time || null,
             ]}
           />
         </LedgerRow>
@@ -139,15 +137,12 @@ function JobRows({ jobs }: { jobs: Job[] }) {
 function JobRow({ job, last, stripe }: { job: Job; last: boolean; stripe: boolean }) {
   const data = useData();
   const items = data.useItems(job.id);
-  const visits = data.useVisits(job.id);
   const locations = data.useLocations(job.id);
-  const today = todayIso();
   const open = items.filter((i) => i.status === 'open' && !i.unfinished);
   const ready = open.filter((i) => i.ready).length;
-  const toCheck = open.filter((i) => i.markedDoneAt).length;
-  const late = useMemo(() => pastDue(items, visits, today).length, [items, visits, today]);
+  const waiting = open.length - ready;
   const setUp = locations.some((l) => l.active);
-  const said = [job.name, job.address, setUp ? `${open.length} open, ${ready} ready${late ? `, ${late} past due` : ''}` : 'not set up yet'].filter(Boolean).join(', ');
+  const said = [job.name, job.address, setUp ? `${open.length} open, ${ready} ready${waiting ? `, ${waiting} waiting` : ''}` : 'not set up yet'].filter(Boolean).join(', ');
   return (
     <LedgerRow
       last={last}
@@ -178,8 +173,7 @@ function JobRow({ job, last, stripe }: { job: Job; last: boolean; stripe: boolea
                 ? [
                     { text: `${open.length} open`, color: colors.label },
                     { text: `${ready} ready`, color: colors.ok },
-                    toCheck > 0 ? { text: `${toCheck} to check`, color: colors.tint } : null,
-                    late > 0 ? { text: `${late} past due`, color: colors.destructive } : null,
+                    waiting > 0 ? { text: `${waiting} waiting`, color: colors.secondary } : null,
                   ]
                 : [{ text: 'Set up', color: colors.tint }]
           }

@@ -324,7 +324,7 @@ describe('the lists that go to the subs', () => {
   const settings = { job: { name: 'Fish', address: '715 North Shore Drive' }, date: new Date(2026, 9, 30) };
   const dataRows = (html: string) => html.match(/<tr class="rb-row[^"]*">.*?<\/tr>/g) ?? [];
 
-  it('prints a company list: ready now, then waiting by what it waits on, days for each batch and lines to add more', () => {
+  it('prints a company list: ready now, then waiting by what it waits on, and lines to add more', () => {
     const page = companyPrintout(companyList('c-sms', items, lookups), settings);
     expect(page.title).toBe('SMS Carpentry');
     expect(page.fileName).toBe('Fish Completion List for SMS Carpentry, October 30 2026.pdf');
@@ -333,17 +333,15 @@ describe('the lists that go to the subs', () => {
     expect(page.body).not.toContain('Carpentry: ');
     const sections = [...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1]);
     expect(sections).toEqual(['Ready', 'Waiting', 'Anything Missing']);
-    // The month and day never break apart on the page.
-    expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November\u00a02');
-    expect(page.body).toContain('Waiting on Owner, ready by November\u00a09');
+    // What each group waits on, and no dates: the schedule is not part of the list for now.
+    expect(page.body).toContain('Waiting on Volcano Stone and Owner</td>');
+    expect(page.body).toContain('Waiting on Owner</td>');
+    expect(page.body).not.toContain('ready by');
     // The room on every line, never only on the first line of a group.
     const lines = dataRows(page.body);
     expect(lines).toHaveLength(5);
     for (const line of lines) expect(line).toMatch(/Living 107|Kitchen 109/);
-    // One line for the days of each batch: the ready items, then each waiting group.
-    expect(page.body.match(/<tr class="rb-days">/g)).toHaveLength(3);
-    expect(page.body).toContain('How many days for these 2 items?');
-    expect(page.body).toContain('How many days for this item?');
+    expect(page.body).not.toContain('rb-days');
     expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(6);
     expect(page.body).not.toContain('<th>Photo</th>');
   });
@@ -397,11 +395,11 @@ describe('the lists that go to the subs', () => {
     expect(page.fileName).toBe('Fish Completion List, October 30 2026.pdf');
     expect(page.body).toContain('6 open items in 2 locations: 3 ready now and 3 waiting.');
     expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Level 1']);
-    expect([...page.body.matchAll(/<tr class="rb-band"><td colspan="4">(.*?) \u00b7 /g)].map((m) => m[1])).toEqual(['Living 107', 'Kitchen 109']);
+    expect([...page.body.matchAll(/<tr class="rb-band"><td colspan="(\d)">(.*?) \u00b7 /g)].map((m) => m[2])).toEqual(['Living 107', 'Kitchen 109']);
     const lines = dataRows(page.body);
     expect(lines).toHaveLength(6);
     for (const line of lines) expect(line).toMatch(/<div class="rb-meta">(SMS Carpentry|Triple H Painting) \u00b7 /);
-    expect(page.body).toContain('Waiting on Volcano Stone and Owner, ready by November\u00a02');
+    expect(page.body).toContain('Waiting on Volcano Stone and Owner</td>');
     expect(page.body.match(/<tr class="rb-blank">/g)).toHaveLength(4);
     expect(printPage(page)).toMatch(/^<!DOCTYPE html>.*<div class="rb-doc">.*<\/div><\/body><\/html>$/s);
     expect(printPage(page, { pageMargins: false })).toContain('@page{size:letter;margin:0}');

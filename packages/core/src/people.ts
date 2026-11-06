@@ -1,4 +1,4 @@
-// People at Ross Built and who does what. Two roles: an admin adds people, makes and closes jobs and
+// The people at a company and who does what. Two roles: an admin adds people, makes and closes jobs and
 // changes the setup; the team walks jobs, adds items and checks them off. Each person sees every
 // job or only the jobs they are on; admins see every job. A job's team says who is on it and as
 // what. An item can be assigned to one person, and shows on their My Items.

@@ -1,6 +1,6 @@
 // What an item waits on. Mostly other tasks on the list that have to be done first, usually one:
 // "Set upper cabinets" waits on "Install range backsplash". For what is not a task on the list (the
-// owner picking a fixture, the design team, Ross Built) it waits on who. A task that is done or
+// owner picking a fixture, the design team, your own company) it waits on who. A task that is done or
 // removed holds nothing up, and an item with nothing left to wait on is ready. Its Ready By is its
 // own date when it has one; otherwise the day the tasks it waits on are scheduled to be done.
 

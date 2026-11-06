@@ -381,6 +381,10 @@ export function planWrites(before: State, next: Partial<State>, ctx: WriteContex
       if (labels !== before.waitingOn[jobId]) holdups.set(jobId, diffHoldups(jobId, labels, ctx, writes));
     }
   }
+  // The company's name: its one row.
+  if (next.org && next.org !== before.org && next.org.id !== '' && next.org.name !== before.org.name) {
+    writes.push({ table: 'orgs', op: 'update', id: next.org.id, values: { name: next.org.name } });
+  }
   const form = next.formSettings && next.formSettings !== before.formSettings;
   const view = next.viewSettings && next.viewSettings !== before.viewSettings;
   if (form || view) {

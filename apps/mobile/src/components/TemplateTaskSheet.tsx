@@ -3,11 +3,9 @@
 // change it; taking it off the template switches it off, and nothing is deleted.
 
 import {
-  hoursText,
   isRoomKind,
   KIND_LABELS,
   KINDS,
-  PICK_HOURS,
   placeLabel,
   TEMPLATE_PLACES,
   tidyTitle,
@@ -21,7 +19,7 @@ import { layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { haptic, ListRow, ListSection, ListTextField, OptionPicker, Segmented, Sheet, useFeedback } from '@/ui';
 
-type Picker = 'place' | 'trade' | 'hours' | 'waits' | null;
+type Picker = 'place' | 'trade' | 'waits' | null;
 
 export function TemplateTaskSheet({
   templateId,
@@ -49,7 +47,8 @@ function TaskForm({ templateId, task, onClose }: { templateId: string; task: Tem
   const [place, setPlace] = useState<TemplatePlace>(task?.place ?? 'bathroom');
   const [tradeId, setTradeId] = useState<string | null>(task?.tradeId ?? null);
   const [kind, setKind] = useState<ItemKind>(task?.kind ?? 'completion');
-  const [hours, setHours] = useState<number | null>(task?.hours ?? null);
+  // Not asked for now: a task keeps the time it had, or its standard title's.
+  const hours = task?.hours ?? null;
   const [waitsOn, setWaitsOn] = useState<string | null>(task?.waitsOn[0] ?? null);
   const [picker, setPicker] = useState<Picker>(null);
   const [tried, setTried] = useState(false);
@@ -88,7 +87,6 @@ function TaskForm({ templateId, task, onClose }: { templateId: string; task: Tem
 
   const placeOptions = TEMPLATE_PLACES.map((p) => ({ value: p, label: placeLabel(p), group: isRoomKind(p) ? 'Every Location of a Kind' : 'Areas Every Job Has' }));
   const tradeOptions = [{ value: 'none', label: 'No Trade' }, ...trades.map((t) => ({ value: t.id, label: t.name }))];
-  const hourOptions = [{ value: 'none', label: 'Not Estimated' }, ...PICK_HOURS.map((h) => ({ value: String(h), label: hoursText(h) }))];
   const waitOptions = [{ value: 'none', label: 'Nothing' }, ...others.map((t) => ({ value: t.id, label: t.title, hint: placeLabel(t.place) }))];
 
   return (
@@ -107,7 +105,6 @@ function TaskForm({ templateId, task, onClose }: { templateId: string; task: Tem
         <ListSection>
           <ListRow title="Where" value={placeLabel(place)} accessory="chevron" onPress={() => setPicker('place')} testID="task-place" />
           <ListRow title="Trade" value={trades.find((t) => t.id === trade)?.name ?? 'No Trade'} accessory="chevron" onPress={() => setPicker('trade')} testID="task-trade" />
-          <ListRow title="Estimated Time" value={time !== null ? hoursText(time) : 'Not Estimated'} accessory="chevron" onPress={() => setPicker('hours')} testID="task-hours" />
           <ListRow
             title="Waits On"
             value={others.find((t) => t.id === waitsOn)?.title ?? 'Nothing'}
@@ -134,14 +131,6 @@ function TaskForm({ templateId, task, onClose }: { templateId: string; task: Tem
         onSelect={(v) => setTradeId(v === 'none' ? null : v)}
         onClose={() => setPicker(null)}
         footer="On each job, the company doing this trade gets it."
-      />
-      <OptionPicker
-        visible={picker === 'hours'}
-        title="Estimated Time"
-        options={hourOptions}
-        value={time !== null ? String(time) : 'none'}
-        onSelect={(v) => setHours(v === 'none' ? null : Number(v))}
-        onClose={() => setPicker(null)}
       />
       <OptionPicker
         visible={picker === 'waits'}

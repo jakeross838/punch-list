@@ -57,17 +57,16 @@ export interface PageScroll {
   bottomInset: number;
 }
 
-/** Which part of the bottom bar is lit, and what Capture works on. */
+/** Which part of the bottom bar is lit, if any, and what Capture works on. */
 export interface PageTab {
-  active: 'jobs' | 'schedule' | 'send' | 'me';
+  /** Me and its screens light none. */
+  active?: 'jobs' | 'send';
   /** The job the screen is on. */
   jobId?: string;
   /** Capture starts in this location. */
   locationId?: string | null;
   /** Capture does something of the screen's own. */
   onCapture?: () => void;
-  /** A count of what is late, on Schedule. */
-  late?: number;
 }
 
 export interface PageProps {
@@ -95,13 +94,11 @@ export interface PageProps {
   background?: 'grouped' | 'plain';
   /** More in the bar, after the back button. */
   left?: BarItem[];
-  /** Square buttons on the right of the bar, before the bell. */
+  /** Square buttons on the right of the bar. */
   right?: BarItem[];
-  /** The Updates bell in the bar. On by default for screens, off for sheets. */
-  bell?: boolean;
   /** The Me button in the bar, on the screens of the bottom bar. */
   account?: boolean;
-  /** The job's name in the bar, with a menu to switch jobs: Schedule and Send. */
+  /** The job's name in the bar, with a menu to switch jobs: Send. */
   jobSwitch?: { jobId: string; onChange: (jobId: string) => void };
   /** The buttons along the bottom, like Not Done and Complete. */
   bottom?: BarButton[];
@@ -124,7 +121,7 @@ export interface PageProps {
   sheet?: boolean;
   /** False keeps a sheet from closing with a swipe, for unsaved changes. */
   dismissible?: boolean;
-  /** The bottom bar with Jobs, Schedule, Capture, Send and Me. */
+  /** The bottom bar with Jobs, Capture and Send. */
   tab?: PageTab;
   children?: ReactNode;
   /** For screens built on a list: render it with the scroll props and header from the page. */

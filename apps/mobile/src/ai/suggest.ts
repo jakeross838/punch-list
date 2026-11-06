@@ -1,6 +1,6 @@
 // iPhone: fill in an item from its photo through the suggest-item function on the server, which
-// keeps the Claude key and checks the person is an active Ross Built user. Hidden until the
-// function is set up (EXPO_PUBLIC_SUGGEST_ITEMS=1 once it is deployed with its key).
+// keeps the Claude key and checks the person is switched on at a company. Hidden until the function
+// is set up (EXPO_PUBLIC_SUGGEST_ITEMS=1 once it is deployed with its key).
 
 import { readSuggestion, suggestPrompt, type ItemSuggestion, type SuggestContext } from '@punch/core';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';

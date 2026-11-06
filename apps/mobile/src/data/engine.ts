@@ -9,6 +9,7 @@
 import { randomUUID } from 'expo-crypto';
 import { useMemo, useSyncExternalStore } from 'react';
 import {
+  companyNameProblem,
   contactProblem,
   isAdmin,
   isEmail,
@@ -16,6 +17,7 @@ import {
   renamedHoldups,
   seesJob,
   tidyComment,
+  tidyCompanyName,
   tidyContact,
   tidyEmail,
   tidyName,
@@ -67,7 +69,7 @@ export interface Keeper {
 }
 
 /** What differs between the backends besides where the changes are kept. */
-export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signOut'> &
+export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signOut' | 'startCompany' | 'deleteAccount'> &
   Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useUpdates' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'companyMarkDone' | 'previewAs'>>;
 
 const now = () => new Date().toISOString();
@@ -193,6 +195,17 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
         const s = useStore();
         return s.signedIn ? s.me : null;
       }),
+    useOrg: () => useStore().org,
+    useNewAccount: () => useStore().newAccount,
+    async renameOrg(name) {
+      const state = get();
+      adminOnly(state);
+      const problem = companyNameProblem(name);
+      if (problem) throw new Error(`${problem}.`);
+      const clean = tidyCompanyName(name);
+      if (clean === state.org.name) return;
+      await save({ org: { ...state.org, name: clean } });
+    },
     usePeople: () => useStore().people,
     useJobs: () => {
       const s = useStore();
@@ -315,7 +328,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       };
       checkPerson(state, next, id);
       const people = state.people.map((p) => (p.id === id ? next : p));
-      if (!people.some(isAdmin)) throw new Error('Ross Built needs at least one admin. Make someone else an admin first.');
+      if (!people.some(isAdmin)) throw new Error('Your company needs at least one admin. Make someone else an admin first.');
       await save({ people, me: state.me.id === id ? next : state.me });
     },
     async setTeamMember(jobId, personId, part) {
@@ -860,6 +873,8 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     sendSignInCode: extras.sendSignInCode,
     verifySignInCode: extras.verifySignInCode,
+    startCompany: extras.startCompany,
+    deleteAccount: extras.deleteAccount,
     signOut: extras.signOut,
     useSync: extras.useSync ?? (() => UP_TO_DATE),
     clearRefused: extras.clearRefused ?? (async () => {}),

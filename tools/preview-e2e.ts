@@ -205,8 +205,8 @@ async function main(): Promise<void> {
     await step('an item edits in place: Ready is a checkbox, Not Ready picks the task to be done first', async () => {
       await app.getByTestId('item-item-1').click();
       await app.getByTestId('mark-complete').waitFor();
-      // It waits on the range backsplash, so it is ready by the day the backsplash's visit is done.
-      await app.getByText(/^Waiting on Install range backsplash \(Volcano Stone\), ready by [A-Z][a-z]+ \d+$/).last().waitFor();
+      // It waits on the range backsplash: the task, and the company doing it.
+      await app.getByText('Waiting on Install range backsplash (Volcano Stone)', { exact: true }).last().waitFor();
       await settle();
       await shot('08-item');
       await app.getByTestId('ready-check').click();
@@ -218,16 +218,16 @@ async function main(): Promise<void> {
       // This location's tasks come first; the owner is for what is not a task on the list.
       await app.getByTestId('waiting-task-item-25').click();
       await app.getByTestId('waiting-Owner').click();
-      await app.getByTestId('not-ready-by').fill('2026-11-05');
+      // No date to pick: the schedule is not part of the app for now.
+      if ((await app.getByTestId('not-ready-by').count()) !== 0) throw new Error('The Not Ready box still asks for a date');
       await settle(300);
       await shot('09-not-ready-box');
       await app.getByTestId('not-ready-done').last().click();
       await app.getByTestId('not-ready-box').waitFor({ state: 'detached' });
-      await app.getByText('Waiting on Install range backsplash (Volcano Stone) and Owner, ready by November 5').last().waitFor();
-      // The estimate, the type and the order wait under Details: one tap on a usual time.
+      await app.getByText('Waiting on Install range backsplash (Volcano Stone) and Owner', { exact: true }).last().waitFor();
+      // The type and the order wait under Details. No estimated time.
       await app.getByTestId('item-details').click();
-      await app.getByTestId('estimate-2').click();
-      if ((await app.getByTestId('estimate-2').getAttribute('aria-checked')) !== 'true') throw new Error('The estimate did not take');
+      if ((await app.getByTestId(/^estimate-/).count()) !== 0) throw new Error('Details still asks for a time');
       await app.getByTestId('field-description').fill('Range wall, both sides of the hood, after the stone is set.');
       await app.getByTestId('field-description').blur();
       await settle(300);
@@ -235,7 +235,7 @@ async function main(): Promise<void> {
       // The type: Additional brings up its order, a purchase order, variance purchase order or change order; back to Incomplete.
       await app.getByRole('tab', { name: 'Additional' }).click();
       await app.getByTestId('field-po').waitFor();
-      await app.getByText('Extra work, to be quoted. It is scheduled once it has its purchase order, variance purchase order or change order.').waitFor();
+      await app.getByText('Extra work, to be quoted. It goes ahead once it has its purchase order, variance purchase order or change order.').waitFor();
       await app.getByTestId('order-co').click();
       await app.getByTestId('order-vpo').waitFor();
       await settle(300);
@@ -245,13 +245,13 @@ async function main(): Promise<void> {
       // Leave and come back: the changes were saved as they were made, and the row says them.
       await app.getByTestId('back').last().click();
       await app.getByTestId('item-item-16').waitFor();
-      await app.getByTestId('time-item-1').getByText('2 hours', { exact: true }).waitFor();
+      if ((await app.getByTestId('time-item-1').count()) !== 0) throw new Error('The row still shows a time');
       // In a location the items go by company; the usual type, Incomplete, is not said on the row.
       if ((await app.getByTestId('item-item-1').getByText(/Additional/).count()) > 0) throw new Error('The row still says Additional');
       await settle();
-      await shot('09e-row-with-time');
+      await shot('09e-row');
       await app.getByTestId('item-item-1').click();
-      await app.getByText('Waiting on Install range backsplash (Volcano Stone) and Owner, ready by November 5').last().waitFor();
+      await app.getByText('Waiting on Install range backsplash (Volcano Stone) and Owner', { exact: true }).last().waitFor();
       if ((await app.getByTestId('field-description').inputValue()) !== 'Range wall, both sides of the hood, after the stone is set.') {
         throw new Error('The description did not save');
       }
@@ -275,7 +275,8 @@ async function main(): Promise<void> {
       await app.getByTestId('shutter').click();
       await (await chooser).setFiles(photoPath);
       await app.getByText('Saved, with no location yet').waitFor();
-      await app.getByTestId('camera-finish').getByText(/^Done by [A-Z][a-z]+day, [A-Z][a-z]+ \d+\.$/).waitFor();
+      // No finish date: the schedule is not part of the app for now.
+      if ((await app.getByText(/^Done by /).count()) !== 0) throw new Error('The camera still says a finish date');
       await settle(400);
       await shot('09f-no-location');
       await app.getByTestId('camera-close').click();
@@ -372,10 +373,9 @@ async function main(): Promise<void> {
       await app.getByText('Company filled in from the title.').waitFor();
       await app.getByText('SMS Carpentry').last().waitFor();
       if ((await app.getByTestId('pick-trade').count()) !== 0) throw new Error('The form still asks for the trade');
-      await app.getByTestId('item-details').getByText('Incomplete · 30 minutes', { exact: true }).waitFor();
+      await app.getByTestId('item-details').getByText('Incomplete', { exact: true }).waitFor();
       await app.getByTestId('item-details').click();
-      if ((await app.getByTestId('estimate-0.5').last().getAttribute('aria-checked')) !== 'true') throw new Error('The title did not fill in its usual time');
-      await app.getByText('The usual time for this title. Change it if this one is different.').waitFor();
+      if ((await app.getByTestId(/^estimate-/).count()) !== 0) throw new Error('The title filled in a time');
       await settle(300);
       await shot('15-filled-in');
     });
@@ -467,7 +467,7 @@ async function main(): Promise<void> {
       // Done here: the location is walked, and the camera goes on to the next one.
       await app.getByTestId('camera-next').click();
       await app.getByText(/^Bathroom 116 walked\. Now in [A-Z]/).waitFor();
-      await app.getByTestId('camera-finish').getByText(/^1 of \d+ walked\. Done by /).waitFor();
+      await app.getByTestId('camera-walked').getByText(/^1 of \d+ walked\.$/).waitFor();
       await settle(400);
       await shot('21c-next-location');
       await app.getByTestId('camera-close').click();
@@ -660,26 +660,6 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('Past Due is on the Schedule, with a red count on its tab', async () => {
-      await app.getByTestId('schedule-badge').last().waitFor();
-      await app.getByTestId('tab-schedule').last().click();
-      await app.getByTestId('schedule-past-due').click();
-      const door = app.getByTestId(/^item-item-/).filter({ hasText: 'Hang front door' });
-      await door.waitFor();
-      await door.getByText(/^\d+ Days? Past Due$/).waitFor();
-      await door.getByText('Waiting on Owner', { exact: true }).waitFor();
-      await door.getByText('Foyer 115 · SMS Carpentry', { exact: true }).waitFor();
-      await app.getByText('Bathroom 116 · Rangel Custom Tile · Deficiency', { exact: true }).waitFor();
-      await app.getByText(/^Visit ended \d+ days? ago$/).first().waitFor();
-      await settle();
-      await shot('28-past-due');
-      await app.getByTestId('back').last().click();
-      await settle();
-      // Jobs goes back to the job the Schedule was opened from.
-      await app.getByTestId('tab-jobs').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle();
-    });
     await step('View and Filter: by company, saved as the default', async () => {
       await app.getByTestId('filter').click();
       await app.getByTestId('view-done').waitFor();
@@ -715,8 +695,8 @@ async function main(): Promise<void> {
       await shot('29c-filters');
       await app.getByTestId('view-done').click();
       await app.getByTestId('chip-companyIds:company-4').waitFor();
-      // The job's own totals (the Jobs screen underneath says its totals too).
-      await app.getByText(/^\d+ open · [\d.]+ (hours|minutes)/).filter({ visible: true }).first().waitFor();
+      // The job's own count of what is open.
+      await app.getByTestId('count-open').filter({ visible: true }).first().waitFor();
       await settle(600);
       await shot('29d-filtered');
       await app.getByTestId('chip-companyIds:company-2').click();
@@ -755,7 +735,7 @@ async function main(): Promise<void> {
       await shot('31-by-waiting');
       await app.getByTestId('group-waiting:owner').click();
       await app.getByText('Waiting on Owner').first().waitFor();
-      await app.getByTestId('holdup-ready-by').fill('2026-11-12');
+      if ((await app.getByTestId('holdup-ready-by').count()) !== 0) throw new Error('The holdup still asks for a date');
       await settle(300);
       await shot('32-waiting-on-owner');
       await app.getByTestId('holdup-clear').click();
@@ -771,91 +751,7 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('the schedule: schedule a visit from the plan, then confirm it', async () => {
-      await app.getByTestId('tab-schedule').last().click();
-      await app.getByTestId('gantt').waitFor();
-      await settle();
-      await shot('33-schedule');
-      await app.getByTestId('gantt-company-company-4').click();
-      await app.getByTestId('book-ready').waitFor();
-      // The ready work splits into full days, each one to schedule on its own.
-      await app.getByTestId('ready-day-2').waitFor();
-      await settle();
-      await shot('34-plan');
-      await app.getByTestId('ready-day-2').scrollIntoViewIfNeeded();
-      await settle(300);
-      await shot('34b-plan-days');
-      await app.getByTestId('book-day-2').click();
-      await app.getByTestId('visit-save').waitFor();
-      await settle(600);
-      // Take the baseboard off the day, then Fill the Day tops it back up with small ready work.
-      const baseboard = app.getByTestId('visit-item-item-21');
-      if ((await baseboard.getAttribute('aria-checked')) === 'true') await baseboard.click();
-      await app.getByTestId('visit-fill').click();
-      await app.getByTestId('visit-time').getByText('8 hours', { exact: true }).waitFor();
-      await app.getByTestId('visit-fill').waitFor({ state: 'detached' });
-      // Two days is more than the work needs.
-      await app.getByTestId('visit-days-more').click();
-      await app.getByTestId('visit-days-fit').waitFor();
-      await settle(300);
-      await shot('35-book-visit');
-      await app.getByTestId('visit-days-fit').click();
-      await app.getByTestId('visit-days-fit').waitFor({ state: 'detached' });
-      await app.getByTestId('visit-save').click();
-      await app.getByTestId('visit-sheet').waitFor({ state: 'detached' });
-      // The new visit on the plan (the schedule underneath shows visits too).
-      const booked = app.getByTestId(/^visit-[0-9a-f]{8}-/).last();
-      await booked.waitFor();
-      await settle(400);
-      await booked.click();
-      await app.getByTestId('visit-confirmed').waitFor();
-      await settle(600);
-      await app.getByTestId('visit-confirmed').click();
-      await app.getByTestId('visit-save').click();
-      await app.getByTestId('visit-sheet').waitFor({ state: 'detached' });
-      await booked.getByText('Confirmed', { exact: true }).waitFor();
-      await settle(400);
-      await shot('36-plan-booked');
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('gantt').last().waitFor();
-      await settle();
-      await shot('37-schedule-booked');
-      await app.getByTestId('tab-jobs').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle();
-    });
-    await step('the schedule builds itself from the list: a chart, and Save the Best Guess keeps the dates', async () => {
-      await app.getByTestId('tab-schedule').last().click();
-      await app.getByTestId('gantt').waitFor();
-      // The headline: when everything with a date is done.
-      await app.getByText(/^Everything with a date is done by [A-Z][a-z]+day, [A-Z][a-z]+ \d+\./).waitFor();
-      // What sets that date is outlined, and said under the chart.
-      await app.getByTestId('schedule-set-by').getByText(/^The outlined visits set the finish date: /).waitFor();
-      // SMS Carpentry's confirmed visit is green; work that moves with the list is pale.
-      await app.locator('[data-testid^="gantt-bar-auto:"]').first().waitFor();
-      await settle(500);
-      await shot('37a-gantt');
-      // A pale bar opens as a new visit with its dates and items picked.
-      await app.locator('[data-testid^="gantt-bar-auto:"]').first().click();
-      await app.getByTestId('visit-save').waitFor();
-      await settle(600);
-      await shot('37b-gantt-visit');
-      await app.getByTestId('visit-cancel').click();
-      await app.getByTestId('visit-sheet').waitFor({ state: 'detached' });
-      // Keep every best guess where it is: the pale bars turn blue, with Undo.
-      await app.getByTestId('schedule-save-all').click();
-      await app.getByText(/^\d+ visits? on the schedule as our best guess$/).waitFor();
-      await app.getByTestId('schedule-save-all').waitFor({ state: 'detached' });
-      if ((await app.locator('[data-testid^="gantt-bar-auto:"]').count()) !== 0) throw new Error('A best guess was not saved');
-      await settle(500);
-      await shot('37c-gantt-saved');
-      await app.getByRole('button', { name: 'Undo' }).click();
-      await app.getByTestId('schedule-save-all').waitFor();
-      await app.getByTestId('tab-jobs').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle();
-    });
-    await step('comments: a back and forth on an item, and a Ross Built only note', async () => {
+    await step('comments: a back and forth on an item, and an internal note', async () => {
       await app.getByTestId('group-room-1').click();
       // The row says how many comments the item has.
       await app.getByTestId(/^item-item-/).filter({ hasText: 'Adjust cabinet door' }).getByText('Deficiency', { exact: true }).waitFor();
@@ -867,7 +763,7 @@ async function main(): Promise<void> {
       const thread = app.getByTestId('item-comments');
       await thread.getByText('Will do. We are bringing new hinges for both.').waitFor();
       await thread.getByText('Mike at SMS Carpentry', { exact: true }).waitFor();
-      await thread.getByText('Ross Built only', { exact: true }).waitFor();
+      await thread.getByTestId(/^comment-/).getByText('Internal', { exact: true }).first().waitFor();
       await thread.scrollIntoViewIfNeeded();
       await app.getByTestId('item-comments-input').fill('Bring the hinge jig too.');
       await app.getByTestId('item-comments-post').click();
@@ -876,7 +772,7 @@ async function main(): Promise<void> {
       await app.getByTestId('item-comments-input').fill('Their last invoice is still open.');
       await app.getByTestId('item-comments-post').click();
       await thread.getByText('Their last invoice is still open.').waitFor();
-      if ((await thread.getByText('Ross Built only', { exact: true }).count()) !== 2) throw new Error('The note is not marked Ross Built only');
+      if ((await thread.getByTestId(/^comment-/).getByText('Internal', { exact: true }).count()) !== 2) throw new Error('The note is not marked Internal');
       await thread.scrollIntoViewIfNeeded();
       await settle(500);
       await shot('38a-item-comments');
@@ -886,113 +782,35 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step("the company's page: what SMS Carpentry sees from its link, and its comments come straight back", async () => {
-      await app.getByTestId('tab-schedule').last().click();
-      await app.getByTestId('gantt-company-company-4').click();
-      await app.getByTestId('plan-comments').getByText('We can do all the trim work Monday and Tuesday next week if that works.').waitFor();
-      await app.getByTestId('company-page').click();
-      await app.getByTestId('company-name').waitFor();
-      await app.getByText('This is the page SMS Carpentry opens from the link on its list. What they write here comes straight to you.').waitFor();
-      // Ross Built only notes never show here.
-      await app.getByTestId('company-comments-item-16').getByText('Bring the hinge jig too.').waitFor();
-      for (const note of ['pantry doors', 'last invoice']) {
-        if ((await app.getByText(note, { exact: false }).filter({ visible: true }).count()) !== 0) throw new Error(`A Ross Built only note shows on the company's page: ${note}`);
-      }
-      await settle(500);
-      await shot('38b-company-page');
-      await app.getByTestId('company-name').fill('Mike');
-      await app.getByTestId('company-comments-item-16-input').fill('Hinges are on the truck.');
-      await app.getByTestId('company-comments-item-16-post').click();
-      await app.getByTestId('company-comments-item-16').getByText('Hinges are on the truck.').waitFor();
-      // An item with no comments yet opens a box for one.
-      await app.getByTestId('company-comment-item-22').click();
-      await app.getByTestId('company-comments-item-22-input').fill('Is the hearth stone sealed yet?');
-      await app.getByTestId('company-comments-item-22-post').click();
-      await app.getByTestId('company-comments-item-22').getByText('Mike at SMS Carpentry', { exact: true }).waitFor();
-      await app.getByTestId('company-list-comments-input').fill('We can start Monday at 7.');
-      await app.getByTestId('company-list-comments-post').click();
-      await app.getByTestId('company-list-comments').getByText('We can start Monday at 7.').waitFor();
-      await app.getByTestId('company-comments-item-16').scrollIntoViewIfNeeded();
-      await settle(500);
-      await shot('38c-company-commented');
-      // Its dates: Other Dates asks for another start, for Ross Built to move the visit.
-      const visitCard = app.locator('[data-testid^="company-visit-"]').first();
-      const visitId = (await visitCard.getAttribute('data-testid'))!.slice('company-visit-'.length);
-      await visitCard.scrollIntoViewIfNeeded();
-      await app.getByTestId(`visit-change-${visitId}`).click();
-      await app.getByTestId(`visit-days-${visitId}-2`).click();
-      await settle(300);
-      await shot('38e-company-other-dates');
-      await app.getByTestId(`visit-ask-${visitId}`).click();
-      await visitCard.getByText('Other dates asked', { exact: true }).waitFor();
-      await app.getByTestId('back').last().click();
-      // Back in the app, the company's comments are there.
-      await app.getByTestId('plan-comments').getByText('We can start Monday at 7.').waitFor();
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('gantt').last().waitFor();
-      // The Schedule says what the company asked for; Keep These Dates leaves the visit as it is.
-      await app.getByTestId(`schedule-asked-${visitId}`).waitFor();
-      await app.getByTestId(`gantt-asked-${visitId}`).waitFor();
-      await settle(400);
-      await shot('38f-schedule-asked');
-      await app.getByTestId(`schedule-asked-${visitId}`).click();
-      await app.getByTestId('visit-asked').getByText(/^Mike at SMS Carpentry asked for [A-Z][a-z]+day, [A-Z][a-z]+ \d+, 2 days\.$/).waitFor();
-      await settle(600);
-      await shot('38g-visit-asked');
-      await app.getByTestId('visit-keep-dates').click();
-      await app.getByText(/^Kept SMS Carpentry on /).waitFor();
-      await app.getByTestId(`schedule-asked-${visitId}`).waitFor({ state: 'detached' });
-      // Volcano Stone says its best guess dates work: the visit is confirmed.
-      await app.getByTestId('gantt-company-company-5').click();
-      await app.getByTestId('company-page').click();
-      await app.getByTestId('visit-ok-visit-stone').click();
-      await app.getByTestId('company-visit-visit-stone').getByText('Confirmed', { exact: true }).waitFor();
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('gantt').last().waitFor();
-      await app.getByTestId('tab-jobs').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle();
-      await menu('activity');
-      // Newest first: what Mike just wrote, under his name and the company's.
-      await app.getByText('Mike at SMS Carpentry commented on the SMS Carpentry list', { exact: true }).first().waitFor();
-      await app.getByText('Mike at SMS Carpentry commented on Adjust cabinet door', { exact: true }).first().waitFor();
-      await app.getByText('Kitchen 109. Hinges are on the truck.', { exact: true }).waitFor();
-      await app.getByText('Jake Ross added a Ross Built only note on Adjust cabinet door', { exact: true }).waitFor();
-      await app.getByText('Mike at SMS Carpentry asked to move its visit', { exact: true }).first().waitFor();
-      await app.getByText('Volcano Stone confirmed its visit', { exact: true }).first().waitFor();
-      await settle(500);
-      await shot('38d-activity-comments');
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle();
-    });
     await step('Send Lists: a company list and the whole job, ready to send', async () => {
       await app.getByTestId('send').last().click();
       await app.getByTestId('send-job').waitFor();
+      if ((await app.getByTestId('send-schedule').count()) + (await app.getByTestId('send-lookahead').count()) !== 0) throw new Error('Send Lists still has the schedule');
       await settle(700);
       await shot('38-send-lists');
       await app.getByTestId('send-company-4').click();
       const doc = app.getByTestId('doc-preview');
-      await doc.getByText('Scheduled Visits', { exact: true }).waitFor();
+      // The company using the app, on top of every list.
+      await doc.getByText('ROSS BUILT', { exact: true }).first().waitFor();
       await doc.getByText('Waiting', { exact: true }).first().waitFor();
       await doc.getByText('New', { exact: true }).first().waitFor();
-      await doc.getByText(/^How many days for (this item|these \d+ items)\?$/).first().waitFor();
-      // The comments print: on the whole list under the heading, and under each item. Ross Built only notes never do.
-      await doc.getByText('Comments', { exact: true }).first().waitFor();
-      await doc.getByText('We can start Monday at 7.', { exact: false }).waitFor();
-      await doc.getByText('Hinges are on the truck.', { exact: false }).waitFor();
-      for (const note of ['pantry doors', 'last invoice']) {
-        if ((await doc.getByText(note, { exact: false }).count()) !== 0) throw new Error(`A Ross Built only note printed: ${note}`);
+      for (const gone of ['Scheduled Visits', 'How many days', 'Your Page', 'ready by']) {
+        if ((await doc.getByText(gone, { exact: false }).count()) !== 0) throw new Error(`The list still says ${gone}`);
       }
-      // The list goes to the company's people, with its page: the link and the scan code on the list.
+      if ((await doc.locator('.rb-qr svg').count()) !== 0) throw new Error('A scan code is still on the list');
+      // The comments print: on the whole list under the heading, and under each item. Internal notes never do.
+      await doc.getByText('Comments', { exact: true }).first().waitFor();
+      await doc.getByText('We can do all the trim work Monday and Tuesday next week if that works.', { exact: false }).waitFor();
+      await doc.getByText('Will do. We are bringing new hinges for both.', { exact: false }).waitFor();
+      for (const note of ['pantry doors', 'last invoice']) {
+        if ((await doc.getByText(note, { exact: false }).count()) !== 0) throw new Error(`An internal note printed: ${note}`);
+      }
+      // The list goes to the company's people.
       await app.getByTestId('message-email').waitFor();
       await app.getByTestId('message-to').getByText('mike@smscarpentry.example').waitFor();
       await app.getByTestId('message-subject').getByText('Completion List', { exact: false }).waitFor();
       await app.getByTestId('message-body').getByText(/^Hi Mike,/).waitFor();
-      await doc.getByText('Your Page', { exact: true }).waitFor();
-      await doc.getByText(/^https:\/\/link\.rossbuilt\.com\/c\/[0-9a-f]{64}$/).waitFor();
-      if ((await doc.locator('.rb-qr svg').count()) !== 1) throw new Error('No scan code on the list');
+      if ((await app.getByTestId('message-body').getByText(/https?:/).count()) !== 0) throw new Error('The email still carries a link');
       await settle(800);
       await shot('39-company-list');
       await app.getByTestId('mark-sent').click();
@@ -1001,6 +819,7 @@ async function main(): Promise<void> {
       await settle(400);
       await app.getByTestId('send-party-owner').click();
       await doc.getByText('Decisions Needed', { exact: true }).first().waitFor();
+      if ((await doc.getByText('Needed By', { exact: true }).count()) !== 0) throw new Error('The owner list still asks by when');
       await settle(800);
       await shot('40-owner-list');
       await app.getByTestId('preview-done').click();
@@ -1016,16 +835,6 @@ async function main(): Promise<void> {
       await shot('41-whole-job-list');
       await app.getByTestId('preview-done').click();
       await app.getByTestId('list-preview').waitFor({ state: 'detached' });
-      await settle(300);
-      // The schedule for everyone: three weeks of visits, and what each covers.
-      await app.getByTestId('send-lookahead').click();
-      await doc.getByText('Three Week Look Ahead', { exact: true }).waitFor();
-      await doc.getByText('What Each Visit Covers', { exact: true }).waitFor();
-      await doc.getByText(/^Everything with a date is done by /).waitFor();
-      await settle(800);
-      await shot('41b-look-ahead');
-      await app.getByTestId('preview-done').click();
-      await app.getByTestId('list-preview').waitFor({ state: 'detached' });
       await app.getByTestId('tab-jobs').last().click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
@@ -1037,13 +846,13 @@ async function main(): Promise<void> {
       await sheet.waitFor();
       await settle(700);
       await shot('41b-make-a-list');
-      // SMS Carpentry's ready work on Level 1, by location, with a line for the days.
+      // SMS Carpentry's ready work on Level 1, by location.
       await app.getByTestId('export-filters-toggle').click();
       await app.getByTestId('export-filter-state-ready').click();
       await app.getByTestId('export-filter-company-company-4').click();
       await app.getByTestId('export-filter-floor-Level 1').click();
-      await app.getByTestId('export-days').click();
-      await app.getByTestId('export-summary').getByText(/^\d+ items? · [\d.]+ (hours|minutes)/).waitFor();
+      if ((await app.getByTestId('export-days').count()) !== 0) throw new Error('Make a List still offers a line for the days');
+      await app.getByTestId('export-summary').getByText(/^\d+ items?$/).waitFor();
       // Folded again, the filters that are on still show, each one off with a tap.
       await app.getByTestId('export-filters-toggle').click();
       await app.getByTestId('export-chip-floors:Level 1').waitFor();
@@ -1053,7 +862,6 @@ async function main(): Promise<void> {
       const doc = app.getByTestId('doc-preview');
       await doc.getByText('SMS Carpentry', { exact: true }).first().waitFor();
       await doc.getByText('Filters: Ready, SMS Carpentry, Level 1.', { exact: true }).waitFor();
-      await doc.getByText(/^How many days for (this item|these \d+ items)\?$/).first().waitFor();
       if ((await doc.getByText('Master Bedroom 206', { exact: false }).count()) !== 0) throw new Error('Level 2 is on a Level 1 list');
       await settle(800);
       await shot('41d-made-list');
@@ -1103,11 +911,9 @@ async function main(): Promise<void> {
       await app.getByTestId('title-trade').click();
       await app.getByRole('button', { name: 'Carpentry', exact: true }).click();
       await settle(400);
-      await app.getByTestId('title-hours').click();
-      await app.getByRole('button', { name: '30 minutes', exact: true }).click();
-      await settle(400);
+      if ((await app.getByTestId('title-hours').count()) !== 0) throw new Error('Standard titles still ask for a usual time');
       await app.getByTestId('title-add').click();
-      await app.getByRole('button', { name: 'Adjust cabinet hinge, 30 minutes', exact: true }).waitFor();
+      await app.getByText('Adjust cabinet hinge', { exact: true }).waitFor();
       await settle(300);
       await shot('44-standard-titles');
       await app.getByTestId('titles-done').click();
@@ -1259,7 +1065,7 @@ async function main(): Promise<void> {
       await app.getByTestId('role-team').waitFor();
       await settle(500);
       await app.getByTestId('role-team').click();
-      await app.getByText('Ross Built needs at least one admin. Make someone else an admin first.').waitFor();
+      await app.getByText('Your company needs at least one admin. Make someone else an admin first.').waitFor();
       await settle(300);
       await app.getByTestId('back').last().click();
       await settle(400);
@@ -1580,7 +1386,7 @@ async function main(): Promise<void> {
       await app.getByTestId('job-job-preview').waitFor();
       await settle(400);
     });
-    await step('Send Lists: by text for a company with only a phone, and the Schedule Email to every company', async () => {
+    await step('Send Lists: by text for a company with only a phone', async () => {
       await app.getByTestId('job-job-preview').click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
@@ -1597,119 +1403,13 @@ async function main(): Promise<void> {
       await app.getByTestId('preview-done').click();
       await app.getByTestId('list-preview').waitFor({ state: 'detached' });
       await settle(300);
-      // The Schedule Email: to me, a copy to the team, a blind copy to every company's people.
-      await app.getByTestId('send-schedule').getByText(/changed since [A-Z][a-z]+day, /).waitFor();
-      await app.getByTestId('send-schedule').click();
-      await app.getByTestId('message-email').waitFor();
-      await app.getByTestId('message-to').getByText('jake@rossbuilt.com').waitFor();
-      await app.getByTestId('message-cc').getByText(/sam@rossbuilt\.com/).waitFor();
-      await app.getByTestId('message-bcc').getByText(/rosa@volcanostone\.example/).waitFor();
-      await app.getByTestId('message-subject').getByText('Construction Schedule', { exact: false }).waitFor();
-      await app.getByTestId('message-note').getByText(/^No email yet for Climatic/).waitFor();
-      const docs = app.getByTestId('doc-preview');
-      if ((await docs.count()) !== 2) throw new Error('The Schedule Email does not carry two documents');
-      await docs.nth(1).getByText('Whole Schedule', { exact: true }).waitFor();
-      await docs.nth(1).getByText('Every Visit', { exact: true }).waitFor();
-      await docs.nth(1).getByText(/^What Moved Since /).waitFor();
-      await settle(800);
-      await shot('77-schedule-email');
-      await docs.nth(1).scrollIntoViewIfNeeded();
-      await settle(400);
-      await shot('78-whole-schedule');
-      await app.getByTestId('mark-sent').click();
-      await app.getByText('Marked as sent to every company').waitFor();
-      await settle(400);
       await app.getByTestId('tab-jobs').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle();
-    });
-    await step('the Schedule says what moved since it went out, and the company\'s link copies or is taken back', async () => {
-      await app.getByTestId('tab-schedule').last().click();
-      await app.getByText(/^Since [A-Z][a-z]+day, /).waitFor();
-      // Just sent: nothing has moved since.
-      await app.getByTestId('since-nothing').waitFor();
-      await settle(600);
-      await shot('79-since');
-      await app.getByTestId('gantt-company-company-4').click();
-      await app.getByTestId('company-copy-link').waitFor();
-      await settle(500);
-      await shot('80-plan-link');
-      await app.getByTestId('company-copy-link').click();
-      await app.getByText('Link copied').waitFor();
-      await app.getByTestId('company-take-back').click();
-      await app.getByRole('dialog').getByRole('button', { name: 'Take the Link Back' }).click();
-      await app.getByText("SMS Carpentry's link no longer works").waitFor();
-      await app.getByTestId('company-take-back').waitFor({ state: 'detached' });
-      await settle(400);
-      await app.getByTestId('back').last().click();
-      await settle(500);
-      await app.getByTestId('tab-jobs').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle(400);
-    });
-    await step('New: a company says it is done from its page, and the item waits To Check', async () => {
-      // On the job after the steps before; from the list of jobs on a quick run.
-      if ((await app.getByTestId('group-room-1').count()) === 0) await app.getByTestId('job-job-preview').click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle();
-      const toCheck = async () => Number((await app.getByTestId('count-check').last().innerText()).replace(/\D/g, ''));
-      const before = await toCheck();
-      await app.getByTestId('tab-schedule').last().click();
-      await app.getByTestId('gantt-company-company-4').click();
-      await app.getByTestId('company-page').click();
-      await app.getByTestId('company-name').fill('Mike');
-      await app.getByTestId('company-done-item-16').click();
-      await app.getByTestId('company-said-done-item-16').waitFor();
-      // Not Yet takes it back, and Done says it again.
-      await app.getByTestId('company-undo-done-item-16').click();
-      await app.getByTestId('company-done-item-16').click();
-      await app.getByTestId('company-said-done-item-16').waitFor();
-      await app.getByTestId('company-item-item-16').scrollIntoViewIfNeeded();
-      await settle(500);
-      await shot('90-company-done');
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('gantt').last().waitFor();
-      await app.getByTestId('tab-jobs').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle();
-      const after = await toCheck();
-      if (after !== before + 1) throw new Error(`To Check went from ${before} to ${after}`);
-    });
-    await step('New: To Check: Not Done sends it back, Complete checks it off, each with Undo', async () => {
-      await app.getByTestId('count-check').last().click();
-      const row = app.getByTestId('check-row-item-16');
-      await row.waitFor();
-      await row.getByText(/^SMS Carpentry · /).waitFor();
-      await settle(500);
-      await shot('91-to-check');
-      await app.getByTestId('check-not-done-item-16').click();
-      await app.getByText("Back on SMS Carpentry's list as not done").waitFor();
-      await row.waitFor({ state: 'detached' });
-      await undo("Back on SMS Carpentry's list as not done");
-      await row.waitFor();
-      await settle(300);
-      // Complete answers what the company said; Undo puts it back To Check, as it was.
-      await app.getByTestId('check-complete-item-16').click();
-      await app.getByText(/^Completed Adjust cabinet door/).waitFor();
-      await row.waitFor({ state: 'detached' });
-      await undo(/^Completed Adjust cabinet door/);
-      await row.waitFor();
-      await settle(300);
-      // The item says who said it is done, with Not Done beside Complete.
-      await row.getByText('Adjust cabinet door', { exact: true }).click();
-      await app.getByTestId('item-summary').getByText('To Check', { exact: true }).waitFor();
-      await app.getByText(/^SMS Carpentry said it is done on /).waitFor();
-      await app.getByTestId('not-done').waitFor();
-      await settle(500);
-      await shot('92-item-to-check');
-      await app.getByTestId('back').last().click();
-      await row.waitFor();
-      await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
     await step('New: a priority shows on its row, and a checklist ticks off inside an item', async () => {
+      // On the job after the steps before; from the list of jobs on a quick run.
+      if ((await app.getByTestId('group-room-1').count()) === 0) await app.getByTestId('job-job-preview').click();
       await app.getByTestId('group-room-1').click();
       const lights = app.getByTestId('item-item-2');
       const priority = async (on: boolean) => {
@@ -1747,55 +1447,13 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('New: the plan shows where each item is; a pin opens its item, and one more gets pinned', async () => {
-      await app.getByTestId('plans').last().click();
-      await app.getByTestId('plan-image').waitFor();
-      await settle(600);
-      await shot('95-plan');
-      // The first pin: a tap says what it is, a second tap opens it.
-      const pin = app.getByTestId(/^pin-item-/).first();
-      const title = (await pin.getAttribute('aria-label'))!.split(',')[0]!;
-      await pin.click();
-      await app.getByTestId('pin-open').getByText(title, { exact: true }).waitFor();
-      await pin.click();
-      await app.getByTestId('item-summary').waitFor();
-      if ((await app.getByTestId('field-title').last().inputValue()) !== title) throw new Error(`The pin opened another item than ${title}`);
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('plan-image').waitFor();
-      const place = app.getByTestId(/^place-/).first();
-      const id = (await place.getAttribute('data-testid'))!.slice('place-'.length);
-      await place.click();
-      await app.getByTestId('placing').waitFor();
-      const box = await app.getByTestId('plan-image').boundingBox();
-      if (!box) throw new Error('No plan to pin on');
-      await tab.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.55);
-      await app.getByText(/^Pinned .+ on .+/).waitFor();
-      await app.getByTestId(`pin-${id}`).waitFor();
-      await settle(500);
-      await shot('96-pinned');
-      await undo(/^Pinned .+ on .+/);
-      await app.getByTestId(`pin-${id}`).waitFor({ state: 'detached' });
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle();
-    });
-    await step('New: Updates says what people did, newest first, and the bell goes quiet once seen', async () => {
-      await app.getByRole('button', { name: /^Updates, \d+ new$/ }).last().waitFor();
-      await app.getByTestId('updates').last().click();
-      await app.getByRole('button', { name: /^Mike at SMS Carpentry marked Adjust cabinet door done\./ }).first().waitFor();
-      await settle(500);
-      await shot('97-updates');
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await app.getByRole('button', { name: 'Updates', exact: true }).last().waitFor();
-      await settle();
-    });
     await step('New: the whole job goes out as a spreadsheet', async () => {
       await app.getByTestId('send').last().click();
       await app.getByTestId('export-spreadsheet').click();
       // The preview page shows it first, then downloads it; on the iPhone the share sheet opens.
       const table = app.getByTestId('spreadsheet-table');
-      await table.getByText('Estimated Hours', { exact: true }).waitFor();
+      await table.getByText('Waiting On', { exact: true }).waitFor();
+      if ((await table.getByText('Estimated Hours', { exact: true }).count()) !== 0) throw new Error('The spreadsheet still has Estimated Hours');
       await table.getByText('Adjust cabinet door', { exact: true }).first().waitFor();
       await settle(600);
       await shot('98-spreadsheet');
@@ -1817,23 +1475,29 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('Account, Sign Out, and signing in with a code sent by email', async () => {
+    await step('Me: the company name, Sign Out, and signing in with a code sent by email', async () => {
       await app.getByTestId('back').last().click();
       await app.getByTestId('job-job-preview').waitFor();
       await settle(400);
       await app.getByTestId('account').last().click();
       await app.getByTestId('account-email').getByText('jake@rossbuilt.com').waitFor();
       await app.getByTestId('account-job-job-preview').waitFor();
+      await app.getByTestId('company-name').getByText('Ross Built', { exact: true }).waitFor();
       await settle(500);
       await shot('81-account');
+      // The admin changes the company's name: it goes on every list.
+      await app.getByTestId('company-name').click();
+      await app.getByTestId('company-name-field').fill('  Ross   Built Custom Homes ');
+      await app.getByTestId('company-name-save').click();
+      await app.getByTestId('company-name-sheet').waitFor({ state: 'detached' });
+      await app.getByTestId('company-name').getByText('Ross Built Custom Homes', { exact: true }).waitFor();
+      await settle(400);
+      await shot('81b-company-name');
       await app.getByTestId('sign-out').click();
       await app.getByRole('dialog').getByRole('button', { name: 'Sign Out' }).click();
       await app.getByTestId('sign-in-email').waitFor();
       await settle(600);
       await shot('82-sign-in');
-      await app.getByTestId('sign-in-email').fill('someone@example.com');
-      await app.getByTestId('sign-in-send').click();
-      await app.getByText('That email is not set up at Ross Built. Ask an admin to add you under People.').waitFor();
       await app.getByTestId('sign-in-email').fill('Sam@RossBuilt.com');
       await app.getByTestId('sign-in-send').click();
       await app.getByTestId('sign-in-code').waitFor();
@@ -1848,6 +1512,62 @@ async function main(): Promise<void> {
       if ((await app.getByText('Bay Drive House').count()) !== 0) throw new Error('Sam sees a job he is not on');
       await settle(600);
       await shot('84-signed-in');
+    });
+    await step('New: someone new signs up, starts their company, adds a job, and deletes their account', async () => {
+      // Signed out after the steps before; signed in on a quick run.
+      if ((await app.getByTestId('sign-in-email').count()) === 0) {
+        if ((await app.getByTestId('job-job-preview').filter({ visible: true }).count()) === 0) await app.getByTestId('back').last().click();
+        await app.getByTestId('job-job-preview').waitFor();
+        await settle(400);
+        await app.getByTestId('account').last().click();
+        await app.getByTestId('sign-out').click();
+        await app.getByRole('dialog').getByRole('button', { name: 'Sign Out' }).click();
+      }
+      await app.getByTestId('sign-in-email').waitFor();
+      await app.getByTestId('sign-in-email').fill('Pat@GulfCoastHomes.example');
+      await app.getByTestId('sign-in-send').click();
+      await app.getByTestId('sign-in-code').fill('123456');
+      // New here: a third step to name the company.
+      await app.getByTestId('sign-up-company').waitFor();
+      await app.getByText('Start Your Company', { exact: true }).first().waitFor();
+      await app.getByText('Joining a company that already uses Punch List? Ask its admin to add you under People with pat@gulfcoasthomes.example, then sign in again.').waitFor();
+      await settle(500);
+      await shot('85-start-company');
+      await app.getByTestId('sign-up-company').fill('Gulf Coast  Homes');
+      await app.getByTestId('sign-up-name').fill('Pat Lee');
+      await app.getByTestId('sign-up-start').click();
+      // In, as the admin of an empty company: the first job is one tap away.
+      await app.getByTestId('empty-new-job').waitFor();
+      if ((await app.getByTestId('job-job-preview').count()) !== 0) throw new Error('A new company sees the sample jobs');
+      await settle(600);
+      await shot('86-new-company');
+      await app.getByTestId('empty-new-job').click();
+      await app.getByTestId('field-job-name').fill('Bayview');
+      await app.getByTestId('field-address').fill('12 Bay Road');
+      await app.getByTestId('save').last().click();
+      await app.getByText('Bayview', { exact: true }).first().waitFor();
+      await settle(600);
+      await shot('86b-first-job');
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByText('Bayview', { exact: true }).first().waitFor();
+      await app.getByTestId('account').last().click();
+      await app.getByTestId('company-name').getByText('Gulf Coast Homes', { exact: true }).waitFor();
+      await app.getByTestId('account-email').getByText('pat@gulfcoasthomes.example').waitFor();
+      await app.getByText('Admin · Gulf Coast Homes', { exact: true }).first().waitFor();
+      await app.getByTestId('people').click();
+      await app.getByText('Pat Lee', { exact: true }).first().waitFor();
+      if ((await app.getByText('Jake Ross', { exact: true }).count()) !== 0) throw new Error('A new company sees another company\'s people');
+      await settle(500);
+      await shot('87-new-company-people');
+      await app.getByTestId('back').last().click();
+      // The last one at the company: deleting the account deletes the company too.
+      await app.getByTestId('delete-account').click();
+      await app.getByRole('dialog').getByText(/^You are the only one at Gulf Coast Homes, so the company goes too/).waitFor();
+      await settle(400);
+      await shot('88-delete-account');
+      await app.getByRole('dialog').getByRole('button', { name: 'Delete My Account' }).click();
+      await app.getByTestId('sign-in-email').waitFor();
+      await settle(400);
     });
   } catch (e) {
     await shot('zz-failure');

@@ -9,7 +9,7 @@ import { config } from '../config';
 import { supabase } from '../powersync/supabase';
 import { db } from './db';
 
-const BUCKET = 'photos';
+export const BUCKET = 'photos';
 const LONG_SIDE = 2048;
 /** A plan sheet keeps more of its detail: its room names are small. */
 const PLAN_LONG_SIDE = 4096;

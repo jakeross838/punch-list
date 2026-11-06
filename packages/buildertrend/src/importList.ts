@@ -6,7 +6,7 @@
 // Whatever does not fit the standard is kept where it can be and reported in plain sentences.
 
 import {
-  DEFAULT_WAITING_ON_EXTRAS,
+  defaultWaitingOnExtras,
   isPriced,
   KIND_LABELS,
   parseRoomList,
@@ -263,7 +263,7 @@ export function importCompletionList(source: ImportSource, options: ImportOption
     };
   });
 
-  const known = [...DEFAULT_WAITING_ON_EXTRAS, ...companySpelling.values()];
+  const known = [...defaultWaitingOnExtras(ROSS_BUILT), ...companySpelling.values()];
   const sortOrderOf = (label: string) => locationByKey.get(label.toLowerCase())?.sortOrder ?? Number.MAX_SAFE_INTEGER;
   const items = placements
     .map((p) => toItem(p, known, punch.get(p.item.taskId), tally))
@@ -351,7 +351,7 @@ const SMALL_WORDS = new Set(['a', 'an', 'and', 'at', 'by', 'for', 'in', 'of', 'o
  * Known names (Ross Built, Owner, the companies on the job) keep their own spelling and are never
  * split, so "Bay and Gulf Glass" stays whole. A name written all in lower case gets capitals.
  */
-export function splitWaitingOn(text: string | null | undefined, known: readonly string[] = DEFAULT_WAITING_ON_EXTRAS): string[] {
+export function splitWaitingOn(text: string | null | undefined, known: readonly string[] = defaultWaitingOnExtras(ROSS_BUILT)): string[] {
   if (!text) return [];
   const spelling = new Map<string, string>();
   for (const name of known) if (!spelling.has(name.trim().toLowerCase())) spelling.set(name.trim().toLowerCase(), name.trim());

@@ -1,10 +1,10 @@
 -- Database checks: the access rule and everything the database keeps itself.
 -- Run by tools/db-test.sh on a fresh local Postgres. Any failed check stops the run.
 
-insert into public.people (email, name) values
-  ('jake@rossbuilt.com', 'Jake Ross'),
-  ('andrew@rossbuilt.com', 'Andrew Ross'),
-  ('former@rossbuilt.com', 'Former Employee');
+insert into public.people (org, email, name) values
+  ('ross_built', 'jake@rossbuilt.com', 'Jake Ross'),
+  ('ross_built', 'andrew@rossbuilt.com', 'Andrew Ross'),
+  ('ross_built', 'former@rossbuilt.com', 'Former Employee');
 update public.people set role = 'admin' where email in ('jake@rossbuilt.com', 'andrew@rossbuilt.com');
 update public.people set active = false where email = 'former@rossbuilt.com';
 
@@ -579,8 +579,9 @@ end $$;
 
 reset role;
 
--- ---------- the company, on its page ----------
-set role anon;
+-- ---------- the company page's functions ----------
+-- Out of the app for now: closed to the app and to anyone not signed in. What they do is still
+-- checked, as the database.
 set request.jwt.claims = '';
 do $$
 declare
@@ -633,11 +634,6 @@ begin
     raise exception 'FAIL: a company marked another company''s item done';
   exception when insufficient_privilege then null;
   end;
-  begin
-    perform 1 from public.plan_sheets;
-    raise exception 'FAIL: the page reached the plans';
-  exception when insufficient_privilege then null;
-  end;
   -- Its dates: these work, or other dates asked for.
   perform public.trade_confirm_visit(link, current_setting('test.visit')::uuid, 'Mike');
   perform public.trade_ask_visit(link, current_setting('test.visit2')::uuid, '2026-11-13', 1, ' Mike ');
@@ -658,14 +654,41 @@ begin
     raise exception 'FAIL: dates were asked for with no first day';
   exception when check_violation then null;
   end;
+end $$;
+
+set role anon;
+do $$
+declare
+  link text := current_setting('test.link');
+begin
+  begin
+    perform public.trade_page(link);
+    raise exception 'FAIL: the company page opens for anyone';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.trade_comment(link, null, 'Hello', 'Mike');
+    raise exception 'FAIL: anyone can comment through a link';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.trade_mark_done(link, current_setting('test.item')::uuid, true, 'Mike');
+    raise exception 'FAIL: anyone can mark work done through a link';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform 1 from public.plan_sheets;
+    raise exception 'FAIL: anyone reached the plans';
+  exception when insufficient_privilege then null;
+  end;
   begin
     perform 1 from public.visits;
-    raise exception 'FAIL: the page reached the visits table';
+    raise exception 'FAIL: anyone reached the visits table';
   exception when insufficient_privilege then null;
   end;
   begin
     perform 1 from public.comments;
-    raise exception 'FAIL: the page reached the comments table';
+    raise exception 'FAIL: anyone reached the comments table';
   exception when insufficient_privilege then null;
   end;
   begin
@@ -673,6 +696,16 @@ begin
     raise exception 'FAIL: anyone could write to the activity log';
   exception when insufficient_privilege then null;
   end;
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+begin
+  perform public.trade_page(current_setting('test.link'));
+  raise exception 'FAIL: the app can open a company page';
+exception when insufficient_privilege then null;
 end $$;
 reset role;
 
@@ -724,13 +757,11 @@ begin
 end $$;
 reset role;
 
-set role anon;
 set request.jwt.claims = '';
 do $$
 begin
   if public.trade_page(current_setting('test.link')) is not null then raise exception 'FAIL: a link taken back still works'; end if;
 end $$;
-reset role;
 
 -- ---------- To Check after reopening, priority, checklists, and the plans ----------
 set role authenticated;
@@ -1139,11 +1170,13 @@ begin
   if public.hook_only_ross_built_people('{"user":{"email":" Jake@RossBuilt.com "}}') <> '{}'::jsonb then
     raise exception 'FAIL: an active person was turned away at sign in';
   end if;
-  if public.hook_only_ross_built_people('{"user":{"email":"stranger@example.com"}}') -> 'error' ->> 'http_code' <> '403' then
-    raise exception 'FAIL: a stranger was let in to sign in';
+  -- Anyone may sign up and start a company.
+  if public.hook_only_ross_built_people('{"user":{"email":"stranger@example.com"}}') <> '{}'::jsonb then
+    raise exception 'FAIL: a new email was turned away at sign up';
   end if;
-  if public.hook_only_ross_built_people('{"user":{"email":"former@rossbuilt.com"}}') -> 'error' is null then
-    raise exception 'FAIL: a switched off person was let in to sign in';
+  if public.hook_only_ross_built_people('{"user":{"email":"former@rossbuilt.com"}}') -> 'error' ->> 'message'
+     <> 'That email is switched off at Ross Built. Ask an admin there to switch it back on.' then
+    raise exception 'FAIL: a switched off person was not told so at sign in';
   end if;
   if public.hook_only_ross_built_people('{}') -> 'error' is null then
     raise exception 'FAIL: a sign in with no email was let in';
@@ -1235,5 +1268,238 @@ begin
     raise exception 'FAIL: test job item numbers are not unique';
   end if;
 end $$;
+
+-- ---------- a second company ----------
+-- Anyone signs up, names their company and becomes its admin. Each company sees only its own.
+do $$
+begin
+  perform set_config('test.fish', (select id::text from public.jobs where name = 'Fish'), false);
+  perform set_config('test.fish_items', (select count(*)::text from public.items where org = 'ross_built'), false);
+  insert into auth.users (id, email) values
+    ('11111111-1111-4111-8111-111111111111', 'pat@gulfcoast.example'),
+    ('22222222-2222-4222-8222-222222222222', 'sam@gulfcoast.example');
+end $$;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"pat@gulfcoast.example","sub":"11111111-1111-4111-8111-111111111111"}';
+do $$
+declare
+  mine text;
+  j uuid; loc uuid; c uuid; i uuid;
+begin
+  if public.my_account() ->> 'state' <> 'none' then raise exception 'FAIL: a new email is already with a company'; end if;
+  if (select count(*) from public.jobs) + (select count(*) from public.people) + (select count(*) from public.orgs)
+     + (select count(*) from public.trades) + (select count(*) from public.companies) <> 0 then
+    raise exception 'FAIL: someone with no company sees data';
+  end if;
+  begin
+    perform public.start_company('   ', 'Pat Lee');
+    raise exception 'FAIL: a company with no name was started';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.start_company('Gulf Coast Homes', '');
+    raise exception 'FAIL: a company was started with no name for its admin';
+  exception when check_violation then null;
+  end;
+  mine := public.start_company('  Gulf   Coast Homes ', ' Pat  Lee ');
+  if (select count(*) from public.orgs) <> 1 or (select name from public.orgs) <> 'Gulf Coast Homes' or (select id from public.orgs) <> mine then
+    raise exception 'FAIL: the new company is not set up as named';
+  end if;
+  if public.my_account() ->> 'state' <> 'active' or public.my_account() ->> 'company' <> 'Gulf Coast Homes' then
+    raise exception 'FAIL: the new admin is not active at the new company';
+  end if;
+  if (select count(*) from public.people) <> 1 or (select role from public.people) <> 'admin' or (select name from public.people) <> 'Pat Lee' then
+    raise exception 'FAIL: the new company does not have its admin';
+  end if;
+  if (select count(*) from public.trades) <> 19 or (select name from public.trades order by sort_order limit 1) <> 'Site Work' then
+    raise exception 'FAIL: the new company did not get the usual trades';
+  end if;
+  begin
+    perform public.start_company('Another Company', 'Pat Lee');
+    raise exception 'FAIL: one email started two companies';
+  exception when unique_violation then null;
+  end;
+
+  -- Its own job: the database fills in the company on every row.
+  insert into public.jobs (name, address) values ('Bayview', '12 Bay Road') returning id into j;
+  insert into public.locations (job_id, name, number, label, kind, sort_order) values (j, 'Kitchen', '101', 'Kitchen 101', 'room', 1) returning id into loc;
+  -- Names are unique within a company only: Ross Built has a Gator Plumbing and a Plumbing too.
+  insert into public.companies (name, default_trade_id) values ('Gator Plumbing', (select id from public.trades where name = 'Plumbing')) returning id into c;
+  insert into public.job_companies (job_id, company_id, trade_id) values (j, c, (select id from public.trades where name = 'Plumbing'));
+  insert into public.items (job_id, location_id, title, company_id, ready, bought_out) values (j, loc, 'Install toilet', c, true, true) returning id into i;
+  if (select org from public.jobs where id = j) <> mine or (select org from public.locations where id = loc) <> mine
+     or (select org from public.companies where id = c) <> mine or (select org from public.items where id = i) <> mine then
+    raise exception 'FAIL: a new row did not get its company';
+  end if;
+  if (select number from public.items where id = i) <> 1 then raise exception 'FAIL: the new company''s first item is not number 1'; end if;
+  -- Saying another company's org changes nothing: the row is still this company's.
+  insert into public.trades (org, name) values ('ross_built', 'Odd Jobs');
+  if (select org from public.trades where name = 'Odd Jobs') <> mine then raise exception 'FAIL: a row was put in another company'; end if;
+  update public.trades set org = 'ross_built' where name = 'Odd Jobs';
+  if (select org from public.trades where name = 'Odd Jobs') <> mine then raise exception 'FAIL: a row was moved to another company'; end if;
+
+  -- Ross Built's rows are out of reach, even with their ids.
+  if exists (select 1 from public.jobs where id = current_setting('test.fish')::uuid) or public.can_see_job(current_setting('test.fish')::uuid) then
+    raise exception 'FAIL: one company sees another''s job';
+  end if;
+  if exists (select 1 from public.items where org <> mine) or exists (select 1 from public.people where org <> mine)
+     or exists (select 1 from public.job_access where org <> mine) or exists (select 1 from public.companies where org <> mine) then
+    raise exception 'FAIL: one company sees another''s rows';
+  end if;
+  begin
+    insert into public.items (job_id, title, ready, bought_out) values (current_setting('test.fish')::uuid, 'Sneaky', true, true);
+    raise exception 'FAIL: one company added an item to another''s job';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.locations (job_id, name, label, kind, sort_order) values (current_setting('test.fish')::uuid, 'Sneaky', 'Sneaky', 'room', 99);
+    raise exception 'FAIL: one company added a location to another''s job';
+  exception when insufficient_privilege then null;
+  end;
+  update public.people set name = 'Changed by another company' where email = 'jake@rossbuilt.com';
+  update public.items set title = 'Changed by another company' where job_id = current_setting('test.fish')::uuid;
+  update public.jobs set name = 'Changed by another company' where id = current_setting('test.fish')::uuid;
+  -- Moving its item to Ross Built's job is turned down.
+  begin
+    update public.items set job_id = current_setting('test.fish')::uuid where id = i;
+    raise exception 'FAIL: an item moved to another company''s job';
+  exception when insufficient_privilege or check_violation then null;
+  end;
+  -- An email is with one company: Pat cannot add someone from Ross Built.
+  begin
+    insert into public.people (email, name) values ('jake@rossbuilt.com', 'Jake Ross');
+    raise exception 'FAIL: one email was added at two companies';
+  exception when unique_violation then null;
+  end;
+  insert into public.people (email, name, role, sees) values ('sam@gulfcoast.example', 'Sam Diaz', 'team', 'all');
+  if (select org from public.people where email = 'sam@gulfcoast.example') <> mine then raise exception 'FAIL: a new person did not get the company'; end if;
+  -- Photos are kept by job: a path names its job.
+  if public.job_of_path(j::text || '/' || i::text || '.jpg') <> j or public.job_of_path(j::text || '/plans/x.jpg') <> j
+     or public.job_of_path('not a job/x.jpg') is not null or public.job_of_path(null) is not null then
+    raise exception 'FAIL: a photo path does not name its job';
+  end if;
+  if public.alone_in_company() then raise exception 'FAIL: Pat is not alone at the company'; end if;
+  -- The company's name: its admin changes it.
+  update public.orgs set name = '  Gulf Coast Homes  LLC ' where id = mine;
+  if (select name from public.orgs) <> 'Gulf Coast Homes LLC' then raise exception 'FAIL: the admin could not rename the company'; end if;
+  perform set_config('test.gulf', mine, false);
+  perform set_config('test.bayview', j::text, false);
+end $$;
+reset role;
+
+-- Ross Built sees none of it, and nothing of its own changed.
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+begin
+  if (select count(*) from public.orgs) <> 1 or (select name from public.orgs) <> 'Ross Built' then raise exception 'FAIL: Ross Built sees another company'; end if;
+  if exists (select 1 from public.jobs where id = current_setting('test.bayview')::uuid) or public.can_see_job(current_setting('test.bayview')::uuid)
+     or exists (select 1 from public.people where org <> 'ross_built') or exists (select 1 from public.trades where org <> 'ross_built')
+     or exists (select 1 from public.items where org <> 'ross_built') or exists (select 1 from public.job_access where org <> 'ross_built') then
+    raise exception 'FAIL: Ross Built sees another company''s rows';
+  end if;
+  if exists (select 1 from public.people where name = 'Changed by another company') or exists (select 1 from public.items where title = 'Changed by another company')
+     or exists (select 1 from public.jobs where name = 'Changed by another company') then
+    raise exception 'FAIL: another company changed Ross Built''s rows';
+  end if;
+  begin
+    update public.orgs set name = 'Taken Over' where id = current_setting('test.gulf');
+    if exists (select 1 from public.orgs where name = 'Taken Over') then raise exception 'FAIL: Ross Built renamed another company'; end if;
+  end;
+end $$;
+reset role;
+
+-- A team member at the new company cannot rename it; deleting an account.
+set role authenticated;
+set request.jwt.claims = '{"email":"sam@gulfcoast.example","sub":"22222222-2222-4222-8222-222222222222"}';
+do $$
+begin
+  update public.orgs set name = 'Renamed by Sam';
+  if exists (select 1 from public.orgs where name = 'Renamed by Sam') then raise exception 'FAIL: a team member renamed the company'; end if;
+  if (select count(*) from public.jobs) <> 1 then raise exception 'FAIL: Sam does not see the company''s job'; end if;
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"pat@gulfcoast.example","sub":"11111111-1111-4111-8111-111111111111"}';
+do $$
+begin
+  -- The only admin, with someone still at the company: someone else is made admin first.
+  begin
+    perform public.delete_my_account();
+    raise exception 'FAIL: the only admin deleted their account with people still at the company';
+  exception when check_violation then null;
+  end;
+  update public.items set assigned_to = (select id from public.people where email = 'sam@gulfcoast.example') where title = 'Install toilet';
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"sam@gulfcoast.example","sub":"22222222-2222-4222-8222-222222222222"}';
+do $$
+begin
+  perform public.delete_my_account();
+end $$;
+reset role;
+
+do $$
+begin
+  if exists (select 1 from auth.users where id = '22222222-2222-4222-8222-222222222222') then raise exception 'FAIL: the sign in was not deleted'; end if;
+  if exists (select 1 from public.people where email = 'sam@gulfcoast.example') then raise exception 'FAIL: the email stayed on the person'; end if;
+  if not exists (select 1 from public.people where org = current_setting('test.gulf') and name = 'Deleted Account' and not active and phone is null) then
+    raise exception 'FAIL: the deleted person was not taken off their records';
+  end if;
+  if exists (select 1 from public.items where org = current_setting('test.gulf') and assigned_to is not null)
+     or exists (select 1 from public.job_team jt join public.people p on p.id = jt.person_id where p.name = 'Deleted Account') then
+    raise exception 'FAIL: the deleted person is still assigned or on a team';
+  end if;
+  if (select count(*) from public.items where org = current_setting('test.gulf')) <> 1 then raise exception 'FAIL: the company lost its items'; end if;
+end $$;
+
+-- The last one at the company deletes their account: the whole company goes, and nothing else.
+set role authenticated;
+set request.jwt.claims = '{"email":"pat@gulfcoast.example","sub":"11111111-1111-4111-8111-111111111111"}';
+do $$
+begin
+  if not public.alone_in_company() then raise exception 'FAIL: Pat is alone at the company now'; end if;
+  perform public.delete_my_account();
+end $$;
+reset role;
+
+do $$
+declare
+  t text;
+  n integer;
+begin
+  for t in select c.table_name from information_schema.columns c where c.table_schema = 'public' and c.column_name = 'org' loop
+    execute format('select count(*) from public.%I where org = %L', t, current_setting('test.gulf')) into n;
+    if n <> 0 then raise exception 'FAIL: % still has the deleted company''s rows', t; end if;
+  end loop;
+  if exists (select 1 from public.orgs where id = current_setting('test.gulf')) or exists (select 1 from auth.users where id = '11111111-1111-4111-8111-111111111111') then
+    raise exception 'FAIL: the company or the sign in is still there';
+  end if;
+  if (select count(*) from public.items where org = 'ross_built')::text <> current_setting('test.fish_items') or not exists (select 1 from public.orgs where id = 'ross_built') then
+    raise exception 'FAIL: deleting one company touched another';
+  end if;
+  -- And nothing is deleted outside of that.
+  begin
+    delete from public.items where org = 'ross_built';
+    raise exception 'FAIL: an item was deleted after a company was';
+  exception when restrict_violation then null;
+  end;
+end $$;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+begin
+  begin
+    perform public.purge_company('ross_built');
+    raise exception 'FAIL: the app can delete a company';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
 
 select 'All database checks passed' as result;

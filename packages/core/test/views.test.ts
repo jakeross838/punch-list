@@ -85,10 +85,11 @@ describe('list views', () => {
       filters: { ...NO_FILTERS, states: ['not_ready'] },
     });
     expect(readViewSettings({ groupBy: 'company', filter: 'added_scope' }).filters.kinds).toEqual(['added_scope']);
-    expect(readViewSettings({ groupBy: 'sideways', filters: { states: ['ready', 'later'], photo: 'yes', estimated: false } })).toEqual({
+    // The schedule's filters are dropped while it is out of the app: nothing is hidden with no way to see why.
+    expect(readViewSettings({ groupBy: 'sideways', filters: { states: ['ready', 'later', 'past_due'], photo: 'yes', estimated: false, scheduled: true } })).toEqual({
       groupBy: 'room',
       showCompleted: false,
-      filters: { ...NO_FILTERS, states: ['ready'], estimated: false },
+      filters: { ...NO_FILTERS, states: ['ready'] },
     });
     expect(readViewSettings(null).groupBy).toBe('room');
   });

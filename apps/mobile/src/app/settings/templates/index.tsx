@@ -25,7 +25,7 @@ export default function TemplatesScreen() {
       eyebrow="What always needs doing"
       crumb={['Me', 'Templates']}
       backLabel="Me"
-      tab={{ active: 'me' }}
+      tab={{}}
       right={admin ? [{ kind: 'button', label: 'New Template', icon: 'plus', iconOnly: true, onPress: () => setAdding(true), testID: 'new-template' }] : []}
     >
       {on.length === 0 ? (

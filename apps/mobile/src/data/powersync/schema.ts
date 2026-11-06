@@ -3,6 +3,9 @@
 
 import { column, Schema, Table } from '@powersync/react-native';
 
+/** The signed-in person's company: only its own row comes down. */
+const orgs = new Table({ name: column.text, created_at: column.text });
+
 const people = new Table({
   org: column.text,
   email: column.text,
@@ -96,7 +99,7 @@ const items = new Table(
     job_id: column.text,
     location_id: column.text,
     number: column.integer,
-    /** The person at Ross Built it is assigned to. */
+    /** The person at the company it is assigned to. */
     assigned_to: column.text,
     title: column.text,
     description: column.text,
@@ -124,7 +127,7 @@ const items = new Table(
     /** Estimated time, in hours. */
     hours: column.real,
     bt_external_id: column.text,
-    /** When the company said it is done, from its page: To Check until Ross Built looks. */
+    /** When the company said it is done, from its page (out of the app for now). */
     marked_done_at: column.text,
     /** 1 when it is wanted first. */
     priority: column.integer,
@@ -273,7 +276,7 @@ const list_sends = new Table(
   { indexes: { job: ['job_id'] } },
 );
 
-/** A comment on an item, or on a company's whole list: from Ross Built, or from the company's page. Never deleted. */
+/** A comment on an item, or on a company's whole list: from your team, or from the company doing the work. Never deleted. */
 const comments = new Table(
   {
     org: column.text,
@@ -284,7 +287,7 @@ const comments = new Table(
     person_id: column.text,
     from_company: column.integer,
     author_name: column.text,
-    /** 1: Ross Built only. */
+    /** 1: internal, for your own company only. */
     internal: column.integer,
     removed: column.integer,
     created_at: column.text,
@@ -360,6 +363,7 @@ const rejected_changes = new Table(
 );
 
 export const AppSchema = new Schema({
+  orgs,
   people,
   jobs,
   job_team,

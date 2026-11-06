@@ -1,18 +1,20 @@
 # yaml-language-server: $schema=https://unpkg.com/@powersync/service-sync-rules@latest/schema/sync_config.json
 #
 # What each phone receives. PowerSync does not go through Supabase's access rules, so this file is the
-# gate for the phones: a signed-in email that is not an active person matches no org and gets nothing.
+# gate for the phones: each phone gets only its own company's rows, and a signed-in email that is not
+# an active person at a company matches no org and gets nothing.
 
 config:
   edition: 3
 
 streams:
-  # What everyone at Ross Built shares: the people, the companies with their contacts and trades, the standard titles, the added fields and the templates.
-  ross_built:
+  # What everyone at the company shares: its name, its people, the companies it works with and their contacts, the trades, the standard titles, the added fields and the templates.
+  company:
     auto_subscribe: true
     with:
       my_org: SELECT org FROM people WHERE email = auth.parameter('email') AND active = true
     queries:
+      - SELECT * FROM orgs WHERE id IN my_org
       - SELECT * FROM people WHERE org IN my_org
       - SELECT * FROM trades WHERE org IN my_org
       - SELECT * FROM companies WHERE org IN my_org

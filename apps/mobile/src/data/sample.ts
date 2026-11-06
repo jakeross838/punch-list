@@ -11,6 +11,7 @@ import {
   DEFAULT_FORM,
   DEFAULT_VIEW,
   earliestStart,
+  STARTING_TRADES,
   mondayOf,
   parseRoomList,
   ROOM_KINDS,
@@ -27,6 +28,7 @@ import {
   type JobCompany,
   type ListSend,
   type Location,
+  type Org,
   type Person,
   type Photo,
   type PlanSheet,
@@ -47,7 +49,11 @@ export interface SampleState {
   signedIn: boolean;
   /** Who asked for a sign in code, to enter it next. */
   codeFor: string | null;
-  /** Everyone at Ross Built, for who did what. */
+  /** Signed in with an email that is not with a company yet: they start one next. */
+  newAccount: string | null;
+  /** The company: its name goes on every list. */
+  org: Org;
+  /** Everyone at the company, for who did what. */
   people: Person[];
   /** Who did what, the way the database logs it. */
   activity: Activity[];
@@ -69,7 +75,7 @@ export interface SampleState {
   plans: PlanSheet[];
   visits: Visit[];
   sends: ListSend[];
-  /** The back and forth with the companies, and Ross Built only notes. */
+  /** The back and forth with the companies, and internal notes. */
   comments: Comment[];
   titles: StandardTitle[];
   customFields: CustomField[];
@@ -579,6 +585,8 @@ export function sampleState(): SampleState {
     me,
     signedIn: true,
     codeFor: null,
+    newAccount: null,
+    org: { id: 'ross_built', name: 'Ross Built' },
     people: [me, sam, taylor],
     activity,
     jobs: [job, bay, palm],
@@ -603,5 +611,40 @@ export function sampleState(): SampleState {
     formSettings: DEFAULT_FORM,
     viewSettings: DEFAULT_VIEW,
     counters: { [job.id]: n, [bay.id]: 0, [palm.id]: 0 },
+  };
+}
+
+/** A company just started on the preview page: its admin, the usual trades and nothing else yet. */
+export function newCompanyState(org: Org, me: Person): SampleState {
+  return {
+    me,
+    signedIn: true,
+    codeFor: null,
+    newAccount: null,
+    org,
+    people: [me],
+    activity: [],
+    jobs: [],
+    team: [],
+    locations: [],
+    trades: STARTING_TRADES.map((name, i) => ({ id: `trade-new-${i + 1}`, name, sortOrder: i + 1 })),
+    companies: [],
+    contacts: [],
+    links: [],
+    jobCompanies: [],
+    waitingOn: {},
+    items: [],
+    photos: [],
+    plans: [],
+    visits: [],
+    sends: [],
+    comments: [],
+    titles: [],
+    customFields: [],
+    templates: [],
+    templateItems: [],
+    formSettings: DEFAULT_FORM,
+    viewSettings: DEFAULT_VIEW,
+    counters: {},
   };
 }

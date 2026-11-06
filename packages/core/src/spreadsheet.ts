@@ -5,7 +5,7 @@
 
 import { waitingOnText } from './waitingOn';
 import { kindText } from './orders';
-import type { Item, Visit } from './types';
+import type { Item } from './types';
 
 export interface SheetLookups {
   locations: Map<string, { label: string; floor: string | null }>;
@@ -13,7 +13,6 @@ export interface SheetLookups {
   people: Map<string, string>;
   /** Item titles, for the tasks an item waits on. */
   items: Map<string, Item>;
-  visits: Map<string, Visit>;
 }
 
 export const SHEET_COLUMNS = [
@@ -27,10 +26,7 @@ export const SHEET_COLUMNS = [
   'Status',
   'Ready',
   'Waiting On',
-  'Ready By',
   'Priority',
-  'Estimated Hours',
-  'Visit',
   'Assigned To',
   'Checklist',
   'Added',
@@ -38,12 +34,11 @@ export const SHEET_COLUMNS = [
   'Completed By',
 ] as const;
 
-/** The status an item shows in the app: Draft, To Check, Open or Complete. */
+/** The status an item shows in the app: Draft, Open or Complete. */
 export function sheetStatus(item: Item): string {
   if (item.status === 'complete') return 'Complete';
   if (item.status === 'removed') return 'Removed';
   if (item.unfinished) return 'Draft';
-  if (item.markedDoneAt) return 'To Check';
   return 'Open';
 }
 
@@ -73,7 +68,6 @@ export function itemsSheet(items: Item[], look: SheetLookups): string[][] {
   return kept.map((i) => {
     const loc = where(i);
     const tasks = i.waitingOnItems.map((id) => look.items.get(id)?.title.trim() || 'another item');
-    const visit = i.visitId ? look.visits.get(i.visitId) : undefined;
     const steps = i.checklist ?? [];
     return [
       i.number === null ? '' : String(i.number),
@@ -86,10 +80,7 @@ export function itemsSheet(items: Item[], look: SheetLookups): string[][] {
       sheetStatus(i),
       i.ready ? 'Yes' : 'No',
       i.ready ? '' : waitingOnText([...tasks, ...i.waitingOn]),
-      i.ready ? '' : day(i.readyBy),
       i.priority ? 'Yes' : '',
-      i.hours === null ? '' : String(i.hours),
-      visit ? day(visit.start) : '',
       i.assignedTo ? (look.people.get(i.assignedTo) ?? '') : '',
       steps.length > 0 ? `${steps.filter((s) => s.done).length} of ${steps.length} done` : '',
       day(i.createdAt),

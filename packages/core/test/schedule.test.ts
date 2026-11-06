@@ -182,7 +182,7 @@ describe('unfinished items', () => {
 });
 
 describe('the owner and design team list', () => {
-  it('lists who else work waits on, and what Ross Built needs from them by when', () => {
+  it('lists who else work waits on, and what is needed from them', () => {
     const items = [
       item({ id: 'o1', ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09', locationId: 'a' }),
       item({ id: 'o2', ready: false, waitingOn: ['Owner', 'Volcano Stone'], readyBy: '2026-11-02', locationId: 'k' }),
@@ -198,8 +198,8 @@ describe('the owner and design team list', () => {
     const page = partyPrintout('Owner', lines, { job: { name: 'Fish', address: '715 North Shore Drive' }, date: new Date(2026, 9, 30) });
     expect(page.fileName).toBe('Fish Decisions Needed for Owner, October 30 2026.pdf');
     expect(page.body).toContain('These 2 items are waiting on your answer.');
-    expect(page.body).toContain('<th>Needed By</th>');
-    expect(page.body).toContain('November\u00a02');
+    expect(page.body).not.toContain('Needed By');
+    expect(page.body).toContain('<td>Kitchen 109</td><td><div class="rb-work">Item 24</div>');
   });
 });
 
@@ -236,9 +236,11 @@ describe('filling in from the photo', () => {
     expect(describeMarks(ctx.marks)).toEqual(['A red circle around the area from 20% to 60% across and 15% to 50% down.']);
     const prompt = suggestPrompt(ctx);
     expect(prompt).toContain('The photo was taken in Kitchen 109.');
-    expect(prompt).toContain('- Adjust cabinet door (Carpentry, usually 30 minutes)');
+    expect(prompt).toContain('- Adjust cabinet door (Carpentry)');
     expect(prompt).toContain('- Touch up paint (Painting)');
-    expect(prompt).toContain('- hours: about how long the work takes');
+    // No time: the schedule is not part of the app for now.
+    expect(prompt).not.toContain('hours');
+    expect(prompt).not.toContain('Ross Built');
     expect(prompt).toContain('- Triple H Painting (Painting)');
     expect(prompt).toContain('Reply with only JSON');
     expect(prompt).not.toContain('numbered spots');
@@ -325,31 +327,27 @@ describe('filling in from the photo', () => {
   });
 });
 
-describe('a company list with planned visits', () => {
-  it('prints each visit with its items, and keeps them off Ready', () => {
+describe('a company list', () => {
+  it('prints what is ready, then what waits, with no visits or day lines, and the builder on top', () => {
     const items = [
       item({ id: 'b1', number: 1, assignedTo: null, visitId: 'v1' }),
       item({ id: 'b2', number: 2, assignedTo: null, visitId: 'v1', locationId: 'a' }),
       item({ id: 'r1', number: 3 }),
-      item({ id: 'w1', number: 4, assignedTo: null, ready: false, waitingOn: ['Owner'] }),
+      item({ id: 'w1', number: 4, assignedTo: null, ready: false, waitingOn: ['Owner'], readyBy: '2026-11-02' }),
     ];
     const page = companyPrintout(companyList('c-sms', items, lookups), {
       job: { name: 'Fish', address: '715 North Shore Drive' },
+      builder: 'Ross Built',
       date: new Date(2026, 9, 30),
-      visits: [visit({ id: 'v1', start: '2026-11-03', days: 2, confirmed: true })],
       isNew: (id) => id === 'r1',
     });
-    expect(page.body).toContain('4 open items, 2 scheduled, 1 ready now and 1 waiting.');
-    expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual([
-      'Scheduled Visits',
-      'Ready, Not Scheduled Yet',
-      'Waiting',
-      'Anything Missing',
-    ]);
-    expect(page.body).toContain('Tuesday, November\u00a03 to Wednesday, November\u00a04, 2 days, confirmed');
-    // Each item once: the two on the visit, then the ready one, then the waiting one.
-    const numbers = [...page.body.matchAll(/<td class="rb-num">(\d+)/g)].map((m) => m[1]);
-    expect(numbers).toEqual(['2', '1', '3', '4']);
+    expect(page.body).toContain('4 open items, 3 ready now and 1 waiting.');
+    expect([...page.body.matchAll(/<h2 class="rb-section">(.*?)<\/h2>/g)].map((m) => m[1])).toEqual(['Ready', 'Waiting', 'Anything Missing']);
+    expect(page.body).toContain('<div class="rb-brand-name">ROSS BUILT</div>');
+    expect(page.body).toContain('Waiting on Owner</td>');
+    expect(page.body).not.toContain('How many days');
+    expect(page.body).not.toContain('ready by');
+    expect(page.body).not.toContain('Scheduled Visits');
     expect(page.body.match(/class="rb-new"/g)).toHaveLength(1);
   });
 });

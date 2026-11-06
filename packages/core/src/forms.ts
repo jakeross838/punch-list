@@ -16,7 +16,7 @@ export const KIND_LABELS: Record<ItemKind, string> = { deficiency: 'Deficiency',
 export const KIND_HINTS: Record<ItemKind, string> = {
   deficiency: 'Something wrong or damaged to fix.',
   completion: "The company's own work, not finished yet.",
-  added_scope: 'Extra work, to be quoted. It is scheduled once it has its purchase order, variance purchase order or change order.',
+  added_scope: 'Extra work, to be quoted. It goes ahead once it has its purchase order, variance purchase order or change order.',
 };
 
 export const FORM_FIELDS: { field: FormField; label: string }[] = [
@@ -26,8 +26,6 @@ export const FORM_FIELDS: { field: FormField; label: string }[] = [
   { field: 'kind', label: 'Type' },
   { field: 'ready', label: 'Ready' },
   { field: 'waitingOn', label: 'Waiting On' },
-  { field: 'readyBy', label: 'Ready By' },
-  { field: 'hours', label: 'Estimated Time' },
 ];
 
 export function formShows(settings: FormSettings, field: FormField): boolean {

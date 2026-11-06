@@ -28,17 +28,14 @@ import { Viewfinder, type ViewfinderHandle } from "@/components/Viewfinder";
 import { colors } from "@/constants/theme";
 import { useData } from "@/data/api";
 import { capture, useCapture } from "@/data/capture";
-import { useTimeline } from "@/data/view";
 import {
   haptic,
   Icon,
   OptionPicker,
   PhotoView,
-  shortDate,
   Text,
   Touchable,
   useFeedback,
-  weekdayDate,
   type Option,
 } from "@/ui";
 
@@ -58,7 +55,6 @@ export default function CaptureScreen() {
   const companies = data.useCompanies();
   const jobCompanies = data.useJobCompanies(jobId);
   // When everything is done, the drafts from the walk counted as Claude fills them in.
-  const finish = useTimeline(jobId, true).finish;
   const finder = useRef<ViewfinderHandle>(null);
   const [shot, setShot] = useState<MarkupShot | null>(null);
   const [flash, setFlash] = useState(false);
@@ -89,11 +85,6 @@ export default function CaptureScreen() {
   const walkedCount = ordered.filter((l) => l.walkedAt).length;
   const room = locations.find((l) => l.id === walk.roomId);
   const saved = walk.lastSaved;
-
-  // The finish date as the walk begins, to say how far the walk moves it.
-  useEffect(() => {
-    capture.noteFinish(finish);
-  }, [finish]);
 
   // The saved note shows for a moment over the viewfinder, then goes.
   useEffect(() => {
@@ -321,17 +312,10 @@ export default function CaptureScreen() {
           ? "Each photo saves as an item. Claude fills it in."
           : "Each photo saves as an item.";
 
-  const moved =
-    walk.startFinish && finish && walk.startFinish !== finish
-      ? `, was ${shortDate(walk.startFinish)}`
-      : "";
   const walkedLine =
-    walkedCount > 0 ? `${walkedCount} of ${ordered.length} walked.` : "";
-  const finishLine = walking
-    ? [walkedLine, finish ? `Done by ${weekdayDate(finish)}${moved}.` : ""]
-        .filter(Boolean)
-        .join(" ") || null
-    : null;
+    walking && walkedCount > 0
+      ? `${walkedCount} of ${ordered.length} walked.`
+      : null;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]} testID="capture">
@@ -491,16 +475,16 @@ export default function CaptureScreen() {
       >
         {hint}
       </Text>
-      {finishLine ? (
+      {walkedLine ? (
         <Text
           variant="footnote"
           weight="600"
           color={colors.onDark}
           align="center"
           style={styles.hint}
-          testID="camera-finish"
+          testID="camera-walked"
         >
-          {finishLine}
+          {walkedLine}
         </Text>
       ) : null}
 

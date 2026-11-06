@@ -13,11 +13,11 @@ declare
   i integer;
   verbs text[] := array['Install', 'Replace', 'Repair', 'Touch up', 'Caulk', 'Adjust'];
 begin
-  insert into public.jobs (name, address) values ('Test Job (generated)', 'For the Phase 1 checks only') returning id into j;
+  insert into public.jobs (org, name, address) values ('ross_built', 'Test Job (generated)', 'For the Phase 1 checks only') returning id into j;
 
   for i in 1..12 loop
-    insert into public.trades (name, sort_order) values ('Test Trade ' || chr(64 + i), 900 + i) returning id into t;
-    insert into public.companies (name, default_trade_id) values ('Test Company ' || chr(64 + i), t) returning id into c;
+    insert into public.trades (org, name, sort_order) values ('ross_built', 'Test Trade ' || chr(64 + i), 900 + i) returning id into t;
+    insert into public.companies (org, name, default_trade_id) values ('ross_built', 'Test Company ' || chr(64 + i), t) returning id into c;
     insert into public.job_companies (job_id, company_id, trade_id) values (j, c, t);
     trade_ids := trade_ids || t;
     company_ids := company_ids || c;

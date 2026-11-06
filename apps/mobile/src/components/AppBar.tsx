@@ -1,5 +1,5 @@
-// The parts of the slate bar that know about you: the Updates bell, the Me button and the job's
-// name with its menu to switch jobs. Page.tsx puts them in the bar.
+// The parts of the slate bar that know about you: the Me button and the job's name with its menu
+// to switch jobs. Page.tsx puts them in the bar.
 
 import { router } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
@@ -7,30 +7,11 @@ import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { colors } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { setCurrentJob } from '@/data/currentJob';
-import { useUnseenUpdates } from '@/data/updates';
-import { BarButtonView } from '@/ui/BarButton';
 import { Icon } from '@/ui/Icon';
 import { measureAnchor, MenuPanel, type MenuAnchor } from '@/ui/Menu';
 import { Text } from '@/ui/Text';
 import { Touchable } from '@/ui/Touchable';
 import { initials } from './initials';
-
-export function UpdatesBell() {
-  const unseen = useUnseenUpdates();
-  return (
-    <View>
-      <BarButtonView
-        label={unseen > 0 ? `Updates, ${unseen} new` : 'Updates'}
-        icon="bell"
-        iconOnly
-        tone="dark"
-        onPress={() => router.push('/updates')}
-        testID="updates"
-      />
-      {unseen > 0 ? <View pointerEvents="none" style={styles.dot} /> : null}
-    </View>
-  );
-}
 
 export function AccountButton() {
   const me = useData().useMe();
@@ -98,16 +79,6 @@ export function JobSwitch({ jobId, onChange }: { jobId: string; onChange: (jobId
 }
 
 const styles = StyleSheet.create({
-  dot: {
-    position: 'absolute',
-    top: 6,
-    right: 7,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.oceanside,
-    boxShadow: `0 0 0 2px ${colors.bar}`,
-  },
   avatar: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.stone },
   avatarText: { fontSize: 12, letterSpacing: 0.7 },
   switch: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 220 },

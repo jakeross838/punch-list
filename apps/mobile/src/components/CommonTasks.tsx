@@ -11,7 +11,6 @@ import {
   commonTasks,
   companyForTrade,
   duplicatesOf,
-  hoursText,
   placeHeading,
   placeLabel,
   placeOf,
@@ -157,7 +156,7 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
     const waits = e.task && e.task.waitsOn.length > 0 ? `After ${e.task.waitsOn.map((w) => tasks.find((t) => t.id === w)?.title ?? 'another task').join(', ')}` : null;
     const detail = there
       ? 'On the list here'
-      : [companyName(e.tradeId) ?? 'No company on the job for it yet', e.hours !== null ? hoursText(e.hours) : null, waits].filter(Boolean).join(' · ');
+      : [companyName(e.tradeId) ?? 'No company on the job for it yet', waits].filter(Boolean).join(' · ');
     return (
       <Touchable
         key={e.key}

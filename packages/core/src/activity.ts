@@ -140,7 +140,7 @@ export interface ActivityLine {
   /** When, as an ISO time: the last of the changes it covers. */
   at: string;
   personId: string | null;
-  /** "Jake Ross"; Buildertrend for an import; Ross Built when nobody is known. */
+  /** "Jake Ross"; Buildertrend for an import; Someone when nobody is known. */
   who: string;
   itemId: string | null;
   /** What they did, read after their name: "added Touch up paint". */
@@ -428,7 +428,7 @@ export function activityLines(entries: Activity[], look: ActivityLookups, option
 
 function whoOf(g: Group, look: ActivityLookups): string {
   if (g.personId) return look.people.get(g.personId) ?? 'Someone';
-  return g.entries.some((e) => e.imported) ? 'Buildertrend' : 'Ross Built';
+  return g.entries.some((e) => e.imported) ? 'Buildertrend' : 'Someone';
 }
 
 function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map<string, number>): ActivityLine | null {
@@ -475,7 +475,7 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
       ...base,
       who: named ? `${named} at ${companyName}` : companyName,
       action: `marked ${title} done`,
-      detail: [forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? ''), 'For Ross Built to check'].filter(Boolean).map(sentence).join(' '),
+      detail: [forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? ''), 'For your team to check'].filter(Boolean).map(sentence).join(' '),
     };
   }
 
@@ -498,7 +498,7 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     return {
       ...base,
       who,
-      action: d.internal === true ? `added a Ross Built only note on ${on}` : `commented on ${on}`,
+      action: d.internal === true ? `added an internal note on ${on}` : `commented on ${on}`,
       detail: [where, clip(String(d.body ?? ''), 140)].filter(Boolean).map(sentence).join(' '),
     };
   }

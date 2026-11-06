@@ -20,6 +20,7 @@ import type {
   Location,
   Mark,
   NewTemplateItem,
+  Org,
   ParsedLocation,
   PlannedItem,
   Person,
@@ -89,7 +90,7 @@ export interface NewVisit {
   itemIds: string[];
 }
 
-/** Someone new at Ross Built. They sign in with this email. */
+/** Someone new at your company. They sign in with this email. */
 export interface NewPerson {
   name: string;
   email: string;
@@ -119,6 +120,9 @@ export interface NewSend {
   snapshot?: ScheduleSnapshot | null;
 }
 
+/** After the code: signed in, or new here and about to start a company. */
+export type SignInResult = 'signed_in' | 'new';
+
 /** How this phone stands with the server. The preview has nothing to send. */
 export interface SyncInfo {
   /** Signed in, with the jobs on their way down for the first time. */
@@ -139,7 +143,13 @@ export interface DataApi {
   mode: 'preview' | 'live';
   /** Whoever is signed in; null before signing in. */
   useMe(): Person | null;
-  /** Everyone at Ross Built, switched off or not: for who did what, and for People. */
+  /** The signed-in person's company: its name goes on every list. Empty before signing in. */
+  useOrg(): Org;
+  /** Admins only. The company's name, on every list it sends. */
+  renameOrg(name: string): Promise<void>;
+  /** The email signed in that is not with a company yet, to start one; null otherwise. */
+  useNewAccount(): string | null;
+  /** Everyone at the company, switched off or not: for who did what, and for People. */
   usePeople(): Person[];
   /** The jobs the signed-in person sees, closed ones included. */
   useJobs(): Job[];
@@ -179,7 +189,7 @@ export interface DataApi {
   useActivity(jobId: string): Activity[];
   /** What happened lately on every job you see, newest first: the Updates list. */
   useUpdates(): Activity[];
-  /** The job's comments, Ross Built only ones and ones taken back included. */
+  /** The job's comments, internal notes and ones taken back included. */
   useComments(jobId: string): Comment[];
   /** Admins only. The Project Manager, when given, goes on the team. */
   createJob(input: { name: string; address: string; projectManagerId?: string | null }): Promise<string>;
@@ -267,13 +277,13 @@ export interface DataApi {
   addCompanyComment(input: { jobId: string; companyId: string; itemId: string | null; body: string; name: string | null }): Promise<string>;
   /**
    * From the company's own page: these dates work (the visit is confirmed), or other dates asked
-   * for (the visit keeps its dates until Ross Built moves it). On the phone these go through the
+   * for (the visit keeps its dates until it is moved). On the phone these go through the
    * database's trade_confirm_visit and trade_ask_visit with the link's token.
    */
   companyConfirmVisit(input: { visitId: string; name: string | null }): Promise<void>;
   /**
    * From the company's own page: the work on an item is done, or not yet after all. The item stays
-   * open, To Check, until Ross Built marks it Complete or Not Done. On the phone this goes through
+   * open until your team marks it Complete or Not Done. On the phone this goes through
    * the database's trade_mark_done with the link's token.
    */
   companyMarkDone(input: { jobId: string; companyId: string; itemId: string; done: boolean; name: string | null }): Promise<void>;
@@ -282,10 +292,17 @@ export interface DataApi {
   undoSend(id: string): Promise<void>;
   setFormSettings(settings: FormSettings): Promise<void>;
   setViewSettings(settings: ViewSettings): Promise<void>;
-  /** Sends a six digit code to the email, for someone Ross Built has added. Refused for anyone else. */
+  /** Sends a six digit code to the email. Anyone may sign up; someone switched off at their company is told so. */
   sendSignInCode(email: string): Promise<void>;
-  /** Signs in with the code from the email. */
-  verifySignInCode(email: string, code: string): Promise<void>;
+  /** Signs in with the code from the email: into the app, or as someone new who starts a company next. */
+  verifySignInCode(email: string, code: string): Promise<SignInResult>;
+  /** For someone new, after the code: a company of their own, with them as its admin. */
+  startCompany(input: { company: string; name: string }): Promise<void>;
+  /**
+   * Deletes the signed-in person's account and signs out. Their records stay with the company under
+   * Deleted Account; the last person at a company takes the whole company with it.
+   */
+  deleteAccount(): Promise<void>;
   /** Signs out; what is on the phone is cleared. Refused while changes made here have not gone up. */
   signOut(): Promise<void>;
   /** How this phone stands with the server. */

@@ -1,6 +1,6 @@
 // The filters, each kind with its values as chips to switch on or off: Status, Type, Company,
-// Assigned To, Level, Location, Waiting On, Added By, Estimated Time, Visit and Photo. The values come from the
-// job. Used by View and Filter and by Make a List.
+// Assigned To, Level, Location, Waiting On, Added By and Photo. The values come from the job. Used
+// by View and Filter and by Make a List.
 
 import {
   floorOf,
@@ -87,7 +87,7 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
   return (
     <>
       <Facet title="Status">
-        {STATES.map((s) => (
+        {STATES.filter((s) => s !== 'past_due').map((s) => (
           <Chip key={s} label={STATE_LABELS[s]} on={f.states.includes(s)} onPress={() => toggle('states', s)} testID={id(`state-${s}`)} />
         ))}
       </Facet>
@@ -147,8 +147,6 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
           ))}
         </Facet>
       ) : null}
-      <Facet title="Estimated Time">{yesNo('estimated')}</Facet>
-      <Facet title="Visit">{yesNo('scheduled')}</Facet>
       <Facet title="Photo">{yesNo('photo')}</Facet>
     </>
   );

@@ -1,5 +1,5 @@
-// One company: its name, its usual trade, and its people: who gets its lists and the Schedule Email
-// on every job, by email or by text. Admins add and change them and switch them off or back on;
+// One company: its name, its usual trade, and its people: who gets its lists on every job, by email
+// or by text. Admins add and change them and switch them off or back on;
 // everyone else can look.
 
 import { isAdmin, type Contact } from '@punch/core';
@@ -56,7 +56,7 @@ function CompanyDetail({ companyId }: { companyId: string }) {
   const detail = (c: Contact) => [[c.email, c.phone].filter(Boolean).join(' · '), c.getsLists ? '' : 'Does not get the lists'].filter(Boolean).join('\n');
 
   return (
-    <Page title={company.name} eyebrow="Company" crumb={['Me', 'Companies', company.name]} backLabel="Companies" tab={{ active: 'me' }}>
+    <Page title={company.name} eyebrow="Company" crumb={['Me', 'Companies', company.name]} backLabel="Companies" tab={{}}>
       <ListSection header="Company" footer={admin ? 'A new name changes it on every job.' : undefined}>
         <ListLabeledField
           label="Name"

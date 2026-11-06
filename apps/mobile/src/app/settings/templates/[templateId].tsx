@@ -2,7 +2,7 @@
 // the roof), each with its trade, time and what it waits on. Admins add and change tasks and switch
 // the template off; anyone can add it to a job.
 
-import { hoursText, isAdmin, placeLabel, TEMPLATE_PLACES, taskCount, type Template, type TemplateItem } from '@punch/core';
+import { isAdmin, placeLabel, TEMPLATE_PLACES, taskCount, type Template, type TemplateItem } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { TemplateTaskSheet } from '@/components/TemplateTaskSheet';
@@ -52,12 +52,12 @@ function TemplateDetail({ template }: { template: Template }) {
   }
 
   const sub = (t: TemplateItem) =>
-    [trades.find((x) => x.id === t.tradeId)?.name ?? 'No trade', t.hours !== null ? hoursText(t.hours) : null, t.waitsOn.length > 0 ? `waits on ${t.waitsOn.map(titleOf).filter(Boolean).join(' and ')}` : null]
+    [trades.find((x) => x.id === t.tradeId)?.name ?? 'No trade', t.waitsOn.length > 0 ? `waits on ${t.waitsOn.map(titleOf).filter(Boolean).join(' and ')}` : null]
       .filter(Boolean)
       .join(' · ');
 
   return (
-    <Page title={template.name} eyebrow="Template" crumb={['Me', 'Templates', template.name]} backLabel="Templates" subtitle={[taskCount(tasks.length), template.active ? null : 'Switched off'].filter(Boolean).join(' · ')} tab={{ active: 'me' }}>
+    <Page title={template.name} eyebrow="Template" crumb={['Me', 'Templates', template.name]} backLabel="Templates" subtitle={[taskCount(tasks.length), template.active ? null : 'Switched off'].filter(Boolean).join(' · ')} tab={{}}>
       {admin ? (
         <ListSection>
           <ListLabeledField label="Name" value={name} onChangeText={setName} onBlur={() => void saveName()} autoCapitalize="words" returnKeyType="done" testID="field-template-name" />
