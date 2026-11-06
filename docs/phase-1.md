@@ -17,7 +17,7 @@ Jake, on build 6: "check everything and if you notice it doesn't behave as an ap
 - **Camera:** pinch to zoom, with 1× to go back.
 - **Small things:** a tap on the status bar scrolls back to the top on the job (a sideways row of chips stopped it). Larger Text grows the app's words, up to where the bars and buttons still fit them.
 - **Each company's work in order:** a company's list is numbered 1, 2, 3 in the order to do it. What is ready comes first: an item marked Priority, then whatever holds up the most other work, counting every open item that waits on it down the chain, whoever does it, then the most hours of it. What is waiting comes after, soonest ready first. Each item says what it holds up ("Holds up 3 items"). The numbers are the same in the app (the company's list), on the printed list (a new Order column), on the company's page, and the email says the list is numbered. Work still to be quoted, and work the company already marked done, has no number.
-- **The database:** the company's page answer says what each item holds up (`holds_up`, in `company_page`, still to be applied with the other two). Until it is, the page numbers by Priority and readiness alone.
+- **The database:** the company's page answer says what each item holds up (`holds_up`, in `company_page`). Jake said to put the changes in, and both migrations went onto the live project the same afternoon (`walk_and_delete_job` as 20261106192919, `company_page` as 20261106192951): Delete the Job, the trades for adding a company (Ross Built has the 19 standard ones now) and the company's page answers work. Only the company page's function can call the page's database functions.
 - Checked: 227 unit tests (new ones for the order), the type checks, lint, the database checks (with what an item holds up, down the chain), 105 of the phone's writes, the full preview walk-through (57 steps, with new ones for the numbered list, the photo viewer and Discard Changes; no console or page errors), and the company's page against its stand-in.
 
 ## Walk right away, manage jobs, and the company's page (6 November 2026)
@@ -197,7 +197,7 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 
 ## The live database (3 November 2026)
 
-- The Supabase project `punch-list` (Canada Central) holds the schema and the access rules: all 21 migrations, applied in order, with the same version numbers as the files. It matches the database the checks test, function for function and rule for rule; the only extra is Supabase's own `rls_auto_enable`.
+- The Supabase project `punch-list` (Canada Central) holds the schema and the access rules: all 25 migrations, applied in order, with the same version numbers as the files. It matches the database the checks test, function for function and rule for rule; the only extra is Supabase's own `rls_auto_enable`.
 - Jake (jake@rossbuilt.com) is the first admin. Everyone else is added under People.
 - Nobody signed out reads anything: the tables and the access checks answer permission denied. Only the company page's four functions are open, and they work only with a live link.
 - Supabase's security check is clear but for what is meant: the company page's functions, and the checks the access rules run as the person signed in. Nobody can call a trigger function.
