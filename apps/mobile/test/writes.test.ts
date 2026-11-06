@@ -25,6 +25,7 @@ function state(over: Partial<State> = {}): State {
     waitingOn: {},
     items: [],
     photos: [],
+    plans: [],
     visits: [],
     sends: [],
     comments: [],

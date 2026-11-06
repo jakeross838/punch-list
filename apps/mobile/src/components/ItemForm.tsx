@@ -28,7 +28,28 @@ export interface ItemDraft extends ItemFields {
 export function fieldsOf(item: Item): ItemFields {
   const { assignedTo, title, description, tradeId, companyId, kind, ready, waitingOn, waitingOnItems, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra, unfinished, visitId, hours } =
     item;
-  return { assignedTo, title, description, tradeId, companyId, kind, ready, waitingOn, waitingOnItems, readyBy, boughtOut, poOrCo, status, completedBy, completedAt, extra, unfinished, visitId, hours };
+  return {
+    assignedTo,
+    title,
+    description,
+    tradeId,
+    companyId,
+    kind,
+    ready,
+    waitingOn,
+    waitingOnItems,
+    readyBy,
+    boughtOut,
+    poOrCo,
+    status,
+    completedBy,
+    completedAt,
+    extra,
+    unfinished,
+    visitId,
+    hours,
+    priority: item.priority ?? false,
+  };
 }
 
 export function blankDraft(locationId: string): ItemDraft {
@@ -95,6 +116,7 @@ export const EDITABLE: (keyof ItemDraft)[] = [
   'unfinished',
   'visitId',
   'hours',
+  'priority',
 ];
 
 /** One field's value against another's: lists and added fields by what they hold. */

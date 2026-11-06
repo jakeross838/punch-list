@@ -7,6 +7,7 @@ import {
   type Activity,
   type ActivityDetail,
   type ActivityKind,
+  type ChecklistEntry,
   type Comment,
   type Company,
   type CompanyLink,
@@ -21,6 +22,7 @@ import {
   type Mark,
   type Person,
   type Photo,
+  type PlanSheet,
   type ScheduleSnapshot,
   type StandardTitle,
   type TeamMember,
@@ -168,10 +170,27 @@ export const rowToItem = (r: Row): Item => ({
   visitId: textOrNull(r.visit_id),
   hours: tidyHours(r.hours),
   btExternalId: textOrNull(r.bt_external_id),
+  markedDoneAt: textOrNull(r.marked_done_at),
+  priority: bool(r.priority),
+  checklist: checklistOf(r.checklist),
+  planId: textOrNull(r.plan_id),
+  pinX: numOrNull(r.pin_x),
+  pinY: numOrNull(r.pin_y),
   createdBy: text(r.created_by),
   createdAt: text(r.created_at),
   updatedAt: text(r.updated_at),
 });
+
+/** An item's checklist from its JSON, keeping only well-formed steps. */
+function checklistOf(value: unknown): ChecklistEntry[] {
+  const list = json<unknown>(value, []);
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((e) => {
+    if (!e || typeof e !== 'object') return [];
+    const { id, text: words, done } = e as Record<string, unknown>;
+    return typeof id === 'string' && typeof words === 'string' ? [{ id, text: words, done: done === true }] : [];
+  });
+}
 
 const ITEM_COLUMNS: Record<keyof ItemPatch, string> = {
   locationId: 'location_id',
@@ -195,6 +214,12 @@ const ITEM_COLUMNS: Record<keyof ItemPatch, string> = {
   unfinished: 'unfinished',
   visitId: 'visit_id',
   hours: 'hours',
+  markedDoneAt: 'marked_done_at',
+  priority: 'priority',
+  checklist: 'checklist',
+  planId: 'plan_id',
+  pinX: 'pin_x',
+  pinY: 'pin_y',
 };
 
 /** An item patch as column and value pairs for the phone database (booleans as 0 or 1). */
@@ -207,6 +232,19 @@ export function itemPatchColumns(patch: ItemPatch): [string, unknown][] {
       return [ITEM_COLUMNS[k], typeof v === 'boolean' ? (v ? 1 : 0) : typeof v === 'object' && v !== null ? JSON.stringify(v) : v];
     });
 }
+
+/** A row of plan_sheets: a sheet of the job's plans; its picture is kept like a photo's. */
+export const rowToPlanSheet = (r: Row, uri: string): PlanSheet => ({
+  id: text(r.id),
+  jobId: text(r.job_id),
+  floor: text(r.floor),
+  name: text(r.name),
+  uri,
+  width: num(r.width),
+  height: num(r.height),
+  sortOrder: num(r.sort_order),
+  removed: bool(r.removed),
+});
 
 export const rowToPhoto = (r: Row, uri: string): Photo => ({
   id: text(r.id),

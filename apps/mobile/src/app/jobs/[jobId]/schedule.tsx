@@ -146,7 +146,7 @@ export default function ScheduleScreen() {
     holidays.length > 0 ? `No work on ${holidays.map((h) => `${h.name}, ${h.days.map((d) => shortDate(d)).join(' and ')}`).join('; ')}.` : '';
 
   return (
-    <Page title="Schedule" large subtitle={subtitle || undefined} backLabel={job?.name}>
+    <Page title="Schedule" subtitle={subtitle || undefined} backLabel={job?.name}>
       {late.length > 0 ? (
         <ListSection>
           <ListRow

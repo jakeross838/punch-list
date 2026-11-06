@@ -1,8 +1,10 @@
-// Text in Apple's type styles. Every piece of text in the app goes through this, so sizes and
-// weights stay on the system scale.
+// Text in the Site Office type styles. Every piece of text in the app goes through this, so sizes,
+// faces and weights stay on the scale: Space Grotesk titles, Inter for reading, JetBrains Mono in
+// capitals for labels and stamps. A weight picks the face's file for that weight, since custom
+// fonts do not change weight with fontWeight.
 
 import { Text as RNText, type ColorValue, type TextProps, type TextStyle } from 'react-native';
-import { colors, type as typeScale, type TypeVariant } from '@/constants/theme';
+import { colors, faceOf, fontOf, type as typeScale, type TypeVariant } from '@/constants/theme';
 
 export interface AppTextProps extends TextProps {
   variant?: TypeVariant;
@@ -20,7 +22,7 @@ export function Text({ variant = 'body', color = colors.label, weight, tabular, 
       style={[
         typeScale[variant],
         { color },
-        weight ? { fontWeight: weight } : null,
+        weight ? { fontFamily: fontOf(faceOf(variant), weight) } : null,
         tabular ? { fontVariant: ['tabular-nums'] } : null,
         align ? { textAlign: align } : null,
         style,

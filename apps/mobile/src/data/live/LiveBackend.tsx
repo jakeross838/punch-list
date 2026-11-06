@@ -7,7 +7,7 @@ import { tidyComment, tidyEmail, type Activity } from '@punch/core';
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { DataContext, type DataApi, type SyncInfo } from '../api';
-import { makeApi, type Keeper } from '../engine';
+import { latestFirst, makeApi, UPDATES_KEPT, type Keeper } from '../engine';
 import { keepPhoto } from '../photoFiles';
 import { SupabaseConnector } from '../powersync/connector';
 import { NOT_SET_UP, sendSignInCode, signOutOfSupabase, supabase, verifySignInCode } from '../powersync/supabase';
@@ -151,6 +151,14 @@ const liveApi: DataApi = makeApi(keeper, {
     const { data: logged } = useQuery<Row>('SELECT * FROM job_activity WHERE job_id = ?', [jobId]);
     return useMemo((): Activity[] => [...history.map(rowToItemHistory), ...logged.map(rowToJobActivity)], [history, logged]);
   },
+  useUpdates() {
+    const { data: history } = useQuery<Row>(`SELECT * FROM item_history ORDER BY at DESC LIMIT ${UPDATES_KEPT}`);
+    const { data: logged } = useQuery<Row>(`SELECT * FROM job_activity ORDER BY at DESC LIMIT ${UPDATES_KEPT}`);
+    return useMemo(
+      (): Activity[] => latestFirst([...history.map(rowToItemHistory), ...logged.map(rowToJobActivity)]).slice(0, UPDATES_KEPT),
+      [history, logged],
+    );
+  },
   useSync() {
     const status = useStatus();
     const s = useSyncExternalStore(store.subscribe, store.get, store.get);
@@ -184,6 +192,10 @@ const liveApi: DataApi = makeApi(keeper, {
   },
   async companyConfirmVisit({ visitId, name }) {
     const { error } = await supabase.rpc('trade_confirm_visit', { p_token: visitLink(visitId), p_visit: visitId, p_name: name });
+    if (error) throw new Error(error.message);
+  },
+  async companyMarkDone({ jobId, companyId, itemId, done, name }) {
+    const { error } = await supabase.rpc('trade_mark_done', { p_token: linkFor(jobId, companyId), p_item: itemId, p_done: done, p_name: name });
     if (error) throw new Error(error.message);
   },
   async companyAskVisit({ visitId, start: first, days, name }) {

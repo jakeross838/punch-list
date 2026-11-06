@@ -1,29 +1,22 @@
-// The circle at the start of an item, like Reminders. Tap it to check the item off: it fills with
-// the accent and the checkmark pops in.
+// The box at the start of an item: tap it to check the item off. It fills slate deep and the check
+// comes in; nothing grows or bounces. (Still named for the circle it used to be.)
 
 import { Pressable, StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { colors } from '@/constants/theme';
+import { colors, motion } from '@/constants/theme';
 import { Icon } from './Icon';
 import { easeOut } from './Touchable';
 
 const SIZE = 22;
 
-const pop = {
-  '0%': { transform: [{ scale: 1 }] },
-  '40%': { transform: [{ scale: 1.18 }] },
-  '100%': { transform: [{ scale: 1 }] },
-};
-
 export function CompleteCircle({
   checked,
-  animate,
   onPress,
   label,
   testID,
 }: {
   checked: boolean;
-  /** Play the pop: only when the tap just happened, not when the list first shows. */
+  /** Kept for the screens that pass it: the box no longer pops. */
   animate?: boolean;
   onPress: () => void;
   label: string;
@@ -41,27 +34,25 @@ export function CompleteCircle({
     >
       <Animated.View
         style={[
-          styles.circle,
+          styles.box,
           {
-            borderColor: checked ? colors.tint : colors.circle,
-            backgroundColor: checked ? colors.tint : 'transparent',
+            borderColor: checked ? colors.action : colors.quiet,
+            backgroundColor: checked ? colors.action : colors.cell,
             transitionProperty: ['borderColor', 'backgroundColor'],
-            transitionDuration: 180,
+            transitionDuration: motion.base,
             transitionTimingFunction: easeOut,
           },
-          checked && animate ? { animationName: pop, animationDuration: 380, animationTimingFunction: easeOut } : null,
         ]}
       >
         <Animated.View
           style={{
             opacity: checked ? 1 : 0,
-            transform: [{ scale: checked ? 1 : 0.3 }],
-            transitionProperty: ['opacity', 'transform'],
-            transitionDuration: 260,
+            transitionProperty: 'opacity',
+            transitionDuration: motion.slow,
             transitionTimingFunction: easeOut,
           }}
         >
-          <Icon name="checkmark" size={13} color={colors.white} weight="bold" />
+          <Icon name="checkmark" size={15} color={colors.onBar} weight="bold" />
         </Animated.View>
       </Animated.View>
     </Pressable>
@@ -70,12 +61,5 @@ export function CompleteCircle({
 
 const styles = StyleSheet.create({
   hit: { paddingTop: 1 },
-  circle: {
-    width: SIZE,
-    height: SIZE,
-    borderRadius: SIZE / 2,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  box: { width: SIZE, height: SIZE, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 });

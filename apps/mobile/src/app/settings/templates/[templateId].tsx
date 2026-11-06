@@ -57,7 +57,7 @@ function TemplateDetail({ template }: { template: Template }) {
       .join(' · ');
 
   return (
-    <Page title={template.name} large backLabel="Templates" subtitle={[taskCount(tasks.length), template.active ? null : 'Switched off'].filter(Boolean).join(' · ')}>
+    <Page title={template.name} backLabel="Templates" subtitle={[taskCount(tasks.length), template.active ? null : 'Switched off'].filter(Boolean).join(' · ')}>
       {admin ? (
         <ListSection>
           <ListLabeledField label="Name" value={name} onChangeText={setName} onBlur={() => void saveName()} autoCapitalize="words" returnKeyType="done" testID="field-template-name" />

@@ -1,5 +1,6 @@
-// Lists in two styles. Grouped: white rounded sections on the light gray background, for sheets
-// and forms. Plain: rows straight on white with hairlines that start at the text, for screens.
+// Lists, Site Office style: a mono label over a white square panel with a thin slate border, on
+// sand. Rows are divided by fine rules. Both variants look the same now; plain is kept for the
+// screens that still ask for it.
 
 import { Children, createContext, isValidElement, useContext, useState, type ReactNode } from 'react';
 import { Platform, StyleSheet, TextInput, View, type ColorValue, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
@@ -14,7 +15,7 @@ type Variant = 'grouped' | 'plain';
 
 const RowPosition = createContext<{ last: boolean; variant: Variant }>({ last: true, variant: 'grouped' });
 
-const TILE = 30;
+const TILE = 32;
 
 export function ListSection({
   header,
@@ -36,18 +37,12 @@ export function ListSection({
   variant?: Variant;
 }) {
   const rows = Children.toArray(children).filter(isValidElement);
-  const plain = variant === 'plain';
   return (
-    <View style={[plain ? styles.plainSection : styles.section, style]} testID={testID}>
+    <View style={[styles.section, style]} testID={testID}>
       {header != null || headerRight ? (
-        <View style={plain ? styles.plainHeader : styles.header}>
+        <View style={styles.header}>
           {typeof header === 'string' ? (
-            <Text
-              variant={plain ? 'subheadline' : 'footnote'}
-              weight={plain ? '600' : '400'}
-              color={colors.secondary}
-              style={{ flex: 1 }}
-            >
+            <Text variant="label" color={colors.secondary} style={styles.headerText} accessibilityRole="header">
               {header}
             </Text>
           ) : (
@@ -57,7 +52,7 @@ export function ListSection({
         </View>
       ) : null}
       {rows.length > 0 ? (
-        <View style={plain ? styles.plainRows : styles.card}>
+        <View style={styles.card}>
           {rows.map((row, i) => (
             <RowPosition.Provider key={row.key ?? i} value={{ last: i === rows.length - 1, variant }}>
               {row}
@@ -67,11 +62,11 @@ export function ListSection({
       ) : null}
       {footer ? (
         typeof footer === 'string' ? (
-          <Text variant="footnote" color={footerTone === 'danger' ? colors.destructive : colors.secondary} style={plain ? styles.plainFooter : styles.footer}>
+          <Text variant="footnote" color={footerTone === 'danger' ? colors.destructive : colors.secondary} style={styles.footer}>
             {footer}
           </Text>
         ) : (
-          <View style={plain ? styles.plainFooter : styles.footer}>{footer}</View>
+          <View style={styles.footer}>{footer}</View>
         )
       ) : null}
     </View>
@@ -82,20 +77,16 @@ export function Separator({ inset = layout.rowPadding }: { inset?: number }) {
   return <View style={[styles.separator, { left: inset }]} />;
 }
 
-function useRow(hasTile: boolean): { separator: ReactNode; rowStyle: StyleProp<ViewStyle> } {
-  const { last, variant } = useContext(RowPosition);
-  const plain = variant === 'plain';
-  const inset = plain ? 0 : hasTile ? layout.rowPadding + TILE + 14 : layout.rowPadding;
-  return {
-    separator: last ? null : <Separator inset={inset} />,
-    rowStyle: plain ? styles.plainRow : null,
-  };
+function useRow(_hasTile: boolean): { separator: ReactNode; rowStyle: StyleProp<ViewStyle> } {
+  const { last } = useContext(RowPosition);
+  return { separator: last ? null : <Separator inset={0} />, rowStyle: null };
 }
 
-export function IconTile({ name, color, size = TILE }: { name: IconName; color: ColorValue; size?: number }) {
+/** A square outlined tile with an icon, at the start of a row. */
+export function IconTile({ name, color = colors.label, size = TILE }: { name: IconName; color?: ColorValue; size?: number }) {
   return (
-    <View style={[styles.tile, { width: size, height: size, borderRadius: size * 0.27, backgroundColor: color }]}>
-      <Icon name={name} size={size * 0.6} color={colors.white} weight="medium" />
+    <View style={[styles.tile, { width: size, height: size }]}>
+      <Icon name={name} size={Math.round(size * 0.55)} color={color} />
     </View>
   );
 }
@@ -115,6 +106,8 @@ export interface ListRowProps {
   testID?: string;
   accessibilityLabel?: string;
   titleLines?: number;
+  /** A form field: the title as a mono label, the value in ink. */
+  field?: boolean;
 }
 
 export function ListRow({
@@ -123,7 +116,7 @@ export function ListRow({
   value,
   valueColor = colors.secondary,
   icon,
-  iconColor = colors.tint,
+  iconColor = colors.label,
   accessory = 'none',
   right,
   onPress,
@@ -132,6 +125,7 @@ export function ListRow({
   testID,
   accessibilityLabel,
   titleLines = 2,
+  field = false,
 }: ListRowProps) {
   const { separator, rowStyle } = useRow(!!icon);
   const titleColor = tone === 'tint' ? colors.tint : tone === 'destructive' ? colors.destructive : colors.label;
@@ -139,7 +133,7 @@ export function ListRow({
     <>
       {icon ? <IconTile name={icon} color={iconColor} /> : null}
       <View style={styles.rowText}>
-        <Text color={titleColor} numberOfLines={titleLines}>
+        <Text variant={field ? 'label' : 'body'} color={field && tone === 'default' ? colors.secondary : titleColor} numberOfLines={titleLines}>
           {title}
         </Text>
         {subtitle ? (
@@ -149,13 +143,13 @@ export function ListRow({
         ) : null}
       </View>
       {value ? (
-        <Text color={valueColor} numberOfLines={1} style={styles.value}>
+        <Text variant="callout" color={field && valueColor === colors.secondary ? colors.label : valueColor} numberOfLines={1} style={styles.value}>
           {value}
         </Text>
       ) : null}
       {right}
-      {accessory === 'chevron' ? <Icon name="chevron.right" size={13} color={colors.chevron} weight="bold" /> : null}
-      {accessory === 'checkmark' ? <Icon name="checkmark" size={18} color={colors.tint} weight="semibold" /> : null}
+      {accessory === 'chevron' ? <Icon name="chevron.right" size={14} color={colors.quiet} weight="medium" /> : null}
+      {accessory === 'checkmark' ? <Icon name="checkmark" size={18} color={colors.label} weight="semibold" /> : null}
       {separator}
     </>
   );
@@ -244,7 +238,7 @@ export function ListTextField({
           styles.input,
           size === 'title' ? styles.titleInput : null,
           multiline
-            ? { height, lineHeight: size === 'title' ? 28 : typeScale.body.lineHeight, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' }
+            ? { height, lineHeight: size === 'title' ? 26 : typeScale.body.lineHeight, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' }
             : null,
           props.style,
         ]}
@@ -259,7 +253,7 @@ export function ListLabeledField({ label, invalid, ...props }: TextInputProps & 
   const { separator, rowStyle } = useRow(false);
   return (
     <View style={[styles.row, rowStyle, invalid ? styles.invalid : null]}>
-      <Text numberOfLines={1} style={styles.label}>
+      <Text variant="label" color={colors.secondary} numberOfLines={1} style={styles.label}>
         {label}
       </Text>
       <TextInput
@@ -284,25 +278,25 @@ export function Button({
 }: {
   label: string;
   onPress: () => void;
-  /** filled: the accent pill. tinted: a light gray pill with accent text. */
+  /** filled: slate deep. tinted: outlined. plain: gulf blue words only. */
   variant?: 'filled' | 'tinted' | 'plain';
   icon?: IconName;
   disabled?: boolean;
   testID?: string;
 }) {
-  const fg = variant === 'filled' ? colors.white : colors.tint;
+  const fg = variant === 'filled' ? colors.onBar : variant === 'plain' ? colors.tint : colors.label;
   return (
     <Touchable
-      feedback="scale"
+      feedback="opacity"
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       testID={testID}
-      style={[styles.button, variant === 'filled' ? styles.buttonFilled : variant === 'tinted' ? styles.buttonTinted : null]}
+      style={[styles.button, variant === 'filled' ? styles.buttonFilled : variant === 'tinted' ? styles.buttonTinted : styles.buttonPlain]}
     >
-      {icon ? <Icon name={icon} size={18} color={fg} weight="semibold" /> : null}
-      <Text variant="headline" color={fg}>
+      {icon ? <Icon name={icon} size={17} color={fg} weight="medium" /> : null}
+      <Text variant="button" color={fg} numberOfLines={1}>
         {label}
       </Text>
     </Touchable>
@@ -312,8 +306,10 @@ export function Button({
 export function EmptyState({ icon, title, message, children }: { icon: IconName; title: string; message?: string; children?: ReactNode }) {
   return (
     <View style={styles.empty}>
-      <Icon name={icon} size={40} color={colors.chevron} />
-      <Text variant="title3" weight="600" align="center">
+      <View style={styles.emptyIcon}>
+        <Icon name={icon} size={24} color={colors.secondary} />
+      </View>
+      <Text variant="title3" align="center">
         {title}
       </Text>
       {message ? (
@@ -326,11 +322,13 @@ export function EmptyState({ icon, title, message, children }: { icon: IconName;
   );
 }
 
-export function Banner({ icon = 'info.circle', children }: { icon?: IconName; children: string }) {
+/** A note in a light box with a square stamp, like "You can start taking photos now." */
+export function Banner({ icon, children, tone = 'info' }: { icon?: IconName; children: string; tone?: 'info' | 'warning' }) {
+  const mark = tone === 'warning' ? colors.destructive : colors.tint;
   return (
     <View style={styles.banner}>
-      <Icon name={icon} size={17} color={colors.secondary} />
-      <Text variant="footnote" color={colors.secondary} style={{ flex: 1 }}>
+      {icon ? <Icon name={icon} size={16} color={mark} /> : <View style={[styles.bannerMark, { backgroundColor: mark }]} />}
+      <Text variant="subheadline" style={{ flex: 1 }}>
         {children}
       </Text>
     </View>
@@ -338,40 +336,60 @@ export function Banner({ icon = 'info.circle', children }: { icon?: IconName; ch
 }
 
 const styles = StyleSheet.create({
-  section: { marginHorizontal: layout.margin, marginBottom: 22 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: layout.rowPadding, paddingBottom: 7, minHeight: 18 },
-  card: { backgroundColor: colors.cell, borderRadius: layout.radius, overflow: 'hidden' },
-  footer: { paddingHorizontal: layout.rowPadding, paddingTop: 8 },
-  plainSection: { marginBottom: 6 },
-  plainHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 12, paddingHorizontal: layout.inset, paddingTop: 22, paddingBottom: 4 },
-  plainRows: { marginLeft: layout.inset },
-  plainFooter: { paddingHorizontal: layout.inset, paddingTop: 8 },
+  section: { marginHorizontal: layout.margin, marginBottom: 20 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 4,
+    marginBottom: 8,
+    paddingBottom: 8,
+    minHeight: 24,
+    borderBottomWidth: layout.hairline,
+    borderBottomColor: colors.border,
+  },
+  headerText: { flex: 1, fontSize: 11 },
+  card: { backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border, overflow: 'hidden' },
+  footer: { paddingHorizontal: 4, paddingTop: 8 },
   // A border, not a filled box: borders snap to the screen's pixels, so the line stays sharp.
-  separator: { position: 'absolute', right: 0, bottom: 0, height: 0, borderBottomWidth: layout.hairline, borderBottomColor: colors.separator },
+  separator: { position: 'absolute', right: 0, bottom: 0, height: 0, borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
   row: {
     minHeight: layout.rowMinHeight,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: layout.rowPadding,
-    paddingVertical: 10,
+    paddingVertical: 11,
     backgroundColor: colors.cell,
   },
-  plainRow: { paddingLeft: 0, paddingRight: layout.inset, minHeight: 48 },
-  rowText: { flex: 1, gap: 1 },
+  rowText: { flex: 1, gap: 2 },
   value: { maxWidth: '60%', textAlign: 'right' },
-  tile: { alignItems: 'center', justifyContent: 'center' },
+  tile: { alignItems: 'center', justifyContent: 'center', borderWidth: layout.hairline, borderColor: colors.borderStrong },
   fieldRow: { paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
-  invalid: { backgroundColor: 'rgba(215, 0, 21, 0.05)' },
+  invalid: { backgroundColor: 'rgba(176, 85, 78, 0.06)' },
   // One line: no line height, so the words stay put as you type (see fieldFont). Wrapping fields add it.
   input: { ...fieldFont('body'), color: colors.label, minHeight: layout.rowMinHeight, paddingVertical: 0, outlineWidth: 0 },
-  titleInput: { fontSize: 22, fontWeight: '600', letterSpacing: -0.2, minHeight: 54 },
+  titleInput: { ...fieldFont('sheetTitle'), minHeight: 56 },
   label: { flexShrink: 0 },
   // minWidth 0 lets the field shrink beside its label (a web input otherwise keeps its own width).
   labeledInput: { flex: 1, minWidth: 0, textAlign: 'right' },
-  button: { height: 46, borderRadius: 23, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 22 },
-  buttonFilled: { backgroundColor: colors.tint },
-  buttonTinted: { backgroundColor: colors.surface },
-  empty: { alignItems: 'center', gap: 8, paddingHorizontal: 40, paddingVertical: 48 },
-  banner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: layout.inset, marginTop: 20 },
+  button: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18, borderWidth: 1 },
+  buttonFilled: { backgroundColor: colors.action, borderColor: colors.action },
+  buttonTinted: { backgroundColor: 'transparent', borderColor: colors.borderStrong },
+  buttonPlain: { backgroundColor: 'transparent', borderColor: 'transparent', height: 40 },
+  empty: { alignItems: 'center', gap: 8, paddingHorizontal: 40, paddingVertical: 44 },
+  emptyIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: layout.hairline, borderColor: colors.borderStrong, marginBottom: 6 },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginHorizontal: layout.margin,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: layout.hairline,
+    borderColor: colors.border,
+    backgroundColor: colors.stripe,
+  },
+  bannerMark: { width: 8, height: 8, marginTop: 5 },
 });

@@ -40,7 +40,7 @@ import { ActivityIndicator, Keyboard, StyleSheet, TextInput, View } from 'react-
 import { colors, fieldFont, layout, type as typeScale } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { usePersonOptions } from './people';
-import { haptic, Icon, ListLabeledField, ListRow, ListSection, OptionPicker, PhotoView, Segmented, Text, Touchable } from '@/ui';
+import { haptic, Icon, ListLabeledField, ListRow, ListSection, ListSwitchRow, OptionPicker, PhotoView, Segmented, Text, Touchable } from '@/ui';
 import { EstimateField } from './EstimateField';
 import { ExtraFields, useFormOptions, type ItemDraft } from './ItemForm';
 import { ReadyRow } from './ReadyRow';
@@ -184,8 +184,9 @@ export function ItemEditor({
 
   // Details: what is in it, in a line, and open on its own when something in it needs fixing.
   const detailProblem = problem('hours') ?? problem('poOrCo');
-  const hasDetails = showHours || showKind || showPo || customFields.length > 0 || !!details;
+  const hasDetails = true;
   const summary = [
+    value.priority ? 'Priority' : null,
     showKind || showPo ? kindText(value) : null,
     showHours ? (value.hours !== null ? hoursText(value.hours) : 'No time yet') : null,
     ...(detailWords ?? []),
@@ -201,10 +202,10 @@ export function ItemEditor({
           <View style={styles.photoColumn}>
             {first ? (
               <Touchable feedback="scale" onPress={() => onPhotoPress?.(first.key)} accessibilityRole="button" accessibilityLabel="Change the markup" testID="photo-edit">
-                <PhotoView photo={first} width={72} height={72} radius={8} />
+                <PhotoView photo={first} width={72} height={72} />
                 {photos.length > 1 ? (
                   <View style={styles.badge}>
-                    <Text variant="caption1" weight="600" color={colors.white}>
+                    <Text variant="stamp" weight="600" color={colors.onBar}>
                       +{photos.length - 1}
                     </Text>
                   </View>
@@ -212,17 +213,20 @@ export function ItemEditor({
               </Touchable>
             ) : (
               <Touchable feedback="scale" onPress={onAddPhoto} accessibilityRole="button" accessibilityLabel="Add a photo" style={styles.noPhoto}>
-                <Icon name="camera" size={24} color={colors.tint} />
+                <Icon name="camera" size={22} color={colors.secondary} />
               </Touchable>
             )}
             <Touchable feedback="opacity" onPress={onAddPhoto} accessibilityRole="button" accessibilityLabel="Add another photo" testID="add-photo" style={styles.addPhoto}>
-              <Text variant="footnote" weight="600" color={colors.tint} numberOfLines={1}>
+              <Text variant="stamp" weight="600" color={colors.tint} numberOfLines={1}>
                 Add Photo
               </Text>
             </Touchable>
           </View>
         ) : null}
         <View style={styles.textColumn}>
+          <Text variant="stamp" color={colors.secondary}>
+            Title
+          </Text>
           <TextInput
             value={value.title}
             onChangeText={(title) => {
@@ -231,7 +235,7 @@ export function ItemEditor({
             }}
             onFocus={() => setTitleFocused(true)}
             onBlur={titleDone}
-            placeholder="Title"
+            placeholder="What needs doing"
             placeholderTextColor={colors.placeholder}
             selectionColor={colors.tint}
             autoCapitalize="sentences"
@@ -246,11 +250,14 @@ export function ItemEditor({
           {shows('description') ? (
             <>
               <View style={styles.rule} />
+              <Text variant="stamp" color={colors.secondary}>
+                Where exactly
+              </Text>
               <TextInput
                 value={value.description}
                 onChangeText={(description) => set({ description }, true)}
                 onBlur={() => set({ description: value.description })}
-                placeholder="Add a description"
+                placeholder="Left door at the hood, both hinges"
                 placeholderTextColor={colors.placeholder}
                 selectionColor={colors.tint}
                 autoCapitalize="sentences"
@@ -280,8 +287,8 @@ export function ItemEditor({
       ) : null}
       {fillIn && blanks ? (
         <Touchable feedback="opacity" onPress={fillIn.onPress} disabled={fillIn.busy} accessibilityRole="button" testID="fill-in" style={styles.fillIn}>
-          {fillIn.busy ? <ActivityIndicator size="small" color={colors.tint} /> : <Icon name="sparkles" size={17} color={colors.tint} weight="semibold" />}
-          <Text variant="subheadline" weight="600" color={colors.tint}>
+          {fillIn.busy ? <ActivityIndicator size="small" color={colors.tint} /> : <Icon name="sparkles" size={16} color={colors.tint} />}
+          <Text variant="label" weight="600" color={colors.tint}>
             {fillIn.busy ? 'Looking at the Photo' : 'Fill In From Photo'}
           </Text>
         </Touchable>
@@ -322,6 +329,7 @@ export function ItemEditor({
       >
         <ListRow
           title="Location"
+          field
           value={roomLabel ?? 'Choose'}
           valueColor={roomLabel ? colors.secondary : colors.tint}
           accessory="chevron"
@@ -331,6 +339,7 @@ export function ItemEditor({
         {showCompany ? (
           <ListRow
             title="Company"
+          field
             value={companyName ?? 'Choose'}
             valueColor={companyName ? colors.secondary : colors.tint}
             accessory="chevron"
@@ -341,6 +350,7 @@ export function ItemEditor({
         {showAssigned ? (
           <ListRow
             title="Assigned To"
+          field
             value={assignedName ?? 'No One'}
             valueColor={colors.secondary}
             accessory="chevron"
@@ -368,12 +378,13 @@ export function ItemEditor({
         <ListSection footer={sentence(detailProblem)} footerTone="danger">
           <ListRow
             title="Details"
+            field
             subtitle={summary || undefined}
             onPress={() => {
               haptic.selection();
               setOpen((o) => !o);
             }}
-            right={<Icon name={detailsOpen ? 'chevron.down' : 'chevron.right'} size={13} color={colors.chevron} weight="bold" />}
+            right={<Icon name={detailsOpen ? 'chevron.down' : 'plus'} size={15} color={colors.label} weight="medium" />}
             accessibilityLabel={`Details${summary ? `, ${summary}` : ''}`}
             testID="item-details"
           />
@@ -418,6 +429,10 @@ export function ItemEditor({
               />
             </ListSection>
           ) : null}
+
+          <ListSection footer="Wanted first: it goes to the top of its list, and of the company's list.">
+            <ListSwitchRow title="Priority" value={!!value.priority} onValueChange={(priority) => set({ priority })} testID="field-priority" />
+          </ListSection>
 
           {customFields.length > 0 ? (
             <ListSection header="More">
@@ -466,22 +481,22 @@ export function ItemEditor({
 }
 
 const styles = StyleSheet.create({
-  card: { marginHorizontal: layout.margin, padding: 14, borderRadius: layout.radius, backgroundColor: colors.cell, flexDirection: 'row', gap: 12 },
+  card: { marginHorizontal: layout.margin, padding: 14, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border, flexDirection: 'row', gap: 12 },
   photoColumn: { width: 72, gap: 4 },
-  noPhoto: { width: 72, height: 72, borderRadius: 8, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', right: 4, bottom: 4, minWidth: 24, height: 20, paddingHorizontal: 6, borderRadius: 10, backgroundColor: 'rgba(0, 0, 0, 0.55)', alignItems: 'center', justifyContent: 'center' },
-  addPhoto: { height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  textColumn: { flex: 1, minWidth: 0 },
-  title: { ...fieldFont('title3'), minHeight: 26, padding: 0, color: colors.label, outlineWidth: 0 },
+  noPhoto: { width: 72, height: 72, borderWidth: 1.25, borderStyle: 'dashed', borderColor: colors.quiet, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', right: 4, bottom: 4, minWidth: 24, height: 18, paddingHorizontal: 5, backgroundColor: 'rgba(19, 32, 40, 0.78)', alignItems: 'center', justifyContent: 'center' },
+  addPhoto: { height: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  textColumn: { flex: 1, minWidth: 0, gap: 3 },
+  title: { ...fieldFont('title2'), minHeight: 28, padding: 0, color: colors.label, outlineWidth: 0 },
   titleProblem: { color: colors.destructive },
-  rule: { height: 0, borderBottomWidth: layout.hairline, borderBottomColor: colors.separator, marginTop: 10, marginBottom: 9 },
-  description: { ...typeScale.body, minHeight: 60, padding: 0, color: colors.label, textAlignVertical: 'top', outlineWidth: 0 },
-  note: { marginHorizontal: layout.margin + layout.rowPadding, marginTop: 8 },
-  suggestions: { marginHorizontal: layout.margin, marginTop: 8, borderRadius: layout.radius, backgroundColor: colors.cell, overflow: 'hidden' },
+  rule: { height: 0, borderBottomWidth: layout.fine, borderBottomColor: colors.separator, marginTop: 10, marginBottom: 9 },
+  description: { ...typeScale.callout, minHeight: 48, padding: 0, color: colors.label, textAlignVertical: 'top', outlineWidth: 0 },
+  note: { marginHorizontal: layout.margin + 4, marginTop: 8 },
+  suggestions: { marginHorizontal: layout.margin, marginTop: 8, borderWidth: layout.hairline, borderColor: colors.borderStrong, backgroundColor: colors.cell, overflow: 'hidden' },
   suggestion: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, backgroundColor: colors.cell },
-  suggestionRule: { borderTopWidth: layout.hairline, borderTopColor: colors.separator },
+  suggestionRule: { borderTopWidth: layout.fine, borderTopColor: colors.separator },
   suggestionHint: { maxWidth: '55%' },
-  section: { marginTop: 18 },
-  fillIn: { alignSelf: 'flex-start', height: 40, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6, marginHorizontal: layout.margin + layout.rowPadding },
+  section: { marginTop: 14 },
+  fillIn: { alignSelf: 'flex-start', height: 38, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6, marginHorizontal: layout.margin + 4 },
   kind: { padding: 8, backgroundColor: colors.cell },
 });

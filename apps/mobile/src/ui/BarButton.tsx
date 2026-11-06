@@ -1,7 +1,8 @@
-// Bar buttons. Plain ones are the accent color with no background ("Cancel", the back chevron,
-// the "…" menu); the main one is a filled accent pill ("Done", "Add", "New Item").
+// Square buttons, Site Office style. On the slate bar they are outlined in sand; on sand and white
+// they are outlined in slate. The main one is filled: slate deep with sand words on light
+// backgrounds, sand with slate words on the bar. Words are JetBrains Mono in capitals.
 
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { colors } from '@/constants/theme';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -13,57 +14,68 @@ export interface BarButtonProps {
   icon?: IconName;
   /** Show only the icon; the label is still read out by VoiceOver. */
   iconOnly?: boolean;
-  /** Shown beside the icon in place of the label, like "Jobs" after the back chevron. */
+  /** Shown in place of the label. */
   text?: string;
-  /** plain: accent text or icon. prominent: a filled accent pill. */
+  /** plain: outlined. tinted: outlined with gulf blue words. prominent: filled. */
   variant?: 'plain' | 'tinted' | 'prominent';
   onPress: () => void;
   disabled?: boolean;
   testID?: string;
+  /** regular: 36 high, for bars and sheet heads. large: 48 high, for the buttons along the bottom. */
   size?: 'regular' | 'large';
+  /** dark: on the slate bar. light: on sand or white. */
+  tone?: 'dark' | 'light';
+  style?: StyleProp<ViewStyle>;
+  /** A small count in the corner, like how many filters are on. */
+  badge?: number;
 }
 
-export function BarButtonView({ label, icon, iconOnly, text, variant = 'plain', onPress, disabled, testID, size = 'regular' }: BarButtonProps) {
-  const pill = variant === 'prominent';
-  const fg = pill ? colors.white : colors.tint;
+export function BarButtonView({
+  label,
+  icon,
+  iconOnly,
+  text,
+  variant = 'plain',
+  onPress,
+  disabled,
+  testID,
+  size = 'regular',
+  tone = 'light',
+  style,
+  badge,
+}: BarButtonProps) {
+  const filled = variant === 'prominent';
+  const dark = tone === 'dark';
+  const fg = filled ? (dark ? colors.bar : colors.onBar) : dark ? colors.onBar : variant === 'tinted' ? colors.tint : colors.label;
+  const bg = filled ? (dark ? colors.onBar : colors.action) : 'transparent';
+  const edge = filled ? bg : dark ? colors.onBarEdge : colors.borderStrong;
+  const h = size === 'large' ? 48 : 36;
   const shown = iconOnly ? null : (text ?? label);
-  if (pill) {
-    const h = size === 'large' ? 46 : 34;
-    return (
-      <Touchable
-        feedback="scale"
-        onPress={onPress}
-        disabled={disabled}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        testID={testID}
-        style={[styles.pill, { height: h, borderRadius: h / 2, paddingHorizontal: size === 'large' ? 26 : 16 }]}
-      >
-        {icon ? <Icon name={icon} size={size === 'large' ? 18 : 15} color={fg} weight="bold" /> : null}
-        {shown ? (
-          <Text variant={size === 'large' ? 'headline' : 'subheadline'} weight="600" color={fg} numberOfLines={1}>
-            {shown}
-          </Text>
-        ) : null}
-      </Touchable>
-    );
-  }
   return (
     <Touchable
       feedback="opacity"
       onPress={onPress}
       disabled={disabled}
-      hitSlop={6}
+      hitSlop={size === 'large' ? 0 : 4}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={badge ? `${label}, ${badge} on` : label}
       testID={testID}
-      style={[styles.plain, iconOnly ? styles.iconOnly : null]}
+      style={[
+        styles.button,
+        { height: h, minWidth: h, backgroundColor: bg, borderColor: edge },
+        shown ? { paddingHorizontal: size === 'large' ? 16 : 12 } : { width: h },
+        style,
+      ]}
     >
-      {icon ? <Icon name={icon} size={iconOnly ? 23 : 21} color={fg} weight={icon === 'chevron.left' ? 'semibold' : 'regular'} /> : null}
+      {icon ? <Icon name={icon} size={size === 'large' ? 17 : 18} color={fg} weight={shown ? 'medium' : 'regular'} /> : null}
       {shown ? (
-        <Text color={fg} numberOfLines={1}>
+        <Text variant="button" color={fg} numberOfLines={1}>
           {shown}
+        </Text>
+      ) : null}
+      {badge ? (
+        <Text variant="stamp" weight="600" color={dark ? colors.bar : colors.onBar} style={[styles.badge, { backgroundColor: dark ? colors.onBar : colors.action }]}>
+          {badge}
         </Text>
       ) : null}
     </Touchable>
@@ -71,7 +83,17 @@ export function BarButtonView({ label, icon, iconOnly, text, variant = 'plain', 
 }
 
 const styles = StyleSheet.create({
-  pill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: colors.tint },
-  plain: { height: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6 },
-  iconOnly: { justifyContent: 'center', paddingHorizontal: 0 },
+  button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1 },
+  badge: {
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 3,
+    lineHeight: 17,
+    textAlign: 'center',
+    letterSpacing: 0.2,
+    overflow: 'hidden',
+  },
 });

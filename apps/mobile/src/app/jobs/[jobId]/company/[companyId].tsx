@@ -74,7 +74,7 @@ export default function CompanyPageScreen() {
     ) : null;
 
   return (
-    <Page title={companyName} large subtitle={job ? `${job.name}, from Ross Built` : undefined} backLabel={companyName} background="grouped">
+    <Page title={companyName} subtitle={job ? `${job.name}, from Ross Built` : undefined} backLabel={companyName} background="grouped">
       <Banner icon="eye">{`This is the page ${companyName} opens from the link on its list. What they write here comes straight to you.`}</Banner>
       <ListSection style={styles.first} footer="So Ross Built knows who wrote. Type it once.">
         <ListTextField placeholder="Your name" value={name} onChangeText={setName} autoCapitalize="words" accessibilityLabel="Your name" testID="company-name" />

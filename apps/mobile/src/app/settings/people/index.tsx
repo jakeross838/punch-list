@@ -27,7 +27,7 @@ export default function PeopleScreen() {
   return (
     <Page
       title="People"
-      large
+
       backLabel="Jobs"
       right={admin ? [{ kind: 'button', label: 'Add Person', icon: 'plus', iconOnly: true, onPress: () => setAdding(true), testID: 'add-person' }] : []}
     >

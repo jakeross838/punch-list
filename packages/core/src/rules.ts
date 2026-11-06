@@ -32,6 +32,12 @@ export type ItemFields = Pick<
   | 'visitId'
   | 'hours'
   | 'assignedTo'
+  | 'markedDoneAt'
+  | 'priority'
+  | 'checklist'
+  | 'planId'
+  | 'pinX'
+  | 'pinY'
 >;
 
 /**

@@ -194,6 +194,8 @@ export function sortItems(items: Item[], tradeRank?: (tradeId: string | null) =>
       const rb = tradeRank(b.tradeId);
       if (ra !== rb) return ra - rb;
     }
+    // Wanted first: a priority goes to the top of its trade, or of the list.
+    if (!!a.priority !== !!b.priority) return a.priority ? -1 : 1;
     // Where someone dragged it, or its number: the two count the same way, so a list put in order
     // by hand stays in order, and anything added after it goes at the end.
     const ka = sortKey(a);

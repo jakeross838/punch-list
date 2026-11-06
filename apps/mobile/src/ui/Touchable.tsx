@@ -1,7 +1,7 @@
-// Press feedback the way iOS does it. Rows light up gray the instant you touch them and fade back
-// when you let go; buttons and tiles press in slightly; bar buttons dim. A short delay before the
-// press shows keeps rows from flashing while you scroll. The same code animates on the iPhone and
-// on the preview page.
+// Press feedback, Site Office style: nothing grows or shrinks. Rows take a faint slate wash the
+// instant you touch them and fade back when you let go; buttons, tiles and bar buttons dim. A short
+// delay before the press shows keeps rows from flashing while you scroll. The same code animates on
+// the iPhone and on the preview page.
 
 import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, type ColorValue, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
@@ -46,20 +46,14 @@ export function Touchable({
   const down = pressed && !disabled;
 
   const feedbackStyle =
-    feedback === 'scale'
+    feedback === 'scale' || feedback === 'opacity'
       ? {
-          transform: [{ scale: down ? 0.96 : 1 }],
-          transitionProperty: 'transform' as const,
-          transitionDuration: down ? motion.fast : motion.base,
+          // 'scale' is kept for the screens that ask for it: a firmer dim, no scaling.
+          opacity: down ? (feedback === 'scale' ? 0.72 : 0.45) : 1,
+          transitionProperty: 'opacity' as const,
+          transitionDuration: down ? 0 : motion.base,
           transitionTimingFunction: easeOut,
         }
-      : feedback === 'opacity'
-        ? {
-            opacity: down ? 0.35 : 1,
-            transitionProperty: 'opacity' as const,
-            transitionDuration: down ? 0 : motion.base,
-            transitionTimingFunction: easeOut,
-          }
         : feedback === 'highlight'
           ? { overflow: 'hidden' as const }
           : null;

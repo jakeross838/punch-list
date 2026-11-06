@@ -20,6 +20,7 @@ import type {
   Location,
   Person,
   Photo,
+  PlanSheet,
   StandardTitle,
   TeamMember,
   Template,
@@ -180,6 +181,13 @@ const photos: Spec<Photo> = {
   made: (p) => ({ created_by: p.createdBy, created_at: p.createdAt }),
 };
 
+/** A plan sheet's picture is a photo's: where it is in storage is the uploader's to fill in. */
+const plans: Spec<PlanSheet> = {
+  table: 'plan_sheets',
+  key: byId,
+  row: (p) => ({ job_id: p.jobId, floor: p.floor, name: p.name, width: p.width, height: p.height, sort_order: p.sortOrder, removed: p.removed }),
+};
+
 const visits: Spec<Visit> = {
   table: 'visits',
   key: byId,
@@ -260,6 +268,7 @@ const LISTS = {
   titles,
   customFields,
   visits,
+  plans,
   items,
   photos,
   sends,
@@ -358,10 +367,10 @@ export function planWrites(before: State, next: Partial<State>, ctx: WriteContex
     // Each list keeps its own kind of record; the specs line up with the lists by name.
     const spec = LISTS[key] as unknown as Spec<unknown>;
     (out as Record<string, unknown>)[key] = diffList(spec, before[key] as unknown[], after as unknown[], ctx, writes);
-    if (key === 'photos') {
-      // A new photo's picture is a file on this phone until it is uploaded.
-      const had = new Set(before.photos.map((p) => p.id));
-      for (const p of after as Photo[]) {
+    if (key === 'photos' || key === 'plans') {
+      // A new photo's or plan's picture is a file on this phone until it is uploaded.
+      const had = new Set((before[key] as { id: string }[]).map((p) => p.id));
+      for (const p of after as (Photo | PlanSheet)[]) {
         if (!had.has(p.id)) writes.push({ table: 'photo_files', op: 'insert', id: p.id, values: { uri: p.uri, uploaded: 0 } });
       }
     }

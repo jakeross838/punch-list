@@ -1,5 +1,4 @@
-// What a screen says about its bar, once, for both platforms. The iPhone turns it into the native
-// navigation bar, toolbar and menus (Page.tsx); the preview page draws the same thing (Page.web.tsx).
+// What a screen says about its frame, once, for both platforms (Page.tsx draws it).
 
 import type { ReactNode } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -10,7 +9,7 @@ export interface BarButton {
   label: string;
   icon?: IconName;
   iconOnly?: boolean;
-  /** Shown in place of the label, like "Jobs" after the back chevron. */
+  /** Shown in place of the label. */
   text?: string;
   variant?: 'plain' | 'tinted' | 'prominent';
   onPress: () => void;
@@ -21,7 +20,7 @@ export interface BarButton {
 export interface MenuAction {
   label: string;
   icon?: IconName;
-  /** Shows a checkmark: the current Group By, Show Completed when on. */
+  /** Shows a check: the current Group By, Show Completed when on. */
   checked?: boolean;
   destructive?: boolean;
   onPress: () => void;
@@ -44,52 +43,89 @@ export interface BarMenu {
 export type BarItem = BarButton | BarMenu;
 
 export interface PageScroll {
-  /** Spread onto the list: scroll tracking on the preview page, inset handling on the iPhone. */
+  /** Spread onto the list. */
   props: {
     onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
     scrollEventThrottle?: number;
-    contentInsetAdjustmentBehavior?: 'automatic';
     automaticallyAdjustKeyboardInsets?: boolean;
     keyboardShouldPersistTaps?: 'handled';
     keyboardDismissMode?: 'on-drag' | 'interactive';
   };
-  /** Put first in the list header: the large title on the preview page, and the subtitle. */
+  /** Put first in the list header: the title block and the search field. */
   header: ReactNode;
-  /** Space the list needs at the bottom to clear the toolbar. */
+  /** Space the list needs at the bottom. */
   bottomInset: number;
 }
 
+/** Which part of the bottom bar is lit, and what Capture works on. */
+export interface PageTab {
+  active: 'jobs' | 'schedule' | 'send' | 'me';
+  /** The job the screen is on. */
+  jobId?: string;
+  /** Capture starts in this location. */
+  locationId?: string | null;
+  /** Capture does something of the screen's own. */
+  onCapture?: () => void;
+  /** A count of what is late, on Schedule. */
+  late?: number;
+}
+
 export interface PageProps {
+  /** The screen's title, in the header under the bar (or the sheet's head). */
   title: string;
-  /** A large title that shrinks into the bar as you scroll. */
-  large?: boolean;
-  subtitle?: string;
-  /** A small line above the large title, like "Ross Built" over "Jobs". Preview page only. */
+  /** The small line above the title: "Active · Closeout", "Location · Level 1". */
   eyebrow?: string;
-  /** The previous screen's title, shown after the back chevron: "Jobs". */
+  /** The color of the square stamp before the eyebrow. */
+  marker?: string;
+  /** A line of plain words under the title, like the address. */
+  subtitle?: string;
+  /** Anything else under the title: a line of counts. */
+  meta?: ReactNode;
+  /** A stamp caption at the top right of the header: "Sent Fri". */
+  stamp?: string;
+  /** Where you are, under the bar: Fish / Level 1 / Kitchen 109. */
+  crumb?: string[];
+  /** The screen draws its own title. */
+  hideHeader?: boolean;
+  /** Shown under the title and before the search: the counts and tiles on a job. */
+  beforeSearch?: ReactNode;
+  /** The previous screen's name, after the back chevron: "Jobs". */
   backLabel?: string;
+  /** Kept for screens that still pass it; both are sand. */
   background?: 'grouped' | 'plain';
+  /** More in the bar, after the back button. */
   left?: BarItem[];
+  /** Square buttons on the right of the bar, before the bell. */
   right?: BarItem[];
-  /** The bottom toolbar, like New Item in Reminders. */
+  /** The Updates bell in the bar. On by default for screens, off for sheets. */
+  bell?: boolean;
+  /** The Me button in the bar, on the screens of the bottom bar. */
+  account?: boolean;
+  /** The job's name in the bar, with a menu to switch jobs: Schedule and Send. */
+  jobSwitch?: { jobId: string; onChange: (jobId: string) => void };
+  /** The buttons along the bottom, like Not Done and Complete. */
   bottom?: BarButton[];
-  /** A bar of the screen's own at the bottom, drawn the same on both platforms: the camera bar. */
+  /** A bar of the screen's own over the bottom of the content. */
   footer?: ReactNode;
-  /** How tall the footer is above the safe area, so the list can scroll clear of it. */
+  /** How tall the footer is, so the list can scroll clear of it. */
   footerHeight?: number;
   search?: {
     value: string;
     onChange: (text: string) => void;
     placeholder?: string;
-    /** Tucked away until asked for: pull down on the iPhone, the magnifying glass on the preview page. */
+    /** Kept for screens that still pass it: the field is always shown. */
     collapsed?: boolean;
+    /** The Filter button beside the field. */
+    filter?: { onPress: () => void; count?: number; testID?: string };
   };
   /** False for the first screen, which has nothing to go back to. */
   back?: boolean;
-  /** The screen is shown as a sheet: small title, Cancel and Done in the bar, no back button. */
+  /** The screen is shown as a sheet: its title in the sheet's head, no bar. */
   sheet?: boolean;
   /** False keeps a sheet from closing with a swipe, for unsaved changes. */
   dismissible?: boolean;
+  /** The bottom bar with Jobs, Schedule, Capture, Send and Me. */
+  tab?: PageTab;
   children?: ReactNode;
   /** For screens built on a list: render it with the scroll props and header from the page. */
   list?: (scroll: PageScroll) => ReactNode;

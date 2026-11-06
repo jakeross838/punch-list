@@ -1,15 +1,16 @@
-// One location's items (or one company's, or what they wait on): each with its time, who does
-// it and its type, what it waits on, and its photo or an empty slot to take it. The heading says how
-// many are open and how long they take, and the filters that are on show as chips. Completed items
-// are checked off and crossed off under Completed at the end, which opens and closes with a tap
-// (open from the start when View has Show Completed on). In a location, New Item under the list types one in with no camera,
-// and the bottom bar steps to the one before or after, with the camera between.
-// Past Due lists everything late, the latest first, with the days. Drafts lists what was saved to
-// finish later, filling in from the photos while it shows. A Waiting On list can stop the wait for all its items at once, or move their Ready By
-// together. Select (or a long press on an item) picks items to move, copy, assign, complete or save as
-// a template all at once; in a location, the lines at the end of each row drag it into order, with
-// the others picked along with it. Copied items paste into any location, on this job or another.
-// Add From a Template puts a template's tasks for this location on its list.
+// One location's items (or one company's, or what they wait on), Site Office style: the location's
+// counts under its title, then its items in white panels by company, each with a status pill and a
+// short note. Completed items wait under Completed at the end, which opens and closes with a tap
+// (open from the start when View has Show Completed on). In a location the end of the list has New
+// Item, Common Tasks and the next location of the walk; Capture in the bottom bar takes the photo
+// here. Ready, Waiting and To Check list the job's items by state, by company, with each company's
+// schedule a tap away; To Check is the work the companies say is done, for Ross Built to mark
+// Complete or Not Done. Past Due lists everything late, the latest first. Drafts lists what was saved
+// to finish later, filling in from the photos while it shows. A Waiting On list can stop the wait for
+// all its items at once, or move their Ready By together. Select (or a long press on an item) picks
+// items to move, copy, assign, complete or save as a template all at once; in a location, the lines
+// at the end of each row drag it into order, with the others picked along with it. Copied items
+// paste into any location, on this job or another.
 
 import {
   clearHoldup,
@@ -38,7 +39,7 @@ import { randomUUID } from "expo-crypto";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { SectionList, StyleSheet, View } from "react-native";
-import { CAMERA_BAR_HEIGHT, CameraBar, RoomStep } from "@/components/CameraBar";
+import { ToCheckRow } from "@/components/ToCheckRow";
 import { CommonTasks } from "@/components/CommonTasks";
 import { DragList } from "@/components/DragList";
 import { fieldsOf, useFormOptions } from "@/components/ItemForm";
@@ -59,8 +60,13 @@ import {
   EmptyState,
   haptic,
   Icon,
+  LedgerRow,
+  MetaLine,
   OptionPicker,
   Page,
+  Panel,
+  SectionLabel,
+  Segmented,
   Text,
   Touchable,
   useFeedback,
@@ -68,9 +74,26 @@ import {
 } from "@/ui";
 
 interface Section {
-  key: "open" | "done";
+  key: string;
+  kind: "open" | "done";
   title: string | null;
+  /** The company the section is, for its schedule link. */
+  companyId?: string | null;
   data: Item[];
+}
+
+type State = "ready" | "waiting" | "check";
+const STATES: readonly (readonly [State, string])[] = [
+  ["ready", "Ready"],
+  ["waiting", "Waiting"],
+  ["check", "To Check"],
+];
+
+/** Which state an open item is in, for the Ready, Waiting and To Check lists. */
+export function stateOf(item: Item): State | null {
+  if (item.status !== "open" || item.unfinished) return null;
+  if (item.markedDoneAt) return "check";
+  return item.ready ? "ready" : "waiting";
 }
 
 export default function GroupScreen() {
@@ -82,6 +105,7 @@ export default function GroupScreen() {
   const { jobId, key } = params;
   const due = params.by === "due";
   const drafts = params.by === "drafts";
+  const stateList: State | null = params.by === "state" ? (STATES.some(([v]) => v === key) ? (key as State) : "ready") : null;
   const by: GroupBy =
     params.by === "company" || params.by === "waiting" ? params.by : "room";
   const data = useData();
@@ -152,11 +176,21 @@ export default function GroupScreen() {
     [people],
   );
 
+  const stateCounts = useMemo(() => {
+    const n: Record<State, number> = { ready: 0, waiting: 0, check: 0 };
+    for (const i of items) {
+      const st = stateOf(i);
+      if (st) n[st] += 1;
+    }
+    return n;
+  }, [items]);
   const listed = due
     ? late.map((p) => p.item)
     : drafts
       ? sortItems(items.filter((i) => i.unfinished && i.status === "open"))
-      : (group?.items ?? []);
+      : stateList
+        ? sortItems(items.filter((i) => stateOf(i) === stateList))
+        : (group?.items ?? []);
   const open = listed.filter(
     (i) => i.status !== "complete" || actions.checking.has(i.id),
   );
@@ -164,10 +198,26 @@ export default function GroupScreen() {
     (i) => i.status === "complete" && !actions.checking.has(i.id),
   );
   const doneShown = doneOpen ?? view.showCompleted;
+  // In a location and on the state lists, the open items go by company, in the order they come.
+  const byCompany = (by === "room" && !due && !drafts) || !!stateList;
+  const openSections: Section[] = [];
+  if (byCompany) {
+    for (const item of open) {
+      const company = item.companyId ?? null;
+      let section = openSections.find((x) => x.companyId === company);
+      if (!section) {
+        section = { key: `open-${company ?? "none"}`, kind: "open", title: company ? (companyName.get(company) ?? "Company") : "No company yet", companyId: company, data: [] };
+        openSections.push(section);
+      }
+      section.data.push(item);
+    }
+  } else if (open.length > 0) {
+    openSections.push({ key: "open", kind: "open", title: null, data: open });
+  }
   const sections: Section[] = [
-    { key: "open", title: null, data: open },
+    ...openSections,
     ...(done.length > 0
-      ? [{ key: "done" as const, title: "Completed", data: doneShown ? done : [] }]
+      ? [{ key: "done", kind: "done" as const, title: "Completed", data: doneShown ? done : [] }]
       : []),
   ];
   const toggleDone = () => {
@@ -187,20 +237,37 @@ export default function GroupScreen() {
     ? "Past Due"
     : drafts
       ? "Drafts"
-      : (room?.label ??
-        (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
+      : stateList
+        ? (STATES.find(([v]) => v === stateList)?.[1] ?? "Ready")
+        : (room?.label ??
+          (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
   const openTime = totalText(
     totalTime(open.filter((i) => i.status === "open")),
   );
   const subtitle = drafts
     ? `${open.length} ${open.length === 1 ? "draft" : "drafts"}. ${open.some((i) => isFilling(fill, i.id)) ? (open.length === 1 ? "Filling in from the photo." : "Filling in from the photos.") : open.length === 1 ? "Tap it to finish it." : "Tap one to finish it."}`
-    : [`${open.length} open`, openTime].filter(Boolean).join(" · ");
+    : undefined;
+  const openNow = open.filter((i) => i.status === "open");
+  const readyNow = openNow.filter((i) => i.ready && !i.unfinished).length;
+  const lateNow = due ? 0 : pastDue(openNow, visits, today).length;
+  const companiesNow = new Set(openNow.map((i) => i.companyId).filter(Boolean)).size;
+  const meta = drafts ? null : (
+    <MetaLine
+      facts={[
+        { text: `${openNow.length} ${stateList === "check" ? "to check" : stateList === "ready" ? "ready" : "open"}`, color: stateList === "ready" ? colors.ok : stateList === "check" ? colors.tint : colors.label },
+        !stateList && readyNow > 0 ? { text: `${readyNow} ready`, color: colors.ok } : null,
+        !due && lateNow > 0 ? { text: `${lateNow} late`, color: colors.destructive } : null,
+        stateList ? `${companiesNow} ${companiesNow === 1 ? "company" : "companies"}` : null,
+        openTime ? `About ${openTime}` : null,
+      ]}
+    />
+  );
   // Each row says what the list does not already: the location outside a location's list, the company outside a company's.
-  const inRoom = by === "room" && !due && !drafts;
+  const inRoom = by === "room" && !due && !drafts && !stateList;
   const locationFor = (item: Item) =>
     inRoom ? undefined : roomName.get(item.locationId);
   const companyFor = (item: Item) =>
-    drafts || (by === "company" && !due)
+    drafts || byCompany || (by === "company" && !due)
       ? undefined
       : (companyName.get(item.companyId ?? "") ?? undefined);
   const noteFor = (item: Item) =>
@@ -283,10 +350,6 @@ export default function GroupScreen() {
       pathname: "/jobs/[jobId]/list/[by]/[key]",
       params: { jobId, by: "room", key: id },
     });
-  const openCamera = () => {
-    capture.start({ jobId, roomId: room?.id ?? null });
-    router.push({ pathname: "/jobs/[jobId]/capture", params: { jobId } });
-  };
   /** Starting with the words: the form, with no camera. */
   const newItem = () => {
     capture.start({ jobId, roomId: room?.id ?? null });
@@ -415,7 +478,7 @@ export default function GroupScreen() {
       feedback.toast({ message: e instanceof Error ? e.message : "That did not paste. Try again." });
     }
   };
-  const inLocation = !!room && !due && !drafts;
+  const inLocation = !!room && !due && !drafts && !stateList;
   const right: BarItem[] = selecting
     ? [{ kind: "button", label: "Done", variant: "prominent", onPress: stopPicking, testID: "select-done" }]
     : [
@@ -425,7 +488,7 @@ export default function GroupScreen() {
               {
                 kind: "menu" as const,
                 label: "More",
-                icon: "ellipsis.circle" as const,
+                icon: "ellipsis" as const,
                 testID: "list-more",
                 groups: [
                   {
@@ -440,23 +503,79 @@ export default function GroupScreen() {
           : []),
       ];
 
+  const crumbWhere = due ? "Past Due" : drafts ? "Drafts" : stateList ? title : room ? null : title;
+  const crumb = [job?.name ?? "Job", ...(room ? [room.kind === "shared" ? SHARED_GROUP : (room.floor ?? ""), room.label].filter(Boolean) : crumbWhere ? [crumbWhere] : [])];
+  const eyebrow = due
+    ? "Open and late"
+    : drafts
+      ? "Saved to finish later"
+      : stateList === "ready"
+        ? "Can be done now"
+        : stateList === "waiting"
+          ? "Waiting on something first"
+          : stateList === "check"
+            ? "Companies say these are done"
+            : room
+              ? `Location · ${room.kind === "shared" ? SHARED_GROUP : (room.floor ?? "On the job")}`
+              : by === "company"
+                ? "Company"
+                : by === "waiting"
+                  ? "Waiting on"
+                  : undefined;
+  const marker = stateList === "ready" ? colors.okFill : stateList === "check" ? colors.tint : due ? colors.destructive : undefined;
+  const noneOpen = open.length === 0 && !selecting;
+
+  const renderRow = ({ item, index, section }: { item: Item; index: number; section: Section }) =>
+    stateList === "check" && !selecting ? (
+      <ToCheckRow
+        item={item}
+        photo={firstPhoto.get(item.id)}
+        location={roomName.get(item.locationId)}
+        company={companyName.get(item.companyId ?? "")}
+        first={index === 0}
+        last={index === section.data.length - 1}
+        stripe={index % 2 === 1}
+        onOpen={actions.onOpen}
+        onComplete={actions.onCheck}
+      />
+    ) : (
+      <ItemRow
+        item={item}
+        photo={firstPhoto.get(item.id)}
+        comments={commentsOn.get(item.id)}
+        holds={holds}
+        location={locationFor(item)}
+        company={companyFor(item)}
+        note={noteFor(item)}
+        lateText={lateFor(item)}
+        first={index === 0}
+        last={index === section.data.length - 1}
+        stripe={index % 2 === 1}
+        checking={actions.checking.has(item.id)}
+        completedBy={item.status === "complete" ? personName.get(item.completedBy ?? "") : undefined}
+        onOpen={drafts ? openUnfinished : actions.onOpen}
+        onCheck={actions.onCheck}
+        onReady={actions.onReady}
+        onRemove={actions.onRemove}
+        onAddPhoto={addPhoto}
+        onLongPress={drafts || due ? undefined : (i) => startPicking(i)}
+        select={selecting ? { picked: picked.has(item.id), onToggle: togglePick } : undefined}
+      />
+    );
+
   return (
     <>
       <Page
         title={title}
-        large
-        eyebrow={
-          room
-            ? room.kind === "shared"
-              ? SHARED_GROUP
-              : (room.floor ?? undefined)
-            : undefined
-        }
+        eyebrow={eyebrow}
+        marker={marker}
         subtitle={selecting ? `${pickedItems.length} picked` : subtitle}
+        meta={selecting ? undefined : meta}
+        crumb={crumb}
         backLabel={job?.name}
-        background="plain"
         right={right}
-        footerHeight={CAMERA_BAR_HEIGHT}
+        tab={selecting ? undefined : { active: "jobs", jobId, locationId: room?.id ?? null }}
+        footerHeight={selecting ? 74 : 0}
         footer={
           selecting ? (
             <SelectionBar
@@ -469,64 +588,62 @@ export default function GroupScreen() {
                 ...(admin ? [{ icon: "templates" as const, label: "Template", onPress: () => setSheet("save"), testID: "picked-template" }] : []),
               ]}
             />
-          ) : (
-          <CameraBar
-            onCamera={openCamera}
-            cameraLabel={
-              room ? `Take a Photo in ${room.label}` : "Take a Photo"
-            }
-            left={
-              previous ? (
-                <RoomStep
-                  direction="previous"
-                  label={previous.label}
-                  onPress={() => goRoom(previous.id)}
-                />
-              ) : null
-            }
-            right={
-              next ? (
-                <RoomStep
-                  direction="next"
-                  label={next.label}
-                  onPress={() => goRoom(next.id)}
-                />
-              ) : null
-            }
-          />
-          )
+          ) : undefined
         }
         list={(scroll) => (
           <SectionList
             {...scroll.props}
             scrollEnabled={!dragging}
-            sections={canDrag ? [] : selecting ? sections.filter((x) => x.key === "open").map((x) => ({ ...x, data: pickable })) : sections}
+            sections={canDrag ? [] : selecting ? [{ key: "picking", kind: "open" as const, title: null, data: pickable }] : sections}
             keyExtractor={(item) => item.id}
             stickySectionHeadersEnabled={false}
             contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
             ListHeaderComponent={
               <View>
                 {scroll.header}
+                {stateList ? (
+                  <Segmented
+                    options={STATES.map(([v, label]) => [v, `${label} ${stateCounts[v]}`] as const)}
+                    value={stateList}
+                    onChange={(next) => router.setParams({ key: next })}
+                    style={styles.states}
+                    testID="state-tabs"
+                  />
+                ) : null}
+                {stateList === "check" ? (
+                  <Text variant="subheadline" color={colors.secondary} style={styles.explain}>
+                    A company marks its work done from its own page. Only Ross Built marks it complete, once you have looked.
+                  </Text>
+                ) : null}
+                {inLocation && !selecting ? (
+                  <Touchable feedback="opacity" onPress={() => router.push({ pathname: "/jobs/[jobId]/plans", params: { jobId, floor: room?.floor ?? "" } })} accessibilityRole="link" testID="see-on-plan" style={styles.planLink}>
+                    <Icon name="map" size={15} color={colors.tint} />
+                    <Text variant="label" color={colors.tint}>
+                      See it on the plan
+                    </Text>
+                    <Icon name="chevron.right" size={11} color={colors.tint} weight="semibold" />
+                  </Touchable>
+                ) : null}
                 {inLocation && copied && !selecting ? (
                   <View style={styles.paste} testID="paste-banner">
-                    <Icon name="clipboard" size={18} color={colors.tint} />
-                    <Text variant="subheadline" style={{ flex: 1 }} numberOfLines={2}>
+                    <Icon name="clipboard" size={18} color={colors.onBar} />
+                    <Text variant="subheadline" color={colors.onBar} style={{ flex: 1 }} numberOfLines={2}>
                       {itemsWord(copied.items.length)} copied{copied.jobId === jobId ? "" : ` from ${jobs.find((j) => j.id === copied.jobId)?.name ?? "another job"}`}
                     </Text>
                     <Touchable feedback="opacity" onPress={() => void pasteHere()} accessibilityRole="button" testID="paste-here" hitSlop={8}>
-                      <Text variant="subheadline" weight="600" color={colors.tint}>
+                      <Text variant="label" weight="600" color={colors.onBar}>
                         Paste Here
                       </Text>
                     </Touchable>
                     <Touchable feedback="opacity" onPress={() => clipboard.clear()} accessibilityRole="button" accessibilityLabel="Forget what was copied" testID="paste-clear" hitSlop={10}>
-                      <Icon name="xmark.circle.fill" size={18} color={colors.chevron} />
+                      <Icon name="xmark" size={16} color={colors.onBarQuiet} />
                     </Touchable>
                   </View>
                 ) : null}
                 {selecting ? (
                   <View style={styles.picking}>
                     <Touchable feedback="opacity" onPress={pickAll} accessibilityRole="button" testID="pick-all" hitSlop={8}>
-                      <Text variant="subheadline" weight="600" color={colors.tint}>
+                      <Text variant="label" weight="600" color={colors.tint}>
                         {allPicked ? "Unpick All" : "Pick All"}
                       </Text>
                     </Touchable>
@@ -551,7 +668,8 @@ export default function GroupScreen() {
                         holds={holds}
                         location={locationFor(item)}
                         company={companyFor(item)}
-                        last={false}
+                        first
+                        last
                         checking={false}
                         onOpen={actions.onOpen}
                         onCheck={actions.onCheck}
@@ -563,7 +681,7 @@ export default function GroupScreen() {
                     )}
                   />
                 ) : null}
-                {due || drafts || selecting ? null : (
+                {due || drafts || selecting || stateList ? null : (
                   <FilterBar
                     jobId={jobId}
                     filters={filters}
@@ -571,40 +689,40 @@ export default function GroupScreen() {
                   />
                 )}
                 {holdup && heldUp.length > 0 ? (
-                  <View style={styles.holdup}>
-                    <View style={styles.holdupRow}>
-                      <Text style={{ flex: 1 }}>Ready By</Text>
-                      <DateField
-                        value={groupReadyBy}
-                        onChange={setAllReadyBy}
-                        label={`Ready By for everything waiting on ${holdup}`}
-                        testID="holdup-ready-by"
-                      />
-                    </View>
-                    <Touchable
-                      feedback="highlight"
-                      onPress={clearAll}
-                      accessibilityRole="button"
-                      testID="holdup-clear"
-                      style={[styles.holdupRow, styles.holdupRule]}
-                    >
-                      <Icon
-                        name="checkmark.circle.fill"
-                        size={20}
-                        color={colors.tint}
-                      />
-                      <Text color={colors.tint} style={{ flex: 1 }}>
-                        Stop Waiting on {holdup}
+                  <Panel style={styles.holdup}>
+                    <LedgerRow trail={<DateField value={groupReadyBy} onChange={setAllReadyBy} label={`Ready By for everything waiting on ${holdup}`} testID="holdup-ready-by" />}>
+                      <Text variant="label" color={colors.secondary}>
+                        Ready By
                       </Text>
-                    </Touchable>
-                  </View>
+                    </LedgerRow>
+                    <LedgerRow last onPress={clearAll} chevron={false} lead={<Icon name="checkmark.circle.fill" size={18} color={colors.tint} />} testID="holdup-clear">
+                      <Text color={colors.tint}>Stop Waiting on {holdup}</Text>
+                    </LedgerRow>
+                  </Panel>
+                ) : null}
+                {noneOpen ? (
+                  <EmptyState
+                    icon="checkmark.circle.fill"
+                    title={drafts ? "No Drafts" : stateList === "check" ? "Nothing to Check" : "Nothing Open"}
+                    message={
+                      drafts
+                        ? "Photos saved to finish later wait here to be filled in."
+                        : stateList === "check"
+                          ? "When a company marks its work done from its page, it shows here."
+                          : room
+                            ? isFiltered(filters)
+                              ? "Nothing here fits the filters. Take a photo, or tap New Item to type one in."
+                              : "Take a photo with Capture, or tap New Item to type one in."
+                            : "No open items here right now."
+                    }
+                  />
                 ) : null}
               </View>
             }
             renderSectionHeader={({ section }) =>
-              section.key === "done" ? (
+              selecting ? null : section.kind === "done" ? (
                 <Touchable
-                  feedback="highlight"
+                  feedback="opacity"
                   onPress={toggleDone}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: doneShown }}
@@ -613,101 +731,58 @@ export default function GroupScreen() {
                   testID="completed-toggle"
                   style={styles.doneHeader}
                 >
-                  <Icon
-                    name={doneShown ? "chevron.down" : "chevron.right"}
-                    size={13}
-                    weight="semibold"
-                    color={colors.secondary}
-                  />
-                  <Text
-                    variant="subheadline"
-                    weight="600"
-                    color={colors.secondary}
-                    style={{ flex: 1 }}
-                  >
+                  <Text variant="label" color={colors.secondary} style={styles.doneLabel}>
                     Completed
                   </Text>
-                  <Text variant="subheadline" color={colors.secondary} tabular testID="completed-count">
+                  <Text variant="label" color={colors.secondary} tabular testID="completed-count">
                     {done.length}
                   </Text>
+                  <Icon name={doneShown ? "chevron.down" : "chevron.right"} size={12} weight="semibold" color={colors.secondary} />
                 </Touchable>
-              ) : null
+              ) : section.title ? (
+                <SectionLabel
+                  label={section.title}
+                  right={stateList && section.companyId ? "Schedule" : String(section.data.length)}
+                  onPress={stateList && section.companyId ? () => router.push({ pathname: "/jobs/[jobId]/plan/[companyId]", params: { jobId, companyId: section.companyId! } }) : undefined}
+                  style={styles.sectionLabel}
+                  testID={`section-${section.key}`}
+                />
+              ) : (
+                <View style={{ height: 8 }} />
+              )
             }
-            renderSectionFooter={({ section }) =>
-              section.key === "open" && !selecting ? (
-                <View>
-                  {section.data.length === 0 ? (
-                    <EmptyState
-                      icon="checkmark.circle.fill"
-                      title={drafts ? "No Drafts" : "Nothing Open"}
-                      message={
-                        drafts
-                          ? "Photos taken in Draft mode wait here to be filled in."
-                          : room
-                            ? isFiltered(filters)
-                              ? "Nothing here fits the filters. Take a photo, or tap New Item to type one in."
-                              : "Take a photo, or tap New Item to type one in."
-                            : "No open items here right now."
-                      }
-                    />
+            renderSectionFooter={() => <View style={{ height: 2 }} />}
+            renderItem={renderRow}
+            ListFooterComponent={
+              inLocation && !selecting ? (
+                <Panel style={styles.tail}>
+                  <LedgerRow onPress={newItem} chevron={false} lead={<Icon name="plus" size={16} color={colors.tint} weight="medium" />} testID="new-item-row">
+                    <Text variant="label" color={colors.tint}>
+                      New Item
+                    </Text>
+                  </LedgerRow>
+                  <LedgerRow onPress={() => setCommon(true)} chevron={false} lead={<Icon name="checklist" size={16} color={colors.tint} />} testID="common-tasks-row" last={!next && !previous}>
+                    <Text variant="label" color={colors.tint}>
+                      Add common tasks
+                    </Text>
+                  </LedgerRow>
+                  {next ? (
+                    <LedgerRow onPress={() => goRoom(next.id)} trail={<Text variant="callout">{next.label}</Text>} testID="next-location" last={!previous} accessibilityLabel={`Next location, ${next.label}`}>
+                      <Text variant="label" color={colors.secondary}>
+                        Next location
+                      </Text>
+                    </LedgerRow>
                   ) : null}
-                  {room && !due && !drafts ? (
-                    <View style={styles.newRow}>
-                      <Touchable
-                        feedback="highlight"
-                        onPress={newItem}
-                        accessibilityRole="button"
-                        testID="new-item-row"
-                        style={styles.newItem}
-                      >
-                        <Icon
-                          name="plus.circle.fill"
-                          size={24}
-                          color={colors.tint}
-                        />
-                        <Text color={colors.tint} weight="500">
-                          New Item
-                        </Text>
-                      </Touchable>
-                      <Touchable
-                        feedback="highlight"
-                        onPress={() => setCommon(true)}
-                        accessibilityRole="button"
-                        testID="common-tasks-row"
-                        style={styles.newItem}
-                      >
-                        <Icon name="checklist" size={22} color={colors.tint} />
-                        <Text color={colors.tint} weight="500">
-                          Common Tasks
-                        </Text>
-                      </Touchable>
-                    </View>
+                  {previous ? (
+                    <LedgerRow onPress={() => goRoom(previous.id)} trail={<Text variant="callout">{previous.label}</Text>} testID="previous-location" last accessibilityLabel={`Previous location, ${previous.label}`}>
+                      <Text variant="label" color={colors.secondary}>
+                        Previous location
+                      </Text>
+                    </LedgerRow>
                   ) : null}
-                </View>
-              ) : null
+                </Panel>
+              ) : undefined
             }
-            renderItem={({ item, index, section }) => (
-              <ItemRow
-                item={item}
-                photo={firstPhoto.get(item.id)}
-                comments={commentsOn.get(item.id)}
-                holds={holds}
-                location={locationFor(item)}
-                company={companyFor(item)}
-                note={noteFor(item)}
-                lateText={lateFor(item)}
-                last={index === section.data.length - 1}
-                checking={actions.checking.has(item.id)}
-                completedBy={item.status === "complete" ? personName.get(item.completedBy ?? "") : undefined}
-                onOpen={drafts ? openUnfinished : actions.onOpen}
-                onCheck={actions.onCheck}
-                onReady={actions.onReady}
-                onRemove={actions.onRemove}
-                onAddPhoto={addPhoto}
-                onLongPress={drafts || due ? undefined : (i) => startPicking(i)}
-                select={selecting ? { picked: picked.has(item.id), onToggle: togglePick } : undefined}
-              />
-            )}
           />
         )}
       />
@@ -743,51 +818,33 @@ export default function GroupScreen() {
 }
 
 const styles = StyleSheet.create({
+  states: { marginHorizontal: layout.margin, marginTop: 2 },
+  explain: { marginHorizontal: layout.inset, marginTop: 12 },
+  planLink: { flexDirection: "row", alignItems: "center", gap: 6, marginHorizontal: layout.inset, marginTop: 2, marginBottom: 4, alignSelf: "flex-start", minHeight: 30 },
   paste: {
     minHeight: 48,
     marginHorizontal: layout.margin,
-    marginTop: 6,
-    marginBottom: 4,
+    marginTop: 8,
     paddingHorizontal: 14,
-    borderRadius: layout.radius,
-    backgroundColor: colors.chipOn,
+    backgroundColor: colors.bar,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
-  picking: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: layout.inset, paddingTop: 6, paddingBottom: 6 },
-  holdup: {
-    marginHorizontal: layout.margin,
-    marginTop: 6,
-    marginBottom: 8,
-    borderRadius: layout.radius,
-    backgroundColor: colors.surface,
-    overflow: "hidden",
-  },
-  holdupRow: {
-    minHeight: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-  },
-  holdupRule: { borderTopWidth: layout.hairline, borderTopColor: colors.rule },
+  picking: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: layout.inset, paddingTop: 6, paddingBottom: 10 },
+  holdup: { marginTop: 10 },
+  sectionLabel: { marginTop: 16, marginBottom: 8 },
   doneHeader: {
-    minHeight: 44,
+    minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: layout.inset,
-    marginTop: 14,
-    backgroundColor: colors.background,
+    marginHorizontal: layout.inset,
+    marginTop: 18,
+    marginBottom: 8,
+    borderBottomWidth: layout.hairline,
+    borderBottomColor: colors.border,
   },
-  newRow: { flexDirection: "row", flexWrap: "wrap" },
-  newItem: {
-    minHeight: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingLeft: layout.inset - 1,
-    paddingRight: layout.inset,
-  },
+  doneLabel: { flex: 1, fontSize: 11 },
+  tail: { marginTop: 18 },
 });

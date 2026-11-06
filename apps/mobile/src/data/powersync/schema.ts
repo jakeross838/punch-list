@@ -124,11 +124,40 @@ const items = new Table(
     /** Estimated time, in hours. */
     hours: column.real,
     bt_external_id: column.text,
+    /** When the company said it is done, from its page: To Check until Ross Built looks. */
+    marked_done_at: column.text,
+    /** 1 when it is wanted first. */
+    priority: column.integer,
+    /** JSON: the steps inside it, each with its words and whether it is done. */
+    checklist: column.text,
+    /** Where it is pinned on the plans: the sheet, and the spot as fractions across and down. */
+    plan_id: column.text,
+    pin_x: column.real,
+    pin_y: column.real,
     created_by: column.text,
     created_at: column.text,
     updated_at: column.text,
   },
-  { indexes: { job: ['job_id'], location: ['location_id'], assigned: ['assigned_to'] } },
+  { indexes: { job: ['job_id'], location: ['location_id'], assigned: ['assigned_to'], plan: ['plan_id'] } },
+);
+
+/** A sheet of the job's plans, one per level, to pin items on. Its picture is in storage like a photo's. */
+const plan_sheets = new Table(
+  {
+    org: column.text,
+    job_id: column.text,
+    floor: column.text,
+    name: column.text,
+    storage_path: column.text,
+    width: column.integer,
+    height: column.integer,
+    sort_order: column.integer,
+    removed: column.integer,
+    created_by: column.text,
+    created_at: column.text,
+    updated_at: column.text,
+  },
+  { indexes: { job: ['job_id'] } },
 );
 
 const item_history = new Table(
@@ -348,6 +377,7 @@ export const AppSchema = new Schema({
   templates,
   template_items,
   photos,
+  plan_sheets,
   visits,
   list_sends,
   comments,

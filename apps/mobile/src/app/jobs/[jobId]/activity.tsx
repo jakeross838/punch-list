@@ -41,7 +41,7 @@ export default function ActivityScreen() {
   return (
     <Page
       title="Activity"
-      large
+
       subtitle="Who added or changed what on the job."
       backLabel={job?.name}
       background="plain"

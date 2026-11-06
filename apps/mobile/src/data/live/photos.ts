@@ -11,6 +11,8 @@ import { db } from './db';
 
 const BUCKET = 'photos';
 const LONG_SIDE = 2048;
+/** A plan sheet keeps more of its detail: its room names are small. */
+const PLAN_LONG_SIDE = 4096;
 
 type Row = Record<string, unknown>;
 
@@ -38,14 +40,14 @@ const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}`, apik
 const inUrl = (path: string) => path.split('/').map(encodeURIComponent).join('/');
 
 /** The picture made smaller for sending and keeping, as a new file next to it; the original if that fails. */
-async function smaller(id: string, uri: string): Promise<string> {
+async function smaller(id: string, uri: string, most = LONG_SIDE): Promise<string> {
   try {
     const whole = await ImageManipulator.manipulate(uri).renderAsync();
     const long = Math.max(whole.width, whole.height);
     const image =
-      long > LONG_SIDE
+      long > most
         ? await ImageManipulator.manipulate(uri)
-            .resize(whole.width >= whole.height ? { width: LONG_SIDE } : { height: LONG_SIDE })
+            .resize(whole.width >= whole.height ? { width: most } : { height: most })
             .renderAsync()
         : whole;
     const saved = await image.saveAsync({ compress: 0.75, format: SaveFormat.JPEG });
@@ -60,8 +62,9 @@ async function smaller(id: string, uri: string): Promise<string> {
 }
 
 /** Sends one picture up. False when it could not go (no signal, or signed out): the rest wait too. */
-async function upload(token: string, r: Row): Promise<boolean> {
+async function upload(token: string, r: Row, kind: 'photo' | 'plan' = 'photo'): Promise<boolean> {
   const id = String(r.id);
+  const table = kind === 'plan' ? 'plan_sheets' : 'photos';
   let uri = String(r.uri ?? '');
   if (!new File(uri).exists) {
     // The picture is gone from this phone: there is nothing to send.
@@ -69,7 +72,7 @@ async function upload(token: string, r: Row): Promise<boolean> {
     return true;
   }
   if (!uri.endsWith('-up.jpg')) {
-    const small = await smaller(id, uri);
+    const small = await smaller(id, uri, kind === 'plan' ? PLAN_LONG_SIDE : LONG_SIDE);
     if (small !== uri) {
       await db.execute('UPDATE photo_files SET uri = ? WHERE id = ?', [small, id]);
       try {
@@ -80,7 +83,7 @@ async function upload(token: string, r: Row): Promise<boolean> {
       uri = small;
     }
   }
-  const path = `${String(r.job_id)}/${id}.jpg`;
+  const path = kind === 'plan' ? `${String(r.job_id)}/plans/${id}.jpg` : `${String(r.job_id)}/${id}.jpg`;
   const result = await new File(uri).upload(`${config.supabaseUrl}/storage/v1/object/${BUCKET}/${inUrl(path)}`, {
     httpMethod: 'POST',
     headers: { ...authHeaders(token), 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
@@ -93,7 +96,7 @@ async function upload(token: string, r: Row): Promise<boolean> {
     return false;
   }
   await db.writeTransaction(async (tx) => {
-    await tx.execute('UPDATE photos SET storage_path = ? WHERE id = ?', [path, id]);
+    await tx.execute(`UPDATE ${table} SET storage_path = ? WHERE id = ?`, [path, id]);
     await tx.execute('UPDATE photo_files SET uploaded = 1 WHERE id = ?', [id]);
   });
   return true;
@@ -134,8 +137,15 @@ async function work(): Promise<void> {
         'SELECT f.id, f.uri, p.job_id FROM photo_files f JOIN photos p ON p.id = f.id WHERE f.uploaded = 0 AND p.removed = 0 ORDER BY p.created_at',
       );
       for (const r of up) if (!(await upload(token, r))) return;
+      const plansUp = await db.getAll<Row>(
+        'SELECT f.id, f.uri, s.job_id FROM photo_files f JOIN plan_sheets s ON s.id = f.id WHERE f.uploaded = 0 AND s.removed = 0 ORDER BY s.created_at',
+      );
+      for (const r of plansUp) if (!(await upload(token, r, 'plan'))) return;
       const down = await db.getAll<Row>(
-        'SELECT p.id, p.storage_path FROM photos p LEFT JOIN photo_files f ON f.id = p.id WHERE f.id IS NULL AND p.storage_path IS NOT NULL AND p.removed = 0 ORDER BY p.created_at DESC LIMIT 40',
+        `SELECT p.id, p.storage_path FROM photos p LEFT JOIN photo_files f ON f.id = p.id WHERE f.id IS NULL AND p.storage_path IS NOT NULL AND p.removed = 0
+         UNION ALL
+         SELECT s.id, s.storage_path FROM plan_sheets s LEFT JOIN photo_files f ON f.id = s.id WHERE f.id IS NULL AND s.storage_path IS NOT NULL AND s.removed = 0
+         LIMIT 40`,
       );
       for (const r of down) {
         if (missing.has(String(r.id))) continue;
@@ -153,7 +163,7 @@ async function work(): Promise<void> {
 /** Starts moving pictures, now and whenever a photo is added or comes down. */
 export function startPhotos(): void {
   if (unwatch) return;
-  unwatch = db.onChange({ onChange: () => void work() }, { tables: ['photos', 'photo_files'], throttleMs: 1500 });
+  unwatch = db.onChange({ onChange: () => void work() }, { tables: ['photos', 'plan_sheets', 'photo_files'], throttleMs: 1500 });
   timer = setInterval(() => void work(), 60_000);
   void work();
 }

@@ -24,6 +24,7 @@ import type {
   PlannedItem,
   Person,
   Photo,
+  PlanSheet,
   Role,
   ScheduleSnapshot,
   Sees,
@@ -63,6 +64,19 @@ export interface NewPhoto {
 }
 
 export type PhotoPatch = Partial<Pick<Photo, 'marks' | 'removed' | 'sortOrder'>>;
+
+export interface NewPlan {
+  jobId: string;
+  /** The level it shows, as the locations name it. */
+  floor: string;
+  name: string;
+  /** The picture as the photo library or the camera gave it. */
+  uri: string;
+  width: number;
+  height: number;
+}
+
+export type PlanPatch = Partial<Pick<PlanSheet, 'name' | 'floor' | 'removed' | 'sortOrder'>>;
 
 export interface NewVisit {
   jobId: string;
@@ -163,6 +177,8 @@ export interface DataApi {
   useSends(jobId: string): ListSend[];
   /** Who did what on the job: item_history and job_activity together, in no particular order. */
   useActivity(jobId: string): Activity[];
+  /** What happened lately on every job you see, newest first: the Updates list. */
+  useUpdates(): Activity[];
   /** The job's comments, Ross Built only ones and ones taken back included. */
   useComments(jobId: string): Comment[];
   /** Admins only. The Project Manager, when given, goes on the team. */
@@ -205,6 +221,10 @@ export interface DataApi {
   /** Keeps the pictures with the item, after the ones it has. */
   addPhotos(photos: NewPhoto[]): Promise<void>;
   updatePhoto(id: string, patch: PhotoPatch): Promise<void>;
+  /** The job's plan sheets, not taken off, in order. */
+  usePlans(jobId: string): PlanSheet[];
+  addPlan(plan: NewPlan): Promise<string>;
+  updatePlan(id: string, patch: PlanPatch): Promise<void>;
   addTrade(name: string): Promise<string>;
   /** Admins only. The order the trades come in on every list: these trades, in this order. */
   reorderTrades(orderedIds: string[]): Promise<void>;
@@ -251,6 +271,12 @@ export interface DataApi {
    * database's trade_confirm_visit and trade_ask_visit with the link's token.
    */
   companyConfirmVisit(input: { visitId: string; name: string | null }): Promise<void>;
+  /**
+   * From the company's own page: the work on an item is done, or not yet after all. The item stays
+   * open, To Check, until Ross Built marks it Complete or Not Done. On the phone this goes through
+   * the database's trade_mark_done with the link's token.
+   */
+  companyMarkDone(input: { jobId: string; companyId: string; itemId: string; done: boolean; name: string | null }): Promise<void>;
   companyAskVisit(input: { visitId: string; start: string; days: number; name: string | null }): Promise<void>;
   recordSend(send: NewSend): Promise<string>;
   undoSend(id: string): Promise<void>;

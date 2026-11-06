@@ -1,14 +1,14 @@
 // Preview page only: page-wide rules that make the web page behave like an iPhone app. No tap
 // flash, no text selection on long press, no double-tap zoom, no scrollbars, and the styles for
-// the parts drawn straight in HTML (sheets, menus, swipe rows, the action sheet).
+// the parts drawn straight in HTML (sheets, swipe rows, the action sheet).
 //
 // The page itself never scrolls: each screen's list scrolls inside it. The body height is pinned
 // because the web stack's mobile browser fix would otherwise size it from a zoomed-out viewport
 // while a screen slides in from the right.
 
 const SHEET_CURVE = 'cubic-bezier(0.32, 0.72, 0, 1)';
-const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
-const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, Roboto, sans-serif';
+const FONT = 'Inter_400Regular, Inter, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Roboto, sans-serif';
+const MONO = 'JetBrainsMono_500Medium, "JetBrains Mono", ui-monospace, Menlo, monospace';
 
 const css = `
 html, body { background: #000; height: 100% !important; overflow: hidden; overscroll-behavior: none; }
@@ -57,36 +57,6 @@ body.pl-sheet-open #root {
 .pl-sheet-root[data-open="true"] .pl-sheet-dim { opacity: 1; }
 .pl-sheet-root[data-open="true"] .pl-sheet { transform: translateY(0); transition-duration: 480ms; }
 
-.pl-menu-root { position: fixed; inset: 0; z-index: 1100; }
-.pl-menu {
-  position: absolute;
-  min-width: 250px;
-  max-width: 300px;
-  background: rgba(255, 255, 255, 0.94);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  backdrop-filter: blur(30px) saturate(180%);
-  border-radius: 14px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
-  transform-origin: top right;
-  transform: scale(0.6);
-  opacity: 0;
-  transition: transform 320ms ${EASE_OUT}, opacity 200ms ${EASE_OUT};
-}
-.pl-menu-root[data-open="true"] .pl-menu { transform: scale(1); opacity: 1; }
-.pl-menu-group + .pl-menu-group { border-top: 6px solid #F2F2F4; }
-.pl-menu-title { padding: 10px 16px 4px; font: 400 13px ${FONT}; color: #6E6E73; }
-.pl-menu-item {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  min-height: 46px; padding: 0 16px; border: 0; background: transparent; text-align: left;
-  font: 400 17px ${FONT}; color: #1D1D1F; cursor: pointer;
-}
-.pl-menu-item + .pl-menu-item { box-shadow: inset 0 1px 0 #EDEDF0; }
-.pl-menu-item:active { background: #ECECEF; }
-.pl-menu-item[data-destructive="true"] { color: #D70015; }
-.pl-menu-check { width: 16px; flex: 0 0 16px; display: flex; }
-.pl-menu-label { flex: 1; }
-
 .pl-swipe {
   display: flex;
   overflow-x: auto;
@@ -99,8 +69,8 @@ body.pl-sheet-open #root {
 .pl-swipe-actions { flex: 0 0 auto; display: flex; scroll-snap-align: end; }
 .pl-swipe-action {
   width: 78px; border: 0; padding: 0; margin: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  color: #fff; font: 600 13px ${FONT}; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  color: #fff; font: 600 10px ${MONO}; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;
 }
 .pl-swipe-action:active { filter: brightness(0.9); }
 

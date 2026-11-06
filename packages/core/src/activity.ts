@@ -39,7 +39,10 @@ export type ActivityKind =
   | 'team_added'
   | 'team_changed'
   | 'team_removed'
-  | 'comment_added';
+  | 'comment_added'
+  | 'item_marked_done'
+  | 'plan_added'
+  | 'plan_removed';
 
 export type ActivityDetail = Record<string, string | number | boolean | null>;
 
@@ -183,6 +186,21 @@ function parseObject(text: string | null | undefined): Record<string, unknown> {
   }
 }
 
+function parseEntries(text: string | null | undefined): { id: string; text: string; done: boolean }[] {
+  if (!text) return [];
+  try {
+    const v: unknown = JSON.parse(text);
+    if (!Array.isArray(v)) return [];
+    return v.flatMap((x) =>
+      x && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string'
+        ? [{ id: String((x as { id: string }).id), text: String((x as { text?: unknown }).text ?? ''), done: (x as { done?: unknown }).done === true }]
+        : [],
+    );
+  } catch {
+    return [];
+  }
+}
+
 /** Which list it was: "the SMS Carpentry list", "the Owner list", "the whole job list". */
 function listName(list: unknown, look: ActivityLookups): string {
   const key = String(list ?? '');
@@ -245,6 +263,25 @@ function fieldWords(field: string, before: string | null, after: string | null, 
       const visit = after ? look.visits.get(after) : undefined;
       return [after ? (visit ? `On the visit ${dayWords(visit.start, look.today, true)}` : 'On a visit') : 'Off its visit'];
     }
+    case 'priority':
+      return [after === 'true' ? 'Priority' : 'No longer a priority'];
+    case 'marked_done_at':
+      return after ? ['Said to be done'] : ['Not done: back on the list'];
+    case 'checklist': {
+      const was = parseEntries(before);
+      const now = parseEntries(after);
+      const added = now.filter((e) => !was.some((w) => w.id === e.id));
+      const ticked = now.filter((e) => e.done && was.some((w) => w.id === e.id && !w.done));
+      const unticked = now.filter((e) => !e.done && was.some((w) => w.id === e.id && w.done));
+      const out: string[] = [];
+      if (added.length > 0) out.push(`${added.length === 1 ? 'A step' : `${added.length} steps`} added to the checklist`);
+      if (ticked.length > 0) out.push(`Checked off ${listWords(ticked.map((e) => e.text.trim()).filter(Boolean)) || 'a step'}`);
+      if (unticked.length > 0) out.push(`Unchecked ${listWords(unticked.map((e) => e.text.trim()).filter(Boolean)) || 'a step'}`);
+      if (out.length === 0 && now.length < was.length) out.push('A step taken off the checklist');
+      return out;
+    }
+    case 'plan_id':
+      return [after ? 'Pinned on the plan' : 'Taken off the plan'];
     case 'extra': {
       const was = parseObject(before);
       const now = parseObject(after);
@@ -267,7 +304,7 @@ function fieldWords(field: string, before: string | null, after: string | null, 
 /** Changes made to many items at once that read as one line on the job. */
 const BULK_FIELDS = new Set(['status', 'assigned_to', 'location_id']);
 
-const QUIET = new Set(['bought_out', 'number', 'source', 'bt_external_id', 'org', 'completed_by', 'completed_at', 'job_id', 'trade_id', 'position']);
+const QUIET = new Set(['bought_out', 'number', 'source', 'bt_external_id', 'org', 'completed_by', 'completed_at', 'job_id', 'trade_id', 'position', 'pin_x', 'pin_y']);
 
 type Kind = 'create' | 'status' | 'change' | 'photo' | 'locations' | 'bulk' | 'bulkChange' | 'other';
 
@@ -424,6 +461,26 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     const where = places.length <= 3 ? listWords(places) : `${places.slice(0, 2).join(', ')} and ${places.length - 2} more locations`;
     const n = g.entries.length;
     return done(items[0]?.source === 'template' ? `added ${n} items from a template` : `pasted ${n} items`, [where]);
+  }
+
+  if (first.kind === 'item_marked_done') {
+    const d = first.detail ?? {};
+    const companyName = look.companies.get(String(d.company_id ?? '')) ?? 'The company';
+    const named = typeof d.author_name === 'string' && d.author_name.trim() !== '' ? d.author_name.trim() : '';
+    const item = g.itemId ? look.items.get(g.itemId) : undefined;
+    const title = forItem ? 'it' : item?.title.trim() || 'an item';
+    return {
+      ...base,
+      who: named ? `${named} at ${companyName}` : companyName,
+      action: `marked ${title} done`,
+      detail: [forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? ''), 'For Ross Built to check'].filter(Boolean).map(sentence).join(' '),
+    };
+  }
+
+  if (first.kind === 'plan_added' || first.kind === 'plan_removed') {
+    const d = first.detail ?? {};
+    const name = typeof d.name === 'string' && d.name.trim() ? d.name.trim() : 'a plan';
+    return done(first.kind === 'plan_added' ? `added the plan ${name}` : `took off the plan ${name}`);
   }
 
   if (first.kind === 'comment_added') {

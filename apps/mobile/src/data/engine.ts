@@ -20,6 +20,7 @@ import {
   tidyEmail,
   tidyName,
   tidyTitle,
+  type Activity,
   type ActivityDetail,
   type ActivityKind,
   type Comment,
@@ -27,6 +28,7 @@ import {
   type Item,
   type Person,
   type Photo,
+  type PlanSheet,
   type TeamMember,
   type Visit,
 } from '@punch/core';
@@ -55,17 +57,28 @@ export interface Keeper {
   server: boolean;
   get(): State;
   subscribe(listener: () => void): () => void;
-  /** Keeps the parts of the state that changed. What happened is for the preview's log; the database keeps its own. */
-  save(next: Partial<State>, happened?: Happened[]): void | Promise<void>;
+  /**
+   * Keeps the parts of the state that changed. What happened is for the preview's log; the database
+   * keeps its own. From the company's page, an item's changes are not logged as anyone's.
+   */
+  save(next: Partial<State>, happened?: Happened[], options?: { fromCompany?: boolean }): void | Promise<void>;
   /** Keeps a new photo's picture where it can be shown from, named for the photo. */
   keepPhoto(uri: string, id: string): Promise<string>;
 }
 
 /** What differs between the backends besides where the changes are kept. */
 export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signOut'> &
-  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'previewAs'>>;
+  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useUpdates' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'companyMarkDone' | 'previewAs'>>;
 
 const now = () => new Date().toISOString();
+
+/** How many of the latest updates the Updates list keeps. */
+export const UPDATES_KEPT = 300;
+
+/** Newest first; two things done in the same moment keep the order they happened in. */
+export function latestFirst(entries: readonly Activity[]): Activity[] {
+  return [...entries].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : b.id.localeCompare(a.id)));
+}
 
 /**
  * The trade follows the company, as the database has it: a trade the company does on the job stays,
@@ -91,6 +104,10 @@ function settle(state: State, before: Item[], after: Item[]): Item[] {
   let items = after.map((i) => (was.get(i.id) === i ? i : tradeFollows(state, i))).map((i) =>
     i.ready && (i.waitingOn.length > 0 || i.waitingOnItems.length > 0 || i.readyBy !== null) ? { ...i, waitingOn: [], waitingOnItems: [], readyBy: null } : i,
   );
+  // Opened again after it was completed: whatever the company said before is answered. Off the plan, no pin.
+  const wasDone = new Set(before.filter((i) => i.status === 'complete').map((i) => i.id));
+  items = items.map((i) => (i.status === 'open' && wasDone.has(i.id) && i.markedDoneAt ? { ...i, markedDoneAt: null } : i));
+  items = items.map((i) => (!i.planId && (i.pinX != null || i.pinY != null) ? { ...i, pinX: null, pinY: null } : i));
   const wasOpen = new Set(before.filter((i) => i.status === 'open').map((i) => i.id));
   for (const done of items.filter((i) => wasOpen.has(i.id) && i.status !== 'open')) {
     const freed = new Map(releasedBy(done.id, items).map((r) => [r.item.id, r.patch]));
@@ -242,6 +259,12 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       ((jobId) => {
         const s = useStore();
         return useMemo(() => s.activity.filter((a) => a.jobId === jobId), [s.activity, jobId]);
+      }),
+    useUpdates:
+      extras.useUpdates ??
+      (() => {
+        const s = useStore();
+        return useMemo(() => latestFirst(s.activity).slice(0, UPDATES_KEPT), [s.activity]);
       }),
 
     async createJob({ name, address, projectManagerId }) {
@@ -524,6 +547,19 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
           { jobId: was.jobId, kind: 'visit_confirmed_by_company', detail: { ...visitDetail(visit), from_company: true, author_name: tidyName(name) }, personId: null },
         ]);
       }),
+    companyMarkDone:
+      extras.companyMarkDone ??
+      (async ({ jobId, companyId, itemId, done, name }) => {
+        const state = get();
+        const was = state.items.find((i) => i.id === itemId && i.jobId === jobId && i.companyId === companyId && i.status === 'open' && !i.unfinished);
+        if (!was) throw new Error('That item is not on this list');
+        if (done === !!was.markedDoneAt) return;
+        await keeper.save(
+          { items: state.items.map((i) => (i.id === itemId ? { ...i, markedDoneAt: done ? now() : null, updatedAt: now() } : i)) },
+          done ? [{ jobId, itemId, kind: 'item_marked_done', detail: { company_id: companyId, from_company: true, author_name: tidyName(name) }, personId: null }] : [],
+          { fromCompany: true },
+        );
+      }),
     companyAskVisit:
       extras.companyAskVisit ??
       (async ({ visitId, start, days, name }) => {
@@ -655,6 +691,31 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
         happened.push({ jobId: was.jobId, itemId: was.itemId, kind: 'photo_marked', detail: { photo_id: id } });
       }
       await save({ photos: state.photos.map((p) => (p.id === id ? { ...p, ...patch } : p)) }, happened);
+    },
+    usePlans: (jobId) => {
+      const s = useStore();
+      return useMemo(() => s.plans.filter((p) => p.jobId === jobId && !p.removed).sort((a, b) => a.sortOrder - b.sortOrder), [s.plans, jobId]);
+    },
+    async addPlan({ jobId, floor, name, uri, width, height }) {
+      const id = randomUUID();
+      const clean = tidyName(name) || floor || 'Plan';
+      const kept = await keeper.keepPhoto(uri, id);
+      // Keeping the picture takes a moment: whatever changed meanwhile stays.
+      const state = get();
+      const order = Math.max(0, ...state.plans.filter((p) => p.jobId === jobId).map((p) => p.sortOrder)) + 1;
+      const plan: PlanSheet = { id, jobId, floor, name: clean, uri: kept, width, height, sortOrder: order, removed: false };
+      await save({ plans: [...state.plans, plan] }, [{ jobId, kind: 'plan_added', detail: { plan_id: id, name: clean, floor } }]);
+      return id;
+    },
+    async updatePlan(id, patch) {
+      const state = get();
+      const was = state.plans.find((p) => p.id === id);
+      if (!was) return;
+      const next = { ...was, ...patch, ...(patch.name !== undefined ? { name: tidyName(patch.name) || was.name } : null) };
+      await save(
+        { plans: state.plans.map((p) => (p.id === id ? next : p)) },
+        patch.removed && !was.removed ? [{ jobId: was.jobId, kind: 'plan_removed', detail: { plan_id: id, name: was.name, floor: was.floor } }] : [],
+      );
     },
     async addTrade(name) {
       const state = get();

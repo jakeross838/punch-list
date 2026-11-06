@@ -125,7 +125,7 @@ export default function PlanScreen() {
   const readyDays = Math.max(1, plan.readyDays.length);
 
   return (
-    <Page title={plan.company} large subtitle={subtitle} backLabel="Schedule" background="grouped">
+    <Page title={plan.company} subtitle={subtitle} backLabel="Schedule" background="grouped">
       {open === 0 ? <EmptyState icon="checkmark.circle.fill" title="Nothing Open" message={`${plan.company} has no open work on this job.`} /> : null}
 
       <ListSection

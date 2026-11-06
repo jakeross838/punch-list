@@ -126,9 +126,43 @@ export interface Item {
   hours: number | null;
   /** Empty until the Buildertrend connection is turned on. */
   btExternalId: string | null;
+  /**
+   * When the company said the work is done, from its own page: the item is To Check until someone
+   * at Ross Built looks and marks it Complete or Not Done. Only Ross Built completes an item.
+   */
+  markedDoneAt?: string | null;
+  /** Wanted first: it sorts to the top of its list and shows a red mark. */
+  priority?: boolean;
+  /** Steps to tick off inside the item, like the parts of a door to adjust. */
+  checklist?: ChecklistEntry[];
+  /** Where it is pinned on the job's plans: the plan sheet and the spot, as fractions across and down. */
+  planId?: string | null;
+  pinX?: number | null;
+  pinY?: number | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** A step inside an item. */
+export interface ChecklistEntry {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+/** A sheet of the job's plans, one per level, to pin items on. */
+export interface PlanSheet {
+  id: string;
+  jobId: string;
+  /** The level it shows, as the locations name it: "Level 1". */
+  floor: string;
+  name: string;
+  uri: string;
+  width: number;
+  height: number;
+  sortOrder: number;
+  removed: boolean;
 }
 
 // ---------- the schedule ----------

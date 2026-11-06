@@ -22,7 +22,7 @@ export default function TemplatesScreen() {
   return (
     <Page
       title="Templates"
-      large
+
       backLabel="Jobs"
       right={admin ? [{ kind: 'button', label: 'New Template', icon: 'plus', iconOnly: true, onPress: () => setAdding(true), testID: 'new-template' }] : []}
     >

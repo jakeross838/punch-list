@@ -6,7 +6,8 @@
 import { markBounds, type Mark } from '@punch/core';
 import { Image } from 'expo-image';
 import { memo } from 'react';
-import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { colors } from '@/constants/theme';
 import { MarkLayer } from './MarkLayer';
 
 export interface PhotoLike {
@@ -69,7 +70,7 @@ export const PhotoView = memo(function PhotoView({
   width,
   height,
   fit = 'cover',
-  radius = 0,
+  edge = fit === 'cover',
   style,
   testID,
 }: {
@@ -77,17 +78,25 @@ export const PhotoView = memo(function PhotoView({
   width: number;
   height: number;
   fit?: 'cover' | 'contain';
+  /** Kept for the screens that pass it: photos are square. */
   radius?: number;
+  /** A thin slate edge, so a pale photo still reads as a photo. */
+  edge?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }) {
   const shown = fitPhoto(photo, { width, height }, fit, fit === 'cover' ? markBounds(photo.marks) : null);
   return (
-    <View style={[{ width, height, borderRadius: radius, overflow: 'hidden' }, style]} testID={testID}>
+    <View style={[{ width, height, overflow: 'hidden', backgroundColor: '#D6D1C9' }, style]} testID={testID}>
       <View style={{ position: 'absolute', left: shown.left, top: shown.top, width: shown.width, height: shown.height }}>
         <Image source={{ uri: photo.uri }} style={{ width: shown.width, height: shown.height }} contentFit="fill" transition={120} accessibilityIgnoresInvertColors />
         <MarkLayer marks={photo.marks} width={shown.width} height={shown.height} />
       </View>
+      {edge ? <View pointerEvents="none" style={styles.edge} /> : null}
     </View>
   );
+});
+
+const styles = StyleSheet.create({
+  edge: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 1, borderColor: colors.border },
 });

@@ -28,11 +28,11 @@ const nextId = () => `activity-live-${String(++seq).padStart(6, '0')}`;
  * Saves a change and logs it: every item added or changed, field by field, the way the database
  * does, and the other things that happened, all as the signed-in person, now.
  */
-function commit(next: Partial<State>, happened: Happened[] = []): void {
+function commit(next: Partial<State>, happened: Happened[] = [], options: { fromCompany?: boolean } = {}): void {
   const at = now();
   const personId = state.me.id;
   const entries: Activity[] = [];
-  if (next.items && next.items !== state.items) {
+  if (next.items && next.items !== state.items && !options.fromCompany) {
     const before = new Map(state.items.map((i) => [i.id, i]));
     for (const item of next.items) {
       const was = before.get(item.id);

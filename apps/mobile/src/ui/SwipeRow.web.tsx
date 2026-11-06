@@ -50,7 +50,7 @@ export function SwipeRow({ actions, children, style }: SwipeRowProps) {
                 a.onPress();
               }}
             >
-              <Icon name={a.icon} size={21} color={colors.white} weight="semibold" />
+              <Icon name={a.icon} size={20} color={colors.white} weight="medium" />
               <span>{a.label}</span>
             </button>
           ))}

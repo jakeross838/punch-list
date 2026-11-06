@@ -70,7 +70,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   return (
     <FeedbackContext.Provider value={api}>
       {children}
-      <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, styles.toastLayer, { paddingBottom: insets.bottom + 92 }]}>
+      <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, styles.toastLayer, { paddingBottom: insets.bottom + 84 }]}>
         {toast ? (
           <Animated.View
             key={toast.id}
@@ -80,7 +80,8 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
             accessibilityLiveRegion="polite"
             role="status"
           >
-            <Text variant="subheadline" weight="600" color={colors.white} style={{ flexShrink: 1 }}>
+            <View style={styles.mark} />
+            <Text variant="subheadline" weight="500" color={colors.onBar} style={{ flexShrink: 1 }}>
               {toast.message}
             </Text>
             {toast.action ? (
@@ -94,7 +95,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
                   setToast(null);
                 }}
               >
-                <Text variant="subheadline" weight="700" color={colors.white} style={{ textDecorationLine: 'underline' }}>
+                <Text variant="label" weight="600" color={colors.oceanside}>
                   {toast.action.label}
                 </Text>
               </Touchable>
@@ -112,13 +113,16 @@ const styles = StyleSheet.create({
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
+    gap: 12,
     maxWidth: 360,
     minHeight: 48,
-    paddingHorizontal: 20,
+    marginHorizontal: 16,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: 'rgba(29, 29, 31, 0.94)',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+    backgroundColor: colors.bar,
+    borderWidth: 1,
+    borderColor: 'rgba(247, 245, 236, 0.14)',
+    boxShadow: '0 8px 24px rgba(19, 32, 40, 0.24)',
   },
+  mark: { width: 6, height: 6, backgroundColor: colors.oceanside },
 });

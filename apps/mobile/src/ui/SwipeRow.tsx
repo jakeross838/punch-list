@@ -36,8 +36,8 @@ export function SwipeRow({ actions, children, style }: SwipeRowProps) {
               testID={a.testID}
               style={[styles.action, { backgroundColor: a.color }]}
             >
-              <Icon name={a.icon} size={21} color={colors.white} weight="semibold" />
-              <Text variant="footnote" weight="600" color={colors.white}>
+              <Icon name={a.icon} size={20} color={colors.white} weight="medium" />
+              <Text variant="label" weight="600" color={colors.white}>
                 {a.label}
               </Text>
             </Pressable>
@@ -52,5 +52,5 @@ export function SwipeRow({ actions, children, style }: SwipeRowProps) {
 
 const styles = StyleSheet.create({
   actions: { flexDirection: 'row' },
-  action: { width: ACTION_WIDTH, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  action: { width: ACTION_WIDTH, alignItems: 'center', justifyContent: 'center', gap: 6 },
 });

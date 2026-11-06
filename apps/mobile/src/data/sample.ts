@@ -29,6 +29,7 @@ import {
   type Location,
   type Person,
   type Photo,
+  type PlanSheet,
   type StandardTitle,
   type TeamMember,
   type Template,
@@ -38,7 +39,7 @@ import {
   type ViewSettings,
   type Visit,
 } from '@punch/core';
-import { RANGE_WALL, RANGE_WALL_NO_UPPERS, SAMPLE_PHOTO_SIZE } from './samplePhotos';
+import { RANGE_WALL, RANGE_WALL_NO_UPPERS, SAMPLE_PHOTO_SIZE, SAMPLE_PLAN, SAMPLE_PLAN_SIZE } from './samplePhotos';
 
 export interface SampleState {
   me: Person;
@@ -64,6 +65,8 @@ export interface SampleState {
   waitingOn: Record<string, string[]>;
   items: Item[];
   photos: Photo[];
+  /** The plan sheets on each job, to pin items on. */
+  plans: PlanSheet[];
   visits: Visit[];
   sends: ListSend[];
   /** The back and forth with the companies, and Ross Built only notes. */
@@ -356,6 +359,23 @@ export function sampleState(): SampleState {
     ]),
   ];
 
+  // Level 1's plan, with a few items pinned where they are.
+  const plans: PlanSheet[] = [
+    { id: 'plan-level-1', jobId: job.id, floor: 'Level 1', name: 'Level 1 Floor Plan', uri: SAMPLE_PLAN, ...SAMPLE_PLAN_SIZE, sortOrder: 1, removed: false },
+  ];
+  const pins: [number, number, number][] = [
+    [16, 0.5, 0.2],
+    [1, 0.45, 0.14],
+    [3, 0.58, 0.33],
+    [22, 0.2, 0.4],
+    [5, 0.8, 0.2],
+    [6, 0.15, 0.7],
+  ];
+  for (const [num, x, y] of pins) {
+    const i = items.findIndex((it) => it.number === num);
+    if (i >= 0) items[i] = { ...items[i]!, planId: 'plan-level-1', pinX: x, pinY: y };
+  }
+
   let titleNo = 0;
   const titles: StandardTitle[] = Object.entries(STANDARD_TITLES).flatMap(([trade, list]) =>
     list.map(([title, uses, hours]) => ({ id: `title-${++titleNo}`, title, tradeId: t(trade), uses, approved: true, hours, rooms: DEFAULT_ROOM_TASKS[title.toLowerCase()] ?? [] })),
@@ -440,6 +460,29 @@ export function sampleState(): SampleState {
   const activity: Activity[] = [];
   const log = (personId: string, at: string, entry: Omit<Activity, 'id' | 'jobId' | 'personId' | 'at'>) =>
     activity.push({ id: `activity-${String(++seq).padStart(4, '0')}`, jobId: job.id, personId, at, ...entry });
+
+  // SMS Carpentry marked two of its items done from its page this morning: To Check. The touch up
+  // at the hood is wanted first.
+  const markDone = (num: number, when: string) => {
+    const i = items.findIndex((it) => it.number === num);
+    if (i < 0) return;
+    items[i] = { ...items[i]!, markedDoneAt: when };
+    activity.push({
+      id: `activity-${String(++seq).padStart(4, '0')}`,
+      jobId: job.id,
+      personId: null,
+      at: when,
+      kind: 'item_marked_done',
+      itemId: items[i]!.id,
+      detail: { company_id: items[i]!.companyId, from_company: true, author_name: 'Mike' },
+    });
+  };
+  markDone(19, ago(0, 7, 40));
+  markDone(22, ago(0, 7, 44));
+  {
+    const i = items.findIndex((it) => it.number === 3);
+    if (i >= 0) items[i] = { ...items[i]!, priority: true };
+  }
 
   for (const l of locations) log(me.id, ago(13, 8, 10), { kind: 'location_added', itemId: null, detail: { location_id: l.id, label: l.label } });
   const added: Record<number, [string, number, number, number]> = {
@@ -549,6 +592,7 @@ export function sampleState(): SampleState {
     waitingOn: { [job.id]: ['Ross Built', 'Owner', 'Cortney Bishop Design'] },
     items,
     photos,
+    plans,
     visits,
     sends,
     comments,

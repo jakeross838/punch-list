@@ -37,6 +37,7 @@ streams:
       - SELECT * FROM item_history WHERE job_id IN my_jobs
       - SELECT * FROM job_activity WHERE job_id IN my_jobs
       - SELECT * FROM photos WHERE job_id IN my_jobs
+      - SELECT * FROM plan_sheets WHERE job_id IN my_jobs
       - SELECT * FROM visits WHERE job_id IN my_jobs
       - SELECT * FROM list_sends WHERE job_id IN my_jobs
       - SELECT * FROM comments WHERE job_id IN my_jobs

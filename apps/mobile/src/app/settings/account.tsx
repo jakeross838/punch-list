@@ -44,7 +44,7 @@ export default function AccountScreen() {
     });
 
   return (
-    <Page title={me.name} large subtitle={me.email} backLabel="Jobs">
+    <Page title={me.name} subtitle={me.email} backLabel="Jobs">
       <ListSection header="You" footer={admin ? 'Change any of it in People.' : 'An admin changes these in People.'}>
         <ListRow title="Email" value={me.email} testID="account-email" />
         <ListRow title="Phone" value={me.phone ?? 'None'} />

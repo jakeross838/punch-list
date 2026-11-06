@@ -55,7 +55,7 @@ export default function SignInScreen() {
   }
 
   return (
-    <Page title="Sign In" large eyebrow="Ross Built" back={false}>
+    <Page title="Sign In" eyebrow="Ross Built" back={false}>
       <Text variant="subheadline" color={colors.secondary} style={styles.lead}>
         {`${APP_NAME}: every job's list, room by room, and the schedule it builds.`}
       </Text>

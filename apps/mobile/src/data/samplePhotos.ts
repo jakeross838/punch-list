@@ -46,3 +46,31 @@ const svg = (body: string) =>
 export const SAMPLE_PHOTO_SIZE = { width: 1200, height: 1600 };
 export const RANGE_WALL = svg(WALL + UPPERS + BASE);
 export const RANGE_WALL_NO_UPPERS = svg(WALL + OUTLINES + BASE);
+
+// A drawn stand-in for a level's plan, for the preview's sample job only: Level 1 with its rooms
+// named as the sample locations are. Walls in slate, room names in small capitals.
+const PLAN = `
+<rect width="1600" height="1100" fill="#FBFAF6"/>
+<g fill="none" stroke="#3B5864" stroke-width="10" stroke-linejoin="miter">
+<rect x="80" y="80" width="1440" height="940"/>
+<path d="M620 80v520M620 680v340M1060 80v300M1060 460v560M620 600h440M80 560h420M580 560h40M1060 380h460"/>
+</g>
+<g fill="none" stroke="#3B5864" stroke-width="4">
+<path d="M500 560a80 80 0 0 1 80 0M1060 380a80 80 0 0 0 0 80M620 600a80 80 0 0 0 0 80"/>
+</g>
+<g fill="#9DAAB0" opacity="0.35">
+<rect x="680" y="120" width="320" height="56"/><rect x="940" y="176" width="60" height="260"/><rect x="740" y="300" width="160" height="110"/>
+</g>
+<g font-family="Menlo, monospace" font-size="30" letter-spacing="5" fill="#56707B">
+<text x="130" y="140">LIVING 107</text>
+<text x="670" y="250" dx="0">KITCHEN 109</text>
+<text x="1110" y="140">GUEST BEDROOM 114</text>
+<text x="670" y="660">FOYER 115</text>
+<text x="130" y="620">BATHROOM 116</text>
+<text x="1110" y="520">LAUNDRY 119</text>
+</g>`;
+
+export const SAMPLE_PLAN_SIZE = { width: 1600, height: 1100 };
+export const SAMPLE_PLAN = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">${PLAN}</svg>`,
+)}`;

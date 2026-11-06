@@ -47,7 +47,7 @@ export default function SetupScreen() {
   const [company, setCompany] = useState<(Pairing & { open: boolean }) | null>(null);
 
   return (
-    <Page title="Job Setup" large backLabel={job?.name} background="plain" subtitle={admin ? undefined : 'Only an admin changes the setup.'}>
+    <Page title="Job Setup" backLabel={job?.name} background="plain" subtitle={admin ? undefined : 'Only an admin changes the setup.'}>
       {job ? <JobFields key={job.id} job={job} editable={admin} /> : null}
       <View style={styles.tabs}>
         <Segmented<Tab>
