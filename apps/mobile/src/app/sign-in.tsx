@@ -89,7 +89,7 @@ export default function SignInScreen() {
       <View style={styles.head}>
         <Eyebrow text="Ross Built · Field" />
         <Text variant="largeTitle" accessibilityRole="header" style={styles.title}>
-          Sign in
+          Sign In
         </Text>
         <Text variant="callout" color={colors.secondary} style={styles.lead}>
           Ross Built people only. No password: we email you a code.

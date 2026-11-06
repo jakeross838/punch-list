@@ -59,7 +59,7 @@ export function Segmented<T extends string>({
               }}
               style={styles.segment}
               accessibilityRole="tab"
-              accessibilityState={{ selected }}
+              aria-selected={selected}
               accessibilityLabel={label}
             >
               <Text variant="label" weight={selected ? '600' : '500'} color={selected ? colors.onBar : colors.label} numberOfLines={1}>

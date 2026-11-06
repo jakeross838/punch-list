@@ -1,7 +1,8 @@
 // Me: who you are signed in as, what you do at Ross Built and what you see, the jobs you are on and
-// as what, and Ross Built's setup: People, Companies, Templates and Item Form. An admin changes these in People. On the iPhone, This Phone says whether
-// every change made here has gone up, and anything the server turned down. Sign Out clears what is
-// on this phone; it all comes back when you sign in again. It waits until every change has gone up.
+// as what, and Ross Built's setup: People, Companies, Templates and Item Form. An admin changes who
+// you are in People. On the iPhone, This Phone says whether every change made here has gone up, and
+// anything the server turned down. Sign Out clears what is on this phone; it all comes back when you
+// sign in again. It waits until every change has gone up.
 
 import { isAdmin, PART_LABELS, ROLE_HINTS, ROLE_LABELS, SEES_LABELS } from '@punch/core';
 import Constants from 'expo-constants';

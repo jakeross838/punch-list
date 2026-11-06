@@ -373,10 +373,11 @@ export const BOOLEAN_COLUMNS: Record<string, string[]> = {
   trades: ['active'],
   companies: ['active'],
   company_contacts: ['gets_lists', 'active'],
-  items: ['ready', 'bought_out', 'unfinished'],
+  items: ['ready', 'bought_out', 'unfinished', 'priority'],
   title_library: ['approved'],
   custom_fields: ['active'],
   photos: ['removed'],
+  plan_sheets: ['removed'],
   visits: ['confirmed', 'removed'],
   list_sends: ['removed'],
   comments: ['from_company', 'internal', 'removed'],
@@ -387,7 +388,7 @@ export const BOOLEAN_COLUMNS: Record<string, string[]> = {
 
 /** Columns the server keeps as JSON; the phone stores them as text. */
 export const JSON_COLUMNS: Record<string, string[]> = {
-  items: ['extra', 'waiting_on', 'waiting_on_items'],
+  items: ['extra', 'waiting_on', 'waiting_on_items', 'checklist'],
   list_sends: ['item_ids', 'snapshot'],
   custom_fields: ['options'],
   title_library: ['rooms'],

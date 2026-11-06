@@ -90,37 +90,37 @@ export default function ItemFormScreen() {
 
       {admin ? (
         <>
-      <ListSection header="Your Fields" footer="They show under Details on every item.">
-        {fields.map((f) => (
-          <ListRow key={f.id} title={f.label} value={customFieldKindLabel(f.kind)} accessory="chevron" onPress={() => setFieldSheet({ field: f })} />
-        ))}
-        <ListRow title="Add a Field" tone="tint" onPress={() => setFieldSheet({ field: null })} testID="add-field" />
-      </ListSection>
+          <ListSection header="Your Fields" footer="They show under Details on every item.">
+            {fields.map((f) => (
+              <ListRow key={f.id} title={f.label} value={customFieldKindLabel(f.kind)} accessory="chevron" onPress={() => setFieldSheet({ field: f })} testID={`custom-field-${f.id}`} />
+            ))}
+            <ListRow title="Add a Field" tone="tint" onPress={() => setFieldSheet({ field: null })} testID="add-field" />
+          </ListSection>
 
-      <ListSection header="Trades" footer="Every list keeps each trade's items together, in this order, so a location reads the way the work goes instead of jumping between trades.">
-        <ListRow title="Trade Order" value={String(trades.length)} accessory="chevron" onPress={() => setTradesOpen(true)} testID="trade-order" />
-      </ListSection>
+          <ListSection header="Trades" footer="Every list keeps each trade's items together, in this order, so a location reads the way the work goes instead of jumping between trades.">
+            <ListRow title="Trade Order" value={String(trades.length)} accessory="chevron" onPress={() => setTradesOpen(true)} testID="trade-order" />
+          </ListSection>
 
-      <ListSection header="Titles" footer="Picking a title fills in its company and how long it usually takes. The company comes from the title's trade, from the companies on the job.">
-        <ListRow title="Standard Titles" value={String(titles.length)} accessory="chevron" onPress={() => setTitlesOpen(true)} testID="standard-titles" />
-      </ListSection>
+          <ListSection header="Titles" footer="Picking a title fills in its company and how long it usually takes. The company comes from the title's trade, from the companies on the job.">
+            <ListRow title="Standard Titles" value={String(titles.length)} accessory="chevron" onPress={() => setTitlesOpen(true)} testID="standard-titles" />
+          </ListSection>
 
-      <ListSection
-        header="Common Tasks"
-        footer="The usual work in each kind of room, added with a tap on a walk, comes from the templates: each task for Every Bathroom shows in every bathroom, and so on."
-      >
-        <ListRow
-          title="Templates"
-          icon="templates"
-          accessory="chevron"
-          onPress={() => {
-            // Out of this sheet, then to Templates.
-            router.back();
-            router.push('/settings/templates');
-          }}
-          testID="common-tasks-templates"
-        />
-      </ListSection>
+          <ListSection
+            header="Common Tasks"
+            footer="The usual work in each kind of room, added with a tap on a walk, comes from the templates: each task for Every Bathroom shows in every bathroom, and so on."
+          >
+            <ListRow
+              title="Templates"
+              icon="templates"
+              accessory="chevron"
+              onPress={() => {
+                // Out of this sheet, then to Templates.
+                router.back();
+                router.push('/settings/templates');
+              }}
+              testID="common-tasks-templates"
+            />
+          </ListSection>
         </>
       ) : (
         <ListSection footer="The added fields, the standard titles and the common tasks are set up by an admin." />

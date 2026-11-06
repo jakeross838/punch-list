@@ -31,22 +31,33 @@
 
 | Piece | Where | What it does |
 | --- | --- | --- |
-| Phone app | `apps/mobile` | Expo SDK 58, TypeScript, Expo Router. The walk above, job setup, and the item rules. The camera is `expo-camera`, the photo library `expo-image-picker`, markup is drawn with `react-native-svg`, and photos are kept in the app's own folder until they upload. The lists become PDFs with `expo-print` (the house font, Nunito Sans, and the photos are written into the page, and `pdf-lib` adds the footer with page numbers) and go out through the share sheet. Fill In From Photo calls Claude through a server function on the phone, and through the preview page's own Claude access on the preview. Built to look and work like Apple's own apps (see Look and feel). |
+| Phone app | `apps/mobile` | Expo SDK 58, TypeScript, Expo Router. The walk above, job setup, and the item rules. The camera is `expo-camera`, the photo library `expo-image-picker`, markup is drawn with `react-native-svg`, and photos are kept in the app's own folder until they upload. The lists become PDFs with `expo-print` (the house font, Nunito Sans, and the photos are written into the page, and `pdf-lib` adds the footer with page numbers) and go out through the share sheet. Fill In From Photo calls Claude through a server function on the phone, and through the preview page's own Claude access on the preview. Drawn in Nightwork's Site Office style (see Look and feel). |
 | Core rules | `packages/core` | The data types and the rules the app enforces: not ready needs Waiting On, one company per item (its trade follows the company), only Ross Built completes, removing never deletes, room labels and floor order from a pasted list. Also the marks (points on the photo, drawn at any size), title suggestions and what a title fills in, the form and view settings, the added fields, and the lists that go out (each company's, and the whole job) with their printed pages. Shared by the app, the server and the tests. |
 | Database | `supabase/` | Migrations for the schema and access rules, the private photos bucket, plus a seed for a test job of 600 generated items, and `seed/starter_template.sql`, the End of the House template, run once after the import so each task finds its trade by name. |
 | Sync | `powersync/` | The PowerSync service config and sync streams: every signed-in Ross Built user gets every job; each person gets only their own settings. |
 
 ## Look and feel
 
-The app follows Apple's design for iPhone, modeled on Camera, Markup, Reminders and Settings. The parts live in `apps/mobile/src/ui`; every screen is built from them.
+The app is drawn in Nightwork's Site Office style, the look Jake signed off on 5 November. The parts live in `apps/mobile/src/ui`; every screen is built from them.
 
-- **Theme:** white and light gray, near black text, and one accent, Ross Built slate blue, for everything you can tap. Red only for removing and past due. Status is said in words, with a small gray icon where it helps. The schedule's bars are green (confirmed) and blue (our best guess), the colors the companies know from the weekly schedule.
-- **Crisp lists:** text one step under the iPhone's default size (the Small setting), tight rows, thin hairlines and tighter corners, so a screen holds more of the list and every row says more. A location's row has its count, what is ready, what is past due and its time; an item's row has its time, its company and type, how many comments it has, and what it waits on. Everything else is one tap in.
-- **The camera bar:** a large camera button in the middle of the bottom bar on every job and room screen, big enough to hit without looking.
-- **Navigation and sheets:** large titles that shrink into the bar, New Item, Send Lists, View and Item Form as sheets with Cancel and Done, the camera full screen, and Cancel asks before throwing away a new item.
-- **Motion and touch:** rows light up the instant they are touched; buttons press in; the circle fills and the check pops in.
+- **Theme:** a sand page, white square panels with fine slate borders, a deep slate bar at the top and bottom, and slate for every action. Space Grotesk for titles, Inter for reading, and JetBrains Mono in capitals for labels, notes and figures. Green is ready, red is past due and removing, and To Check is outlined. Everything is square except avatars, status dots and the camera shutter.
+- **The frame:** every screen has the bar (back, or the job switch, the Updates bell and the account button), the trail of where you are (Sample Job / Kitchen 109 / Item 1), an eyebrow and the title. The job opens on its figures (Open, Ready, To Check, Past Due), the Walk, Plans and Send Lists tiles, a search that is always there, and its locations by level with how far along each is.
+- **The bottom bar:** Jobs, Schedule, Capture, Send and Me, the same on every screen. Capture is the square in the middle, big enough to hit without looking. Schedule shows how many items are past due. Jobs goes back to the job you were in, then to the list of jobs, the way iPhone tabs do.
+- **Rows:** each item has its box to check it off, its title, a status pill (Ready, Waiting, 3 Days Past Due, To Check, Draft, Complete) with a short note beside it (what it waits on, when its visit is, who said it is done), where it is and who does it, its time, its comments and its photo. Swipe left for Ready and Remove.
+- **One word for one thing:** Past Due is the word for late work everywhere: the figures, the pills, the Schedule, the printouts and what VoiceOver reads.
+- **Motion and touch:** rows dim the instant they are touched, sheets slide up, and toasts with Undo slide up from the bottom bar.
 
-On the iPhone these are the system's own: the native navigation bar, SF Symbols, native menus and action sheets, page sheets that close with a swipe down, the live camera, the system switch and date picker, swipe back, and haptic taps. The preview page draws the same design in the browser; there the shutter opens the iPhone's own camera through the browser, and the live viewfinder, haptics and swipe back can only be judged on the TestFlight build.
+On the iPhone the menus, action sheets, page sheets, the live camera, the date picker, swipe back and haptic taps are the system's own. The preview page draws the same design in the browser; there the shutter opens the iPhone's own camera through the browser, and the live viewfinder, haptics and swipe back can only be judged on the TestFlight build.
+
+### New in build 4
+
+- **To Check:** a company marks its work done from its own page. The item stays open and shows To Check until someone at Ross Built looks: Complete checks it off, and Not Done puts it back on the company's list. Only Ross Built completes an item. Complete answers what the company said, and Undo puts it back To Check.
+- **Plans:** a picture of each level's plan, with every item pinned where it is, colored by its status. Tap a pin to see the item, tap again to open it; pin an item from the plan or from the item's More menu.
+- **Updates:** the bell shows what people did on your jobs since you last looked, newest first, by job or only what needs you.
+- **Priority and checklists:** an item can be a priority (first in its trade, with a red mark), and can hold the steps inside it to tick off one at a time.
+- **Spreadsheet:** Send Lists exports every item on the job for Excel, Numbers or Google Sheets.
+- **Schedule Email reminder:** on Thursday and Friday the job says when the Schedule Email has not gone out that week.
+- Video on items is not in build 4; it comes after.
 
 ## How Jake sees it
 
@@ -147,7 +158,7 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 
 ## The live database (3 November 2026)
 
-- The Supabase project `punch-list` (Canada Central) holds the schema and the access rules: all 19 migrations, applied in order, with the same version numbers as the files. It matches the database the checks test, function for function and rule for rule; the only extra is Supabase's own `rls_auto_enable`.
+- The Supabase project `punch-list` (Canada Central) holds the schema and the access rules: all 21 migrations, applied in order, with the same version numbers as the files. It matches the database the checks test, function for function and rule for rule; the only extra is Supabase's own `rls_auto_enable`.
 - Jake (jake@rossbuilt.com) is the first admin. Everyone else is added under People.
 - Nobody signed out reads anything: the tables and the access checks answer permission denied. Only the company page's four functions are open, and they work only with a live link.
 - Supabase's security check is clear but for what is meant: the company page's functions, and the checks the access rules run as the person signed in. Nobody can call a trigger function.

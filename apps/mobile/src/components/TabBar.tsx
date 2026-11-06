@@ -2,9 +2,10 @@
 // Capture is the square in the middle, big enough to hit without looking. Schedule, Capture and
 // Send work on the job you are in, or the last one you opened.
 //
-// It acts like tabs on one stack of screens: Jobs goes all the way back to the list of jobs, and
-// Schedule, Send and Me go back to their screen when it is already open underneath, so tapping
-// around never piles up screens. Swiping back still returns to where you were.
+// It acts like tabs on one stack of screens. Jobs goes back to the job you were in before Schedule,
+// Send or Me, and from there all the way back to the list of jobs, as tabs do. Schedule, Send and Me
+// go back to their screen when it is already open underneath, so tapping around never piles up
+// screens. Swiping back still returns to where you were.
 
 import { router, useNavigation } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
@@ -30,6 +31,9 @@ interface StackRoute {
   params?: Record<string, unknown>;
 }
 
+/** The screens the other tabs open: what sits under the first of them is where Jobs was. */
+const TAB_ROOTS = new Set(['jobs/[jobId]/schedule', 'jobs/[jobId]/send', 'settings/account']);
+
 export function TabBar({ active, jobId, locationId = null, onCapture, late }: PageTab) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -37,9 +41,11 @@ export function TabBar({ active, jobId, locationId = null, onCapture, late }: Pa
   const jobs = useData().useJobs();
   const job = jobId ?? (current && jobs.some((j) => j.id === current) ? current : null) ?? jobs.find((j) => !j.closed)?.id ?? null;
 
+  const stack = () => ((navigation.getState()?.routes ?? []) as StackRoute[]).map((r) => ({ name: r.name, jobId: r.params?.jobId }));
+
   /** Back to the screen when it is already open underneath; otherwise open it. */
   const open = (name: string, href: Parameters<typeof router.push>[0], forJob?: string) => {
-    const routes = ((navigation.getState()?.routes ?? []) as StackRoute[]).map((r) => ({ name: r.name, jobId: r.params?.jobId }));
+    const routes = stack();
     const top = routes.length - 1;
     let at = -1;
     for (let i = top; i >= 0; i -= 1) {
@@ -55,7 +61,11 @@ export function TabBar({ active, jobId, locationId = null, onCapture, late }: Pa
 
   const go: Record<TabKey | 'capture', () => void> = {
     jobs: () => {
-      if (router.canDismiss()) router.dismissAll();
+      // Out of another tab: back to the screen it was opened over. In Jobs already: to the list of jobs.
+      const routes = stack();
+      const root = routes.findIndex((r, i) => i > 0 && TAB_ROOTS.has(r.name));
+      if (root > 1) router.dismiss(routes.length - root);
+      else if (router.canDismiss()) router.dismissAll();
     },
     schedule: () => {
       if (!job) return router.navigate('/');
@@ -87,8 +97,8 @@ export function TabBar({ active, jobId, locationId = null, onCapture, late }: Pa
           go[key]();
         }}
         accessibilityRole="tab"
-        accessibilityState={{ selected: on }}
-        accessibilityLabel={shown ? `${label}, ${badge} late` : label}
+        aria-selected={on}
+        accessibilityLabel={shown ? `${label}, ${badge} past due` : label}
         testID={`tab-${key}`}
         style={styles.tab}
       >
@@ -96,7 +106,7 @@ export function TabBar({ active, jobId, locationId = null, onCapture, late }: Pa
         <View>
           <Icon name={icon} size={21} color={color} />
           {shown ? (
-            <View style={styles.badge}>
+            <View style={styles.badge} testID={`${key}-badge`}>
               <Text variant="stamp" weight="600" color={colors.white} style={styles.badgeText}>
                 {badge}
               </Text>

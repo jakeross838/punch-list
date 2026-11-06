@@ -179,6 +179,15 @@ describe('completing and removing', () => {
     expect(reopen(complete(item(), jake))).toMatchObject({ status: 'open', completedBy: null, completedAt: null });
   });
 
+  it("answers the company's done when it is completed, and Undo from the item as it was puts it back", () => {
+    const said = { ...item(), markedDoneAt: '2026-11-04T17:10:00.000Z' };
+    expect(complete(said, jake).markedDoneAt).toBeNull();
+    // Undo opens the item as it was before Complete, so it is To Check again.
+    expect(reopen(said).markedDoneAt).toBe('2026-11-04T17:10:00.000Z');
+    // Opened again later, from the completed item: still answered.
+    expect(reopen(complete(said, jake)).markedDoneAt).toBeNull();
+  });
+
   it('never deletes: removing marks the item Removed, and it can be restored', () => {
     const removed = remove(item());
     expect(removed.status).toBe('removed');

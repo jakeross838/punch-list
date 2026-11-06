@@ -237,7 +237,7 @@ export default function PlansScreen() {
                 <View key={t} style={styles.legendItem}>
                   {t === 'check' ? <View style={styles.legendCheck} /> : <Stamp color={TONE_COLOR[t]} size={9} />}
                   <Text variant="stamp" color={colors.secondary}>
-                    {counts.get(t)} {t === 'ok' ? 'Ready' : t === 'wait' ? 'Waiting' : t === 'late' ? 'Late' : 'To Check'}
+                    {counts.get(t)} {t === 'ok' ? 'Ready' : t === 'wait' ? 'Waiting' : t === 'late' ? 'Past Due' : 'To Check'}
                   </Text>
                 </View>
               ) : null,

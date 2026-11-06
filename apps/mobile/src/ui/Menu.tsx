@@ -75,7 +75,7 @@ export function MenuPanel({
                       feedback="highlight"
                       onPress={() => choose(action)}
                       accessibilityRole="menuitem"
-                      accessibilityState={action.checked !== undefined ? { checked: action.checked } : undefined}
+                      aria-checked={action.checked}
                       testID={action.testID}
                       style={[styles.item, ai > 0 ? styles.itemRule : null]}
                     >

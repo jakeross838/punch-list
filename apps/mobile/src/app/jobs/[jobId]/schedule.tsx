@@ -148,7 +148,7 @@ export default function ScheduleScreen() {
   return (
     <Page
       title="Schedule"
-      eyebrow={job ? `${job.name} · built from the list` : 'Built from the list'}
+      eyebrow="Built from the list"
       subtitle={subtitle || undefined}
       crumb={[job?.name ?? 'Job', 'Schedule']}
       jobSwitch={{ jobId, onChange: (next) => router.setParams({ jobId: next }) }}
@@ -158,7 +158,7 @@ export default function ScheduleScreen() {
         <Figures
           cells={[
             { label: 'Finish', value: timeline.finish ? shortDate(timeline.finish) : 'No date', testID: 'schedule-finish' },
-            { label: 'Late', value: String(late.length), color: late.length > 0 ? colors.destructive : colors.label, testID: 'schedule-late' },
+            { label: 'Past Due', value: String(late.length), color: late.length > 0 ? colors.destructive : colors.label, testID: 'schedule-late' },
             { label: 'To Confirm', value: String(visits.filter((v) => !v.removed && !v.confirmed).length), color: colors.tint, testID: 'schedule-to-confirm' },
             { label: 'No Date', value: String(timeline.noDate.length), testID: 'schedule-no-date' },
           ]}

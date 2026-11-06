@@ -84,8 +84,10 @@ export function asText(value: unknown): string | null {
 /** The fields that changed between two versions of an item, named and written the way the database logs them. */
 export function itemChanges(before: Item, after: Item): { field: string; before: string | null; after: string | null }[] {
   const out: { field: string; before: string | null; after: string | null }[] = [];
+  // Completed or opened again: the status says it, so the company's done mark going with it is not a line of its own.
+  const statusMoved = before.status !== after.status;
   for (const key of Object.keys(after) as (keyof Item)[]) {
-    if (NOT_LOGGED.has(key)) continue;
+    if (NOT_LOGGED.has(key) || (key === 'markedDoneAt' && statusMoved)) continue;
     const was = asText(before[key]);
     const now = asText(after[key]);
     if (was !== now) out.push({ field: columnOf(key), before: was, after: now });

@@ -13,7 +13,7 @@ import { Icon } from '@/ui/Icon';
 import { measureAnchor, MenuPanel, type MenuAnchor } from '@/ui/Menu';
 import { Text } from '@/ui/Text';
 import { Touchable } from '@/ui/Touchable';
-import { initials } from './ActivityRow';
+import { initials } from './initials';
 
 export function UpdatesBell() {
   const unseen = useUnseenUpdates();

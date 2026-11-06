@@ -15,6 +15,7 @@ import {
   isFiltered,
   NO_FILTERS,
   pastDue,
+  scheduleEmailDue,
   totalText,
   totalTime,
   type GroupBy,
@@ -170,7 +171,9 @@ export default function JobScreen() {
   const groups = useMemo(() => groupItems(items, view.groupBy, lookups, { filters, context }), [items, view.groupBy, lookups, filters, context]);
   const draftItems = items.filter((i) => i.unfinished && i.status === 'open');
   const drafts = draftItems.length;
-  const late = useMemo(() => pastDue(items, visits, today).length, [items, visits, today]);
+  const lateIds = useMemo(() => new Set(pastDue(items, visits, today).map((p) => p.item.id)), [items, visits, today]);
+  const late = lateIds.size;
+  const sends = data.useSends(jobId);
   const rows: Row[] = groups.map((group) => ({ group })).filter((r) => r.group.open > 0 || (view.groupBy === 'room' && !narrowed));
 
   // An item waiting on two things shows under both, but counts once.
@@ -272,7 +275,7 @@ export default function JobScreen() {
       {
         actions: [
           { label: 'Activity', icon: 'clock', onPress: openActivity, testID: 'activity' },
-          { label: 'Make a List', icon: 'doc', onPress: openSend, testID: 'make-list' },
+          { label: 'Make a List', icon: 'doc', onPress: () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId, start: 'list' } }), testID: 'make-list' },
           ...(walked > 0 ? [{ label: 'Start a New Walk', icon: 'rooms' as IconName, onPress: newWalk, testID: 'new-walk' }] : []),
           { label: 'Add From a Template', icon: 'templates', onPress: () => setTemplateSheet(true), testID: 'add-template' },
           { label: 'Job Setup', icon: 'slider', onPress: openSetup, testID: 'job-setup' },
@@ -339,7 +342,7 @@ export default function JobScreen() {
       </View>
     ) : null;
   // The filters that are on, as chips that take them off.
-  const filterBar = <FilterBar jobId={jobId} filters={filters} onChange={(next) => setView({ ...view, filters: next })} />;
+  const filterBar = <FilterBar jobId={jobId} filters={filters} onChange={(next) => setView({ ...view, filters: next })} style={styles.filterBar} />;
   const filterCount = Object.values(filters).reduce((n, v) => n + (Array.isArray(v) ? v.length : v ? 1 : 0), 0);
   const groupChips = (
     <ChipRow
@@ -357,17 +360,39 @@ export default function JobScreen() {
     />
   );
   const readyCount = allOpen.filter((i) => i.ready && !i.unfinished && !i.markedDoneAt).length;
-  const toCheck = items.filter((i) => i.status === 'open' && !i.unfinished && i.markedDoneAt).length;
+  // Thursday and Friday, until the Schedule Email goes out this week.
+  const fridayRow = scheduleEmailDue(sends, today, total > 0) ? (
+    <Touchable
+      feedback="highlight"
+      onPress={openSend}
+      accessibilityRole="button"
+      accessibilityLabel="The Schedule Email has not gone out this week. Send it"
+      testID="friday-reminder"
+      style={[styles.note, styles.friday]}
+    >
+      <Stamp color={colors.destructive} size={8} />
+      <Text variant="label" weight="600" style={{ flex: 1 }}>
+        The Schedule Email has not gone out this week
+      </Text>
+      <Text variant="label" color={colors.tint}>
+        Send
+      </Text>
+      <Icon name="chevron.right" size={11} color={colors.tint} weight="semibold" />
+    </Touchable>
+  ) : null;
+  // The figures count what the list below shows: the whole job, or what the filters leave.
+  const toCheck = allOpen.filter((i) => !i.unfinished && i.markedDoneAt).length;
+  const lateShown = narrowed ? allOpen.filter((i) => lateIds.has(i.id)).length : late;
   const openState = (state: 'ready' | 'waiting' | 'check') =>
     router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'state', key: state } });
   const top = (
     <View>
       <Figures
         cells={[
-          { label: 'Open', value: String(total), onPress: () => openState('waiting'), testID: 'count-open' },
+          { label: 'Open', value: String(total), testID: 'count-open' },
           { label: 'Ready', value: String(readyCount), color: colors.ok, onPress: () => openState('ready'), testID: 'count-ready' },
           { label: 'To Check', value: String(toCheck), color: colors.tint, onPress: () => openState('check'), testID: 'count-check' },
-          { label: 'Late', value: String(late), color: late > 0 ? colors.destructive : colors.label, onPress: () => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'due', key: 'all' } }), testID: 'count-late' },
+          { label: 'Past Due', value: String(lateShown), color: lateShown > 0 ? colors.destructive : colors.label, onPress: () => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'due', key: 'all' } }), testID: 'count-late' },
         ]}
       />
       <Tiles
@@ -375,9 +400,9 @@ export default function JobScreen() {
         tiles={[
           {
             icon: 'camera',
-            label: walked > 0 && nextToWalk ? 'Walk On' : 'Walk',
+            label: 'Walk',
             primary: true,
-            badge: walked > 0 ? `${walked}/${inOrder.length}` : undefined,
+            badge: walked > 0 ? `${walked} of ${inOrder.length}` : undefined,
             onPress: () => (walked > 0 && !nextToWalk ? newWalk() : openCamera(nextToWalk?.id ?? null)),
             testID: 'walk',
           },
@@ -455,6 +480,7 @@ export default function JobScreen() {
                   {scroll.header}
                   {groupChips}
                   {filterBar}
+                  {fridayRow}
                   {pasteRow}
                   {draftsRow}
                 </View>
@@ -540,7 +566,7 @@ function GroupRow({
   const label = by === 'room' && location ? location.label : group.label;
   const time = totalText(group.time);
   const pct = share && share.all > 0 ? share.done / share.all : count === 0 ? 1 : 0;
-  const late = group.late > 0 ? `${group.late} ${group.late === 1 ? 'day' : 'days'} late` : group.pastDue > 0 ? `${group.pastDue} late` : '';
+  const late = group.late > 0 ? `${group.late} ${group.late === 1 ? 'day' : 'days'} past due` : group.pastDue > 0 ? `${group.pastDue} past due` : '';
   const said = [label, count === 0 ? 'nothing open' : `${count} open`, sayReady && count > 0 ? `${group.ready} ready` : '', late, time, doneBy && count > 0 ? `done by ${shortDate(doneBy)}` : '', `${Math.round(pct * 100)} percent complete`]
     .filter(Boolean)
     .join(', ');
@@ -590,6 +616,7 @@ function GroupRow({
 const styles = StyleSheet.create({
   tiles: { marginTop: 10 },
   groups: { marginBottom: 6 },
+  filterBar: { marginTop: 4, marginBottom: 4 },
   note: {
     minHeight: 44,
     flexDirection: 'row',
@@ -604,6 +631,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.stripe,
   },
   pasteNote: { backgroundColor: colors.bar, borderColor: colors.bar },
+  friday: { backgroundColor: colors.cell, borderColor: colors.borderStrong },
   sectionLabel: { marginTop: 16, marginBottom: 8 },
   row: {
     marginHorizontal: layout.margin,

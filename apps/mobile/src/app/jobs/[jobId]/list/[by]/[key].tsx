@@ -26,7 +26,6 @@ import {
   isFiltered,
   neighborRooms,
   pastDue,
-  pastDueText,
   SHARED_GROUP,
   sortItems,
   totalText,
@@ -48,7 +47,7 @@ import { SelectionBar } from "@/components/SelectionBar";
 import { AddTemplateSheet, SaveTemplateSheet } from "@/components/TemplateSheets";
 import { isFilling, useDraftFill } from "@/components/draftFill";
 import { FilterBar } from "@/components/FilterBar";
-import { ItemRow } from "@/components/ItemRow";
+import { ItemRow, type PastDueNote } from "@/components/ItemRow";
 import { useItemActions } from "@/components/useItemActions";
 import { colors, layout } from "@/constants/theme";
 import { useData } from "@/data/api";
@@ -256,7 +255,7 @@ export default function GroupScreen() {
       facts={[
         { text: `${openNow.length} ${stateList === "check" ? "to check" : stateList === "ready" ? "ready" : "open"}`, color: stateList === "ready" ? colors.ok : stateList === "check" ? colors.tint : colors.label },
         !stateList && readyNow > 0 ? { text: `${readyNow} ready`, color: colors.ok } : null,
-        !due && lateNow > 0 ? { text: `${lateNow} late`, color: colors.destructive } : null,
+        !due && lateNow > 0 ? { text: `${lateNow} past due`, color: colors.destructive } : null,
         stateList ? `${companiesNow} ${companiesNow === 1 ? "company" : "companies"}` : null,
         openTime ? `About ${openTime}` : null,
       ]}
@@ -274,12 +273,13 @@ export default function GroupScreen() {
     drafts && isFilling(fill, item.id)
       ? "Filling in from the photo"
       : undefined;
-  const lateFor = (item: Item) => {
+  const lateFor = (item: Item): PastDueNote | undefined => {
     const p = lateBy.get(item.id);
     if (!p) return undefined;
-    return p.reason === "visit"
-      ? `visit ended ${p.days === 1 ? "1 day" : `${p.days} days`} ago`
-      : pastDueText(p.days);
+    return {
+      days: p.days,
+      why: p.reason === "visit" ? `Visit ended ${p.days === 1 ? "1 day" : `${p.days} days`} ago` : undefined,
+    };
   };
 
   // What it waits on, for every open item it holds up at once.
@@ -434,12 +434,13 @@ export default function GroupScreen() {
     haptic.success();
     const changes = doing.map((i) => {
       const next = complete(fieldsOf(i), me);
-      return { id: i.id, patch: { status: next.status, completedBy: next.completedBy, completedAt: next.completedAt } };
+      return { id: i.id, patch: { status: next.status, completedBy: next.completedBy, completedAt: next.completedAt, markedDoneAt: null } };
     });
     void data.updateItems(changes);
     feedback.toast({
       message: `Completed ${itemsWord(doing.length)}`,
-      action: { label: "Undo", onPress: () => void data.updateItems(doing.map((i) => ({ id: i.id, patch: { status: "open", completedBy: null, completedAt: null } }))) },
+      // Back as they were, a company's done mark included.
+      action: { label: "Undo", onPress: () => void data.updateItems(doing.map((i) => ({ id: i.id, patch: { status: "open", completedBy: null, completedAt: null, markedDoneAt: i.markedDoneAt ?? null } }))) },
     });
     stopPicking();
   };
@@ -506,7 +507,7 @@ export default function GroupScreen() {
   const crumbWhere = due ? "Past Due" : drafts ? "Drafts" : stateList ? title : room ? null : title;
   const crumb = [job?.name ?? "Job", ...(room ? [room.kind === "shared" ? SHARED_GROUP : (room.floor ?? ""), room.label].filter(Boolean) : crumbWhere ? [crumbWhere] : [])];
   const eyebrow = due
-    ? "Open and late"
+    ? "Schedule"
     : drafts
       ? "Saved to finish later"
       : stateList === "ready"
@@ -547,7 +548,7 @@ export default function GroupScreen() {
         location={locationFor(item)}
         company={companyFor(item)}
         note={noteFor(item)}
-        lateText={lateFor(item)}
+        late={lateFor(item)}
         first={index === 0}
         last={index === section.data.length - 1}
         stripe={index % 2 === 1}
@@ -574,7 +575,7 @@ export default function GroupScreen() {
         crumb={crumb}
         backLabel={job?.name}
         right={right}
-        tab={selecting ? undefined : { active: "jobs", jobId, locationId: room?.id ?? null }}
+        tab={selecting ? undefined : { active: due ? "schedule" : "jobs", jobId, locationId: room?.id ?? null }}
         footerHeight={selecting ? 74 : 0}
         footer={
           selecting ? (
@@ -725,7 +726,7 @@ export default function GroupScreen() {
                   feedback="opacity"
                   onPress={toggleDone}
                   accessibilityRole="button"
-                  accessibilityState={{ expanded: doneShown }}
+                  aria-expanded={doneShown}
                   accessibilityLabel={`Completed, ${itemsWord(done.length)}`}
                   accessibilityHint={doneShown ? "Hides the completed items" : "Shows the completed items"}
                   testID="completed-toggle"

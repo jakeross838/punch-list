@@ -27,6 +27,7 @@ How each service behind the app is set up, and where its secrets are kept. Secre
   ```
 
 - Checked: the connection test, the sync config check and the deploy pass; the first copy of the database is done and every synced table replicates; a request with no sign in is refused.
+- Deployed again on 5 November for build 4, with the plans (`plan_sheets`) and the items' new columns: run from the repository root, since the command line looks for the `powersync` folder there. Supabase changes go in first, then the sync config, then the build, so a phone never asks for a table the database does not have yet.
 
 ## Expo
 
@@ -43,7 +44,7 @@ How each service behind the app is set up, and where its secrets are kept. Secre
 - Apple Developer Program: active since 2 November 2026, on Jake's Apple Account (jakeross838@gmail.com), as an individual. Team ID `HZVH9SG629`.
 - Bundle identifier `com.rossbuilt.punchlist`, registered at Apple. The name on the iPhone is Punch List.
 - App Store Connect record: Ross Built Punch List (Apple ID `6831305928`, SKU `rossbuilt-punchlist`), in `apps/mobile/eas.json` under `submit`.
-- App Store Connect API key: Expo EAS Punch List, Admin, key ID `LU54LZZAX7`. The key file and the issuer ID are in `local/secrets/` (`AuthKey_LU54LZZAX7.p8`, `apple.env`). Apple lets the key file be downloaded only once; the copy in `local/secrets/` and Jake's are the only ones.
+- App Store Connect API key: Expo EAS Punch List, Admin. The key file, its key ID and the issuer ID are in `local/secrets/` (the `.p8` file and `apple.env`), never in the repo, which is public. Apple lets the key file be downloaded only once; the copy in `local/secrets/` and Jake's are the only ones.
 - Signing: the distribution certificate and the App Store provisioning profile were made with `eas credentials` and the API key, and are kept by Expo. Both expire 5 November 2027.
 - The app says it uses no encryption that needs an export declaration, so TestFlight builds do not stop on that question.
 - TestFlight: the internal group Ross Built has every build, and Jake is in it. Apple invites the group when a processed build is ready.
@@ -51,5 +52,5 @@ How each service behind the app is set up, and where its secrets are kept. Secre
   1. Push to `main`, then on expo.dev, Builds, Build from GitHub: iOS, git ref `main`, profile `production`. Expo numbers the builds. A build takes about 5 to 10 minutes.
   2. Download the build's .ipa (the build's Artifact link) into an empty folder and run `node tools/upload-testflight.mjs <ipa> <version> <build number>`. It uploads straight to App Store Connect with Apple's build upload API and the key in `local/secrets/`, in about 3 minutes, the same calls Expo's submit makes (build 3, 5 November).
   3. Apple processes the build (a few minutes) and TestFlight offers it to the Ross Built group by itself, with a notice to Jake.
-  - The other way to upload is `npx eas-cli submit -p ios --id <build id> --non-interactive`, with the key added to the submit profile for that one run (`ascApiKeyPath` `../../local/secrets/AuthKey_LU54LZZAX7.p8`, `ascApiKeyId`, `ascApiKeyIssuerId` from `apple.env`) and `eas.json` put back as committed. It waits in Expo's free submission queue first (about 35 minutes on 5 November). The key cannot be stored on Expo for automatic uploads without signing in with the Apple ID's password, which is not done here.
+  - The other way to upload is `npx eas-cli submit -p ios --id <build id> --non-interactive`, with the key added to the submit profile for that one run (`ascApiKeyPath`, `ascApiKeyId` and `ascApiKeyIssuerId` from `apple.env`) and `eas.json` put back as committed. It waits in Expo's free submission queue first (about 35 minutes on 5 November). The key cannot be stored on Expo for automatic uploads without signing in with the Apple ID's password, which is not done here.
 - Expo's free plan queues builds and submissions; builds started within a minute on 5 November.

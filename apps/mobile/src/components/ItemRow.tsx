@@ -1,5 +1,5 @@
 // One item in a list, Site Office style: the square box to check it off, the title, then a status
-// pill (Ready, Waiting, 3 Days Late, To Check, Draft, Complete) with a short mono note beside it:
+// pill (Ready, Waiting, 3 Days Past Due, To Check, Draft, Complete) with a short mono note beside it:
 // what it waits on, when its visit is, who said it is done. Where it is and who does it go under
 // that in lists that are not one location's or one company's. Its photo sits at the end; an open
 // item with no photo yet has an empty dashed slot: tap it to take the photo. How many comments it
@@ -27,12 +27,18 @@ import { CompleteCircle, dayOf, Icon, isBeforeToday, PhotoView, Pill, shortDate,
 
 const PHOTO = 44;
 
+/** Past Due's word for an item: how many days, and why when it is not the plain Ready By, like "Visit ended 3 days ago". */
+export type PastDueNote = { days: number; why?: string };
+
+/** "1 Day Past Due", "10 Days Past Due". */
+const daysPastDue = (days: number) => `${days} ${days === 1 ? 'Day' : 'Days'} Past Due`;
+
 /** The pill and the note beside it, for an item as it stands. */
 export function itemStatus(
   item: Item,
-  options: { holds?: HoldLookups; checking?: boolean; lateText?: string; note?: string; completedBy?: string; company?: string },
+  options: { holds?: HoldLookups; checking?: boolean; late?: PastDueNote; note?: string; completedBy?: string; company?: string },
 ): { tone: PillTone; text: string; note?: string } {
-  const { holds, checking, lateText, note, completedBy, company } = options;
+  const { holds, checking, late: pastDue, note, completedBy, company } = options;
   if (item.status === 'complete' || checking) {
     const when = item.completedAt && !Number.isNaN(new Date(item.completedAt).getTime()) ? dayOf(item.completedAt) : null;
     return { tone: 'done', text: 'Complete', note: [when, completedBy].filter(Boolean).join(' · ') || undefined };
@@ -46,15 +52,14 @@ export function itemStatus(
   }
   if (!item.ready) {
     const late = item.readyBy !== null && isBeforeToday(item.readyBy);
-    const days = late && item.readyBy ? daysBetween(item.readyBy, dayOfDate(new Date())) : 0;
+    const days = pastDue?.days ?? (late && item.readyBy ? daysBetween(item.readyBy, dayOfDate(new Date())) : 0);
     const on = holds ? holdText(item, holds) : waitingOnText(item.waitingOn);
     const by = holds ? readyByOf(item, holds) : item.readyBy;
-    const waits = on ? `On ${on}` : undefined;
-    if (lateText) return { tone: 'late', text: lateText, note: waits };
-    if (late) return { tone: 'late', text: `${days} ${days === 1 ? 'Day' : 'Days'} Late`, note: waits };
-    return { tone: 'wait', text: 'Waiting', note: [waits, by ? `Ready by ${shortDate(by)}` : null].filter(Boolean).join(' · ') || undefined };
+    // Under a Waiting pill the note says what on; under a Past Due one it has to say waiting itself.
+    if (pastDue || late) return { tone: 'late', text: daysPastDue(days), note: [pastDue?.why, on ? `Waiting on ${on}` : null].filter(Boolean).join(' · ') || undefined };
+    return { tone: 'wait', text: 'Waiting', note: [on ? `On ${on}` : null, by ? `Ready by ${shortDate(by)}` : null].filter(Boolean).join(' · ') || undefined };
   }
-  if (lateText) return { tone: 'late', text: lateText };
+  if (pastDue) return { tone: 'late', text: daysPastDue(pastDue.days), note: pastDue.why };
   const visit = item.visitId ? holds?.visits.get(item.visitId) : undefined;
   if (item.kind === 'added_scope' && !item.poOrCo) return { tone: 'quote', text: 'To Be Quoted' };
   return { tone: 'ok', text: 'Ready', note: visit ? `Visit ${weekdayDate(visit.start)}` : undefined };
@@ -66,7 +71,7 @@ export const ItemRow = memo(function ItemRow({
   location,
   company,
   note,
-  lateText,
+  late,
   comments = 0,
   holds,
   first = false,
@@ -92,8 +97,8 @@ export const ItemRow = memo(function ItemRow({
   company?: string;
   /** For a draft: said in place of what it still needs, like "Filling in from the photo". */
   note?: string;
-  /** Past Due's own words for how late it is. */
-  lateText?: string;
+  /** On Past Due: how late it is, and why. */
+  late?: PastDueNote;
   /** How many comments it has. */
   comments?: number;
   /** The job's items and visits: to name the tasks it waits on and when they are scheduled. */
@@ -125,7 +130,7 @@ export const ItemRow = memo(function ItemRow({
   const open = item.status === 'open' && !checking;
   const title = item.title || 'No title yet';
   const time = item.hours !== null && open ? hoursText(item.hours) : null;
-  const status = itemStatus(item, { holds, checking, lateText, note, completedBy, company });
+  const status = itemStatus(item, { holds, checking, late, note, completedBy, company });
   const kind = item.kind === 'completion' || item.unfinished ? undefined : kindText(item);
   const where = [location, company, kind].filter(Boolean).join(' · ');
   const talk = comments > 0 ? commentCountText(comments) : undefined;
@@ -142,82 +147,84 @@ export const ItemRow = memo(function ItemRow({
 
   return (
     <SwipeRow actions={actions} style={[styles.swipe, first ? styles.first : null, last ? styles.last : styles.ruled]}>
-      <Touchable
-        feedback="highlight"
-        pressDelay={50}
-        onPress={() => (select ? select.onToggle(item) : onOpen(item))}
-        onLongPress={onLongPress && !select ? () => onLongPress(item) : undefined}
-        delayLongPress={450}
-        style={[styles.row, stripe ? styles.stripe : null]}
-        accessibilityRole={select ? 'checkbox' : 'button'}
-        accessibilityState={select ? { checked: select.picked } : undefined}
-        accessibilityLabel={said}
-        testID={`item-${item.id}`}
-      >
-        <View style={styles.lead}>
-          {select ? (
-            <View style={[styles.pick, select.picked ? styles.picked : null]} testID={`pick-${item.id}`}>
-              {select.picked ? <Icon name="checkmark" size={14} color={colors.onBar} weight="bold" /> : null}
-            </View>
-          ) : item.unfinished ? (
-            <View style={styles.draft}>
-              <Icon name="pencil.tip" size={12} color={colors.secondary} weight="medium" />
-            </View>
-          ) : (
-            <CompleteCircle checked={done} onPress={() => onCheck(item)} label={done ? `Reopen ${item.title}` : `Complete ${item.title}`} testID={`check-${item.id}`} />
-          )}
-        </View>
-        <View style={styles.text}>
-          <View style={styles.titleLine}>
-            {item.priority && open ? <View style={styles.priority} accessibilityLabel="Priority" /> : null}
-            <Text numberOfLines={2} color={done || !item.title ? colors.secondary : colors.label} style={[styles.title, done ? styles.crossed : null]}>
-              {title}
-            </Text>
-            {time ? (
-              <Text variant="label" color={colors.secondary} tabular style={styles.time} testID={`time-${item.id}`}>
-                {time}
-              </Text>
-            ) : null}
-          </View>
-          <View style={styles.statusLine}>
-            <Pill text={status.text} tone={status.tone} />
-            {status.note ? (
-              <Text variant="stamp" color={colors.secondary} numberOfLines={1} style={styles.note} testID={done ? `done-${item.id}` : undefined}>
-                {status.note}
-              </Text>
-            ) : null}
-          </View>
-          {where ? (
-            <Text variant="stamp" color={colors.secondary} numberOfLines={1} style={styles.where}>
-              {where}
-            </Text>
-          ) : null}
-        </View>
-        {talk ? (
-          <View style={styles.talk} accessible={false}>
-            <Icon name="message" size={14} color={colors.secondary} />
-            <Text variant="label" color={colors.secondary} tabular>
-              {comments}
-            </Text>
-          </View>
-        ) : null}
-        {photo ? <PhotoView photo={photo} width={PHOTO} height={PHOTO} /> : slot ? <View style={styles.photoSpace} /> : null}
-        {trailing}
-      </Touchable>
-      {slot ? (
-        // Beside the row rather than in it: a button inside a button is not allowed on the web.
+      <View testID={`item-${item.id}`}>
         <Touchable
-          feedback="opacity"
-          onPress={() => onAddPhoto?.(item)}
-          hitSlop={6}
-          accessibilityRole="button"
-          accessibilityLabel={`Take a photo for ${item.title || 'this draft'}`}
-          testID={`add-photo-${item.id}`}
-          style={[styles.photoSlot, { right: layout.rowPadding + (trailing ? 34 : 0) }]}
+          feedback="highlight"
+          pressDelay={50}
+          onPress={() => (select ? select.onToggle(item) : onOpen(item))}
+          onLongPress={onLongPress && !select ? () => onLongPress(item) : undefined}
+          delayLongPress={450}
+          style={[styles.row, stripe ? styles.stripe : null]}
+          accessibilityRole={select ? 'checkbox' : 'button'}
+          aria-checked={select ? select.picked : undefined}
+          accessibilityLabel={said}
+          testID={`open-${item.id}`}
         >
-          <Icon name="camera" size={16} color={colors.quiet} />
+          <View style={styles.lead}>
+            {select ? (
+              <View style={[styles.pick, select.picked ? styles.picked : null]} testID={`pick-${item.id}`}>
+                {select.picked ? <Icon name="checkmark" size={14} color={colors.onBar} weight="bold" /> : null}
+              </View>
+            ) : item.unfinished ? (
+              <View style={styles.draft}>
+                <Icon name="pencil.tip" size={12} color={colors.secondary} weight="medium" />
+              </View>
+            ) : (
+              <CompleteCircle checked={done} onPress={() => onCheck(item)} label={done ? `Reopen ${item.title}` : `Complete ${item.title}`} testID={`check-${item.id}`} />
+            )}
+          </View>
+          <View style={styles.text}>
+            <View style={styles.titleLine}>
+              {item.priority && open ? <View style={styles.priority} accessibilityLabel="Priority" /> : null}
+              <Text numberOfLines={2} color={done || !item.title ? colors.secondary : colors.label} style={[styles.title, done ? styles.crossed : null]}>
+                {title}
+              </Text>
+              {time ? (
+                <Text variant="label" color={colors.secondary} tabular style={styles.time} testID={`time-${item.id}`}>
+                  {time}
+                </Text>
+              ) : null}
+            </View>
+            <View style={styles.statusLine}>
+              <Pill text={status.text} tone={status.tone} />
+              {status.note ? (
+                <Text variant="stamp" color={colors.secondary} numberOfLines={2} style={styles.note} testID={done ? `done-${item.id}` : undefined}>
+                  {status.note}
+                </Text>
+              ) : null}
+            </View>
+            {where ? (
+              <Text variant="stamp" color={colors.secondary} numberOfLines={2} style={styles.where}>
+                {where}
+              </Text>
+            ) : null}
+          </View>
+          {talk ? (
+            <View style={styles.talk} accessible={false}>
+              <Icon name="message" size={14} color={colors.secondary} />
+              <Text variant="label" color={colors.secondary} tabular>
+                {comments}
+              </Text>
+            </View>
+          ) : null}
+          {photo ? <PhotoView photo={photo} width={PHOTO} height={PHOTO} /> : slot ? <View style={styles.photoSpace} /> : null}
+          {trailing}
         </Touchable>
-      ) : null}
+        {slot ? (
+          // Beside the row rather than in it: a button inside a button is not allowed on the web.
+          <Touchable
+            feedback="opacity"
+            onPress={() => onAddPhoto?.(item)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={`Take a photo for ${item.title || 'this draft'}`}
+            testID={`add-photo-${item.id}`}
+            style={[styles.photoSlot, { right: layout.rowPadding + (trailing ? 34 : 0) }]}
+          >
+            <Icon name="camera" size={16} color={colors.quiet} />
+          </Touchable>
+        ) : null}
+      </View>
     </SwipeRow>
   );
 });
@@ -242,7 +249,7 @@ const styles = StyleSheet.create({
   priority: { width: 6, height: 6, marginTop: 7, backgroundColor: colors.destructive },
   crossed: { textDecorationLine: 'line-through', textDecorationColor: colors.secondary },
   time: { paddingTop: 3 },
-  statusLine: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
+  statusLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 5, minWidth: 0 },
   note: { flexShrink: 1, letterSpacing: 1 },
   where: { letterSpacing: 1.1 },
   talk: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingTop: 2 },

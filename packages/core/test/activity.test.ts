@@ -70,6 +70,14 @@ describe('activity', () => {
     ]);
   });
 
+  it("leaves the company's done out of the log when the status says it, as the database does", () => {
+    const said = item({ markedDoneAt: '2026-11-04T17:10:00.000Z' });
+    const done = item({ status: 'complete', completedBy: 'jake', completedAt: at(5), markedDoneAt: null });
+    expect(itemChanges(said, done).map((c) => c.field)).not.toContain('marked_done_at');
+    // Not Done on its own is a line: back on the company's list.
+    expect(itemChanges(said, item({ markedDoneAt: null })).map((c) => c.field)).toEqual(['marked_done_at']);
+  });
+
   it('reads adding an item and its photo, done together, as one line', () => {
     const lines = activityLines(
       [entry({ kind: 'item_created', at: at(0), field: 'created', after: 'Patch drywall' }), entry({ kind: 'photo_added', at: at(1) }), entry({ kind: 'photo_marked', at: at(2) })],

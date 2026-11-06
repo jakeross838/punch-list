@@ -165,7 +165,7 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
         disabled={there}
         onPress={() => toggle(e.key)}
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: on, disabled: there }}
+        aria-checked={on} aria-disabled={there}
         accessibilityLabel={`${e.title}, ${detail}`}
         testID={`common-task-${e.title}`}
         style={[styles.row, i > 0 ? styles.rule : null]}

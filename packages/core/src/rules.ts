@@ -159,7 +159,8 @@ export function complete<T extends ItemFields>(item: T, by: Person, at: Date = n
   if (!by.active) throw new RuleError('Only Ross Built can mark items complete');
   if (item.status === 'removed') throw new RuleError('Restore it to the list first');
   if (item.unfinished) throw new RuleError('Finish the draft before you mark it complete');
-  return { ...item, status: 'complete', completedBy: by.id, completedAt: at.toISOString() };
+  // Complete answers the company's word that it is done; Undo puts the word back as it was.
+  return { ...item, status: 'complete', completedBy: by.id, completedAt: at.toISOString(), markedDoneAt: null };
 }
 
 export function reopen<T extends ItemFields>(item: T): T {

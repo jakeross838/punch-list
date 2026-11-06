@@ -27,7 +27,7 @@ export function CompleteCircle({
       onPress={onPress}
       hitSlop={{ top: 14, bottom: 14, left: 16, right: 12 }}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
+      aria-checked={checked}
       accessibilityLabel={label}
       testID={testID}
       style={styles.hit}

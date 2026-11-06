@@ -28,7 +28,7 @@ export function Switch({ value, onValueChange, accessibilityLabel, disabled, tes
       }}
       disabled={disabled}
       accessibilityRole="switch"
-      accessibilityState={{ checked: value, disabled }}
+      aria-checked={value} aria-disabled={disabled}
       accessibilityLabel={accessibilityLabel}
       testID={testID}
       hitSlop={10}

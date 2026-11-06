@@ -119,9 +119,9 @@ export default function UpdatesScreen() {
       ))}
       <ChipRow
         chips={[
-          { key: 'all', label: 'All jobs', on: only === 'all', onPress: () => setOnly('all'), testID: 'updates-all' },
+          { key: 'all', label: 'All Jobs', on: only === 'all', onPress: () => setOnly('all'), testID: 'updates-all' },
           ...jobsWith.map((j) => ({ key: j.id, label: j.name, on: only === j.id, onPress: () => setOnly(j.id), testID: `updates-job-${j.id}` })),
-          { key: 'needs', label: 'Needs me', on: only === 'needs', onPress: () => setOnly('needs'), testID: 'updates-needs' },
+          { key: 'needs', label: 'Needs Me', on: only === 'needs', onPress: () => setOnly('needs'), testID: 'updates-needs' },
         ]}
       />
       {days.length === 0 ? (

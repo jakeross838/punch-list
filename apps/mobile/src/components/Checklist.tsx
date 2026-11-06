@@ -52,7 +52,7 @@ export function Checklist({ value, onChange, editable = true }: { value: Checkli
               onPress={() => toggle(e.id)}
               disabled={!editable}
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: e.done }}
+              aria-checked={e.done}
               accessibilityLabel={e.text}
               testID={`step-${i}`}
               style={styles.step}

@@ -4,7 +4,7 @@
 // and by how many working days, who is new on it, who confirmed, who is all done and who has no date
 // any more, and the finish date then and now.
 
-import { addDays, isWorkingDay } from './dates';
+import { addDays, isDay, isWorkingDay, mondayOf } from './dates';
 import type { Timeline } from './timeline';
 import type { ListSend, ScheduleSnapshot } from './types';
 
@@ -113,6 +113,20 @@ export function lastScheduleSend(sends: ListSend[]): ListSend | undefined {
   return sends
     .filter((s) => !s.removed && (s.list === 'schedule' || s.list === 'lookahead') && s.snapshot)
     .sort((a, b) => b.sentAt.localeCompare(a.sentAt))[0];
+}
+
+/**
+ * The Friday reminder: on Thursday and Friday, when the job has open work and the Schedule Email has
+ * not gone out since Monday, it is time to send it so the companies can confirm their dates.
+ */
+export function scheduleEmailDue(sends: ListSend[], today: string, hasOpenWork: boolean): boolean {
+  if (!hasOpenWork || !isDay(today)) return false;
+  const [y, m, d] = today.split('-').map(Number) as [number, number, number];
+  const weekday = new Date(y, m - 1, d).getDay();
+  if (weekday !== 4 && weekday !== 5) return false;
+  const monday = mondayOf(today);
+  const last = lastScheduleSend(sends);
+  return !last || last.sentAt.slice(0, 10) < monday;
 }
 
 /** "5 working days later", "1 working day earlier" */

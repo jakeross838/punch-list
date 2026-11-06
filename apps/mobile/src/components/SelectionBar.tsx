@@ -25,7 +25,7 @@ export function SelectionBar({ count, tools }: { count: number; tools: Selection
           disabled={off}
           onPress={t.onPress}
           accessibilityRole="button"
-          accessibilityState={{ disabled: off }}
+          aria-disabled={off}
           accessibilityLabel={t.label}
           testID={t.testID}
           style={[styles.tool, off ? styles.off : null]}

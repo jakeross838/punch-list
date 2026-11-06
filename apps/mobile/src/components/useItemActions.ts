@@ -87,7 +87,8 @@ export function useItemActions(jobId: string) {
     async (item: Item, change: (f: ItemFields) => ItemFields): Promise<boolean> => {
       try {
         const next = change(fieldsOf(item));
-        await data.updateItem(item.id, { status: next.status, completedBy: next.completedBy, completedAt: next.completedAt });
+        // The company's done mark goes with it: Complete answers it, and Undo, from the item as it was, puts it back.
+        await data.updateItem(item.id, { status: next.status, completedBy: next.completedBy, completedAt: next.completedAt, markedDoneAt: next.markedDoneAt ?? null });
         return true;
       } catch (e) {
         haptic.warning();

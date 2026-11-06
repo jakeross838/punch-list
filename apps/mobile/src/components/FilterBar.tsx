@@ -4,7 +4,7 @@
 
 import { filterChips, NO_FILTERS, type FilterNames, type ItemFilters } from '@punch/core';
 import { useMemo } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { Chip, haptic, Text, Touchable, type IconName } from '@/ui';
@@ -31,6 +31,7 @@ export function FilterBar({
   onChange,
   onOpen,
   grouping,
+  style,
 }: {
   jobId: string;
   filters: ItemFilters;
@@ -38,6 +39,7 @@ export function FilterBar({
   onOpen?: () => void;
   /** Always shown, with Filter and how the job is grouped first: "By Location". */
   grouping?: { label: string; icon: IconName; showCompleted: boolean };
+  style?: StyleProp<ViewStyle>;
 }) {
   const names = useFilterNames(jobId);
   const chips = filterChips(filters, names);
@@ -47,7 +49,7 @@ export function FilterBar({
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.row}
-      style={[styles.bar, grouping ? styles.top : null]}
+      style={[styles.bar, grouping ? styles.top : null, style]}
       testID={chips.length > 0 ? 'filter-bar' : 'filter-top'}
     >
       {grouping && onOpen ? (

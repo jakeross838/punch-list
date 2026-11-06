@@ -16,7 +16,7 @@ export function Checkbox({ checked, onPress, label, testID }: { checked: boolean
     );
   }
   return (
-    <Pressable onPress={onPress} hitSlop={12} accessibilityRole="checkbox" accessibilityState={{ checked }} accessibilityLabel={label} testID={testID}>
+    <Pressable onPress={onPress} hitSlop={12} accessibilityRole="checkbox" aria-checked={checked} accessibilityLabel={label} testID={testID}>
       {box}
     </Pressable>
   );

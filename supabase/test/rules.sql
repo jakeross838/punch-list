@@ -620,6 +620,24 @@ begin
     raise exception 'FAIL: a made up link was accepted';
   exception when insufficient_privilege then null;
   end;
+  -- Its work: done, for Ross Built to check. The item stays open and on the page, marked.
+  perform public.trade_mark_done(link, current_setting('test.item')::uuid, true, ' Mike ');
+  page := public.trade_page(link);
+  if not exists (select 1 from jsonb_array_elements(page -> 'items') x where x ->> 'id' = current_setting('test.item') and x ->> 'marked_done_at' is not null) then
+    raise exception 'FAIL: the company could not mark its work done';
+  end if;
+  -- Saying it twice changes nothing.
+  perform public.trade_mark_done(link, current_setting('test.item')::uuid, true, 'Mike');
+  begin
+    perform public.trade_mark_done(link, current_setting('test.other_item')::uuid, true, 'Mike');
+    raise exception 'FAIL: a company marked another company''s item done';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform 1 from public.plan_sheets;
+    raise exception 'FAIL: the page reached the plans';
+  exception when insufficient_privilege then null;
+  end;
   -- Its dates: these work, or other dates asked for.
   perform public.trade_confirm_visit(link, current_setting('test.visit')::uuid, 'Mike');
   perform public.trade_ask_visit(link, current_setting('test.visit2')::uuid, '2026-11-13', 1, ' Mike ');
@@ -685,6 +703,18 @@ begin
   if (select asked_start from public.visits where id = current_setting('test.visit2')::uuid) is not null then
     raise exception 'FAIL: moving the visit did not answer what the company asked';
   end if;
+  -- The company's done is in Activity under its name, once, and not as a change by nobody.
+  if (select count(*) from public.job_activity where kind = 'item_marked_done' and person_id is null and detail ->> 'author_name' = 'Mike') <> 1 then
+    raise exception 'FAIL: the company''s done is not in Activity once';
+  end if;
+  if exists (select 1 from public.item_history where field = 'marked_done_at' and person_id is null) then
+    raise exception 'FAIL: the company''s done was logged as a change by nobody';
+  end if;
+  -- Not Done: back on the company's list, in the item's history under who said so.
+  update public.items set marked_done_at = null where id = current_setting('test.item')::uuid;
+  if not exists (select 1 from public.item_history where field = 'marked_done_at' and item_id = current_setting('test.item')::uuid and person_id is not null) then
+    raise exception 'FAIL: Not Done is not in the item''s history';
+  end if;
   update public.company_links set revoked = true where token = link;
   begin
     update public.company_links set revoked = false where token = link;
@@ -699,6 +729,89 @@ set request.jwt.claims = '';
 do $$
 begin
   if public.trade_page(current_setting('test.link')) is not null then raise exception 'FAIL: a link taken back still works'; end if;
+end $$;
+reset role;
+
+-- ---------- To Check after reopening, priority, checklists, and the plans ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+declare
+  j uuid := (select id from public.jobs where name = 'Fish');
+  loc uuid := (select id from public.locations where job_id = (select id from public.jobs where name = 'Fish') order by sort_order limit 1);
+  other_job uuid := (select id from public.jobs where id <> (select id from public.jobs where name = 'Fish') order by created_at limit 1);
+  it uuid;
+  p uuid;
+  p2 uuid;
+  rec record;
+begin
+  insert into public.items (job_id, location_id, title, ready, company_id, trade_id)
+    select j, loc, 'Adjust closet door', true, jc.company_id, jc.trade_id from public.job_companies jc where jc.job_id = j limit 1
+    returning id into it;
+  -- Done by the company, then completed: the company's done is answered, and History says only
+  -- that it was completed.
+  update public.items set marked_done_at = now() where id = it;
+  update public.items set status = 'complete' where id = it;
+  if (select marked_done_at from public.items where id = it) is not null then raise exception 'FAIL: completing kept the company''s done'; end if;
+  if exists (select 1 from public.item_history where item_id = it and field = 'marked_done_at' and after is null) then
+    raise exception 'FAIL: completing logged the company''s done as taken back';
+  end if;
+  -- Undo: open again with the company's done as it was, so it is To Check again.
+  update public.items set status = 'open', marked_done_at = '2026-11-04 17:10:00+00' where id = it;
+  if (select marked_done_at from public.items where id = it) is null then raise exception 'FAIL: Undo did not put it back To Check'; end if;
+  -- Completed, then opened again later: the done stays answered.
+  update public.items set status = 'complete' where id = it;
+  update public.items set status = 'open' where id = it;
+  if (select marked_done_at from public.items where id = it) is not null then raise exception 'FAIL: reopening brought back the company''s done'; end if;
+  -- Priority and the checklist save, and are in the history.
+  update public.items set priority = true, checklist = '[{"id":"s1","text":"Both hinges","done":false}]'::jsonb where id = it;
+  select * into rec from public.items where id = it;
+  if not rec.priority or jsonb_array_length(rec.checklist) <> 1 then raise exception 'FAIL: priority or the checklist did not save'; end if;
+  if (select count(*) from public.item_history where item_id = it and field in ('priority', 'checklist')) <> 2 then
+    raise exception 'FAIL: priority or the checklist is not in the history';
+  end if;
+  begin
+    update public.items set checklist = '{"id":"s1"}'::jsonb where id = it;
+    raise exception 'FAIL: a checklist that is not a list was accepted';
+  exception when check_violation then null;
+  end;
+  -- A plan for the level, logged; an item pinned on it.
+  insert into public.plan_sheets (job_id, floor, name, width, height) values (j, 'Level 1', '  Level 1 Plan  ', 1600, 1100) returning id into p;
+  select * into rec from public.plan_sheets where id = p;
+  if rec.name <> 'Level 1 Plan' or rec.created_by is distinct from (select id from public.people where email = 'jake@rossbuilt.com') then
+    raise exception 'FAIL: the plan was not tidied or stamped';
+  end if;
+  if not exists (select 1 from public.job_activity where kind = 'plan_added' and detail ->> 'plan_id' = p::text) then raise exception 'FAIL: the new plan is not in Activity'; end if;
+  update public.items set plan_id = p, pin_x = 0.5, pin_y = 0.25 where id = it;
+  if (select pin_x from public.items where id = it) <> 0.5 then raise exception 'FAIL: the pin did not save'; end if;
+  -- Where exactly is not worth a line of history; being put on the plan is.
+  if exists (select 1 from public.item_history where item_id = it and field in ('pin_x', 'pin_y')) then raise exception 'FAIL: the pin''s spot is in the history'; end if;
+  if not exists (select 1 from public.item_history where item_id = it and field = 'plan_id') then raise exception 'FAIL: pinning is not in the history'; end if;
+  begin
+    update public.items set pin_x = 1.5 where id = it;
+    raise exception 'FAIL: a pin off the plan was accepted';
+  exception when check_violation then null;
+  end;
+  -- Off the plan: the spot goes with it.
+  update public.items set plan_id = null where id = it;
+  if (select pin_x from public.items where id = it) is not null then raise exception 'FAIL: an item off the plan kept its spot'; end if;
+  -- Another job's plan is not this job's.
+  if other_job is not null then
+    insert into public.plan_sheets (job_id, floor, name, width, height) values (other_job, 'Level 1', 'Their Plan', 100, 100) returning id into p2;
+    begin
+      update public.items set plan_id = p2, pin_x = 0.1, pin_y = 0.1 where id = it;
+      raise exception 'FAIL: an item was pinned on another job''s plan';
+    exception when check_violation then null;
+    end;
+  end if;
+  -- Taken off, never deleted.
+  update public.plan_sheets set removed = true where id = p;
+  if not exists (select 1 from public.job_activity where kind = 'plan_removed' and detail ->> 'plan_id' = p::text) then raise exception 'FAIL: taking off the plan is not in Activity'; end if;
+  begin
+    delete from public.plan_sheets where id = p;
+    raise exception 'FAIL: a plan was deleted';
+  exception when insufficient_privilege or restrict_violation then null;
+  end;
 end $$;
 reset role;
 

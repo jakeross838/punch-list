@@ -7,6 +7,9 @@ import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { Text, Touchable } from '@/ui';
+import { initials } from './initials';
+
+export { initials };
 
 /** The job's activity as lines, newest first; with an item, just that item's, where it is "it". */
 export function useActivityLines(jobId: string, itemId?: string): ActivityLine[] {
@@ -25,19 +28,6 @@ export function useActivityLines(jobId: string, itemId?: string): ActivityLine[]
     const mine = itemId ? entries.filter((e) => e.itemId === itemId) : entries;
     return activityLines(mine, look, { forItem: !!itemId });
   }, [entries, people, items, locations, companies, trades, visits, customFields, comments, itemId]);
-}
-
-/** "JR" for Jake Ross. */
-export function initials(name: string): string {
-  // "Mike at SMS Carpentry" reads MS: the small words are left out.
-  const words = name
-    .trim()
-    .split(/\s+/)
-    .filter((w) => /^[A-Z0-9]/.test(w));
-  return words
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('');
 }
 
 export const ActivityRow = memo(function ActivityRow({

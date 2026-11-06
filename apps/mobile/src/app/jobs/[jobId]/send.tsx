@@ -16,6 +16,7 @@
 
 import {
   itemsCsv,
+  itemsSheet,
   sheetFileName,
   buildTimeline,
   commentAuthor,
@@ -63,11 +64,13 @@ import {
   type Printout,
   type PrintSettings,
   type ScheduleSnapshot,
+  type ViewSettings,
 } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { ExportSheet, type ListDraft } from '@/components/ExportSheet';
+import { SpreadsheetSheet } from '@/components/SpreadsheetSheet';
 import { useFilterNames } from '@/components/FilterBar';
 import { MessagePreview, namesText, type Message } from '@/components/MessagePreview';
 import { colors, layout } from '@/constants/theme';
@@ -103,6 +106,11 @@ const isRossBuilt = (name: string) => name.trim().toLowerCase() === 'ross built'
 /** How the job is grouped on screen, as a list made to order groups it. */
 const LIST_GROUP: Record<GroupBy, ListGroupBy> = { room: 'location', company: 'company', waiting: 'waiting' };
 
+/** A new list to make: the job's filters and grouping to start from. */
+function listOf(view: ViewSettings): ListDraft {
+  return { filters: view.filters, completed: view.showCompleted, design: { ...DEFAULT_LIST_DESIGN, groupBy: LIST_GROUP[view.groupBy] } };
+}
+
 /** A printed page, with the footer for every page of its PDF. */
 interface Doc {
   printout: Printout;
@@ -123,7 +131,8 @@ interface Made {
 }
 
 export default function SendScreen() {
-  const { jobId } = useLocalSearchParams<{ jobId: string }>();
+  // start: opened from the job's Make a List, so the list to make shows straight away.
+  const { jobId, start } = useLocalSearchParams<{ jobId: string; start?: string }>();
   const data = useData();
   const feedback = useFeedback();
   const job = data.useJobs().find((j) => j.id === jobId);
@@ -144,7 +153,8 @@ export default function SendScreen() {
   const [view] = useJobView(jobId, data.useViewSettings());
   const context = useFilterContext(jobId);
   const names = useFilterNames(jobId);
-  const [draft, setDraft] = useState<ListDraft | null>(null);
+  const [draft, setDraft] = useState<ListDraft | null>(() => (start === 'list' ? listOf(view) : null));
+  const [spreadsheet, setSpreadsheet] = useState<{ csv: string; fileName: string; rows: string[][] } | null>(null);
 
   const today = dayOfDate(new Date());
   // With the items and visits, every list says which tasks an item waits on and when they are scheduled.
@@ -176,26 +186,37 @@ export default function SendScreen() {
   );
   const customTitle = draft ? draft.design.title.trim() || listTitle(draft.filters, names) : '';
   /** Every item on the job as a spreadsheet, for Excel, Numbers or Google Sheets. */
+  async function shareSheet(csv: string, fileName: string) {
+    try {
+      haptic.tap();
+      await shareSpreadsheet(csv, fileName, `${job?.name ?? 'Job'} items`);
+    } catch {
+      feedback.toast({ message: 'The spreadsheet did not open. Try again.' });
+    }
+  }
   async function exportSheet() {
-    const csv = itemsCsv(items, {
+    const look = {
       locations: new Map(locations.map((l) => [l.id, { label: l.label, floor: l.floor }])),
       companies: new Map(companies.map((c) => [c.id, c.name])),
       people: new Map(people.map((p) => [p.id, p.name])),
       items: new Map(items.map((i) => [i.id, i])),
       visits: new Map(visits.map((v) => [v.id, v])),
-    });
-    try {
+    };
+    const csv = itemsCsv(items, look);
+    const fileName = sheetFileName(job?.name ?? 'Job', today);
+    // The preview page shows it first: not every page that shows the preview can download.
+    if (!ON_THE_PHONE) {
       haptic.tap();
-      await shareSpreadsheet(csv, sheetFileName(job?.name ?? 'Job', today), `${job?.name ?? 'Job'} items`);
-    } catch {
-      feedback.toast({ message: 'The spreadsheet did not open. Try again.' });
+      setSpreadsheet({ csv, fileName, rows: itemsSheet(items, look) });
+      return;
     }
+    await shareSheet(csv, fileName);
   }
   const customTime = totalTime(customLines.filter((l) => l.item.status === 'open').map((l) => l.item));
   /** Make a List starts from what the job shows now. */
   const startList = () => {
     haptic.tap();
-    setDraft({ filters: view.filters, completed: view.showCompleted, design: { ...DEFAULT_LIST_DESIGN, groupBy: LIST_GROUP[view.groupBy] } });
+    setDraft(listOf(view));
   };
 
   /** The items on a list right now, in its order. */
@@ -490,7 +511,7 @@ export default function SendScreen() {
   return (
     <Page
       title="Send Lists"
-      eyebrow={job ? `${job.name} · lists and the schedule` : 'Lists and the schedule'}
+      eyebrow="Lists and the schedule"
       crumb={[job?.name ?? 'Job', 'Send']}
       jobSwitch={{ jobId, onChange: (next) => router.setParams({ jobId: next }) }}
       account
@@ -528,7 +549,7 @@ export default function SendScreen() {
           right={busy === 'custom' ? <ActivityIndicator color={colors.secondary} /> : undefined}
           testID="make-list"
         />
-        <ListRow title="Export to a Spreadsheet" icon="table" accessory="chevron" onPress={() => void exportSheet()} testID="export-sheet" />
+        <ListRow title="Export to a Spreadsheet" icon="table" accessory="chevron" onPress={() => void exportSheet()} testID="export-spreadsheet" />
       </ListSection>
       {rows.length === 0 && parties.length === 0 ? (
         <EmptyState icon="checkmark.circle.fill" title="Nothing to Send" message="Every item on this job is complete." />
@@ -613,6 +634,16 @@ export default function SendScreen() {
         suggestedTitle={draft ? listTitle(draft.filters, names) : ''}
         matching={{ items: customLines.length, time: customTime }}
       />
+
+      {ON_THE_PHONE ? null : (
+        <SpreadsheetSheet
+          visible={!!spreadsheet}
+          fileName={spreadsheet?.fileName ?? ''}
+          rows={spreadsheet?.rows ?? []}
+          onDownload={() => spreadsheet && void shareSheet(spreadsheet.csv, spreadsheet.fileName)}
+          onClose={() => setSpreadsheet(null)}
+        />
+      )}
 
       {ON_THE_PHONE ? null : (
         <Sheet

@@ -37,7 +37,7 @@ export function ToCheckRow({
     const was = item.markedDoneAt ?? null;
     void data.updateItems([{ id: item.id, patch: { markedDoneAt: null } }]);
     feedback.toast({
-      message: `${item.title} is open again for ${company ?? 'the company'}`,
+      message: `Back on ${company ?? 'the company'}'s list as not done`,
       action: { label: 'Undo', onPress: () => void data.updateItems([{ id: item.id, patch: { markedDoneAt: was } }]) },
     });
   };

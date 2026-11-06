@@ -13,6 +13,7 @@ import {
   lastScheduleSend,
   listRecipients,
   scheduleChanges,
+  scheduleEmailDue,
   scheduleEmail,
   schedulePrintout,
   scheduleRecipients,
@@ -347,5 +348,20 @@ describe('Common Tasks come from the templates', () => {
     expect(again.items.map((i) => [i.title, i.waitingOnItems])).toEqual([['Install shower glass', ['there']]]);
     expect(again.skipped).toBe(0);
     expect(again.missing).toEqual([]);
+  });
+});
+
+describe('the Friday reminder', () => {
+  const sent = (at: string): ListSend => ({ id: at, jobId: 'j', list: 'schedule', itemIds: [], sentAt: at, sentBy: 'p1', removed: false, snapshot: { finish: null, bars: [] } });
+  it('comes up on Thursday and Friday until the Schedule Email goes out that week', () => {
+    // November 5, 2026 is a Thursday; November 3 a Tuesday.
+    expect(scheduleEmailDue([], '2026-11-05', true)).toBe(true);
+    expect(scheduleEmailDue([], '2026-11-06', true)).toBe(true);
+    expect(scheduleEmailDue([], '2026-11-03', true)).toBe(false);
+    expect(scheduleEmailDue([sent('2026-11-02T15:00:00.000Z')], '2026-11-05', true)).toBe(false);
+    expect(scheduleEmailDue([sent('2026-10-30T15:00:00.000Z')], '2026-11-05', true)).toBe(true);
+  });
+  it('stays away from a job with nothing open', () => {
+    expect(scheduleEmailDue([], '2026-11-05', false)).toBe(false);
   });
 });

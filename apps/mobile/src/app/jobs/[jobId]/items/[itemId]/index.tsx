@@ -19,6 +19,7 @@ import {
   kindText,
   itemNumberLabel,
   missingText,
+  pastDue,
   remove,
   reopen,
   restore,
@@ -217,7 +218,8 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
     live.flush();
     try {
       const next = change(fieldsOf(item));
-      await data.updateItem(item.id, { status: next.status, completedBy: next.completedBy, completedAt: next.completedAt });
+      // Complete answers the company's done; Undo, from the item as it was, puts it back.
+      await data.updateItem(item.id, { status: next.status, completedBy: next.completedBy, completedAt: next.completedAt, markedDoneAt: next.markedDoneAt ?? null });
       return true;
     } catch (e) {
       haptic.warning();
@@ -365,12 +367,28 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
       ...(item.status !== 'removed' ? [{ actions: [{ label: 'Remove from List', icon: 'trash' as IconName, destructive: true, onPress: () => void removeItem(), testID: 'remove' }] }] : []),
     ],
   };
-  const st = itemStatus(item, { holds, company: company?.name });
+  const today = dayOfDate(new Date());
+  // Past due as Past Due counts it: its own Ready By, or a visit that ended with it open.
+  const overdue = item.status === 'open' && !item.unfinished ? pastDue([item], visit ? [visit] : [], today)[0] : undefined;
+  const days = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`;
+  const st = itemStatus(item, {
+    holds,
+    company: company?.name,
+    late: overdue ? { days: overdue.days, why: overdue.reason === 'visit' ? `Visit ended ${days(overdue.days)} ago` : undefined } : undefined,
+  });
+  // Under the pill, in a sentence, what the Ready row below does not already say.
+  const openNote =
+    item.status !== 'open' || item.unfinished
+      ? undefined
+      : item.markedDoneAt
+        ? `${company?.name ?? 'The company'} said it is done on ${dayOf(item.markedDoneAt)}. Check it, then tap Complete, or Not Done to put it back on their list.`
+        : item.ready && overdue?.reason === 'visit'
+          ? `Its visit ended ${days(overdue.days)} ago and it is still open.`
+          : undefined;
   const creator = people.find((p) => p.id === item.createdBy)?.name;
   const addedOn = item.createdAt && !Number.isNaN(new Date(item.createdAt).getTime()) ? dayOf(item.createdAt) : null;
   const added = ['Added', addedOn ? `on ${addedOn}` : null, creator ? `by ${creator}` : null].filter(Boolean).join(' ');
 
-  const today = dayOfDate(new Date());
   const scheduled = item.status === 'open' && !item.unfinished && !!company;
   const visitText = visit
     ? `${shortDate(visit.start)}${visit.days > 1 ? ` to ${shortDate(visitEnd(visit))}` : ''}, ${visit.confirmed ? 'confirmed' : 'best guess'}${visitEnd(visit) < today && item.status === 'open' ? ', past due' : ''}`
@@ -446,7 +464,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
         </View>
       ) : null}
 
-      <View style={styles.grid} testID="item-status">
+      <View style={styles.grid} testID="item-summary">
         <View style={styles.cell}>
           <Text variant="stamp" color={colors.secondary}>
             Status
@@ -462,7 +480,13 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
           </Text>
         </View>
       </View>
-      {status || st.note ? <Banner tone={item.markedDoneAt && item.status === 'open' ? 'info' : 'info'}>{status?.detail ? `${status.line}. ${status.detail}` : (st.note ?? '')}</Banner> : null}
+      {status ? (
+        <View testID="item-status">
+          <Banner>{status.detail ? `${status.line}. ${status.detail}` : status.line}</Banner>
+        </View>
+      ) : openNote ? (
+        <Banner>{openNote}</Banner>
+      ) : null}
 
       <View style={styles.editor}>
         <ItemEditor

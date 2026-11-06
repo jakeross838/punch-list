@@ -104,9 +104,9 @@ function settle(state: State, before: Item[], after: Item[]): Item[] {
   let items = after.map((i) => (was.get(i.id) === i ? i : tradeFollows(state, i))).map((i) =>
     i.ready && (i.waitingOn.length > 0 || i.waitingOnItems.length > 0 || i.readyBy !== null) ? { ...i, waitingOn: [], waitingOnItems: [], readyBy: null } : i,
   );
-  // Opened again after it was completed: whatever the company said before is answered. Off the plan, no pin.
-  const wasDone = new Set(before.filter((i) => i.status === 'complete').map((i) => i.id));
-  items = items.map((i) => (i.status === 'open' && wasDone.has(i.id) && i.markedDoneAt ? { ...i, markedDoneAt: null } : i));
+  // Completed: the company's word that it is done is answered (Undo puts it back). Off the plan, no pin.
+  const wasComplete = new Set(before.filter((i) => i.status === 'complete').map((i) => i.id));
+  items = items.map((i) => (i.status === 'complete' && !wasComplete.has(i.id) && i.markedDoneAt ? { ...i, markedDoneAt: null } : i));
   items = items.map((i) => (!i.planId && (i.pinX != null || i.pinY != null) ? { ...i, pinX: null, pinY: null } : i));
   const wasOpen = new Set(before.filter((i) => i.status === 'open').map((i) => i.id));
   for (const done of items.filter((i) => wasOpen.has(i.id) && i.status !== 'open')) {

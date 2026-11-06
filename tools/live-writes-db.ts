@@ -115,6 +115,7 @@ let state: State = {
   waitingOn: {},
   items: [],
   photos: [],
+  plans: [],
   visits: [],
   sends: [],
   comments: [],
@@ -258,8 +259,22 @@ async function main(): Promise<void> {
     // The uploader, once a picture is up.
     send({ table: 'photos', op: 'update', id: a!.id, values: { storage_path: `${jobId}/${a!.id}.jpg` } });
   });
+  await step('a plan for the level, an item pinned on it, a priority and a checklist', async () => {
+    const plan = await api.addPlan({ jobId, floor: 'Level 1', name: 'Level 1 Plan', uri: 'file:///tmp/plan.jpg', width: 1600, height: 1100 });
+    await api.updateItem(second, { planId: plan, pinX: 0.4, pinY: 0.6, priority: true, checklist: [{ id: 'step-1', text: 'Both hinges', done: false }] });
+    // The uploader, once the plan's picture is up.
+    send({ table: 'plan_sheets', op: 'update', id: plan, values: { storage_path: `${jobId}/plans/${plan}.jpg` } });
+    await api.updatePlan(plan, { name: 'Level 1 Floor Plan' });
+  });
   await step('the first task done: the item waiting on it is ready', async () => {
     await api.updateItem(first, { status: 'complete', completedBy: jake.id, completedAt: new Date().toISOString() });
+  });
+  await step('To Check: the company says it is done, Complete answers it, and Undo puts it back', async () => {
+    const said = '2026-11-04T17:10:00.000Z';
+    await api.updateItem(second, { markedDoneAt: said });
+    // What Complete and its Undo send from the app.
+    await api.updateItem(second, { status: 'complete', completedBy: jake.id, completedAt: new Date().toISOString(), markedDoneAt: null });
+    await api.updateItem(second, { status: 'open', completedBy: null, completedAt: null, markedDoneAt: said });
   });
   await step('a visit, moved, confirmed, then removed', async () => {
     const visit = await api.addVisit({ jobId, companyId: sms, start: '2026-11-10', days: 2, confirmed: false, itemIds: [third] });
@@ -399,6 +414,17 @@ async function main(): Promise<void> {
   check('Sam is on the team as Field', `select part from public.job_team where job_id = ${lit(jobId)} and person_id = ${lit(sam.id)}`, 'field');
   check('Sam completed the item himself', `select completed_by::text = ${lit(sam.id)} from public.items where id = ${lit(third)}`, 't');
   check('the photo knows where its picture is', `select count(*) from public.photos where job_id = ${lit(jobId)} and storage_path is not null`, '1');
+  check(
+    'the plan, its picture and the pin',
+    `select s.name || ',' || (s.storage_path is not null)::text || ',' || i.pin_x || ',' || i.priority::text || ',' || jsonb_array_length(i.checklist) from public.items i join public.plan_sheets s on s.id = i.plan_id where i.id = ${lit(second)}`,
+    'Level 1 Floor Plan,true,0.4,true,1',
+  );
+  check('Undo after Complete is To Check again', `select (marked_done_at is not null)::text || ',' || status from public.items where id = ${lit(second)}`, 'true,open');
+  check(
+    "History says it was completed, not that the company's done was taken back",
+    `select count(*) from public.item_history where item_id = ${lit(second)} and field = 'marked_done_at' and after is null`,
+    '0',
+  );
   check('one live link, one taken back', `select string_agg(revoked::text, ',' order by revoked) from public.company_links where job_id = ${lit(jobId)}`, 'false,true');
   check('Waiting On in its new order', `select string_agg(label, ',' order by sort_order) from public.job_waiting_on where job_id = ${lit(jobId)}`, 'Engineer,Owner');
   check(

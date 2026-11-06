@@ -147,7 +147,7 @@ function JobRow({ job, last, stripe }: { job: Job; last: boolean; stripe: boolea
   const toCheck = open.filter((i) => i.markedDoneAt).length;
   const late = useMemo(() => pastDue(items, visits, today).length, [items, visits, today]);
   const setUp = locations.some((l) => l.active);
-  const said = [job.name, job.address, setUp ? `${open.length} open, ${ready} ready${late ? `, ${late} late` : ''}` : 'not set up yet'].filter(Boolean).join(', ');
+  const said = [job.name, job.address, setUp ? `${open.length} open, ${ready} ready${late ? `, ${late} past due` : ''}` : 'not set up yet'].filter(Boolean).join(', ');
   return (
     <LedgerRow
       last={last}
@@ -179,7 +179,7 @@ function JobRow({ job, last, stripe }: { job: Job; last: boolean; stripe: boolea
                     { text: `${open.length} open`, color: colors.label },
                     { text: `${ready} ready`, color: colors.ok },
                     toCheck > 0 ? { text: `${toCheck} to check`, color: colors.tint } : null,
-                    late > 0 ? { text: `${late} late`, color: colors.destructive } : null,
+                    late > 0 ? { text: `${late} past due`, color: colors.destructive } : null,
                   ]
                 : [{ text: 'Set up', color: colors.tint }]
           }

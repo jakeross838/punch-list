@@ -265,7 +265,7 @@ export function MarkupEditor({
                   dispatch({ type: 'unit', unit });
                 }}
                 accessibilityRole="radio"
-                accessibilityState={{ checked: panel.unit === unit }}
+                aria-checked={panel.unit === unit}
                 testID={`unit-${unit}`}
                 style={[styles.chip, panel.unit === unit ? styles.chipOn : null]}
               >
@@ -317,7 +317,7 @@ export function MarkupEditor({
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={t.label}
-                accessibilityState={{ selected: tool === t.tool }}
+                aria-selected={tool === t.tool}
                 testID={`tool-${t.tool}`}
                 style={[styles.tool, tool === t.tool ? styles.toolOn : null]}
               >
@@ -337,7 +337,7 @@ export function MarkupEditor({
                   }}
                   accessibilityRole="radio"
                   accessibilityLabel={MARK_COLOR_NAMES[c]}
-                  accessibilityState={{ checked: color === c }}
+                  aria-checked={color === c}
                   testID={`color-${c}`}
                   style={styles.swatchHit}
                 >

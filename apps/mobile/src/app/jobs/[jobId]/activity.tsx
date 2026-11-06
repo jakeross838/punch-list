@@ -42,7 +42,7 @@ export default function ActivityScreen() {
     <Page
       title="Activity"
       eyebrow="Who did what"
-      subtitle="Who added or changed what on the job, newest first."
+      subtitle="Who added or changed what on the job."
       crumb={[job?.name ?? 'Job', 'Activity']}
       backLabel={job?.name}
       tab={{ active: 'jobs', jobId }}

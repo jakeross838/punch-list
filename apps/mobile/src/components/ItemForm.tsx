@@ -49,6 +49,8 @@ export function fieldsOf(item: Item): ItemFields {
     visitId,
     hours,
     priority: item.priority ?? false,
+    // Not edited on the form: carried so Complete can answer it and Undo can put it back.
+    markedDoneAt: item.markedDoneAt ?? null,
   };
 }
 
