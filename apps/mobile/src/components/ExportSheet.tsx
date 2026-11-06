@@ -110,7 +110,7 @@ export function ExportSheet({
           </ListSection>
 
           <View style={styles.filterHead}>
-            <Text variant="footnote" weight="600" color={colors.secondary} style={{ flex: 1 }}>
+            <Text variant="label" color={colors.secondary} style={{ flex: 1 }}>
               {count === 0 ? 'Filters' : count === 1 ? '1 Filter' : `${count} Filters`}
             </Text>
             {count > 0 ? (
@@ -160,7 +160,7 @@ export function ExportSheet({
           </ListSection>
           {showFilters ? <FilterFacets jobId={jobId} filters={d.filters} onChange={(filters) => set({ filters })} testPrefix="export-filter" /> : null}
 
-          <Text variant="footnote" weight="600" color={colors.secondary} style={[styles.label, showFilters ? styles.afterFacets : null]}>
+          <Text variant="label" color={colors.secondary} style={[styles.label, showFilters ? styles.afterFacets : null]}>
             Group By
           </Text>
           <View style={styles.segment}>

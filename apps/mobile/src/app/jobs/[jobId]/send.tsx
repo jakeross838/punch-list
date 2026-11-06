@@ -15,6 +15,8 @@
 // the email or text as it would be written, and Mark Sent records it.
 
 import {
+  itemsCsv,
+  sheetFileName,
   buildTimeline,
   commentAuthor,
   companiesWithWork,
@@ -76,6 +78,7 @@ import { composeEmail, composeText, copyText } from '@/export/compose';
 import { DocPreview } from '@/export/DocPreview';
 import { joinPdfs, makePdf, printFonts, printPhoto, sharePdf, showPdf } from '@/export/printing';
 import { scanCode } from '@/export/scanCode';
+import { shareSpreadsheet } from '@/export/spreadsheet';
 import { Button, EmptyState, haptic, Icon, ListRow, ListSection, ListSwitchRow, Page, shortDate, Sheet, Text, Touchable, useFeedback, weekdayDate, type IconName } from '@/ui';
 
 const ON_THE_PHONE = Platform.OS !== 'web';
@@ -172,6 +175,22 @@ export default function SendScreen() {
     [draft, items, lookups, context],
   );
   const customTitle = draft ? draft.design.title.trim() || listTitle(draft.filters, names) : '';
+  /** Every item on the job as a spreadsheet, for Excel, Numbers or Google Sheets. */
+  async function exportSheet() {
+    const csv = itemsCsv(items, {
+      locations: new Map(locations.map((l) => [l.id, { label: l.label, floor: l.floor }])),
+      companies: new Map(companies.map((c) => [c.id, c.name])),
+      people: new Map(people.map((p) => [p.id, p.name])),
+      items: new Map(items.map((i) => [i.id, i])),
+      visits: new Map(visits.map((v) => [v.id, v])),
+    });
+    try {
+      haptic.tap();
+      await shareSpreadsheet(csv, sheetFileName(job?.name ?? 'Job', today), `${job?.name ?? 'Job'} items`);
+    } catch {
+      feedback.toast({ message: 'The spreadsheet did not open. Try again.' });
+    }
+  }
   const customTime = totalTime(customLines.filter((l) => l.item.status === 'open').map((l) => l.item));
   /** Make a List starts from what the job shows now. */
   const startList = () => {
@@ -469,7 +488,14 @@ export default function SendScreen() {
   const jobTarget: Target = { list: LIST_KEYS.job, name: 'Whole Job', kind: 'job' };
 
   return (
-    <Page title="Send Lists" sheet right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: () => router.back(), testID: 'send-done' }]}>
+    <Page
+      title="Send Lists"
+      eyebrow={job ? `${job.name} · lists and the schedule` : 'Lists and the schedule'}
+      crumb={[job?.name ?? 'Job', 'Send']}
+      jobSwitch={{ jobId, onChange: (next) => router.setParams({ jobId: next }) }}
+      account
+      tab={{ active: 'send', jobId }}
+    >
       <ListSection
         header="For Everyone"
         footer="The schedule the list builds. The Schedule Email sends the Three Week Look Ahead and the Whole Schedule to every company at once, to confirm their dates. Green is confirmed; blue is our best guess."
@@ -493,7 +519,7 @@ export default function SendScreen() {
           testID="send-lookahead"
         />
       </ListSection>
-      <ListSection footer="Any filters, grouped your way, with the details you pick on every line. It starts from what the job shows now.">
+      <ListSection footer="Make a List takes any filters, grouped your way, with the details you pick on every line. The spreadsheet has every item on the job, for Excel, Numbers or Google Sheets.">
         <ListRow
           title="Make a List"
           icon="doc"
@@ -502,6 +528,7 @@ export default function SendScreen() {
           right={busy === 'custom' ? <ActivityIndicator color={colors.secondary} /> : undefined}
           testID="make-list"
         />
+        <ListRow title="Export to a Spreadsheet" icon="table" accessory="chevron" onPress={() => void exportSheet()} testID="export-sheet" />
       </ListSection>
       {rows.length === 0 && parties.length === 0 ? (
         <EmptyState icon="checkmark.circle.fill" title="Nothing to Send" message="Every item on this job is complete." />
@@ -617,7 +644,7 @@ export default function SendScreen() {
               ? preview.made.docs.map((d) => (
                   <View key={d.printout.fileName}>
                     {preview.made.docs.length > 1 ? (
-                      <Text variant="footnote" weight="600" color={colors.secondary} style={styles.docLabel}>
+                      <Text variant="label" color={colors.secondary} style={styles.docLabel}>
                         {d.printout.title}
                       </Text>
                     ) : null}

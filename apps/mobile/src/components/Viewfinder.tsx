@@ -62,5 +62,5 @@ export function Viewfinder({ ref, flash }: { ref?: Ref<ViewfinderHandle>; flash:
 const styles = StyleSheet.create({
   fill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: colors.black },
   ask: { alignItems: 'center', justifyContent: 'center', gap: 18, paddingHorizontal: 40 },
-  askButton: { height: 46, paddingHorizontal: 24, borderRadius: 23, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  askButton: { height: 46, paddingHorizontal: 24, backgroundColor: colors.onDark, alignItems: 'center', justifyContent: 'center' },
 });

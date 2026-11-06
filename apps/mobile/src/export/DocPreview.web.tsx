@@ -19,7 +19,6 @@ export function DocPreview({ printout, fontCss }: { printout: Printout; fontCss:
           width: Math.round(PAGE * scale),
           margin: '0 auto',
           background: '#FFFFFF',
-          borderRadius: 4,
           overflow: 'hidden',
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.08)',
         }}

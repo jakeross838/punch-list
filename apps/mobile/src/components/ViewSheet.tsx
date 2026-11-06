@@ -46,7 +46,7 @@ export function ViewSheet({
       testID="view-sheet"
     >
       <ScrollView contentContainerStyle={styles.content} style={{ flex: 1 }}>
-        <Text variant="footnote" weight="600" color={colors.secondary} style={styles.label}>
+        <Text variant="label" color={colors.secondary} style={styles.label}>
           Group By
         </Text>
         <View style={styles.segment}>
@@ -62,7 +62,7 @@ export function ViewSheet({
         </ListSection>
 
         <View style={styles.filterHead}>
-          <Text variant="footnote" weight="600" color={colors.secondary} style={{ flex: 1 }} testID="view-matching">
+          <Text variant="label" color={colors.secondary} style={{ flex: 1 }} testID="view-matching">
             {count === 0 ? 'Filter' : `${count === 1 ? '1 filter' : `${count} filters`}, ${matching === 1 ? '1 open item' : `${matching} open items`}`}
           </Text>
           {count > 0 ? (

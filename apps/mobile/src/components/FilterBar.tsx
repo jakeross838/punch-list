@@ -88,7 +88,7 @@ export function FilterBar({
           testID="filter-clear"
           style={styles.clear}
         >
-          <Text variant="subheadline" weight="600" color={colors.tint}>
+          <Text variant="label" weight="600" color={colors.tint}>
             Clear All
           </Text>
         </Touchable>

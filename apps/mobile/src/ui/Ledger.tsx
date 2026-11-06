@@ -192,7 +192,7 @@ export function Figures({ cells, columns = 2, style }: { cells: Figure[]; column
                 <Text variant="label" color={colors.secondary} numberOfLines={1}>
                   {c.label}
                 </Text>
-                <Text variant="figure" color={c.color ?? colors.label} tabular numberOfLines={1}>
+                <Text variant={c.value.length > 6 ? 'title2' : 'figure'} color={c.color ?? colors.label} tabular numberOfLines={1} style={c.value.length > 6 ? styles.figureLong : null}>
                   {c.value}
                 </Text>
               </>
@@ -325,6 +325,8 @@ const styles = StyleSheet.create({
   figureRule: { borderTopWidth: layout.hairline, borderTopColor: colors.border },
   figure: { flex: 1, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 12, gap: 6, backgroundColor: colors.cell },
   figureDivide: { borderLeftWidth: layout.hairline, borderLeftColor: colors.border },
+  // A date in a count's place: smaller, on the same line as the numbers beside it.
+  figureLong: { lineHeight: 29 },
   tiles: { flexDirection: 'row', gap: 8, marginHorizontal: layout.margin },
   tile: {
     flex: 1,

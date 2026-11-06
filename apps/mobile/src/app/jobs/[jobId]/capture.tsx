@@ -343,7 +343,7 @@ export default function CaptureScreen() {
           accessibilityRole="button"
           accessibilityLabel="Close the Camera"
           testID="camera-close"
-          style={styles.round}
+          style={[styles.round, styles.square]}
         >
           <Icon
             name="xmark"
@@ -354,7 +354,7 @@ export default function CaptureScreen() {
         </Touchable>
         <View style={styles.middle}>
           <Touchable
-            feedback="scale"
+            feedback="opacity"
             onPress={() => setPicker(true)}
             disabled={!!walk.itemId}
             accessibilityRole="button"
@@ -367,7 +367,7 @@ export default function CaptureScreen() {
             style={styles.room}
           >
             <Text
-              variant="subheadline"
+              variant="button"
               weight="600"
               color={colors.onDark}
               numberOfLines={1}
@@ -386,7 +386,7 @@ export default function CaptureScreen() {
           </Touchable>
           {walking ? (
             <Touchable
-              feedback="scale"
+              feedback="opacity"
               onPress={nextRoom}
               accessibilityRole="button"
               accessibilityLabel={
@@ -395,7 +395,7 @@ export default function CaptureScreen() {
               testID="camera-next"
               style={styles.next}
             >
-              <Text variant="subheadline" weight="600" color={colors.onDark}>
+              <Text variant="button" weight="600" color={colors.onDark}>
                 Next
               </Text>
               <Icon
@@ -463,7 +463,7 @@ export default function CaptureScreen() {
               style={styles.stripButton}
             >
               <Icon name="textformat" size={16} color={colors.onDark} />
-              <Text variant="subheadline" weight="600" color={colors.onDark}>
+              <Text variant="label" weight="600" color={colors.onDark}>
                 Type an Item
               </Text>
             </Touchable>
@@ -475,7 +475,7 @@ export default function CaptureScreen() {
               style={styles.stripButton}
             >
               <Icon name="checklist" size={16} color={colors.onDark} />
-              <Text variant="subheadline" weight="600" color={colors.onDark}>
+              <Text variant="label" weight="600" color={colors.onDark}>
                 Common Tasks
               </Text>
             </Touchable>
@@ -512,7 +512,7 @@ export default function CaptureScreen() {
       >
         <View style={styles.side}>
           <Touchable
-            feedback="scale"
+            feedback="opacity"
             onPress={() => void grab("pick")}
             accessibilityRole="button"
             accessibilityLabel="Choose from Photos"
@@ -523,7 +523,7 @@ export default function CaptureScreen() {
           </Touchable>
         </View>
         <Touchable
-          feedback="scale"
+          feedback="opacity"
           onPress={() => void grab("take")}
           disabled={busy}
           accessibilityRole="button"
@@ -544,7 +544,7 @@ export default function CaptureScreen() {
               testID="camera-last"
               style={styles.last}
             >
-              <PhotoView photo={lastPhoto} width={44} height={44} radius={9} />
+              <PhotoView photo={lastPhoto} width={50} height={50} edge={false} />
             </Touchable>
           ) : null}
         </View>
@@ -577,7 +577,7 @@ export default function CaptureScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.black },
+  screen: { flex: 1, backgroundColor: colors.bar },
   bar: {
     height: 52,
     flexDirection: "row",
@@ -597,27 +597,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  square: { width: 40, height: 40, backgroundColor: colors.darkChip },
   room: {
-    height: 32,
+    height: 40,
     maxWidth: 200,
     flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingLeft: 14,
-    paddingRight: 12,
-    borderRadius: 16,
+    paddingLeft: 12,
+    paddingRight: 10,
     backgroundColor: colors.darkChip,
   },
   next: {
-    height: 32,
+    height: 40,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     paddingLeft: 12,
     paddingRight: 10,
     marginLeft: 6,
-    borderRadius: 16,
     backgroundColor: colors.darkChip,
   },
   finder: { width: "100%", aspectRatio: 3 / 4, overflow: "hidden" },
@@ -630,19 +629,18 @@ const styles = StyleSheet.create({
   side: { flex: 1, flexDirection: "row", alignItems: "center" },
   sideRight: { justifyContent: "flex-end" },
   library: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 52,
+    height: 52,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.darkChip,
+    borderWidth: 1,
+    borderColor: "rgba(247, 245, 236, 0.35)",
   },
   last: {
-    width: 48,
-    height: 48,
-    borderRadius: 11,
+    width: 54,
+    height: 54,
     borderWidth: 2,
-    borderColor: colors.white,
+    borderColor: colors.onDark,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -651,16 +649,16 @@ const styles = StyleSheet.create({
     width: 78,
     height: 78,
     borderRadius: 39,
-    borderWidth: 4,
-    borderColor: colors.white,
+    borderWidth: 3,
+    borderColor: colors.onDark,
     alignItems: "center",
     justifyContent: "center",
   },
   shutterInner: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: colors.white,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.onDark,
   },
   strip: {
     height: 44,
@@ -676,9 +674,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: colors.darkChip,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(247, 245, 236, 0.22)",
   },
   hint: { paddingHorizontal: 32, marginTop: 2 },
   saved: {
@@ -691,7 +689,8 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.62)",
+    backgroundColor: "rgba(19, 32, 40, 0.86)",
+    borderWidth: 1,
+    borderColor: "rgba(247, 245, 236, 0.16)",
   },
 });

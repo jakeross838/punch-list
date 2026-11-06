@@ -43,9 +43,10 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
     paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.cell,
     overflow: 'hidden',
   },
-  pillEmpty: { backgroundColor: colors.surface },
+  pillEmpty: { backgroundColor: colors.cell },
 });

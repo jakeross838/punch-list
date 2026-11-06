@@ -7,6 +7,9 @@ import { kept } from './kept';
 
 const seen = kept('punch.updatesSeenAt');
 
+/** Never opened: what came in over the three days before the app opened counts as new. */
+const FIRST_LOOK = new Date(Date.now() - 3 * 86_400_000).toISOString();
+
 /** When you last opened Updates, as an ISO time, or null if you never have. */
 export const useUpdatesSeenAt = () => seen.use();
 
@@ -23,8 +26,7 @@ export function useUnseenUpdates(): number {
   const updates = data.useUpdates();
   const seenAt = useUpdatesSeenAt();
   return useMemo(() => {
-    // Never opened: the last three days count as new.
-    const since = seenAt ?? new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const since = seenAt ?? FIRST_LOOK;
     let n = 0;
     for (const u of updates) {
       if (u.at <= since) break;

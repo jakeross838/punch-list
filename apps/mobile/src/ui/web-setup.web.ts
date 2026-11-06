@@ -11,7 +11,7 @@ const FONT = 'Inter_400Regular, Inter, -apple-system, BlinkMacSystemFont, "Helve
 const MONO = 'JetBrainsMono_500Medium, "JetBrains Mono", ui-monospace, Menlo, monospace';
 
 const css = `
-html, body { background: #000; height: 100% !important; overflow: hidden; overscroll-behavior: none; }
+html, body { background: #132028; height: 100% !important; overflow: hidden; overscroll-behavior: none; }
 body {
   margin: 0;
   font-family: ${FONT};
@@ -30,26 +30,25 @@ input:focus, textarea:focus, input:focus-visible, textarea:focus-visible { outli
 #root {
   position: relative;
   overflow: hidden;
-  background: #000;
+  background: #132028;
   transform-origin: 50% 0;
   transition: transform 480ms ${SHEET_CURVE}, border-radius 480ms ${SHEET_CURVE};
 }
 body.pl-sheet-open #root {
-  transform: scale(0.935) translateY(14px);
-  border-radius: 18px;
+  transform: scale(0.94) translateY(14px);
   overflow: hidden;
 }
 
 .pl-sheet-root { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; justify-content: flex-end; }
-.pl-sheet-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.22); opacity: 0; transition: opacity 420ms ${SHEET_CURVE}; }
+.pl-sheet-dim { position: absolute; inset: 0; background: rgba(19, 32, 40, 0.45); opacity: 0; transition: opacity 420ms ${SHEET_CURVE}; }
 .pl-sheet {
   position: relative;
   display: flex;
   flex-direction: column;
   height: calc(100% - 46px);
-  background: #F5F5F7;
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.04), 0 -10px 40px rgba(0, 0, 0, 0.12);
+  background: #F7F5EC;
+  border-top: 1px solid rgba(59, 88, 100, 0.15);
+  box-shadow: 0 -10px 40px rgba(19, 32, 40, 0.18);
   overflow: hidden;
   transform: translateY(100%);
   transition: transform 300ms ${SHEET_CURVE};
@@ -75,7 +74,7 @@ body.pl-sheet-open #root {
 .pl-swipe-action:active { filter: brightness(0.9); }
 
 .pl-action-root { position: fixed; inset: 0; z-index: 1200; display: flex; flex-direction: column; justify-content: flex-end; }
-.pl-action-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.3); opacity: 0; transition: opacity 300ms ${SHEET_CURVE}; }
+.pl-action-dim { position: absolute; inset: 0; background: rgba(19, 32, 40, 0.45); opacity: 0; transition: opacity 300ms ${SHEET_CURVE}; }
 .pl-action-panel {
   position: relative; padding: 0 8px calc(8px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px;
   transform: translateY(110%); transition: transform 300ms ${SHEET_CURVE};
@@ -83,22 +82,21 @@ body.pl-sheet-open #root {
 .pl-action-root[data-open="true"] .pl-action-dim { opacity: 1; }
 .pl-action-root[data-open="true"] .pl-action-panel { transform: translateY(0); transition-duration: 440ms; }
 .pl-action-group {
-  background: rgba(255, 255, 255, 0.94);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  backdrop-filter: blur(30px) saturate(180%);
-  border-radius: 14px; overflow: hidden;
+  background: #FFFFFF;
+  border: 1px solid rgba(59, 88, 100, 0.15);
+  overflow: hidden;
 }
 .pl-action-head { padding: 14px 16px 12px; text-align: center; }
-.pl-action-title { font: 600 13px ${FONT}; color: #6E6E73; }
-.pl-action-message { font: 400 13px ${FONT}; color: #6E6E73; margin-top: 2px; }
+.pl-action-title { font: 500 10px ${MONO}; letter-spacing: 0.16em; text-transform: uppercase; color: #56707B; }
+.pl-action-message { font: 400 13px ${FONT}; color: #56707B; margin-top: 4px; }
 .pl-action-button {
   display: block; width: 100%; height: 57px; border: 0; background: transparent;
-  font: 400 20px ${FONT}; color: #3E5964; cursor: pointer;
-  box-shadow: inset 0 1px 0 #EDEDF0;
+  font: 500 12px ${MONO}; letter-spacing: 0.14em; text-transform: uppercase; color: #3B5864; cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(59, 88, 100, 0.12);
 }
-.pl-action-button:active { background: #ECECEF; }
-.pl-action-button[data-destructive="true"] { color: #D70015; }
-.pl-action-cancel { font-weight: 600; box-shadow: none; background: #fff; border-radius: 14px; }
+.pl-action-button:active { background: rgba(59, 88, 100, 0.07); }
+.pl-action-button[data-destructive="true"] { color: #B0554E; }
+.pl-action-cancel { font-weight: 600; box-shadow: none; background: #fff; }
 
 .pl-date { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; margin: 0; font-size: 16px; cursor: pointer; }
 

@@ -2,8 +2,8 @@
 // with no account. Its scheduled visits, each with These Dates Work (the visit is confirmed, and
 // turns green for Ross Built) or Other Dates (the day it can start and the days it takes, for Ross
 // Built to move it), then its open work (ready now, waiting, to be quoted)
-// with each item's photo and where it is, and comments: on any item, or on the whole list, under
-// the name typed once at the top. Ross Built sees them right away. Ross Built only notes never
+// with each item's photo and where it is, Done to say the work on it is finished (Ross Built then
+// checks it), and comments: on any item, or on the whole list, under the name typed once at the top. Ross Built sees them right away. Ross Built only notes never
 // show here. In the app it opens from the company's plan, to see the page the way the company does.
 
 import {
@@ -57,7 +57,7 @@ export default function CompanyPageScreen() {
   const section = (title: string, note: string | null, lines: ListLine[], key: string) =>
     lines.length > 0 ? (
       <View key={key} style={styles.section}>
-        <Text variant="footnote" weight="600" color={colors.secondary} style={styles.sectionTitle}>
+        <Text variant="label" color={colors.secondary} style={styles.sectionTitle}>
           {title}
         </Text>
         {note ? (
@@ -67,20 +67,27 @@ export default function CompanyPageScreen() {
         ) : null}
         <View style={styles.cards}>
           {lines.map((l) => (
-            <TradeItem key={l.item.id} line={l} photo={firstPhoto.get(l.item.id)} comments={itemComments(shared, l.item.id)} onPost={post(l.item.id)} />
+            <TradeItem
+              key={l.item.id}
+              line={l}
+              photo={firstPhoto.get(l.item.id)}
+              comments={itemComments(shared, l.item.id)}
+              onPost={post(l.item.id)}
+              onDone={(done) => void data.companyMarkDone({ jobId, companyId, itemId: l.item.id, done, name: name.trim() || null })}
+            />
           ))}
         </View>
       </View>
     ) : null;
 
   return (
-    <Page title={companyName} subtitle={job ? `${job.name}, from Ross Built` : undefined} backLabel={companyName} background="grouped">
+    <Page title={companyName} eyebrow="Their page, as they see it" subtitle={job ? `${job.name}, from Ross Built` : undefined} crumb={[job?.name ?? 'Job', companyName, 'Their Page']} backLabel={companyName}>
       <Banner icon="eye">{`This is the page ${companyName} opens from the link on its list. What they write here comes straight to you.`}</Banner>
       <ListSection style={styles.first} footer="So Ross Built knows who wrote. Type it once.">
         <ListTextField placeholder="Your name" value={name} onChangeText={setName} autoCapitalize="words" accessibilityLabel="Your name" testID="company-name" />
       </ListSection>
 
-      <Text variant="footnote" weight="600" color={colors.secondary} style={styles.sectionTitle}>
+      <Text variant="label" color={colors.secondary} style={styles.sectionTitle}>
         Comments on the Whole List
       </Text>
       <CommentThread
@@ -167,10 +174,12 @@ function VisitAnswer({ visit: v, name }: { visit: Visit; name: string }) {
           </View>
           <View style={styles.actions}>
             <Touchable feedback="opacity" onPress={() => setChanging(false)} accessibilityRole="button" style={styles.action}>
-              <Text color={colors.tint}>Cancel</Text>
+              <Text variant="label" color={colors.label}>
+                Cancel
+              </Text>
             </Touchable>
-            <Touchable feedback="scale" onPress={() => void ask()} accessibilityRole="button" testID={`visit-ask-${v.id}`} style={[styles.action, styles.actionMain]}>
-              <Text weight="600" color={colors.white}>
+            <Touchable feedback="opacity" onPress={() => void ask()} accessibilityRole="button" testID={`visit-ask-${v.id}`} style={[styles.action, styles.actionMain]}>
+              <Text variant="label" color={colors.onBar}>
                 Ask for These Dates
               </Text>
             </Touchable>
@@ -179,14 +188,16 @@ function VisitAnswer({ visit: v, name }: { visit: Visit; name: string }) {
       ) : (
         <View style={styles.actions}>
           {!v.confirmed ? (
-            <Touchable feedback="scale" onPress={() => void confirm()} accessibilityRole="button" testID={`visit-ok-${v.id}`} style={[styles.action, styles.actionMain]}>
-              <Text weight="600" color={colors.white}>
+            <Touchable feedback="opacity" onPress={() => void confirm()} accessibilityRole="button" testID={`visit-ok-${v.id}`} style={[styles.action, styles.actionMain]}>
+              <Text variant="label" color={colors.onBar}>
                 These Dates Work
               </Text>
             </Touchable>
           ) : null}
           <Touchable feedback="opacity" onPress={() => setChanging(true)} accessibilityRole="button" testID={`visit-change-${v.id}`} style={styles.action}>
-            <Text color={colors.tint}>Other Dates</Text>
+            <Text variant="label" color={colors.label}>
+              Other Dates
+            </Text>
           </Touchable>
         </View>
       )}
@@ -195,14 +206,33 @@ function VisitAnswer({ visit: v, name }: { visit: Visit; name: string }) {
 }
 
 /** One item on the company's page: its photo, what and where, and its comments, with a box to add one. */
-function TradeItem({ line, photo, comments, onPost }: { line: ListLine; photo?: Photo; comments: Comment[]; onPost: (body: string) => void }) {
+function TradeItem({
+  line,
+  photo,
+  comments,
+  onPost,
+  onDone,
+}: {
+  line: ListLine;
+  photo?: Photo;
+  comments: Comment[];
+  onPost: (body: string) => void;
+  onDone: (done: boolean) => void;
+}) {
+  const feedback = useFeedback();
   const [open, setOpen] = useState(false);
   const { item } = line;
+  const said = !!item.markedDoneAt;
+  const markDone = () => {
+    haptic.success();
+    onDone(true);
+    feedback.toast({ message: `${item.title}: done. Ross Built will check it.`, action: { label: 'Undo', onPress: () => onDone(false) } });
+  };
   const waiting = item.ready ? null : `Waiting on ${line.waiting || 'something'}${isDay(line.readyBy) ? `, ready by ${shortDate(line.readyBy)}` : ''}`;
   return (
     <View style={styles.card} testID={`company-item-${item.id}`}>
       <View style={styles.cardTop}>
-        {photo ? <PhotoView photo={photo} width={84} height={84} radius={8} /> : null}
+        {photo ? <PhotoView photo={photo} width={84} height={84} /> : null}
         <View style={styles.cardText}>
           <Text weight="600">{item.title}</Text>
           <Text variant="subheadline" color={colors.secondary}>
@@ -215,6 +245,26 @@ function TradeItem({ line, photo, comments, onPost }: { line: ListLine; photo?: 
             </Text>
           ) : null}
         </View>
+      </View>
+      <View style={styles.doneRow}>
+        {said ? (
+          <>
+            <Text variant="label" color={colors.tint} style={{ flex: 1 }} testID={`company-said-done-${item.id}`}>
+              You said it is done. Ross Built will check it.
+            </Text>
+            <Touchable feedback="opacity" onPress={() => onDone(false)} accessibilityRole="button" testID={`company-undo-done-${item.id}`} style={styles.action}>
+              <Text variant="label" color={colors.label}>
+                Not Yet
+              </Text>
+            </Touchable>
+          </>
+        ) : (
+          <Touchable feedback="opacity" onPress={markDone} accessibilityRole="button" accessibilityLabel={`${item.title} is done`} testID={`company-done-${item.id}`} style={[styles.action, styles.actionMain]}>
+            <Text variant="label" color={colors.onBar}>
+              Done
+            </Text>
+          </Touchable>
+        )}
       </View>
       {comments.length > 0 || open ? (
         <CommentThread
@@ -229,7 +279,7 @@ function TradeItem({ line, photo, comments, onPost }: { line: ListLine; photo?: 
         />
       ) : (
         <Touchable feedback="opacity" onPress={() => setOpen(true)} accessibilityRole="button" testID={`company-comment-${item.id}`} style={styles.comment}>
-          <Text variant="subheadline" weight="600" color={colors.tint}>
+          <Text variant="label" color={colors.tint}>
             Comment
           </Text>
         </Touchable>
@@ -244,7 +294,8 @@ const styles = StyleSheet.create({
   section: { marginTop: 22 },
   sectionTitle: { marginHorizontal: layout.margin + layout.rowPadding, marginBottom: 6 },
   cards: { marginHorizontal: layout.margin, gap: 10 },
-  card: { padding: 12, borderRadius: layout.radius, backgroundColor: colors.cell, gap: 10 },
+  card: { padding: 12, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border, gap: 10 },
+  doneRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cardTop: { flexDirection: 'row', gap: 12 },
   cardText: { flex: 1, gap: 2 },
   cardThread: { marginHorizontal: 0 },
@@ -255,6 +306,6 @@ const styles = StyleSheet.create({
   changeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   days: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  action: { height: 36, paddingHorizontal: 12, borderRadius: 18, justifyContent: 'center' },
-  actionMain: { backgroundColor: colors.tint },
+  action: { height: 36, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: colors.borderStrong },
+  actionMain: { backgroundColor: colors.action, borderColor: colors.action },
 });

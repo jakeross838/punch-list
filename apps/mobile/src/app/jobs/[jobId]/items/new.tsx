@@ -13,7 +13,6 @@ import { buildTimeline, dayOfDate, itemNumberLabel, type Item } from '@punch/cor
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { leaveOrConfirm } from '@/components/discard';
 import { ItemEditor } from '@/components/ItemEditor';
 import { startDraft, useItemForm, type ItemDraft } from '@/components/ItemForm';
@@ -21,7 +20,7 @@ import { useFillIn } from '@/components/useFillIn';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture, useCapture } from '@/data/capture';
-import { haptic, Icon, Page, shortDate, Text, Touchable, useFeedback } from '@/ui';
+import { haptic, Icon, Page, shortDate, Text, useFeedback } from '@/ui';
 
 export default function NewItemScreen() {
   const { jobId, typed } = useLocalSearchParams<{ jobId: string; typed?: string }>();
@@ -45,7 +44,6 @@ export default function NewItemScreen() {
 function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolean; saved: string | null; onNext: (note: string) => void }) {
   const data = useData();
   const feedback = useFeedback();
-  const insets = useSafeAreaInsets();
   const walk = useCapture();
   const settings = data.useFormSettings();
   const locations = data.useLocations(jobId);
@@ -151,30 +149,24 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
   return (
     <Page
       title="New Item"
+      eyebrow={[roomLabel, typed ? 'Typed in' : shots.length > 0 ? `${shots.length === 1 ? 'A photo' : `${shots.length} photos`}` : null].filter(Boolean).join(' · ') || undefined}
       sheet
       dismissible={!hasContent}
-      left={[{ kind: 'button', label: 'Cancel', onPress: cancel, testID: 'cancel' }]}
-      right={[{ kind: 'button', label: 'Save', variant: 'prominent', onPress: () => void save(false), disabled: saving, testID: 'save' }]}
-      footerHeight={66}
-      footer={
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <Touchable feedback="scale" onPress={() => void save(true)} disabled={saving} accessibilityRole="button" testID="save-next" style={styles.saveNext}>
-            <Icon name={typed ? 'plus' : 'camera'} size={20} color={colors.white} weight="medium" />
-            <Text variant="headline" color={colors.white}>
-              Save and Next
-            </Text>
-          </Touchable>
-        </View>
-      }
+      right={[{ kind: 'button', label: 'Cancel', icon: 'xmark', iconOnly: true, onPress: cancel, testID: 'cancel' }]}
+      bottom={[
+        { kind: 'button', label: 'Save', variant: 'plain', onPress: () => void save(false), disabled: saving, testID: 'save' },
+        { kind: 'button', label: 'Save and Next', icon: typed ? 'plus' : 'camera', variant: 'prominent', onPress: () => void save(true), disabled: saving, testID: 'save-next' },
+      ]}
     >
       {typed && saved ? (
         <View style={styles.saved} testID="saved-note">
-          <Icon name="checkmark.circle.fill" size={18} color={colors.tint} />
+          <Icon name="checkmark" size={16} color={colors.ok} weight="semibold" />
           <Text variant="subheadline" color={colors.secondary} numberOfLines={1} style={{ flex: 1 }}>
             {saved}
           </Text>
         </View>
       ) : null}
+      <View style={styles.editor} />
       <ItemEditor
         jobId={jobId}
         value={value}
@@ -192,7 +184,6 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
 }
 
 const styles = StyleSheet.create({
-  footer: { paddingTop: 10, paddingHorizontal: layout.margin, backgroundColor: 'rgba(245, 245, 247, 0.96)', borderTopWidth: layout.hairline, borderTopColor: colors.rule },
-  saveNext: { height: 50, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.tint },
-  saved: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: layout.inset, marginBottom: 10 },
+  saved: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: layout.inset, marginTop: 12, marginBottom: 2 },
+  editor: { height: 12 },
 });

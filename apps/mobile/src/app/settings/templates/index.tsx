@@ -22,8 +22,10 @@ export default function TemplatesScreen() {
   return (
     <Page
       title="Templates"
-
-      backLabel="Jobs"
+      eyebrow="What always needs doing"
+      crumb={['Me', 'Templates']}
+      backLabel="Me"
+      tab={{ active: 'me' }}
       right={admin ? [{ kind: 'button', label: 'New Template', icon: 'plus', iconOnly: true, onPress: () => setAdding(true), testID: 'new-template' }] : []}
     >
       {on.length === 0 ? (

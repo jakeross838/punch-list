@@ -97,7 +97,7 @@ function PersonDetail({ person }: { person: Person }) {
   const notOn = jobs.filter((j) => !j.closed && !team.some((t) => t.jobId === j.id));
 
   return (
-    <Page title={person.name} backLabel="People" subtitle={person.active ? undefined : 'Switched off'}>
+    <Page title={person.name} eyebrow="Person" crumb={['Me', 'People', person.name]} backLabel="People" subtitle={person.active ? undefined : 'Switched off'} tab={{ active: 'me' }}>
       <ListSection header="Contact">
         <ListLabeledField
           label="Name"

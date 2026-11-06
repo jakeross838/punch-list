@@ -20,7 +20,7 @@ export default function MyItemsScreen() {
   const byJob = jobs.map((job) => ({ job, items: mine.filter((i) => i.jobId === job.id) })).filter((g) => g.items.length > 0);
   const time = totalText(totalTime(mine));
   return (
-    <Page title="My Items" backLabel="Jobs" background="plain" subtitle={[`${mine.length} open`, time].filter(Boolean).join(' · ')}>
+    <Page title="My Items" eyebrow="Assigned to you" crumb={['Home', 'My Items']} backLabel="Jobs" subtitle={[`${mine.length} open`, time].filter(Boolean).join(' · ')} tab={{ active: 'jobs' }}>
       {byJob.length === 0 ? (
         <EmptyState icon="person" title="Nothing Assigned to You" message="Items assigned to you on any job show here." />
       ) : (

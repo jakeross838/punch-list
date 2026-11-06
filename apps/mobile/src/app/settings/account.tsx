@@ -1,5 +1,5 @@
-// Your account: who you are signed in as, what you do at Ross Built and what you see, and the jobs
-// you are on and as what. An admin changes these in People. On the iPhone, This Phone says whether
+// Me: who you are signed in as, what you do at Ross Built and what you see, the jobs you are on and
+// as what, and Ross Built's setup: People, Companies, Templates and Item Form. An admin changes these in People. On the iPhone, This Phone says whether
 // every change made here has gone up, and anything the server turned down. Sign Out clears what is
 // on this phone; it all comes back when you sign in again. It waits until every change has gone up.
 
@@ -19,8 +19,9 @@ export default function AccountScreen() {
   const jobs = data.useJobs();
   const team = data.useTeams().filter((t) => t.personId === me?.id);
   const sync = data.useSync();
+  const people = data.usePeople();
   // Signing out: the screen goes as the sign in comes up.
-  if (!me) return <Page title="Account" backLabel="Jobs" />;
+  if (!me) return <Page title="Me" tab={{ active: 'me' }} />;
   const admin = isAdmin(me);
   const version = Constants.expoConfig?.version;
 
@@ -44,7 +45,13 @@ export default function AccountScreen() {
     });
 
   return (
-    <Page title={me.name} subtitle={me.email} backLabel="Jobs">
+    <Page title={me.name} eyebrow={`${ROLE_LABELS[me.role]} · Ross Built`} subtitle={me.email} crumb={['Home', 'Me']} back={false} tab={{ active: 'me' }}>
+      <ListSection header="Ross Built" footer={admin ? 'Who works here, the companies, what always needs doing in a house, and what the item form asks.' : 'An admin changes these.'}>
+        <ListRow title="People" icon="person.2.fill" accessory="chevron" onPress={() => router.push('/settings/people')} testID="people" />
+        <ListRow title="Companies" icon="building" accessory="chevron" onPress={() => router.push('/settings/companies')} testID="companies" />
+        <ListRow title="Templates" icon="templates" accessory="chevron" onPress={() => router.push('/settings/templates')} testID="templates" />
+        <ListRow title="Item Form" icon="list.bullet" accessory="chevron" onPress={() => router.push('/settings/item-form')} testID="item-form" />
+      </ListSection>
       <ListSection header="You" footer={admin ? 'Change any of it in People.' : 'An admin changes these in People.'}>
         <ListRow title="Email" value={me.email} testID="account-email" />
         <ListRow title="Phone" value={me.phone ?? 'None'} />
@@ -87,6 +94,22 @@ export default function AccountScreen() {
             <ListRow key={r.id} title={r.what} subtitle={formatWhen(r.at)} />
           ))}
           {sync.refused.length > 0 ? <ListRow title="Clear This List" tone="tint" onPress={() => void data.clearRefused()} testID="account-clear-refused" /> : null}
+        </ListSection>
+      ) : null}
+      {data.mode === 'preview' && data.previewAs ? (
+        <ListSection header="See the Preview As" footer="The preview can be seen as anyone, to check what each person sees and can change.">
+          {people
+            .filter((p) => p.active)
+            .map((p) => (
+              <ListRow
+                key={p.id}
+                title={p.name}
+                subtitle={ROLE_LABELS[p.role]}
+                accessory={p.id === me.id ? 'checkmark' : 'none'}
+                onPress={() => data.previewAs?.(p.id)}
+                testID={`preview-as-${p.id}`}
+              />
+            ))}
         </ListSection>
       ) : null}
       <ListSection>

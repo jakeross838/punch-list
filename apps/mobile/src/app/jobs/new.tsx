@@ -35,6 +35,7 @@ export default function NewJobScreen() {
   return (
     <Page
       title="New Job"
+      eyebrow="Admins only"
       sheet
       dismissible={!dirty}
       left={[{ kind: 'button', label: 'Cancel', onPress: () => leaveOrConfirm(dirty, feedback, () => router.back(), 'this job'), testID: 'cancel' }]}

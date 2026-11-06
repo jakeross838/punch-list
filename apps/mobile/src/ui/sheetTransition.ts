@@ -5,8 +5,9 @@
 import type { StackCardInterpolationProps, StackCardInterpolatedStyle } from 'expo-router/js-stack';
 import { Animated } from 'react-native';
 
-const SHEET_RADIUS = 22;
-const BEHIND_RADIUS = 16;
+// Square, Site Office style: the sheet and the screen behind it keep their corners.
+const SHEET_RADIUS = 0;
+const BEHIND_RADIUS = 0;
 const TOP_GAP = 10;
 
 export function forSheetIOS({ index, current, next, inverted, layouts: { screen }, insets }: StackCardInterpolationProps): StackCardInterpolatedStyle {

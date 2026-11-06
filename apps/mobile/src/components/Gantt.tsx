@@ -75,7 +75,7 @@ export function Gantt({
             testID={`gantt-company-${r.companyId}`}
             style={styles.label}
           >
-            <Text variant="footnote" weight="600" numberOfLines={2}>
+            <Text variant="footnote" weight="500" numberOfLines={2}>
               {companyName(r.companyId)}
             </Text>
           </Touchable>
@@ -199,7 +199,7 @@ export function GanttKey({ critical = false, holidays = false }: { critical?: bo
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', marginHorizontal: layout.margin, borderRadius: layout.radius, backgroundColor: colors.cell, overflow: 'hidden', paddingBottom: 6 },
+  card: { flexDirection: 'row', marginHorizontal: layout.margin, borderWidth: layout.hairline, borderColor: colors.border, backgroundColor: colors.cell, overflow: 'hidden', paddingBottom: 6 },
   labels: { width: LABEL, borderRightWidth: layout.hairline, borderRightColor: colors.separator },
   label: { height: ROW, justifyContent: 'center', paddingLeft: 12, paddingRight: 6 },
   head: { height: HEAD, flexDirection: 'row' },
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   dayNumber: { width: DAY, textAlign: 'center' },
   row: { height: ROW, justifyContent: 'center' },
   weekRule: { position: 'absolute', top: 0, bottom: 0, width: 0, borderLeftWidth: layout.hairline, borderLeftColor: colors.separator },
-  bar: { position: 'absolute', top: (ROW - BAR) / 2, height: BAR, borderRadius: 6, justifyContent: 'center', overflow: 'hidden' },
+  bar: { position: 'absolute', top: (ROW - BAR) / 2, height: BAR, justifyContent: 'center', overflow: 'hidden' },
   barText: { paddingHorizontal: 6 },
   confirmed: { backgroundColor: colors.confirmed },
   planned: { backgroundColor: colors.bestGuess },
@@ -222,5 +222,5 @@ const styles = StyleSheet.create({
   today: { position: 'absolute', top: HEAD - 4, width: 0, borderLeftWidth: 1.5, borderLeftColor: colors.destructive },
   key: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginHorizontal: layout.inset, marginTop: 10 },
   keyItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  swatch: { width: 16, height: 10, borderRadius: 3 },
+  swatch: { width: 16, height: 10 },
 });

@@ -59,7 +59,7 @@ export default function ItemFormScreen() {
   const admin = isAdmin(data.useMe());
 
   return (
-    <Page title="Item Form" sheet right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: () => router.back(), testID: 'form-done' }]}>
+    <Page title="Item Form" eyebrow="What the form asks" sheet right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: () => router.back(), testID: 'form-done' }]}>
       <ListSection
         header="On the Form"
         footer="Title and location are always on. A field turned off still shows when an item needs it, like Waiting On for an item that is not ready."

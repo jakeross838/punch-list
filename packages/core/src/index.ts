@@ -27,3 +27,4 @@ export * from './templates';
 export * from './tracking';
 export * from './emails';
 export * from './contacts';
+export * from './spreadsheet';

@@ -1,14 +1,35 @@
 // Sign in: your Ross Built email, then the six digit code it gets. Only people an admin has added
-// under People get a code, so there is no password and no account to make. On the preview page no
-// email is sent: an email from People and any six digits sign in. On the iPhone, the first sign in
-// waits here while the jobs come down to the phone.
+// under People get a code, so there is no password and no account to make. The code goes in six
+// square boxes that never move while you type; on the iPhone it fills in from Mail. On the preview
+// page no email is sent: an email from People and any six digits sign in. On the iPhone, the first
+// sign in waits here while the jobs come down to the phone.
 
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { APP_NAME } from '@/constants/app';
-import { colors, layout } from '@/constants/theme';
+import { useRef, useState, type ComponentRef } from 'react';
+import { Platform, StyleSheet, TextInput, View } from 'react-native';
+import { colors, fieldFont, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Banner, Button, haptic, ListRow, ListSection, ListTextField, Page, Text } from '@/ui';
+import { Banner, Button, Eyebrow, haptic, Icon, ListRow, ListSection, ListTextField, Page, Text, Touchable } from '@/ui';
+
+const BOXES = 6;
+
+function Step({ n, label, state }: { n: string; label: string; state: 'on' | 'done' | 'next' }) {
+  return (
+    <View style={styles.step} accessible accessibilityLabel={`Step ${Number(n)}, ${label}${state === 'done' ? ', done' : ''}`}>
+      <View style={[styles.stepBox, state === 'on' ? styles.stepOn : null]}>
+        {state === 'done' ? (
+          <Icon name="checkmark" size={14} color={colors.ok} weight="semibold" />
+        ) : (
+          <Text variant="label" weight="600" color={state === 'on' ? colors.onBar : colors.secondary}>
+            {n}
+          </Text>
+        )}
+      </View>
+      <Text variant="label" weight={state === 'on' ? '600' : '500'} color={state === 'on' ? colors.label : colors.secondary}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 export default function SignInScreen() {
   const data = useData();
@@ -19,6 +40,8 @@ export default function SignInScreen() {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resent, setResent] = useState(false);
+  const [focused, setFocused] = useState(true);
+  const codeField = useRef<ComponentRef<typeof TextInput>>(null);
 
   async function send(again = false) {
     if (busy) return;
@@ -54,11 +77,24 @@ export default function SignInScreen() {
     }
   }
 
+  const typeCode = (text: string) => {
+    const digits = text.replace(/\D/g, '').slice(0, BOXES);
+    setCode(digits);
+    // Six digits in: straight in, without a tap.
+    if (digits.length === BOXES) void verify(digits);
+  };
+
   return (
-    <Page title="Sign In" eyebrow="Ross Built" back={false}>
-      <Text variant="subheadline" color={colors.secondary} style={styles.lead}>
-        {`${APP_NAME}: every job's list, room by room, and the schedule it builds.`}
-      </Text>
+    <Page title="Sign In" hideHeader back={false} bell={false}>
+      <View style={styles.head}>
+        <Eyebrow text="Ross Built · Field" />
+        <Text variant="largeTitle" accessibilityRole="header" style={styles.title}>
+          Sign in
+        </Text>
+        <Text variant="callout" color={colors.secondary} style={styles.lead}>
+          Ross Built people only. No password: we email you a code.
+        </Text>
+      </View>
       {sync.gettingJobs ? (
         <ListSection
           header="Signed In"
@@ -81,88 +117,143 @@ export default function SignInScreen() {
             testID="sign-in-sign-out"
           />
         </ListSection>
-      ) : step === 'email' ? (
-        <>
-          <ListSection
-            footer={problem ?? 'Your Ross Built email. We send it a six digit code to sign in, so there is no password to remember.'}
-            footerTone={problem ? 'danger' : 'default'}
-          >
-            <ListTextField
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              autoComplete="email"
-              returnKeyType="send"
-              onSubmitEditing={() => void send()}
-              invalid={!!problem}
-              accessibilityLabel="Email"
-              testID="sign-in-email"
-            />
-          </ListSection>
-          <View style={styles.button}>
-            <Button label={busy ? 'Sending' : 'Send Code'} onPress={() => void send()} disabled={busy || email.trim() === ''} testID="sign-in-send" />
-          </View>
-        </>
       ) : (
         <>
-          <ListSection
-            header="Code"
-            footer={problem ?? `${resent ? 'A new code is on its way' : 'We sent a six digit code'} to ${email.trim().toLowerCase()}. Enter it here.`}
-            footerTone={problem ? 'danger' : 'default'}
-          >
-            <ListTextField
-              placeholder="Six Digit Code"
-              value={code}
-              onChangeText={(text) => {
-                const digits = text.replace(/\D/g, '').slice(0, 6);
-                setCode(digits);
-                // Six digits in: straight in, without a tap.
-                if (digits.length === 6) void verify(digits);
-              }}
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              autoComplete="one-time-code"
-              autoFocus
-              maxLength={6}
-              invalid={!!problem}
-              accessibilityLabel="Six digit code"
-              testID="sign-in-code"
-            />
-          </ListSection>
-          <View style={styles.button}>
-            <Button label={busy ? 'Signing In' : 'Sign In'} onPress={() => void verify()} disabled={busy || code.length !== 6} testID="sign-in-verify" />
+          <View style={styles.steps}>
+            <Step n="01" label="Email" state={step === 'email' ? 'on' : 'done'} />
+            <Step n="02" label="Code" state={step === 'code' ? 'on' : 'next'} />
           </View>
-          <ListSection>
-            <ListRow title="Send a New Code" tone="tint" onPress={() => void send(true)} testID="sign-in-resend" />
-            <ListRow
-              title="Use Another Email"
-              tone="tint"
-              onPress={() => {
-                setStep('email');
-                setProblem(null);
-                setCode('');
-              }}
-              testID="sign-in-other"
-            />
-          </ListSection>
+          {step === 'email' ? (
+            <>
+              <ListSection
+                header="Your Ross Built email"
+                footer={problem ?? 'We send it a six digit code to sign in.'}
+                footerTone={problem ? 'danger' : 'default'}
+              >
+                <ListTextField
+                  placeholder="name@rossbuilt.com"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  autoComplete="email"
+                  returnKeyType="send"
+                  onSubmitEditing={() => void send()}
+                  invalid={!!problem}
+                  accessibilityLabel="Email"
+                  testID="sign-in-email"
+                />
+              </ListSection>
+              <View style={styles.button}>
+                <Button label={busy ? 'Sending' : 'Send Code'} icon="arrow" onPress={() => void send()} disabled={busy || email.trim() === ''} testID="sign-in-send" />
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.emailCard}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text variant="stamp" color={colors.secondary}>
+                    Email
+                  </Text>
+                  <Text numberOfLines={1}>{email.trim().toLowerCase()}</Text>
+                </View>
+                <Touchable
+                  feedback="opacity"
+                  onPress={() => {
+                    setStep('email');
+                    setProblem(null);
+                    setCode('');
+                  }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  testID="sign-in-other"
+                >
+                  <Text variant="label" color={colors.tint}>
+                    Change
+                  </Text>
+                </Touchable>
+              </View>
+              <Text variant="label" color={colors.secondary} style={styles.codeLabel}>
+                Six digit code
+              </Text>
+              <Touchable feedback="none" onPress={() => codeField.current?.focus()} accessibilityRole="none" style={styles.boxes}>
+                {Array.from({ length: BOXES }, (_, i) => {
+                  const on = focused && i === Math.min(code.length, BOXES - 1);
+                  return (
+                    <View key={i} style={[styles.box, on ? styles.boxOn : null, problem ? styles.boxProblem : null]} accessible={false}>
+                      <Text variant="mono" style={styles.digit}>
+                        {code[i] ?? ''}
+                      </Text>
+                    </View>
+                  );
+                })}
+                <TextInput
+                  ref={codeField}
+                  value={code}
+                  onChangeText={typeCode}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  maxLength={BOXES}
+                  caretHidden
+                  selectionColor="transparent"
+                  accessibilityLabel="Six digit code"
+                  testID="sign-in-code"
+                  style={styles.hiddenField}
+                />
+              </Touchable>
+              <Text variant="footnote" color={problem ? colors.destructive : colors.secondary} style={styles.codeNote}>
+                {problem ?? `${resent ? 'A new code is on its way' : 'We sent a code'} to ${email.trim().toLowerCase()}.${Platform.OS === 'ios' ? ' It fills in from Mail.' : ''}`}
+              </Text>
+              <View style={styles.button}>
+                <Button label={busy ? 'Signing In' : 'Sign In'} icon="arrow" onPress={() => void verify()} disabled={busy || code.length !== BOXES} testID="sign-in-verify" />
+              </View>
+              <View style={styles.resend}>
+                <Button label="Send a New Code" variant="plain" onPress={() => void send(true)} testID="sign-in-resend" />
+              </View>
+            </>
+          )}
         </>
       )}
-      {data.mode === 'preview' ? (
-        <View style={styles.banner}>
-          <Banner icon="info.circle">Preview: no email is sent. Use an email from People, like jake@rossbuilt.com or sam@rossbuilt.com, then any six digits.</Banner>
-        </View>
-      ) : null}
+      {data.mode === 'preview' ? <Banner>Preview: no email is sent. Use an email from People, like jake@rossbuilt.com or sam@rossbuilt.com, then any six digits.</Banner> : null}
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  lead: { marginHorizontal: layout.inset, marginTop: -4, marginBottom: 18 },
-  button: { marginHorizontal: layout.margin, marginTop: -8, marginBottom: 22 },
-  banner: { marginHorizontal: layout.margin },
+  head: { paddingHorizontal: 24, paddingTop: 28 },
+  title: { marginTop: 8, fontSize: 34, lineHeight: 38 },
+  lead: { marginTop: 8 },
+  steps: { flexDirection: 'row', gap: 18, marginHorizontal: 24, marginTop: 26, marginBottom: 22 },
+  step: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepBox: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.borderStrong },
+  stepOn: { backgroundColor: colors.action, borderColor: colors.action },
+  button: { marginHorizontal: layout.margin, marginTop: 4 },
+  resend: { marginHorizontal: layout.margin, marginTop: 6, alignItems: 'center' },
+  emailCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: layout.margin,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: colors.cell,
+    borderWidth: layout.hairline,
+    borderColor: colors.border,
+  },
+  codeLabel: { marginHorizontal: 24, marginTop: 22 },
+  boxes: { flexDirection: 'row', gap: 6, marginHorizontal: layout.margin, marginTop: 8 },
+  box: { flex: 1, height: 54, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cell, borderWidth: 1, borderColor: colors.borderStrong },
+  boxOn: { borderWidth: 2, borderColor: colors.action },
+  boxProblem: { borderColor: colors.destructive },
+  digit: { fontSize: 22, lineHeight: 26 },
+  // The real field, over the boxes and out of sight: it takes the typing and the code from Mail.
+  hiddenField: { ...fieldFont('mono'), position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.02, color: 'transparent', outlineWidth: 0 },
+  codeNote: { marginHorizontal: 24, marginTop: 10, marginBottom: 18 },
 });

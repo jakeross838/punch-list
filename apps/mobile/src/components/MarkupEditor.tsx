@@ -183,14 +183,16 @@ export function MarkupEditor({
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.screen, { paddingTop: insets.top }]} testID="markup">
       <View style={styles.bar}>
         <Touchable feedback="opacity" onPress={onRetake} accessibilityRole="button" testID="markup-retake" style={styles.barSide}>
-          <Text color={colors.onDark}>{retakeLabel}</Text>
+          <Text variant="button" color={colors.onDark}>
+            {retakeLabel}
+          </Text>
         </Touchable>
-        <Text variant="headline" color={colors.onDark} accessibilityRole="header">
+        <Text variant="label" weight="600" color={colors.onDark} accessibilityRole="header">
           Mark Up
         </Text>
         <View style={[styles.barSide, styles.barRight]}>
-          <Touchable feedback="scale" onPress={() => onDone(marks)} accessibilityRole="button" testID="markup-next" style={styles.next}>
-            <Text variant="subheadline" weight="600" color={colors.label}>
+          <Touchable feedback="opacity" onPress={() => onDone(marks)} accessibilityRole="button" testID="markup-next" style={styles.next}>
+            <Text variant="button" weight="600" color={colors.bar}>
               {doneLabel}
             </Text>
           </Touchable>
@@ -219,7 +221,7 @@ export function MarkupEditor({
                 testID={`quick-${word.toLowerCase().replace(/ /g, '-')}`}
                 style={styles.chip}
               >
-                <Text variant="subheadline" weight="600" color={colors.onDark}>
+                <Text variant="label" weight="600" color={colors.onDark}>
                   {word}
                 </Text>
               </Touchable>
@@ -370,29 +372,29 @@ export function MarkupEditor({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.black },
+  screen: { flex: 1, backgroundColor: colors.bar },
   bar: { height: 48, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
   barSide: { flex: 1, height: 44, justifyContent: 'center' },
   barRight: { alignItems: 'flex-end' },
-  next: { height: 34, paddingHorizontal: 16, borderRadius: 17, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  next: { height: 36, paddingHorizontal: 14, backgroundColor: colors.onDark, alignItems: 'center', justifyContent: 'center' },
   area: { flex: 1 },
   canvas: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
   controls: { paddingTop: 10, gap: 6 },
   tools: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
-  tool: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  tool: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
   toolOn: { backgroundColor: colors.darkChipOn },
   colors: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   colorSet: { flexDirection: 'row', gap: 6 },
   rule: { width: 1, height: 26, marginHorizontal: 12, backgroundColor: 'rgba(255, 255, 255, 0.24)' },
   swatchHit: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  swatch: { width: 28, height: 28, borderRadius: 14 },
+  swatch: { width: 28, height: 28 },
   swatchBlack: { borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.5)' },
   swatchOn: { borderWidth: 2.5, borderColor: colors.black, outlineWidth: 2, outlineColor: colors.white, outlineStyle: 'solid' },
   panel: { gap: 10, paddingTop: 12, paddingBottom: 12, paddingHorizontal: 16, backgroundColor: '#1C1C1E' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { height: 36, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center', backgroundColor: colors.darkChip },
+  chip: { height: 36, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(247, 245, 236, 0.22)' },
   chipOn: { backgroundColor: colors.white },
   entry: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  input: { ...typeScale.body, flex: 1, minWidth: 0, height: 44, paddingHorizontal: 14, borderRadius: 12, color: colors.onDark, backgroundColor: colors.darkChip, outlineWidth: 0 },
+  input: { ...typeScale.body, flex: 1, minWidth: 0, height: 44, paddingHorizontal: 12, color: colors.onDark, backgroundColor: colors.darkChip, borderWidth: 1, borderColor: 'rgba(247, 245, 236, 0.22)', outlineWidth: 0 },
   panelButton: { height: 44, paddingHorizontal: 8, justifyContent: 'center' },
 });

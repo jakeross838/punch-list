@@ -27,8 +27,10 @@ export default function PeopleScreen() {
   return (
     <Page
       title="People"
-
-      backLabel="Jobs"
+      eyebrow="Ross Built"
+      crumb={['Me', 'People']}
+      backLabel="Me"
+      tab={{ active: 'me' }}
       right={admin ? [{ kind: 'button', label: 'Add Person', icon: 'plus', iconOnly: true, onPress: () => setAdding(true), testID: 'add-person' }] : []}
     >
       {groups

@@ -41,10 +41,11 @@ export default function ActivityScreen() {
   return (
     <Page
       title="Activity"
-
-      subtitle="Who added or changed what on the job."
+      eyebrow="Who did what"
+      subtitle="Who added or changed what on the job, newest first."
+      crumb={[job?.name ?? 'Job', 'Activity']}
       backLabel={job?.name}
-      background="plain"
+      tab={{ active: 'jobs', jobId }}
       list={(scroll) => (
         <SectionList
           {...scroll.props}

@@ -39,7 +39,7 @@ import { VisitSheet, type VisitDraft } from '@/components/VisitSheet';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { useHolds } from '@/data/view';
-import { EmptyState, haptic, ListRow, ListSection, Page, shortDate, Text, Touchable, useFeedback, weekdayDate } from '@/ui';
+import { EmptyState, Figures, haptic, ListRow, ListSection, Page, shortDate, Text, Touchable, useFeedback, weekdayDate } from '@/ui';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -146,7 +146,25 @@ export default function ScheduleScreen() {
     holidays.length > 0 ? `No work on ${holidays.map((h) => `${h.name}, ${h.days.map((d) => shortDate(d)).join(' and ')}`).join('; ')}.` : '';
 
   return (
-    <Page title="Schedule" subtitle={subtitle || undefined} backLabel={job?.name}>
+    <Page
+      title="Schedule"
+      eyebrow={job ? `${job.name} · built from the list` : 'Built from the list'}
+      subtitle={subtitle || undefined}
+      crumb={[job?.name ?? 'Job', 'Schedule']}
+      jobSwitch={{ jobId, onChange: (next) => router.setParams({ jobId: next }) }}
+      account
+      tab={{ active: 'schedule', jobId, late: late.length }}
+      beforeSearch={
+        <Figures
+          cells={[
+            { label: 'Finish', value: timeline.finish ? shortDate(timeline.finish) : 'No date', testID: 'schedule-finish' },
+            { label: 'Late', value: String(late.length), color: late.length > 0 ? colors.destructive : colors.label, testID: 'schedule-late' },
+            { label: 'To Confirm', value: String(visits.filter((v) => !v.removed && !v.confirmed).length), color: colors.tint, testID: 'schedule-to-confirm' },
+            { label: 'No Date', value: String(timeline.noDate.length), testID: 'schedule-no-date' },
+          ]}
+        />
+      }
+    >
       {late.length > 0 ? (
         <ListSection>
           <ListRow

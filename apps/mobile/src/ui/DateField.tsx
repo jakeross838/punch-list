@@ -21,7 +21,9 @@ export function DateField({ value, onChange, label, testID }: DateFieldProps) {
   if (!value) {
     return (
       <Touchable feedback="opacity" onPress={() => onChange(todayIso())} accessibilityRole="button" accessibilityLabel={`Add ${label}`} testID={testID}>
-        <Text color={colors.tint}>Add Date</Text>
+        <Text variant="label" color={colors.tint}>
+          Add Date
+        </Text>
       </Touchable>
     );
   }
@@ -37,7 +39,7 @@ export function DateField({ value, onChange, label, testID }: DateFieldProps) {
         />
       </Host>
       <Touchable feedback="opacity" hitSlop={10} onPress={() => onChange(null)} accessibilityRole="button" accessibilityLabel={`Clear ${label}`}>
-        <Icon name="xmark.circle.fill" size={20} color={colors.chevron} />
+        <Icon name="xmark" size={16} color={colors.quiet} />
       </Touchable>
     </View>
   );

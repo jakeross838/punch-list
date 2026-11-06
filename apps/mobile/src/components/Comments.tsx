@@ -84,7 +84,7 @@ export function CommentThread({
               <Text variant="footnote" weight="600" style={{ flexShrink: 1 }} numberOfLines={1}>
                 {commentAuthor(c, look)}
               </Text>
-              <Text variant="footnote" color={colors.secondary}>
+              <Text variant="stamp" color={colors.secondary}>
                 {whenOf(c.createdAt)}
               </Text>
             </View>
@@ -92,7 +92,7 @@ export function CommentThread({
             {c.internal ? (
               <View style={styles.internalTag}>
                 <Icon name="eye.slash" size={11} color={colors.secondary} />
-                <Text variant="caption1" color={colors.secondary}>
+                <Text variant="stamp" color={colors.secondary}>
                   Ross Built only
                 </Text>
               </View>
@@ -136,7 +136,7 @@ export function CommentThread({
             />
           ) : null}
           <Touchable
-            feedback="scale"
+            feedback="opacity"
             onPress={post}
             disabled={!body}
             accessibilityRole="button"
@@ -144,7 +144,7 @@ export function CommentThread({
             testID={testID ? `${testID}-post` : undefined}
             style={[styles.post, body ? null : styles.postOff]}
           >
-            <Text variant="subheadline" weight="600" color={colors.white}>
+            <Text variant="label" weight="600" color={colors.onBar}>
               Post
             </Text>
           </Touchable>
@@ -161,16 +161,17 @@ export function CommentThread({
 
 const styles = StyleSheet.create({
   thread: { marginHorizontal: layout.margin, gap: 8 },
-  bubble: { padding: 10, paddingTop: 8, borderRadius: layout.radius, backgroundColor: colors.cell, gap: 2 },
-  gray: { backgroundColor: colors.surface },
-  theirs: { backgroundColor: colors.chipOn },
-  internal: { borderWidth: 1, borderColor: colors.rule, borderStyle: 'dashed' },
+  bubble: { padding: 10, paddingTop: 8, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border, gap: 3 },
+  gray: { backgroundColor: colors.stripe },
+  // The company's words: a gulf rule down the side, like a note pinned to the list.
+  theirs: { borderLeftWidth: 3, borderLeftColor: colors.tint },
+  internal: { borderColor: colors.borderStrong, borderStyle: 'dashed' },
   byLine: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
   internalTag: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  box: { padding: 10, borderRadius: layout.radius, backgroundColor: colors.cell, gap: 8 },
+  box: { padding: 10, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.borderStrong, gap: 8 },
   input: { ...typeScale.callout, minHeight: 40, maxHeight: 160, padding: 0, color: colors.label, outlineWidth: 0, textAlignVertical: 'top' },
   boxRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  post: { marginLeft: 'auto', height: 30, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.tint },
+  post: { marginLeft: 'auto', height: 32, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.action },
   postOff: { opacity: 0.4 },
-  hint: { marginHorizontal: layout.rowPadding },
+  hint: { marginHorizontal: 4 },
 });
