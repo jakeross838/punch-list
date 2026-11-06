@@ -82,7 +82,9 @@ async function main(): Promise<void> {
           return { title: 'install towel bar', description: 'Left of the vanity, 24 inches.', trade: 'Carpentry', company: 'SMS Carpentry' };
         },
       });
-      window.claude = { use: async (name) => (name === 'sample' ? sample : null) };
+      // The page's host saves files for it, after asking the viewer: here it keeps what it was given.
+      const downloads = { save: async ({ filename, data }) => { window.__saved = { filename, data: String(data) }; return { status: 'saved' }; } };
+      window.claude = { use: async (name) => (name === 'sample' ? sample : name === 'downloads' ? downloads : null) };
     })();
   `);
   const tab = await context.newPage();
@@ -1797,16 +1799,18 @@ async function main(): Promise<void> {
       await table.getByText('Adjust cabinet door', { exact: true }).first().waitFor();
       await settle(600);
       await shot('98-spreadsheet');
-      // A frame like the preview link's may not download files; where it can, the file is the CSV.
-      const download = tab.waitForEvent('download', { timeout: 5_000 }).catch(() => null);
+      // Download hands the file to the page's host, which asks the viewer before it saves.
       await app.getByTestId('spreadsheet-download').click();
-      const file = await download;
-      if (file) {
-        if (!/[.]csv$/.test(file.suggestedFilename())) throw new Error(`The spreadsheet is named ${file.suggestedFilename()}`);
-        const text = readFileSync(await file.path(), 'utf8');
-        if (!/^\uFEFF?Number,Title,/.test(text)) throw new Error(`The spreadsheet does not start with its columns: ${text.slice(0, 60)}`);
-        if (!text.includes('Adjust cabinet door')) throw new Error('The spreadsheet is missing an item');
+      const saved = app.locator('body');
+      let file: { filename: string; data: string } | undefined;
+      for (let i = 0; i < 20 && !file; i += 1) {
+        file = await saved.evaluate(() => (window as unknown as { __saved?: { filename: string; data: string } }).__saved);
+        if (!file) await settle(150);
       }
+      if (!file) throw new Error('The spreadsheet was not handed over to save');
+      if (!/^Sample Job North Items \d{4}-\d{2}-\d{2}[.]csv$|^Sample Job Items \d{4}-\d{2}-\d{2}[.]csv$/.test(file.filename)) throw new Error(`The spreadsheet is named ${file.filename}`);
+      if (!/^\uFEFF?Number,Title,/.test(file.data)) throw new Error(`The spreadsheet does not start with its columns: ${file.data.slice(0, 60)}`);
+      if (!file.data.includes('Adjust cabinet door')) throw new Error('The spreadsheet is missing an item');
       await app.getByTestId('spreadsheet-close').click();
       await app.getByTestId('spreadsheet-sheet').waitFor({ state: 'detached' });
       await app.getByTestId('tab-jobs').last().click();
