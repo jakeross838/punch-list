@@ -103,7 +103,9 @@ async function call(body: Record<string, unknown>): Promise<Page> {
 
 async function load(): Promise<void> {
   try {
-    page = await call({ action: 'page' });
+    const got = await call({ action: 'page' });
+    // An older answer may leave a part out: the page still shows what it has.
+    page = { ...got, builder: got.builder || 'Your builder', completed: got.completed ?? [], comments: got.comments ?? [], items: got.items ?? [] };
     document.title = `${page.company.name}, ${page.job.name}`;
     render();
   } catch (e) {
@@ -116,7 +118,8 @@ async function send(key: string, body: Record<string, unknown>, after?: () => vo
   busy.add(key);
   renderItem(key);
   try {
-    page = await call({ ...body, name: name || null });
+    const got = await call({ ...body, name: name || null });
+    page = { ...got, builder: got.builder || 'Your builder', completed: got.completed ?? [], comments: got.comments ?? [], items: got.items ?? [] };
     after?.();
     busy.delete(key);
     render();
