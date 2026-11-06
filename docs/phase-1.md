@@ -116,7 +116,7 @@ A six digit code sent to the person's email: no password. Only people Ross Built
 1. Supabase: done. The project `punch-list` is made and loaded (see The live database). The database password stays with Jake; nothing needs it, since PowerSync reads the database as its own role (see `setup.md`).
 2. PowerSync: done. The instance Production is connected to the database and runs the sync config.
 3. Expo: done. The project `@jakeross/punch-list` has the build settings and the app's settings.
-4. Apple and TestFlight: done (5 November). Build 2 is in TestFlight for the Ross Built group (`setup.md`, Apple and TestFlight).
+4. Apple and TestFlight: done (5 November). Build 4, the Site Office redesign with To Check, plans, Updates, priority, checklists and the spreadsheet, is in TestFlight for the Ross Built group (`setup.md`, Apple and TestFlight).
 5. Fish's room list: the plan callouts with their numbers, in floor order.
 6. The standard titles: the preview starts from a list of about fifty by trade; Fish's own completion list would make it real.
 7. Fill In From Photo on the iPhone: an Anthropic API key for the `suggest-item` server function (the preview link uses the viewer's own Claude instead).
@@ -188,7 +188,7 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 - Checked end to end on 5 November: a code emailed to jake@rossbuilt.com signed him in, and PowerSync accepted the sign in and finished the first sync.
 - Expo: the project `@jakeross/punch-list`, the production and simulator build profiles, and the app's settings as Expo environment variables. Expo Doctor passes all 20 checks.
 - Fixed on the way: the app carried an old PowerSync package it never used, which asked for an older PowerSync iPhone library than the one the app uses and would have stopped the iPhone build. Eleven packages were brought to the versions Expo 58 expects.
-- TestFlight, 5 November: build 2 (version 1.0.0) is in internal testing for the Ross Built group, and Jake is invited. The builds start from GitHub on Expo, and the upload to Apple runs with the App Store Connect API key (`setup.md`).
+- TestFlight, 5 November: build 4 (version 1.0.0) is in internal testing for the Ross Built group, and Jake is invited. Before it went out: the preview walked end to end (59 steps, no console or page errors), 214 unit tests, the database checks, 100 of the phone's writes through the live database rules, and Expo's 20 project checks. The builds start from GitHub on Expo, and the upload to Apple runs with the App Store Connect API key (`setup.md`).
 
 ## Status (31 October 2026)
 
