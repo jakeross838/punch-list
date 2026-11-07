@@ -17,6 +17,7 @@ import {
   moveToLevel,
   parseRoomList,
   readingOrder,
+  mergedWaits,
   releasedBy,
   renamedHoldups,
   seesJob,
@@ -41,6 +42,7 @@ import {
 } from '@punch/core';
 import type { DataApi, ItemPatch, NewItem, SyncInfo } from './api';
 import type { SampleState } from './sample';
+import { addSampleJob } from './sampleJob';
 
 export type State = SampleState;
 
@@ -75,7 +77,7 @@ export interface Keeper {
 
 /** What differs between the backends besides where the changes are kept. */
 export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signOut' | 'startCompany' | 'deleteAccount'> &
-  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useUpdates' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'companyMarkDone' | 'previewAs' | 'deleteJob' | 'jobStation'>>;
+  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useUpdates' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'companyMarkDone' | 'previewAs' | 'deleteJob' | 'jobStation' | 'mergeItems'>>;
 
 const now = () => new Date().toISOString();
 
@@ -264,6 +266,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       const s = useStore();
       return useMemo(() => s.items.filter((i) => i.jobId === jobId), [s.items, jobId]);
     },
+    useAllItems: () => useStore().items,
     usePhotos: (jobId) => {
       const s = useStore();
       return useMemo(
@@ -312,6 +315,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
         return useMemo(() => latestFirst(s.activity).slice(0, UPDATES_KEPT), [s.activity]);
       }),
 
+    addSampleJob: (photos) => addSampleJob(api, get, photos),
     async createJob({ name, address, projectManagerId }) {
       const state = get();
       adminOnly(state);
@@ -646,6 +650,45 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       const byId = new Map(changes.map((c) => [c.id, c.patch]));
       await saveItems(settle(state, state.items, state.items.map((i) => (byId.has(i.id) ? { ...i, ...byId.get(i.id), updatedAt: now() } : i))));
     },
+    // On the phone the database merges them (merge_items), and the result comes back down.
+    mergeItems:
+      extras.mergeItems ??
+      (async (keepId, mergeId) => {
+        const state = get();
+        const keep = state.items.find((i) => i.id === keepId);
+        const merge = state.items.find((i) => i.id === mergeId);
+        if (!keep || !merge || keepId === mergeId) throw new Error('Pick two different items.');
+        if (keep.jobId !== merge.jobId) throw new Error('Both items have to be on the same job.');
+        if (keep.status === 'removed' || merge.status === 'removed') throw new Error('One of those items was removed already.');
+        const last = state.photos.filter((p) => p.itemId === keepId).reduce((m, p) => Math.max(m, p.sortOrder), 0);
+        const moving = state.photos
+          .filter((p) => p.itemId === mergeId && !p.removed)
+          .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
+        const order = new Map(moving.map((p, i) => [p.id, last + i + 1]));
+        const talking = state.comments.filter((c) => c.itemId === mergeId && !c.removed).map((c) => c.id);
+        const moved = new Set(talking);
+        const waits = mergedWaits(keepId, mergeId, state.items);
+        const after = state.items.map((i) =>
+          i.id === mergeId ? { ...i, status: 'removed' as const, updatedAt: now() } : waits.has(i.id) ? { ...i, waitingOnItems: waits.get(i.id)!, updatedAt: now() } : i,
+        );
+        const result = { photos: moving.length, comments: talking.length };
+        await saveItems(
+          settle(state, state.items, after),
+          {
+            photos: state.photos.map((p) => (order.has(p.id) ? { ...p, itemId: keepId, sortOrder: order.get(p.id)! } : p)),
+            comments: state.comments.map((c) => (moved.has(c.id) ? { ...c, itemId: keepId } : c)),
+          },
+          [
+            {
+              jobId: keep.jobId,
+              itemId: keepId,
+              kind: 'items_merged',
+              detail: { from_id: mergeId, from_number: merge.number, from_title: merge.title, into_number: keep.number, into_title: keep.title, ...result },
+            },
+          ],
+        );
+        return result;
+      }),
     async addVisit({ itemIds, note, ...input }) {
       const state = get();
       const id = randomUUID();

@@ -1,10 +1,12 @@
-// A job, Site Office style: its counts (Open, Ready and Waiting, the last two a tap into their
-// list), the big tiles for the walk and for sending the lists, the search with Filter beside it, and
-// chips for how the list is grouped: by location, by company or by what items wait on. Drafts and
-// copied items show as a note above the list. The levels follow, each location with how much is
-// open, how much is ready and a bar for how much is done. Tap a location for its items. Capture in
-// the bottom bar walks the job. Add From a Template puts a template's tasks in every location they
-// fit; copied items paste here into a location picked from the job.
+// A job, with only what helps act on it, laid out like Reminders: the search with Filter beside it,
+// the count tiles (Open, Ready and Waiting, the last two a tap into their list) and a segmented
+// control for how the list is grouped (by location, by company or by what items wait on), all once
+// there are items. What to check, the drafts and copied items show as rows in a card above the
+// list, as Mail lists its mailboxes. The levels follow, each location with how much is open and
+// ready and a thin bar for how much is done. Tap a location for its items. Capture in the bottom bar
+// carries on the walk at the next location not walked, and Send sends the lists. Add From a
+// Template puts a template's tasks in every location they fit; copied items paste here into a
+// location picked from the job.
 
 import {
   inWalkOrder,
@@ -27,7 +29,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
 import { useCanReadPlans } from '@/ai/readPlans';
-import { useCanSuggest } from '@/ai/suggest';
+import { useClaudeReady } from '@/ai/claude';
 import { draftFill } from '@/components/draftFill';
 import { FilterBar } from '@/components/FilterBar';
 import { ItemRow } from '@/components/ItemRow';
@@ -45,19 +47,20 @@ import { clipboard, itemsTitle, itemsWord, useClipboard } from '@/data/clipboard
 import { useFilterContext, useHolds, useJobView } from '@/data/view';
 import {
   Button,
-  ChipRow,
   EmptyState,
   Figures,
   haptic,
   Icon,
+  IconTile,
+  LedgerRow,
   MetaLine,
   OptionPicker,
   Page,
+  Panel,
   ProgressBar,
   SectionLabel,
-  Stamp,
+  Segmented,
   Text,
-  Tiles,
   Touchable,
   useFeedback,
   type BarMenu,
@@ -111,7 +114,8 @@ export default function JobScreen() {
   const people = data.usePeople();
   const jobCompanies = data.useJobCompanies(jobId);
   const titles = data.useTitles();
-  const canFill = useCanSuggest();
+  const canFill = useClaudeReady(true);
+  const canSay = useClaudeReady();
   const canReadPlans = useCanReadPlans();
   const saved = data.useViewSettings();
   const context = useFilterContext(jobId);
@@ -194,7 +198,6 @@ export default function JobScreen() {
   const openGroup = (key: string) =>
     router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: view.groupBy, key } });
   const openSetup = () => router.push({ pathname: '/jobs/[jobId]/setup', params: { jobId } });
-  const openSend = () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId } });
   const openActivity = () => router.push({ pathname: '/jobs/[jobId]/activity', params: { jobId } });
   const openDrafts = () => {
     // Any draft the walk could not fill in (no signal, say) gets filled in now.
@@ -207,47 +210,35 @@ export default function JobScreen() {
     }
     router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'drafts', key: 'all' } });
   };
-  const draftsRow =
-    drafts > 0 ? (
-      <Touchable
-        feedback="highlight"
-        onPress={openDrafts}
-        accessibilityRole="button"
-        accessibilityLabel={`${drafts} ${drafts === 1 ? 'draft' : 'drafts'} to finish`}
-        testID="open-unfinished"
-        style={styles.note}
-      >
-        <Stamp color={colors.tint} size={8} />
-        <Text variant="label" weight="600" style={{ flex: 1 }}>
-          {drafts} {drafts === 1 ? 'draft' : 'drafts'} to finish
-        </Text>
-        <Text variant="label" color={colors.tint}>
-          Finish
-        </Text>
-        <Icon name="chevron.right" size={11} color={colors.tint} weight="semibold" />
-      </Touchable>
-    ) : null;
   // What the companies say is done, from their pages: one tap to the list to check.
   const toCheck = items.filter((i) => i.status === 'open' && !i.unfinished && i.markedDoneAt).length;
-  const checkRow =
-    toCheck > 0 ? (
-      <Touchable
-        feedback="highlight"
-        onPress={() => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'state', key: 'check' } })}
-        accessibilityRole="button"
-        accessibilityLabel={`${toCheck} marked done by the companies, to check`}
-        testID="open-to-check"
-        style={styles.note}
-      >
-        <Stamp color={colors.stone} size={8} />
-        <Text variant="label" weight="600" style={{ flex: 1 }}>
-          {toCheck} marked done, to check
-        </Text>
-        <Text variant="label" color={colors.tint}>
-          Check
-        </Text>
-        <Icon name="chevron.right" size={11} color={colors.tint} weight="semibold" />
-      </Touchable>
+  const openCheck = () => router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'state', key: 'check' } });
+  // To Check and Drafts, as Mail lists its mailboxes: a name, a count and a chevron.
+  const inbox = [
+    toCheck > 0 ? { key: 'check', icon: 'checkmark.circle.fill' as IconName, label: 'To Check', count: toCheck, onPress: openCheck, said: `To Check, ${toCheck} marked done by the companies`, testID: 'open-to-check' } : null,
+    drafts > 0 ? { key: 'drafts', icon: 'doc' as IconName, label: 'Drafts', count: drafts, onPress: openDrafts, said: `Drafts, ${drafts} to finish`, testID: 'open-unfinished' } : null,
+  ].filter((r) => r !== null);
+  const inboxCard =
+    inbox.length > 0 && !q ? (
+      <Panel style={styles.card}>
+        {inbox.map((r, i) => (
+          <LedgerRow
+            key={r.key}
+            last={i === inbox.length - 1}
+            lead={<IconTile name={r.icon} />}
+            trail={
+              <Text color={colors.secondary} tabular>
+                {r.count}
+              </Text>
+            }
+            onPress={r.onPress}
+            accessibilityLabel={r.said}
+            testID={r.testID}
+          >
+            <Text>{r.label}</Text>
+          </LedgerRow>
+        ))}
+      </Panel>
     ) : null;
   const openCamera = (roomId: string | null = null) => {
     capture.start({ jobId, roomId });
@@ -282,7 +273,9 @@ export default function JobScreen() {
     groups: [
       {
         actions: [
+          ...(canSay ? [{ label: 'Say It', icon: 'mic' as IconName, onPress: () => router.push({ pathname: '/jobs/[jobId]/say', params: { jobId } }), testID: 'say-it' }] : []),
           { label: 'Activity', icon: 'clock', onPress: openActivity, testID: 'activity' },
+          { label: 'Find Duplicates', icon: 'copy', onPress: () => router.push({ pathname: '/jobs/[jobId]/duplicates', params: { jobId } }), testID: 'find-duplicates' },
           { label: 'Make a List', icon: 'doc', onPress: () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId, start: 'list' } }), testID: 'make-list' },
           { label: 'Job Station', icon: 'tv', onPress: () => setStation(true), testID: 'job-station' },
           ...(walked > 0 ? [{ label: 'Start a New Walk', icon: 'rooms' as IconName, onPress: newWalk, testID: 'new-walk' }] : []),
@@ -317,37 +310,29 @@ export default function JobScreen() {
 
   const empty =
     locations.length === 0 ? (
-      <EmptyState
-        icon="camera"
-        title="Start the Walk"
-        message={
-          canReadPlans
-            ? 'Take a photo of each thing left to do. Type the room as you go, or have Claude read every location from the plans first.'
-            : 'Take a photo of each thing left to do. Type the room as you go, or set up every location from the plans first.'
-        }
-      >
+      <EmptyState icon="camera" title="Start the Walk" message="A photo of each thing left to do.">
         <View style={{ marginTop: 14, gap: 10, alignSelf: 'stretch' }}>
           <Button label="Start the Walk" icon="camera" onPress={() => openCamera(null)} testID="empty-walk" />
           {canReadPlans && jobActions.admin ? (
             <Button label="Read the Plans" icon="map" variant="tinted" onPress={() => router.push({ pathname: '/jobs/[jobId]/read-plans', params: { jobId } })} testID="empty-read-plans" />
           ) : null}
-          <Button label={canReadPlans && jobActions.admin ? 'Set Up the Locations' : 'Set Up the Locations From the Plans'} variant="tinted" onPress={openSetup} testID="empty-setup" />
+          <Button label="Set Up the Locations" variant="tinted" onPress={openSetup} testID="empty-setup" />
         </View>
       </EmptyState>
     ) : narrowed ? (
-      <EmptyState icon="filter" title="Nothing Matches" message="No open items match the filters.">
+      <EmptyState icon="filter" title="Nothing Matches the Filters">
         <View style={{ marginTop: 14 }}>
           <Button label="Clear the Filters" variant="tinted" onPress={() => setView({ ...view, filters: NO_FILTERS })} />
         </View>
       </EmptyState>
     ) : items.every((i) => i.status === 'removed') ? (
-      <EmptyState icon="templates" title="Nothing on the List Yet" message="Walk it with the camera, or start from a template of what always needs doing.">
+      <EmptyState icon="templates" title="Nothing on the List Yet">
         <View style={{ marginTop: 14 }}>
           <Button label="Add From a Template" variant="tinted" onPress={() => setTemplateSheet(true)} testID="empty-template" />
         </View>
       </EmptyState>
     ) : (
-      <EmptyState icon="checkmark.circle.fill" title="Nothing Open" message="Every item on this job is complete." />
+      <EmptyState icon="checkmark.circle.fill" title="Everything Is Complete" />
     );
   /** Copied items into a location picked from this job. */
   async function pasteInto(locationId: string) {
@@ -368,37 +353,39 @@ export default function JobScreen() {
   }
   const pasteRow =
     copied && locations.length > 0 && !q ? (
-      <View style={[styles.note, styles.pasteNote]} testID="job-paste-banner">
-        <Icon name="clipboard" size={17} color={colors.onBar} />
-        <Text variant="subheadline" color={colors.onBar} style={{ flex: 1 }} numberOfLines={2}>
-          {itemsWord(copied.items.length)} copied{copied.jobId === jobId ? '' : ` from ${jobs.find((j) => j.id === copied.jobId)?.name ?? 'another job'}`}
-        </Text>
-        <Touchable feedback="opacity" onPress={() => setPasting(true)} accessibilityRole="button" testID="job-paste" hitSlop={8}>
-          <Text variant="label" weight="600" color={colors.onBar}>
-            Paste
+      <Panel style={styles.card} testID="job-paste-banner">
+        <LedgerRow
+          last
+          lead={<IconTile name="clipboard" />}
+          trail={
+            <>
+              <Touchable feedback="opacity" onPress={() => setPasting(true)} accessibilityRole="button" testID="job-paste" hitSlop={8}>
+                <Text weight="600" color={colors.tint}>
+                  Paste
+                </Text>
+              </Touchable>
+              <Touchable feedback="opacity" onPress={() => clipboard.clear()} accessibilityRole="button" accessibilityLabel="Forget what was copied" hitSlop={10}>
+                <Icon name="xmark.circle.fill" size={20} color={colors.circle} />
+              </Touchable>
+            </>
+          }
+        >
+          <Text numberOfLines={2}>
+            {itemsWord(copied.items.length)} copied{copied.jobId === jobId ? '' : ` from ${jobs.find((j) => j.id === copied.jobId)?.name ?? 'another job'}`}
           </Text>
-        </Touchable>
-        <Touchable feedback="opacity" onPress={() => clipboard.clear()} accessibilityRole="button" accessibilityLabel="Forget what was copied" hitSlop={10}>
-          <Icon name="xmark" size={16} color={colors.onBarQuiet} />
-        </Touchable>
-      </View>
+        </LedgerRow>
+      </Panel>
     ) : null;
   // The filters that are on, as chips that take them off.
   const filterBar = <FilterBar jobId={jobId} filters={filters} onChange={(next) => setView({ ...view, filters: next })} style={styles.filterBar} />;
   const filterCount = Object.values(filters).reduce((n, v) => n + (Array.isArray(v) ? v.length : v ? 1 : 0), 0);
   const groupChips = (
-    <ChipRow
+    <Segmented<GroupBy>
       style={styles.groups}
-      chips={(['room', 'company', 'waiting'] as GroupBy[]).map((g) => ({
-        key: g,
-        label: g === 'room' ? `By ${GROUP_LABELS[g]}` : GROUP_LABELS[g],
-        on: view.groupBy === g,
-        onPress: () => {
-          haptic.selection();
-          setView({ ...view, groupBy: g });
-        },
-        testID: `group-by-${g}`,
-      }))}
+      options={(['room', 'company', 'waiting'] as GroupBy[]).map((g) => [g, GROUP_LABELS[g]] as const)}
+      value={view.groupBy}
+      onChange={(groupBy) => setView({ ...view, groupBy })}
+      testID="group-by"
     />
   );
   // The figures count what the list below shows: the whole job, or what the filters leave.
@@ -406,51 +393,41 @@ export default function JobScreen() {
   const waitingCount = allOpen.filter((i) => !i.ready && !i.unfinished).length;
   const openState = (state: 'ready' | 'waiting') =>
     router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'state', key: state } });
-  const top = (
-    <View>
-      <Figures
-        columns={3}
-        cells={[
-          { label: 'Open', value: String(total), testID: 'count-open' },
-          { label: 'Ready', value: String(readyCount), color: colors.ok, onPress: () => openState('ready'), testID: 'count-ready' },
-          { label: 'Waiting', value: String(waitingCount), onPress: () => openState('waiting'), testID: 'count-waiting' },
-        ]}
-      />
-      <Tiles
-        style={styles.tiles}
-        tiles={[
-          {
-            icon: 'camera',
-            label: 'Walk',
-            primary: true,
-            badge: walked > 0 ? `${walked} of ${inOrder.length}` : undefined,
-            onPress: () => (walked > 0 && !nextToWalk ? newWalk() : openCamera(nextToWalk?.id ?? null)),
-            testID: 'walk',
-          },
-          { icon: 'send', label: 'Send Lists', onPress: openSend, testID: 'send' },
-        ]}
-      />
-    </View>
-  );
+  // The counts, once there is something to count.
+  const hasItems = allOpen.length > 0 || items.some((i) => i.status !== 'removed');
+  const top = hasItems ? (
+    <Figures
+      columns={3}
+      cells={[
+        { label: 'Open', value: String(total), icon: 'list.bullet', color: colors.tint, testID: 'count-open' },
+        { label: 'Ready', value: String(readyCount), icon: 'checkmark', color: colors.okFill, onPress: () => openState('ready'), testID: 'count-ready' },
+        { label: 'Waiting', value: String(waitingCount), icon: 'hourglass', color: colors.waiting, onPress: () => openState('waiting'), testID: 'count-waiting' },
+      ]}
+    />
+  ) : undefined;
 
   return (
     <>
       <Page
         title={job?.name ?? 'Job'}
-        eyebrow={job?.closed ? 'Closed' : `Active · ${inOrder.length} ${inOrder.length === 1 ? 'location' : 'locations'}`}
-        marker={job?.closed ? colors.quiet : colors.okFill}
+        eyebrow={job?.closed ? 'Closed' : undefined}
+        marker={job?.closed ? colors.quiet : undefined}
         subtitle={job?.address || undefined}
-        crumb={['Jobs', job?.name ?? 'Job']}
         backLabel="Jobs"
         right={[{ kind: 'button', label: 'New Item', icon: 'plus', iconOnly: true, onPress: newItem, testID: 'new-item' }, menu]}
-        search={{
-          value: query,
-          onChange: setQuery,
-          placeholder: `Search ${total} ${total === 1 ? 'item' : 'items'}`,
-          filter: { onPress: () => setSheet(true), count: filterCount + (view.showCompleted ? 1 : 0) || undefined },
-        }}
-        tab={{ active: 'jobs', jobId }}
-        beforeSearch={top}
+        search={
+          hasItems
+            ? {
+                value: query,
+                onChange: setQuery,
+                placeholder: 'Search items',
+                filter: { onPress: () => setSheet(true), count: filterCount + (view.showCompleted ? 1 : 0) || undefined },
+              }
+            : undefined
+        }
+        // Capture carries on the walk: the next location not walked yet, in floor order.
+        tab={{ active: 'jobs', jobId, onCapture: () => openCamera(nextToWalk?.id ?? null) }}
+        summary={top}
         list={(scroll) =>
           q ? (
             <SectionList
@@ -467,7 +444,7 @@ export default function JobScreen() {
                 </View>
               }
               ListEmptyComponent={<EmptyState icon="magnifyingglass" title="No Results" message={`No items${narrowed ? ' that fit the filters' : ''} match “${q}”.`} />}
-              renderSectionHeader={({ section }) => <SectionLabel label={section.title} right={String(section.data.length)} style={styles.sectionLabel} />}
+              renderSectionHeader={({ section }) => <SectionLabel label={section.title} right={String(section.data.length)} />}
               renderItem={({ item, index, section }) => (
                 <ItemRow
                   item={item}
@@ -477,7 +454,6 @@ export default function JobScreen() {
                   assignee={names(item.companyId) || names(item.assignedTo) || undefined}
                   first={index === 0}
                   last={index === section.data.length - 1}
-                  stripe={index % 2 === 1}
                   checking={actions.checking.has(item.id)}
                   onOpen={actions.onOpen}
                   onCheck={actions.onCheck}
@@ -498,22 +474,20 @@ export default function JobScreen() {
               ListHeaderComponent={
                 <View>
                   {scroll.header}
-                  {groupChips}
+                  {hasItems ? groupChips : null}
                   {filterBar}
                   {pasteRow}
-                  {checkRow}
-                  {draftsRow}
+                  {inboxCard}
                 </View>
               }
               ListEmptyComponent={empty}
               renderSectionHeader={({ section }) =>
                 section.title ? (
-                  <SectionLabel label={section.title} right={section.totals || undefined} style={styles.sectionLabel} testID={`floor-totals-${section.key}`} />
+                  <SectionLabel prominent label={section.title} right={section.totals || undefined} testID={`floor-totals-${section.key}`} />
                 ) : (
-                  <View style={{ height: 14 }} />
+                  <View style={{ height: 16 }} />
                 )
               }
-              renderSectionFooter={() => <View style={{ height: 2 }} />}
               renderItem={({ item: row, index, section }) => (
                 <GroupRow
                   row={row}
@@ -522,7 +496,6 @@ export default function JobScreen() {
                   share={doneShare.get(row.group.key)}
                   first={index === 0}
                   last={index === section.data.length - 1}
-                  stripe={index % 2 === 1}
                   sayReady={view.groupBy !== 'waiting' && !(filters.states.length === 1 && (filters.states[0] === 'ready' || filters.states[0] === 'not_ready'))}
                   onPress={() => openGroup(row.group.key)}
                 />
@@ -563,7 +536,6 @@ function GroupRow({
   share,
   first,
   last,
-  stripe,
   sayReady,
   onPress,
 }: {
@@ -574,7 +546,6 @@ function GroupRow({
   share?: { done: number; all: number };
   first: boolean;
   last: boolean;
-  stripe: boolean;
   /** How many are ready, unless the grouping or the filters say it already. */
   sayReady: boolean;
   onPress: () => void;
@@ -587,82 +558,25 @@ function GroupRow({
     .filter(Boolean)
     .join(', ');
   return (
-    <Touchable
-      feedback="highlight"
-      pressDelay={40}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={said}
-      testID={`group-${group.key}`}
-      style={[styles.row, first ? styles.rowFirst : null, last ? styles.rowLast : styles.rowRule, stripe ? styles.rowStripe : null]}
-    >
-      <View style={styles.rowText}>
-        <View style={styles.rowTop}>
-          <Text numberOfLines={1} weight="500" style={{ flex: 1 }}>
-            {label}
-          </Text>
-          {share && share.all > 0 ? (
-            <Text variant="label" color={colors.secondary} tabular>
-              {Math.round(pct * 100)}%
-            </Text>
-          ) : null}
-        </View>
-        <MetaLine
-          facts={
-            count === 0
-              ? [{ text: 'Nothing open', color: colors.ok }]
-              : [
-                  { text: `${count} open`, color: colors.label },
-                  sayReady ? { text: `${group.ready} ready`, color: colors.ok } : null,
-                ]
-          }
-        />
-        <View style={styles.bar} testID={`group-meta-${group.key}`}>
+    <LedgerRow card={{ first, last }} onPress={onPress} accessibilityLabel={said} testID={`group-${group.key}`}>
+      <Text numberOfLines={1}>{label}</Text>
+      <MetaLine
+        testID={`group-meta-${group.key}`}
+        facts={count === 0 ? [{ text: 'Nothing open', color: colors.ok }] : [`${count} open`, sayReady && group.ready > 0 ? { text: `${group.ready} ready`, color: colors.ok } : null]}
+      />
+      {/* How much is done, once some is and some is not: nothing done and all done say themselves. */}
+      {pct > 0 && pct < 1 ? (
+        <View style={styles.bar}>
           <ProgressBar value={pct} />
         </View>
-      </View>
-      <Icon name="chevron.right" size={14} color={colors.quiet} weight="medium" />
-    </Touchable>
+      ) : null}
+    </LedgerRow>
   );
 }
 
 const styles = StyleSheet.create({
-  tiles: { marginTop: 10 },
-  groups: { marginBottom: 6 },
-  filterBar: { marginTop: 4, marginBottom: 4 },
-  note: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginHorizontal: layout.margin,
-    marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: layout.hairline,
-    borderColor: colors.border,
-    backgroundColor: colors.stripe,
-  },
-  pasteNote: { backgroundColor: colors.bar, borderColor: colors.bar },
-  friday: { backgroundColor: colors.cell, borderColor: colors.borderStrong },
-  sectionLabel: { marginTop: 16, marginBottom: 8 },
-  row: {
-    marginHorizontal: layout.margin,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: layout.rowPadding,
-    paddingVertical: 11,
-    backgroundColor: colors.cell,
-    borderLeftWidth: layout.hairline,
-    borderRightWidth: layout.hairline,
-    borderColor: colors.border,
-  },
-  rowFirst: { borderTopWidth: layout.hairline },
-  rowLast: { borderBottomWidth: layout.hairline },
-  rowRule: { borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
-  rowStripe: { backgroundColor: '#F7F9F9' },
-  rowText: { flex: 1, minWidth: 0, gap: 4 },
-  rowTop: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
-  bar: { marginTop: 4 },
+  groups: { marginHorizontal: layout.margin, marginTop: 6, marginBottom: 4 },
+  filterBar: { marginTop: 8, marginBottom: 2 },
+  card: { marginTop: 16 },
+  bar: { marginTop: 6, marginBottom: 1 },
 });

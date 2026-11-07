@@ -270,6 +270,32 @@ describe('Activity for many items at once', () => {
     expect(activityLines([entries[0]!], look, { forItem: true }).map((l) => l.action)).toEqual(['added it']);
   });
 
+  it('items said at once with Say It read as one line too', () => {
+    const made = [1, 2].map((k) => item({ id: `s${k}`, title: `Task ${k}`, source: 'said', locationId: 'kitchen' }));
+    const entries: Activity[] = made.map((m, k) => ({
+      id: `s${k}`,
+      jobId: 'fish',
+      itemId: m.id,
+      personId: 'jake',
+      at: `2026-11-07T13:00:0${k}.000Z`,
+      kind: 'item_created',
+      field: 'created',
+      before: null,
+      after: m.title,
+    }));
+    const look = activityLookups({
+      people: [{ id: 'jake', name: 'Jake Ross', email: 'jake@rossbuilt.com', active: true, role: 'admin', sees: 'all', phone: null }],
+      items: made,
+      locations: [location('kitchen', 'Kitchen 109', 3)],
+      companies: [],
+      trades: [],
+      visits: [],
+      customFields: [],
+      today: new Date(2026, 10, 7),
+    });
+    expect(activityLines(entries, look).map((l) => `${l.who} ${l.action}. ${l.detail}`)).toEqual(['Jake Ross said 2 items. Kitchen 109.']);
+  });
+
   it('the same change to several items at once reads as one line: completed, assigned, moved', () => {
     const made = [1, 2, 3].map((k) => item({ id: `c${k}`, title: `Task ${k}`, locationId: 'bath1' }));
     const change = (k: number, field: string, before: string | null, after: string | null, second = 0): Activity => ({

@@ -107,7 +107,7 @@ function PersonDetail({ person }: { person: Person }) {
   });
 
   return (
-    <Page title={person.name} eyebrow="Person" crumb={['Me', 'People', person.name]} backLabel="People" subtitle={person.active ? undefined : 'Switched off'} tab={{}}>
+    <Page title={person.name} backLabel="People" subtitle={person.active ? undefined : 'Switched off'} tab={{}}>
       <ListSection header="Contact">
         <ListLabeledField
           label="Name"

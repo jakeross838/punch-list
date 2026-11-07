@@ -10,6 +10,7 @@ import {
   isAdmin,
   KIND_LABELS,
   KINDS as ITEM_KINDS,
+  repeatedTitles,
   setFieldShown,
   tidyTitle,
   type CustomField,
@@ -57,10 +58,10 @@ export default function ItemFormScreen() {
   const admin = isAdmin(data.useMe());
 
   return (
-    <Page title="Item Form" eyebrow="What the form asks" sheet right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: () => router.back(), testID: 'form-done' }]}>
+    <Page title="Item Form" sheet right={[{ kind: 'button', label: 'Done', variant: 'prominent', onPress: () => router.back(), testID: 'form-done' }]}>
       <ListSection
         header="On the Form"
-        footer="Title and location are always on. A field turned off still shows when an item needs it, like Waiting On for an item that is not ready."
+        footer="Title and location are always on. A field turned off still shows when an item needs it."
       >
         {FORM_FIELDS.map((f) => (
           <ListSwitchRow
@@ -95,17 +96,17 @@ export default function ItemFormScreen() {
             <ListRow title="Add a Field" tone="tint" onPress={() => setFieldSheet({ field: null })} testID="add-field" />
           </ListSection>
 
-          <ListSection header="Trades" footer="Every list keeps each trade's items together, in this order, so a location reads the way the work goes instead of jumping between trades.">
+          <ListSection header="Trades" footer="Lists keep each trade's items together, in this order.">
             <ListRow title="Trade Order" value={String(trades.length)} accessory="chevron" onPress={() => setTradesOpen(true)} testID="trade-order" />
           </ListSection>
 
-          <ListSection header="Titles" footer="Picking a title fills in its company and how long it usually takes. The company comes from the title's trade, from the companies on the job.">
+          <ListSection header="Titles" footer="Picking a title fills in its company and its usual time.">
             <ListRow title="Standard Titles" value={String(titles.length)} accessory="chevron" onPress={() => setTitlesOpen(true)} testID="standard-titles" />
           </ListSection>
 
           <ListSection
             header="Common Tasks"
-            footer="The usual work in each kind of room, added with a tap on a walk, comes from the templates: each task for Every Bathroom shows in every bathroom, and so on."
+            footer="The usual work for each kind of room, from the templates."
           >
             <ListRow
               title="Templates"
@@ -264,7 +265,7 @@ function TradeOrderSheet({ visible, onClose }: { visible: boolean; onClose: () =
       testID="trade-order-sheet"
     >
       <ScrollView scrollEnabled={!dragging} contentContainerStyle={styles.sheetContent}>
-        <ListSection footer="Each location lists its items trade by trade, in this order. Drag the lines at the end of a row to move a trade.">
+        <ListSection footer="Drag the lines to change the order.">
           <DragList
             data={trades}
             keyOf={(t) => t.id}
@@ -289,6 +290,9 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
   const [picking, setPicking] = useState(false);
 
   const tradeOptions: Option[] = trades.map((t) => ({ value: t.id, label: t.name }));
+  // Wording typed on items again and again that is not a standard title yet.
+  const items = data.useAllItems();
+  const often = useMemo(() => repeatedTitles(items, titles).slice(0, 8), [items, titles]);
   const q = query.trim().toLowerCase();
   const groups = useMemo(() => {
     const shown = titles.filter((t) => q === '' || t.title.toLowerCase().includes(q));
@@ -338,6 +342,23 @@ function TitlesSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
           />
           <ListRow title="Add Title" tone="tint" disabled={!canAdd} onPress={() => void add()} testID="title-add" />
         </ListSection>
+        {often.length > 0 ? (
+          <ListSection header="Typed Often" footer="Wording typed on items again and again. Tap one to make it a standard title, then Add Title.">
+            {often.map((o) => (
+              <ListRow
+                key={o.title}
+                title={o.title}
+                value={`${o.uses} times`}
+                onPress={() => {
+                  haptic.selection();
+                  setTitle(o.title);
+                  if (o.tradeId) setTradeId(o.tradeId);
+                }}
+                testID={`title-often-${o.title}`}
+              />
+            ))}
+          </ListSection>
+        ) : null}
         <View style={styles.search}>
           <SearchField value={query} onChangeText={setQuery} placeholder="Search Titles" />
         </View>

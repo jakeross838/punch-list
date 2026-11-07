@@ -10,7 +10,7 @@ Plan: [Punch List App: Version 1 Plan](https://claude.ai/artifact/8aKXo8iiTrKoH7
 apps/mobile             The phone app: Expo SDK 58, TypeScript, Expo Router. Its iOS design parts are in src/ui
 apps/company-page       The company's page behind its link: one small web page, on Expo's hosting at punch-list.expo.app
 packages/core           The data types and the rules every item follows, shared by the app, the server and the tests
-supabase                Database migrations, access rules, the test job seed, the database checks, and the functions (company-page, suggest-item)
+supabase                Database migrations, access rules, the test job seed, the database checks, and the functions (company-page, read-plans, ai)
 powersync               The offline sync service config
 packages/buildertrend   Parked: Buildertrend client, read-back checks, snapshots, Phase 0 checks
 apps/extension          Parked: Chrome extension that runs inside a logged-in Buildertrend tab
@@ -31,8 +31,8 @@ npm run test:preview      walks the preview at iPhone size in Chromium, under th
 node tools/build-company-page.mjs   builds the company's page into apps/company-page/dist
 COMPANY_PAGE_FUNCTION=http://localhost:4320/fn node tools/build-company-page.mjs && npx tsx tools/company-page-e2e.ts
                           walks the company's page against a stand-in for its function
-npm run build:functions   writes the read-plans function's words to Claude from the core (prompt.js)
-DENO=/path/to/deno npm run test:read-plans   runs the read-plans function against stand-ins for Supabase and Claude
+npm run build:functions   writes each Claude function's words, tasks and prices from the core (core.js), and the code they share (claude.ts)
+DENO=/path/to/deno npm run test:functions    runs the ai and read-plans functions against stand-ins for Supabase and Claude
 npm run import:buildertrend   reads a job's Completion List from Buildertrend, read only, into local/ for loading
 npm run build:extension   parked: builds the Buildertrend extension
 npm run test:extension    parked: runs the extension in Chromium against the stand-in Buildertrend

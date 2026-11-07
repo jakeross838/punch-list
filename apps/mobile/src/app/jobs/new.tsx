@@ -39,7 +39,6 @@ export default function NewJobScreen() {
   return (
     <Page
       title="New Job"
-      eyebrow="Admins only"
       sheet
       left={[{ kind: 'button', label: 'Cancel', onPress: () => router.back(), testID: 'cancel' }]}
       right={[{ kind: 'button', label: 'Create', variant: 'prominent', onPress: create, testID: 'save' }]}

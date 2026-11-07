@@ -74,27 +74,21 @@ export interface PageProps {
   title: string;
   /** The small line above the title: "Active · Closeout", "Location · Level 1". */
   eyebrow?: string;
-  /** The color of the square stamp before the eyebrow. */
+  /** The color of the dot before the eyebrow. */
   marker?: string;
   /** A line of plain words under the title, like the address. */
   subtitle?: string;
   /** Anything else under the title: a line of counts. */
   meta?: ReactNode;
-  /** A stamp caption at the top right of the header: "Sent Fri". */
-  stamp?: string;
-  /** Where you are, under the bar: Fish / Level 1 / Kitchen 109. */
-  crumb?: string[];
   /** The screen draws its own title. */
   hideHeader?: boolean;
-  /** Shown under the title and before the search: the counts and tiles on a job. */
-  beforeSearch?: ReactNode;
+  /** Shown under the title and the search: the count tiles on a job. */
+  summary?: ReactNode;
   /** The previous screen's name, after the back chevron: "Jobs". */
   backLabel?: string;
-  /** Kept for screens that still pass it; both are sand. */
-  background?: 'grouped' | 'plain';
   /** More in the bar, after the back button. */
   left?: BarItem[];
-  /** Square buttons on the right of the bar. */
+  /** Buttons on the right of the bar. */
   right?: BarItem[];
   /** The Me button in the bar, on the screens of the bottom bar. */
   account?: boolean;
@@ -110,8 +104,6 @@ export interface PageProps {
     value: string;
     onChange: (text: string) => void;
     placeholder?: string;
-    /** Kept for screens that still pass it: the field is always shown. */
-    collapsed?: boolean;
     /** The Filter button beside the field. */
     filter?: { onPress: () => void; count?: number; testID?: string };
   };

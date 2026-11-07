@@ -62,12 +62,22 @@
         {
           "photosPermission": "Punch List uses your photos so you can add one to an item.",
           "cameraPermission": "Punch List uses the camera to take photos of items on the job.",
-          "microphonePermission": false
+          "microphonePermission": "Punch List uses the microphone when you say what is left to do, to write it down as items."
         }
       ],
       "expo-asset",
       "expo-mail-composer",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Punch List uses the microphone when you say what is left to do, to write it down as items.",
+          "speechRecognitionPermission": "Punch List turns what you say into items on the job.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

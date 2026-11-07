@@ -79,7 +79,7 @@ export default function SetupScreen() {
   }, [groups, newLevels]);
 
   return (
-    <Page title="Job Setup" eyebrow="Locations, companies, team" crumb={[job?.name ?? 'Job', 'Job Setup']} backLabel={job?.name} subtitle={admin ? undefined : 'Only an admin changes the setup.'} tab={{ active: 'jobs', jobId }}>
+    <Page title="Job Setup" backLabel={job?.name} subtitle={admin ? undefined : 'Only an admin can change this.'} tab={{ active: 'jobs', jobId }}>
       {job ? <JobFields key={job.id} job={job} editable={admin} /> : null}
       <View style={styles.tabs}>
         <Segmented<Tab>
@@ -328,8 +328,8 @@ function RoomsTab({
             {ordering
               ? 'Drag the lines to set the walk order on each level.'
               : canRead
-                ? 'Claude reads the rooms on each level from the plan PDF or pictures of the sheets. Or type each one in at the end of its level.'
-                : 'Paste the room list from the plans, or type each one in at the end of its level.'}
+                ? 'Claude reads the rooms from the plans. Or type them in at the end of each level.'
+                : 'Paste the room list from the plans, or type them in at the end of each level.'}
           </Text>
         </View>
       ) : null}
@@ -627,7 +627,7 @@ function WaitingTab({ jobId }: { jobId: string }) {
     <ListSection
       variant="plain"
       header="Extra Choices"
-      footer="Companies on this job are already choices. Add anyone else work can wait on."
+      footer="Add anyone else work can wait on."
     >
       {extras.map((x) => (
         <ListRow

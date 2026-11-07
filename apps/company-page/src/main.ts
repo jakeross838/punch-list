@@ -43,7 +43,7 @@ if (!SAMPLE && !/^[0-9a-f]{64}$/.test(token)) {
     root: app,
     call,
     nameKey: 'punch-name',
-    bar: (p) => `<div class="bar"><span class="brand">${esc(p.builder.toUpperCase())}</span><span class="sub">PUNCH LIST</span></div>`,
+    bar: (p) => `<div class="bar"><span class="brand">${esc(p.builder)}</span><span class="sub">Punch List</span></div>`,
     footer: (p) =>
       SAMPLE ? 'This is a sample: nothing here is real, and nothing you do on it is sent anywhere.' : `This page is just for ${esc(p.company.name)}: anyone with its link can see it, so keep the link to your team.`,
     onProblem: (message) => {

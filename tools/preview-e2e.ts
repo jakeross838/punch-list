@@ -115,7 +115,36 @@ async function main(): Promise<void> {
               notes: 'The third floor sheet was hard to read: check its rooms.',
             };
           }
-          return { title: 'install towel bar', description: 'Left of the vanity, 24 inches.', trade: 'Carpentry', company: 'SMS Carpentry' };
+          // Every other question is kept too, with how many photos went and which model.
+          window.__asked = window.__asked || [];
+          window.__asked.push({ input, images: options && options.images ? options.images.length : 0, tier: options && options.modelTier });
+          // Say It: three things said, one of them on the list already and one with no location.
+          if (/said what is left to do/.test(input)) {
+            return {
+              items: [
+                { title: 'Adjust cabinet door', description: 'left of the hood, it rubs.', location: 'Kitchen 109', assignedTo: 'SMS Carpentry', waitingOn: null },
+                { title: 'Caulk window sill', description: 'By the sink.', location: 'Kitchen 109', assignedTo: 'Triple H Painting', waitingOn: null },
+                { title: 'Install mirror', description: 'Over the vanity, once the owner picks one.', location: null, assignedTo: null, waitingOn: 'Owner' },
+              ],
+            };
+          }
+          // The same work as one on the list: the closest one, always.
+          if (/Is it the same work as one already on the list/.test(input)) {
+            const m = input.match(/^- #(\\d+) /m);
+            return { same: m ? Number(m[1]) : null };
+          }
+          // Find Duplicates: the pairs about a cabinet door are the same work; the others are not.
+          if (/pairs of items on the running list/.test(input)) {
+            return { same: [...input.matchAll(/^Pair (\\d+): (.*)$/gm)].filter((m) => /cabinet door/i.test(m[2])).map((m) => Number(m[1])) };
+          }
+          // Standard wording: a switch cover is the switch plate.
+          if (/list of standard titles/.test(input)) {
+            const typed = (input.match(/They typed: "(.*)"/) || [])[1] || '';
+            return { title: /switch/i.test(typed) ? 'Install switch plate' : null };
+          }
+          // Fill In From Photo: one more thing when they mention the tub caulk.
+          const others = /tub caulk/i.test(input) ? [{ title: 'Caulk tub surround', description: 'Corner at the valve wall.', trade: 'Tile', company: 'Rangel Custom Tile' }] : [];
+          return { title: 'install towel bar', description: 'Left of the vanity, 24 inches.', trade: 'Carpentry', company: 'SMS Carpentry', others };
         },
       });
       // The page's host saves files for it, after asking the viewer: here it keeps what it was given.
@@ -180,7 +209,7 @@ async function main(): Promise<void> {
   try {
     await tab.goto('http://localhost:4319/host.html');
     await step('jobs list opens', async () => {
-      await app.getByText('Sample Job').waitFor({ timeout: 20_000 });
+      await app.getByText('Sample Job', { exact: true }).first().waitFor({ timeout: 20_000 });
       await settle();
       await shot('01-jobs');
     });
@@ -306,6 +335,10 @@ async function main(): Promise<void> {
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
+      // From Jobs, Capture opens on the last job with no location; on a job it carries on the walk.
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await settle();
       await app.getByTestId('camera').last().click();
       await app.getByTestId('shutter').waitFor();
       await app.getByText('Choose Location').waitFor();
@@ -318,6 +351,7 @@ async function main(): Promise<void> {
       await settle(400);
       await shot('09f-no-location');
       await app.getByTestId('camera-close').click();
+      await app.getByTestId('job-job-preview').click();
       await app.getByTestId('group-room-1').waitFor();
       await app.getByTestId('group-room-1').click();
       await app.getByTestId('item-item-16').waitFor();
@@ -356,6 +390,12 @@ async function main(): Promise<void> {
       await shot('11c-markup');
       await app.getByTestId('tool-circle').click();
       await drag([0.2, 0.12], [0.8, 0.45]);
+      // Text is a tool of its own, and a tap anywhere with any tool starts typing there.
+      await app.getByTestId('tool-text').getByText('Text', { exact: true }).waitFor();
+      await drag([0.1, 0.92], [0.1, 0.92]);
+      await app.getByTestId('markup-note').waitFor();
+      await app.getByTestId('markup-note-cancel').click();
+      await app.getByTestId('markup-note').waitFor({ state: 'detached' });
       await app.getByTestId('tool-pen').click();
       await drag([0.1, 0.7], [0.35, 0.8]);
       await app.getByTestId('markup-undo').click();
@@ -463,7 +503,8 @@ async function main(): Promise<void> {
       await app.getByTestId('field-title').fill('Set mirror');
       await app.getByTestId('field-description').click();
       await app.getByTestId('pick-assigned').click();
-      await app.getByRole('button', { name: 'Triple H Painting' }).click();
+      // Recent goes first in Assigned To: the company in its own group is the last one.
+      await app.getByRole('button', { name: 'Triple H Painting' }).last().click();
       await settle(400);
       await app.getByTestId('ready-check').click();
       await app.getByTestId('not-ready-box').waitFor();
@@ -544,18 +585,17 @@ async function main(): Promise<void> {
       await settle(700);
       await app.getByTestId('back').last().click();
       await app.getByTestId('open-unfinished').waitFor();
-      // The Walk tile says how far the walk has come.
-      await app.getByTestId('walk').getByText(/^1 of \d+$/).waitFor();
       await settle();
       await shot('22-job-unfinished');
     });
     await step('check them sitting down: one is on the list already, so its photo goes there; Mark Up, then Next puts one on the lists', async () => {
       await app.getByTestId('open-unfinished').click();
-      await app.getByText('4 drafts. Filling in from the photos.').waitFor();
+      await app.getByText('Claude is filling them in.').waitFor();
       await app.getByText('Filling in from the photo', { exact: true }).first().waitFor();
       await settle(300);
       await shot('23-drafts-filling');
-      await app.getByText('4 drafts. Tap one to finish it.').waitFor({ timeout: 20000 });
+      await app.getByText('Claude is filling them in.').waitFor({ state: 'detached', timeout: 20000 });
+      if ((await app.getByTestId(/^item-item-|^item-[0-9a-f-]{36}$/).count()) < 4) throw new Error('Drafts does not list the four drafts');
       if ((await app.getByText('No title yet').count()) !== 0) throw new Error('A draft did not fill in');
       await settle();
       await shot('23b-drafts-filled');
@@ -595,10 +635,10 @@ async function main(): Promise<void> {
       await app.getByText('Draft', { exact: true }).last().waitFor();
       await settle();
       await app.getByTestId('back').last().click();
-      await app.getByText('2 drafts. Tap one to finish it.').waitFor();
+      await app.getByRole('heading', { name: 'Drafts', exact: true }).last().waitFor();
       await app.getByTestId('back').last().click();
       // Gone once it has slid away, so only the job's own rows count below.
-      await app.getByText('2 drafts. Tap one to finish it.').waitFor({ state: 'detached' });
+      await app.getByTestId(/^item-/).first().waitFor({ state: 'detached' });
       await app.getByTestId('group-room-1').waitFor();
       // The one checked over is on the lists now, with the one from the walk; the last draft is not.
       await app.getByTestId('search').last().fill('towel');
@@ -682,7 +722,7 @@ async function main(): Promise<void> {
     });
     await step('Activity shows who added or changed what, and each item its History', async () => {
       await menu('activity');
-      await app.getByText('Who added or changed what on the job.').waitFor();
+      await app.getByRole('heading', { name: 'Activity', exact: true }).waitFor();
       // The newest first: the sample job has a Patch drywall of its own from days ago.
       await app.getByText('Jake Ross added Patch drywall', { exact: true }).first().waitFor();
       await settle(500);
@@ -736,7 +776,7 @@ async function main(): Promise<void> {
       await settle(600);
       await shot('29-view');
       if ((await app.getByRole('tab', { name: 'Trade' }).count()) !== 0) throw new Error('The lists still group by trade');
-      await app.getByRole('tab', { name: 'Assigned To' }).click();
+      await app.getByTestId('view-group-company').click();
       await app.getByTestId('filter-state-not_ready').click();
       await settle(300);
       await app.getByTestId('save-default').click();
@@ -796,7 +836,7 @@ async function main(): Promise<void> {
       await app.getByTestId('filter').click();
       await app.getByTestId('view-done').waitFor();
       await settle(600);
-      await app.getByRole('tab', { name: 'Waiting' }).click();
+      await app.getByTestId('view-group-waiting').click();
       await settle(300);
       await app.getByTestId('view-done').click();
       await app.getByTestId('group-ready').waitFor();
@@ -853,7 +893,7 @@ async function main(): Promise<void> {
       await settle();
     });
     await step('Send Lists: a company list and the whole job, ready to send', async () => {
-      await app.getByTestId('send').last().click();
+      await app.getByTestId('tab-send').last().click();
       await app.getByTestId('send-job').waitFor();
       if ((await app.getByTestId('send-schedule').count()) + (await app.getByTestId('send-lookahead').count()) !== 0) throw new Error('Send Lists still has the schedule');
       await settle(700);
@@ -888,7 +928,7 @@ async function main(): Promise<void> {
       await shot('39-company-list');
       await app.getByTestId('mark-sent').click();
       await app.getByText('Marked as sent to SMS Carpentry').waitFor();
-      await app.getByText(/Sent [A-Z][a-z]+\s\d+\./).first().waitFor();
+      await app.getByText(/Sent [A-Z][a-z]+\s\d+/).first().waitFor();
       await settle(400);
       await app.getByTestId('send-party-owner').click();
       await doc.getByText('Decisions Needed', { exact: true }).first().waitFor();
@@ -913,7 +953,7 @@ async function main(): Promise<void> {
       await settle();
     });
     await step('Make a List: any filters, grouped and laid out as picked', async () => {
-      await app.getByTestId('send').last().click();
+      await app.getByTestId('tab-send').last().click();
       await app.getByTestId('make-list').click();
       const sheet = app.getByTestId('export-sheet');
       await sheet.waitFor();
@@ -1161,12 +1201,12 @@ async function main(): Promise<void> {
       await app.getByTestId('pick-assigned').click();
       await settle(500);
       await shot('56-assign');
-      await app.getByRole('button', { name: 'Taylor Brooks', exact: true }).click();
+      await app.getByRole('button', { name: 'Taylor Brooks', exact: true }).last().click();
       await app.getByTestId('pick-assigned').filter({ hasText: 'Taylor Brooks' }).waitFor();
       await settle(300);
       await app.getByTestId('pick-assigned').click();
       await settle(500);
-      await app.getByRole('button', { name: 'Jake Ross', exact: true }).click();
+      await app.getByRole('button', { name: 'Jake Ross', exact: true }).last().click();
       await app.getByTestId('pick-assigned').filter({ hasText: 'Jake Ross' }).waitFor();
       await settle(400);
       await app.getByTestId('back').last().click();
@@ -1201,13 +1241,12 @@ async function main(): Promise<void> {
       await app.getByTestId(/^team-/).filter({ hasText: 'Taylor BrooksSuperintendent' }).waitFor();
       await app.getByTestId('close-job').click();
       await app.getByRole('dialog').getByRole('button', { name: 'Close the Job' }).click();
-      await app.getByText('1 active · 2 closed', { exact: true }).waitFor();
+      await app.getByText('Closed Sample Job').first().waitFor();
       await app.getByTestId('show-closed').waitFor();
       await settle(400);
       await shot('60-job-closed');
       await app.getByRole('button', { name: 'Undo' }).click();
       await app.getByTestId('job-job-preview').waitFor();
-      await app.getByText('2 active · 1 closed', { exact: true }).waitFor();
       await settle(400);
     });
     await step('the preview as Sam: only the jobs he is on, and no setup', async () => {
@@ -1225,7 +1264,7 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
       await menu('job-setup');
-      await app.getByText('Only an admin changes the setup.').waitFor();
+      await app.getByText('Only an admin can change this.').waitFor();
       await app.getByTestId('paste-rooms').waitFor({ state: 'detached' });
       await settle(400);
       await shot('62-as-sam-setup');
@@ -1283,7 +1322,7 @@ async function main(): Promise<void> {
       await shot('63-dragged');
       await itemRow('Install range backsplash').click();
       await itemRow('Adjust cabinet door').click();
-      await app.getByText('2 picked').waitFor();
+      await app.getByText('2 Selected').waitFor();
       await settle(300);
       await shot('64-picked');
       await app.getByTestId('picked-move').click();
@@ -1334,7 +1373,7 @@ async function main(): Promise<void> {
       await settle(600);
       // Assigned To takes a company or someone on the team, for all of them at once; Undo puts each back.
       await app.getByText('Your Team', { exact: true }).first().waitFor();
-      await app.getByRole('button', { name: 'Sam Rivera', exact: true }).click();
+      await app.getByRole('button', { name: 'Sam Rivera', exact: true }).last().click();
       await app.getByText(/^Assigned \d items to Sam Rivera$/).waitFor();
       await settle(300);
       await undo(/Assigned \d items to Sam Rivera/);
@@ -1472,10 +1511,10 @@ async function main(): Promise<void> {
       await app.getByTestId('job-job-preview').click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
-      await app.getByTestId('send').last().click();
+      await app.getByTestId('tab-send').last().click();
       await app.getByTestId('send-job').waitFor();
-      await app.getByTestId('send-company-5').getByText(/To Rosa Sample\./).waitFor();
-      await app.getByTestId('send-company-0').getByText(/By text to Dave Sample\./).waitFor();
+      await app.getByTestId('send-company-5').getByText(/To Rosa Sample/).waitFor();
+      await app.getByTestId('send-company-0').getByText(/By text to Dave Sample/).waitFor();
       await settle(500);
       await app.getByTestId('send-company-0').click();
       await app.getByTestId('message-text').waitFor();
@@ -1530,7 +1569,7 @@ async function main(): Promise<void> {
       await settle();
     });
     await step('the whole job goes out as a spreadsheet', async () => {
-      await app.getByTestId('send').last().click();
+      await app.getByTestId('tab-send').last().click();
       await app.getByTestId('export-spreadsheet').click();
       // The preview page shows it first, then downloads it; on the iPhone the share sheet opens.
       const table = app.getByTestId('spreadsheet-table');
@@ -1561,16 +1600,15 @@ async function main(): Promise<void> {
       if ((await app.getByTestId('group-room-1').count()) === 0) await app.getByTestId('job-job-preview').click();
       // SMS Carpentry marked two of its items done from its page.
       await app.getByTestId('open-to-check').waitFor();
-      await app.getByText('2 marked done, to check').waitFor();
+      await app.getByTestId('open-to-check').getByText('2', { exact: true }).waitFor();
       await settle(400);
       await shot('99-to-check-banner');
       await app.getByTestId('open-to-check').click();
-      await app.getByText('Done, the companies say: check each').waitFor();
       await app.getByText('To Check', { exact: true }).first().waitFor();
       await settle(400);
       await shot('99a-to-check-list');
       await app.locator('[data-testid^="open-item-"]').first().click();
-      await app.getByText('SMS Carpentry says it is done').waitFor();
+      await app.getByText(/^SMS Carpentry marked it done on /).waitFor();
       await settle(400);
       await shot('99b-to-check-item');
       await app.getByTestId('mark-complete').click();
@@ -1578,7 +1616,7 @@ async function main(): Promise<void> {
       await app.getByTestId('back').last().click();
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
-      await app.getByText('1 marked done, to check').waitFor();
+      await app.getByTestId('open-to-check').getByText('1', { exact: true }).waitFor();
       await settle();
     });
     await step('New: a confirmed item shows Confirmed and its time on its row', async () => {
@@ -1595,7 +1633,7 @@ async function main(): Promise<void> {
       await app.getByTestId('filter').click();
       await app.getByTestId('view-done').waitFor();
       await settle(600);
-      await app.getByRole('tab', { name: 'Assigned To' }).click();
+      await app.getByTestId('view-group-company').click();
       await app.getByTestId('view-done').click();
       await app.getByTestId('group-company-4').waitFor();
       await settle(500);
@@ -1661,7 +1699,7 @@ async function main(): Promise<void> {
       if ((await app.getByText('Sample Job Renamed').count()) > 0) throw new Error('Discard Changes kept the new name');
     });
     await step('New: every company has its page, and the link goes on its list', async () => {
-      await app.getByTestId('send').last().click();
+      await app.getByTestId('tab-send').last().click();
       await app.getByTestId('send-job').waitFor();
       await app.getByText('Company Pages', { exact: true }).waitFor();
       await settle(400);
@@ -1819,6 +1857,251 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle(400);
       await shot('99q-job-from-plans');
+    });
+    /** What Claude was asked last about a task, found by words in its question. */
+    const lastAsked = async (words: string) => {
+      const all = (await tab.mainFrame().childFrames()[0]?.evaluate(() => (window as unknown as { __asked?: { input: string; images: number; tier: string }[] }).__asked)) ?? [];
+      return [...all].reverse().find((a) => a.input.includes(words)) ?? null;
+    };
+    await step('New: Say It: what is said becomes items to check, one on the list already is left out, and one with no location goes where it is put', async () => {
+      await menu('say-it');
+      await app.getByTestId('say-words').waitFor();
+      await settle(600);
+      await shot('99r-say-it');
+      await app.getByTestId('say-words').fill('The cabinet door left of the hood rubs. Caulk the window sill by the sink, Triple H. Hang a mirror over the vanity once the owner picks one.');
+      await app.getByTestId('say-make').click();
+      await app.getByTestId('say-working').waitFor();
+      await app.getByTestId('say-summary').waitFor({ timeout: 30_000 });
+      const asked = await lastAsked('said what is left to do');
+      if (!asked || !asked.input.includes('What they said: "The cabinet door left of the hood rubs.') || !asked.input.includes('- Kitchen 109') || !asked.input.includes('- SMS Carpentry (Carpentry)') || asked.tier !== 'default' || asked.images !== 0) {
+        throw new Error(`Claude was not asked Say It with the job: ${asked?.input.slice(0, 400)}`);
+      }
+      await app.getByTestId('say-row-0').getByText(/Already on the list: item 16/).waitFor();
+      if ((await app.getByTestId('say-row-0').getAttribute('aria-checked')) !== 'false') throw new Error('An item on the list already was not left out');
+      await app.getByTestId('say-row-1').getByText('Kitchen 109 · Triple H Painting').waitFor();
+      await app.getByTestId('say-row-2').getByText('No location · No one yet · Waiting on Owner').waitFor();
+      await app.getByTestId('say-add').getByText('Add 2').waitFor();
+      await settle(400);
+      await shot('99s-say-review');
+      // The mirror goes in Bathroom 116.
+      await app.getByTestId('say-row-2-fix').click();
+      await app.getByTestId('say-fix-room').waitFor();
+      await settle(600);
+      await app.getByTestId('say-fix-room').click();
+      await app.getByRole('button', { name: 'Bathroom 116', exact: true }).click();
+      await settle(400);
+      await app.getByTestId('say-fix-done').click();
+      await app.getByTestId('say-row-2').getByText('Bathroom 116 · No one yet · Waiting on Owner').waitFor();
+      await app.getByTestId('say-add').click();
+      await app.getByText('Added 2 items. 1 is a draft to finish.').waitFor();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(500);
+      // One line in Activity.
+      await menu('activity');
+      await app.getByText(/said 2 items/).first().waitFor();
+      await settle(300);
+      await shot('99t-said-activity');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
+    });
+    await step('New: a new item: Claude says it repeats one on the list, the standard title is offered, a vague title is pointed out, and Recent leads Assigned To', async () => {
+      await app.getByTestId('group-room-1').click();
+      await app.getByTestId('new-item-row').waitFor();
+      await settle();
+      await app.getByTestId('new-item-row').click();
+      await app.getByTestId('field-title').waitFor();
+      await settle(700);
+      await app.getByTestId('pick-assigned').click();
+      await app.getByTestId('picker').getByText('Recent', { exact: true }).waitFor();
+      await settle(400);
+      await shot('99u-recent-assignees');
+      await app.getByTestId('picker-cancel').click();
+      await settle(500);
+      // The same thing said another way.
+      await app.getByTestId('field-title').fill('cabinet door rubs');
+      await app.getByTestId('field-description').click();
+      await app.getByTestId('duplicate-note').getByText(/Claude says this is the same as item 16, Adjust cabinet door\./).waitFor({ timeout: 15_000 });
+      const same = await lastAsked('Is it the same work as one already on the list');
+      if (!same || !same.input.includes('The new item: Cabinet door rubs') || !same.input.includes('- #16 Adjust cabinet door') || same.tier !== 'quick') throw new Error(`Claude was not asked about the same work: ${same?.input.slice(0, 300)}`);
+      await settle(300);
+      await shot('99v-same-work');
+      // A standard title in other words, at once.
+      await app.getByTestId('field-title').fill('cover outlet install');
+      await app.getByTestId('field-description').click();
+      await app.getByTestId('standard-note').getByText(/The standard title is Install outlet cover\./).waitFor();
+      await app.getByTestId('standard-use').click();
+      await settle(300);
+      if ((await app.getByTestId('field-title').inputValue()) !== 'Install outlet cover') throw new Error('Use It did not put in the standard title');
+      // Said another way: Claude knows the standard title.
+      await app.getByTestId('field-title').fill('switch cover missing');
+      await app.getByTestId('field-description').click();
+      await app.getByTestId('standard-note').getByText(/The standard title is Install switch plate\./).waitFor({ timeout: 15_000 });
+      await settle(300);
+      await shot('99w-standard-title');
+      // Too vague to send a company.
+      await app.getByTestId('field-title').fill('fix it');
+      await app.getByTestId('field-description').click();
+      await app.getByTestId('vague-note').waitFor();
+      await settle(300);
+      await shot('99x-vague');
+      // Saved anyway, it repeats item 16: Find Duplicates finds it.
+      await app.getByTestId('field-title').fill('cabinet door rubs');
+      await app.getByTestId('field-description').click();
+      await app.getByTestId('duplicate-note').waitFor();
+      await app.getByTestId('save').click();
+      await app.getByText(/^Saved (as a draft|Cabinet door rubs) in Kitchen 109$/).waitFor();
+      await settle(500);
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
+    });
+    await step('New: Find Duplicates: Claude picks out the same work written twice, Merge makes it one, and Not the Same puts a pair away', async () => {
+      await menu('find-duplicates');
+      await app.getByTestId('dup-summary').getByText(/Claude says (one pair is|\d+ pairs are) the same work written twice/).waitFor({ timeout: 20_000 });
+      await settle(400);
+      await shot('99y-duplicates');
+      // Merge each one that repeats item 16 (the whole walk-through typed another cabinet door earlier).
+      for (let round = 0; round < 3; round += 1) {
+        const merge = app.getByTestId(/^dup-merge-(16-\d+|\d+-16)$/).first();
+        if ((await merge.count()) === 0) break;
+        await merge.click();
+        await app.getByRole('button', { name: 'Keep Item 16', exact: true }).click();
+        await app.getByText(/^Merged item \d+ into item 16\.$/).first().waitFor();
+        await settle(500);
+        if (round === 0) await shot('99z-merged');
+        // Claude looks at what is left.
+        await app.getByTestId('dup-summary').getByText(/^Claude says/).waitFor({ timeout: 20_000 });
+      }
+      // The pairs that look alike but are different work, out of the way until asked for.
+      await app.getByTestId('dup-summary').getByText(/Claude says none of the items that look alike are the same work\./).waitFor({ timeout: 20_000 });
+      await app.getByTestId('dup-show-close').click();
+      await app.getByText('These look alike, but Claude says they are different work.').waitFor();
+      const before = await app.getByTestId(/^dup-apart-/).count();
+      await app.getByTestId(/^dup-apart-/).first().click();
+      await settle(400);
+      if ((await app.getByTestId(/^dup-apart-/).count()) !== before - 1) throw new Error('Not the Same did not put the pair away');
+      await settle(300);
+      await shot('99za-not-the-same');
+      // The merge is in item 16's History and the job's Activity.
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await menu('activity');
+      await app.getByText(/merged #\d+ Cabinet door rubs into #16 Adjust cabinet door/).first().waitFor();
+      await settle(300);
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
+    });
+    await step('New: on a walk, several photos from the library at once, each a draft, and the walk says how it went as the camera closes', async () => {
+      await app.getByTestId('group-room-1').click();
+      await app.getByTestId('item-item-16').waitFor();
+      await settle();
+      await app.getByTestId('camera').last().click();
+      await app.getByTestId('shutter').waitFor();
+      await app.getByTestId('camera-say').waitFor();
+      await settle(400);
+      const chooser = tab.waitForEvent('filechooser');
+      await app.getByTestId('camera-library').click();
+      await (await chooser).setFiles([photoPath, photoPath, photoPath]);
+      await app.getByText('3 photos saved as drafts. Claude fills them in').waitFor();
+      await app.getByText('3 saved on this walk. Tap the photo to finish it now.').waitFor();
+      await settle(400);
+      await shot('99zb-library-batch');
+      await app.getByTestId('camera-close').click();
+      await app.getByRole('status').filter({ hasText: /^3 saved on this walk\. 3 drafts to check/ }).waitFor();
+      await settle(300);
+      await shot('99zc-walk-summary');
+      await app.getByRole('status').getByRole('button', { name: 'Drafts' }).click();
+      await app.getByTestId(/^item-/).first().waitFor();
+      await settle(500);
+      await app.getByTestId('back').last().click();
+      await settle(400);
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
+    });
+    await step('New: Fill In From Photo with the words: Claude sees one more thing marked on the photo, and it becomes a draft too', async () => {
+      await app.getByTestId('group-room-5').click();
+      await app.getByTestId('camera').last().click();
+      await app.getByTestId('shutter').waitFor();
+      await settle(400);
+      await app.getByTestId('no-photo').click();
+      await app.getByTestId('field-title').waitFor();
+      await settle(700);
+      await app.getByTestId('add-photo').click();
+      await app.getByTestId('shutter').waitFor();
+      await settle(400);
+      await takePhoto();
+      await app.getByTestId('tool-circle').click();
+      await drag([0.2, 0.2], [0.4, 0.4]);
+      await drag([0.6, 0.6], [0.8, 0.8]);
+      await app.getByTestId('markup-next').click();
+      await app.getByTestId('field-description').waitFor();
+      await settle(700);
+      await app.getByTestId('field-description').fill('Door rubs, and the tub caulk is cracked too');
+      await app.getByTestId('fill-in').click();
+      await app.getByText('Claude sees one more thing marked on this photo').waitFor({ timeout: 15_000 });
+      const fill = await lastAsked('They also said or typed: "Door rubs, and the tub caulk is cracked too"');
+      if (!fill || fill.images !== 1 || fill.tier !== 'default') throw new Error('Fill In did not send the photo with the words');
+      await settle(400);
+      await shot('99zd-one-more-thing');
+      await app.getByRole('button', { name: 'Add It as a Draft', exact: true }).click();
+      await app.getByText('Added a draft to finish in Drafts.').waitFor();
+      if ((await app.getByTestId('field-title').inputValue()) !== 'Install towel bar') throw new Error('Fill In did not fill in the title');
+      await app.getByTestId('save').click();
+      await app.getByText(/^Saved Install towel bar in Laundry 119$/).waitFor();
+      await settle(500);
+      // The other thing waits in Drafts, with the photo.
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('open-unfinished').click();
+      await app.getByTestId(/^item-/).filter({ hasText: 'Caulk tub surround' }).waitFor();
+      await settle(400);
+      await shot('99ze-the-other-draft');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
+    });
+    await step('New: the Sample Job: one tap adds a whole job to try everything on, with photos, marks and comments, and it deletes like any other job', async () => {
+      // From the Jobs screen, which stays underneath the job, hidden. The preview job is named
+      // Sample Job, or Sample Job North by now.
+      const addSample = app.getByTestId('add-sample-job');
+      if (!(await addSample.isVisible())) await app.getByTestId('tab-jobs').last().click();
+      await settle(600);
+      if (!(await addSample.isVisible())) await app.getByTestId('tab-jobs').last().click();
+      await addSample.waitFor();
+      await settle(400);
+      await shot('99zf-jobs-sample-button');
+      await app.getByTestId('add-sample-job').click();
+      await app.getByRole('dialog').getByRole('button', { name: 'Add the Sample Job' }).click();
+      await app.getByText('The Sample Job is ready. Try anything on it.').waitFor({ timeout: 20_000 });
+      await app.getByRole('heading', { name: /^Sample Job( 2)?$/ }).last().waitFor();
+      await app.getByTestId('count-open').filter({ visible: true }).first().waitFor();
+      await app.getByTestId('open-unfinished').filter({ visible: true }).waitFor();
+      await settle(700);
+      await shot('99zg-sample-job');
+      await app.locator('[data-testid^="group-"]').filter({ hasText: 'Kitchen 109' }).filter({ visible: true }).first().click();
+      const door = app.getByTestId(/^item-/).filter({ hasText: 'Adjust cabinet door' });
+      await door.waitFor();
+      // Its photo is there (no empty slot to take one), and its two comments.
+      if ((await door.getByTestId(/^add-photo-/).count()) !== 0) throw new Error('The Sample Job item has no photo');
+      await door.getByText('2', { exact: true }).waitFor();
+      await settle(600);
+      await shot('99zh-sample-kitchen');
+      await door.click();
+      await app.getByTestId('item-photo').waitFor();
+      await settle(600);
+      await shot('99zi-sample-item');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('back').last().click();
+      await settle(500);
+      await menu('delete-job');
+      await app.getByRole('dialog').getByRole('button', { name: 'Delete the Job' }).click();
+      await app.getByText(/^Deleted Sample Job( 2)?$/).waitFor();
+      await app.getByTestId('add-sample-job').waitFor();
+      await app.getByTestId('job-job-preview').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
     });
     await step('Me: the company name, Sign Out, and signing in with a code sent by email', async () => {
       await app.getByTestId('back').last().click();

@@ -1,12 +1,25 @@
 // Drafts fill themselves in. Right after a photo is saved as a draft, and again when Drafts opens
 // (for any that could not be done on the walk, with no signal, say), Claude looks at each draft's
-// photo, one at a time, and fills in its blanks: the title, where exactly and the company (the
-// trade follows the company). A draft stays a draft until someone checks it and taps Next, or Done
-// from the camera. A draft someone is typing in is left to them.
+// photo, one at a time, with whatever was typed on it, and fills in its blanks: the title, where
+// exactly and the company (the trade follows the company). A draft stays a draft until someone
+// checks it and taps Next, or Done from the camera. A draft someone is typing in is left to them.
 
-import { suggestContext, suggestionPatch, type Company, type Item, type JobCompany, type Location, type Mark, type StandardTitle, type Trade } from '@punch/core';
+import {
+  isAssigned,
+  readSuggestions,
+  suggestContext,
+  suggestionPatch,
+  type Company,
+  type Item,
+  type JobCompany,
+  type Location,
+  type Mark,
+  type StandardTitle,
+  type Trade,
+} from '@punch/core';
 import { useSyncExternalStore } from 'react';
-import { suggestFromPhoto } from '@/ai/suggest';
+import { askClaude } from '@/ai/claude';
+import { ClaudeError } from '@/ai/claudeErrors';
 import type { DataApi } from '@/data/api';
 
 /** What the job knows, for the photo reader. */
@@ -21,7 +34,7 @@ export interface FillJob {
 
 /** One draft as it was when it was queued, with its first photo. */
 export interface FillTask {
-  item: Pick<Item, 'id' | 'locationId' | 'title' | 'description' | 'companyId' | 'tradeId' | 'unfinished' | 'hours'>;
+  item: Pick<Item, 'id' | 'locationId' | 'title' | 'description' | 'companyId' | 'tradeId' | 'unfinished' | 'hours'> & Partial<Pick<Item, 'assignedTo'>>;
   photo: { uri: string; marks: Mark[] };
 }
 
@@ -39,7 +52,7 @@ const listeners = new Set<() => void>();
 const tried = new Set<string>();
 /** Typed in by someone: its answer is not used. */
 const touched = new Set<string>();
-/** Claude is not allowed here, so nothing more is asked. */
+/** Claude is not allowed here, not set up, or this month's allowance is used: nothing more is asked. */
 let stopped = false;
 
 function publish(next: FillState) {
@@ -58,16 +71,17 @@ async function run() {
   publish({ running: task.item.id, queued: queue.map((q) => q.task.item.id) });
   try {
     const location = job.locations.find((l) => l.id === task.item.locationId)?.label ?? null;
-    const ctx = suggestContext({ location, titles: job.titles, trades: job.trades, companies: job.companies, jobCompanies: job.jobCompanies, marks: task.photo.marks });
-    const suggestion = await suggestFromPhoto(task.photo, ctx);
+    const words = [task.item.title, task.item.description].map((w) => w.trim()).filter(Boolean).join('. ');
+    const ctx = suggestContext({ location, words, titles: job.titles, trades: job.trades, companies: job.companies, jobCompanies: job.jobCompanies, marks: task.photo.marks });
+    const [suggestion] = readSuggestions(await askClaude('fill-in', ctx, [task.photo.uri]), ctx);
     tried.add(task.item.id);
     if (suggestion && !touched.has(task.item.id)) {
       const patch = suggestionPatch(suggestion, task.item, job.trades, job.companies);
       if (Object.keys(patch).length > 0) await job.data.updateItem(task.item.id, patch);
     }
   } catch (e) {
-    const code = (e as { code?: string } | null)?.code;
-    if (code === 'not_granted' || code === 'sampling_disabled') {
+    const trouble = e instanceof ClaudeError ? e.trouble : null;
+    if (trouble === 'not_allowed' || trouble === 'not_set_up' || trouble === 'used_up' || trouble === 'signed_out') {
       stopped = true;
       queue = [];
     }
@@ -79,12 +93,16 @@ async function run() {
 }
 
 export const draftFill = {
-  /** Queues the drafts that have a photo and nothing typed yet, unless they are done or waiting already. */
+  /**
+   * Queues the drafts that have a photo and something still blank (the title, where exactly or who
+   * does it), unless they are done or waiting already.
+   */
   add(tasks: FillTask[], job: FillJob) {
     if (stopped) return;
     for (const task of tasks) {
       const id = task.item.id;
-      if (!task.item.unfinished || task.item.title.trim() !== '') continue;
+      const blank = task.item.title.trim() === '' || task.item.description.trim() === '' || !isAssigned(task.item);
+      if (!task.item.unfinished || !blank) continue;
       if (tried.has(id) || touched.has(id) || state.running === id || queue.some((q) => q.task.item.id === id)) continue;
       queue.push({ task, job });
     }

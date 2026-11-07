@@ -208,10 +208,10 @@ export default function SendScreen() {
     const r = listRecipients(contacts, companyId);
     if (r.emails.length > 0) return { line: `To ${namesText(r.people.filter((p) => p.email).map((p) => p.name || p.email!))}`, icon: 'envelope' };
     if (r.phones.length > 0) return { line: `By text to ${namesText(r.people.filter((p) => p.phone).map((p) => p.name || p.phone!))}`, icon: 'message' };
-    return { line: 'Nobody gets its lists yet', icon: 'share' };
+    return { line: 'No one to send to yet', icon: 'share' };
   }
 
-  /** "Sent October 23. 2 new since then", or "Sent October 23". */
+  /** "Sent October 23, 2 new", or "Sent October 23". */
   function sentLine(target: Target): string {
     const last = lastSend(sends, target.list);
     if (!last) return 'Not sent yet';
@@ -220,7 +220,7 @@ export default function SendScreen() {
       last,
     ).size;
     const day = shortDate(last.sentAt.slice(0, 10)).replace(' ', '\u00a0');
-    return fresh > 0 ? `Sent ${day}. ${fresh}\u00a0new since then` : `Sent ${day}`;
+    return fresh > 0 ? `Sent ${day}, ${fresh}\u00a0new` : `Sent ${day}`;
   }
 
   /** Each item's first photo at print size, a few at a time to keep the phone's memory steady. */
@@ -484,13 +484,11 @@ export default function SendScreen() {
   return (
     <Page
       title="Send Lists"
-      eyebrow="What is left, company by company"
-      crumb={[job?.name ?? 'Job', 'Send']}
       jobSwitch={{ jobId, onChange: (next) => router.setParams({ jobId: next }) }}
       account
       tab={{ active: 'send', jobId }}
     >
-      <ListSection footer="Make a List takes any filters, grouped your way, with the details you pick on every line. The spreadsheet has every item on the job, for Excel, Numbers or Google Sheets.">
+      <ListSection footer="A list with any filters, or a spreadsheet of every item.">
         <ListRow
           title="Make a List"
           icon="doc"
@@ -505,12 +503,12 @@ export default function SendScreen() {
         <EmptyState icon="checkmark.circle.fill" title="Nothing to Send" message="Every item on this job is complete." />
       ) : (
         <>
-          <ListSection header="Companies" footer="Tap a company to see its list. Each list goes to the company's people by email, or by text to anyone with only a phone.">
+          <ListSection header="Companies" footer="Tap a company to see its list and send it.">
             {rows.map((r) => {
               const target = companyTarget(r);
               const counts = [
                 plural(r.open, 'item'),
-                r.ready > 0 ? `${r.ready} ready now` : '',
+                r.ready > 0 ? `${r.ready} ready` : '',
                 r.needsPrice > 0 ? `${r.needsPrice} to be quoted` : '',
               ].filter(Boolean);
               const how = reach(r.companyId);
@@ -518,7 +516,7 @@ export default function SendScreen() {
                 <ListRow
                   key={r.companyId}
                   title={r.name}
-                  subtitle={`${counts.join(', ')}. ${sentLine(target)}. ${how.line}.`}
+                  subtitle={`${[...counts, sentLine(target)].join(' · ')}\n${how.line}`}
                   accessory={ON_THE_PHONE ? 'none' : 'chevron'}
                   onPress={() => void openList(target)}
                   right={trailing(target, how.icon)}
@@ -529,7 +527,7 @@ export default function SendScreen() {
           </ListSection>
           <ListSection
             header="Company Pages"
-            footer="Each company's list, live, with its photos: they confirm items, put in how long each takes, mark them done and comment. The link goes on every list they get."
+            footer="Each company's live list, where they confirm, mark done and comment. The link is on every list they get."
           >
             {rows.map((r) => (
               <ListRow
@@ -574,7 +572,7 @@ export default function SendScreen() {
           <ListSection header={builder || 'Your Team'} footer="Every open item by location, with the company on every line.">
             <ListRow
               title="Whole Job"
-              subtitle={`${plural(open.length, 'item')} in ${plural(rooms, 'location')}, ${open.filter((i) => i.ready).length} ready now`}
+              subtitle={`${plural(open.length, 'item')} in ${plural(rooms, 'location')} · ${open.filter((i) => i.ready).length} ready`}
               accessory={ON_THE_PHONE ? 'none' : 'chevron'}
               onPress={() => void openList(jobTarget)}
               right={trailing(jobTarget)}

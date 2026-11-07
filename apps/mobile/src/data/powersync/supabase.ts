@@ -75,6 +75,30 @@ export async function deleteJobOnServer(jobId: string): Promise<void> {
   if (error) throw new Error(/fetch|network/i.test(error.message) ? 'That did not go. Check the signal and try again.' : sentence(error.message));
 }
 
+/** Two items become one, on the server: the database moves the photos and comments and removes the one merged. */
+export async function mergeItemsOnServer(keepId: string, mergeId: string): Promise<{ photos: number; comments: number }> {
+  const { data, error } = await supabase.rpc('merge_items', { p_keep: keepId, p_merge: mergeId });
+  if (error) throw new Error(/fetch|network/i.test(error.message) ? 'Merging needs a signal. Check it and try again.' : sentence(error.message));
+  const d = (data ?? {}) as { photos?: unknown; comments?: unknown };
+  return { photos: Number(d.photos) || 0, comments: Number(d.comments) || 0 };
+}
+
+/** Every file in a job's folder in storage, its plans folder included: all of it goes when the job does. */
+export async function jobFilesOnServer(bucket: string, jobId: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const folder of [jobId, `${jobId}/plans`]) {
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase.storage.from(bucket).list(folder, { limit: 1000, offset });
+      if (error) throw new Error('The photos did not delete. Check the signal and try again.');
+      const rows = data ?? [];
+      // A folder in the list has no id.
+      out.push(...rows.filter((f) => f.id).map((f) => `${folder}/${f.name}`));
+      if (rows.length < 1000) break;
+    }
+  }
+  return out;
+}
+
 /** Takes photos out of storage: the company's, for the last person there deleting their account, or a job's, as it is deleted. */
 export async function deletePhotosOnServer(bucket: string, paths: string[]): Promise<void> {
   for (let i = 0; i < paths.length; i += 100) {

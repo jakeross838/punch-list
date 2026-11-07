@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   kinds: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginHorizontal: layout.margin, marginBottom: 16 },
   group: { marginBottom: 16 },
   groupName: { marginHorizontal: layout.inset, marginBottom: 7 },
-  list: { marginHorizontal: layout.margin, borderWidth: layout.hairline, borderColor: colors.border, backgroundColor: colors.cell, overflow: 'hidden' },
+  list: { marginHorizontal: layout.margin, borderRadius: layout.radius, backgroundColor: colors.cell, overflow: 'hidden' },
   row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: layout.rowPadding, paddingVertical: 8, backgroundColor: colors.cell },
   rule: { borderTopWidth: layout.hairline, borderTopColor: colors.separator },
   note: { marginHorizontal: layout.inset, marginTop: 4 },

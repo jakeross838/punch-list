@@ -1367,6 +1367,218 @@ begin
 end $$;
 reset role;
 
+-- ---------- Claude's use, and merging two items ----------
+-- What Claude costs is counted by the functions, as the service role. The app never counts it or
+-- sets an allowance, and an admin sees their own company's.
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+declare
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  a jsonb := public.ai_allowance();
+begin
+  if a ->> 'org' <> 'ross_built' or (a ->> 'person_id')::uuid is distinct from jake
+     or (a ->> 'limit_cents')::numeric <> 20000 or (a ->> 'used_cents')::numeric <> 0 then
+    raise exception 'FAIL: the allowance is not Ross Built''s: %', a;
+  end if;
+  begin
+    insert into public.ai_usage (org, task, model, cost_cents) values ('ross_built', 'fill-in', 'claude-sonnet-5-5', 0);
+    raise exception 'FAIL: the app counted its own use of Claude';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform 1 from public.ai_limits;
+    raise exception 'FAIL: the app can read the allowances';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.ai_limits set monthly_cents = 999999;
+    raise exception 'FAIL: the app changed its allowance';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+set role service_role;
+insert into public.ai_usage (org, person_id, task, model, input_tokens, output_tokens, cost_cents) values
+  ('ross_built', (select id from public.people where email = 'jake@rossbuilt.com'), 'fill-in', 'claude-sonnet-5-5', 1200, 300, 0.54),
+  ('ross_built', (select id from public.people where email = 'sam@rossbuilt.com'), 'say-it', 'claude-sonnet-5-5', 2000, 900, 1.3);
+-- Last month's is not this month's.
+insert into public.ai_usage (org, task, model, cost_cents, created_at)
+  values ('ross_built', 'read-plans', 'claude-sonnet-5-5', 80, date_trunc('month', now()) - interval '1 day');
+reset role;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+begin
+  if (public.ai_allowance() ->> 'used_cents')::numeric <> 1.84 then raise exception 'FAIL: this month''s use is not what was counted: %', public.ai_allowance(); end if;
+  if (select count(*) from public.ai_usage) <> 3 then raise exception 'FAIL: an admin does not see what Claude cost the company'; end if;
+end $$;
+reset role;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"sam@rossbuilt.com"}';
+do $$
+declare
+  a jsonb := public.ai_allowance();
+begin
+  if a ->> 'org' <> 'ross_built' or (a ->> 'person_id')::uuid is distinct from public.current_person_id() or (a ->> 'used_cents')::numeric <> 1.84 then
+    raise exception 'FAIL: a team member''s allowance is not their company''s: %', a;
+  end if;
+  if exists (select 1 from public.ai_usage) then raise exception 'FAIL: a team member sees what Claude cost'; end if;
+end $$;
+reset role;
+
+-- The same work written twice: the one kept takes the other's photos and comments.
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+declare
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  j uuid := (select id from public.jobs where name = 'Fish');
+  loc uuid := (select id from public.locations where job_id = (select id from public.jobs where name = 'Fish') order by sort_order limit 1);
+  c uuid := (select id from public.companies where name = 'Gator Plumbing');
+  g uuid := (select id from public.items where job_id = current_setting('test.gavin')::uuid and title = 'Install shelving');
+  keep uuid; dupe uuid; waits uuid; n_dupe integer;
+  pk uuid; p1 uuid; p2 uuid; p3 uuid; m1 uuid; m2 uuid;
+  r jsonb; rec record;
+begin
+  insert into public.items (job_id, location_id, title, company_id, ready) values (j, loc, 'Replace the outlet by the sink', c, true) returning id into keep;
+  insert into public.items (job_id, location_id, title, company_id, ready) values (j, loc, 'Sink outlet replace', c, true) returning id, number into dupe, n_dupe;
+  insert into public.photos (job_id, item_id, width, height, sort_order) values (j, keep, 900, 1200, 1) returning id into pk;
+  insert into public.photos (job_id, item_id, width, height, sort_order) values (j, dupe, 900, 1200, 1) returning id into p1;
+  insert into public.photos (job_id, item_id, width, height, sort_order) values (j, dupe, 900, 1200, 2) returning id into p2;
+  insert into public.photos (job_id, item_id, width, height, sort_order) values (j, dupe, 900, 1200, 3) returning id into p3;
+  update public.photos set removed = true where id = p3;
+  insert into public.comments (job_id, item_id, body) values (j, dupe, 'The cover plate is cracked too.') returning id into m1;
+  insert into public.comments (job_id, item_id, body) values (j, dupe, 'Never mind.') returning id into m2;
+  update public.comments set removed = true where id = m2;
+  insert into public.items (job_id, location_id, title, company_id, ready, waiting_on_items)
+    values (j, loc, 'Install the backsplash', c, false, array[dupe]) returning id into waits;
+
+  -- Outside of a merge, a photo stays with its item.
+  update public.photos set item_id = waits where id = p1;
+  if (select item_id from public.photos where id = p1) <> dupe then raise exception 'FAIL: a photo moved to another item'; end if;
+
+  r := public.merge_items(keep, dupe);
+  if r <> '{"photos": 2, "comments": 1}'::jsonb then raise exception 'FAIL: the merge did not say what came along: %', r; end if;
+  if (select item_id from public.photos where id = p1) <> keep or (select item_id from public.photos where id = p2) <> keep
+     or (select item_id from public.comments where id = m1) <> keep then
+    raise exception 'FAIL: the photos and the comment did not come along';
+  end if;
+  if (select sort_order from public.photos where id = pk) <> 1 or (select sort_order from public.photos where id = p1) <> 2
+     or (select sort_order from public.photos where id = p2) <> 3 then
+    raise exception 'FAIL: the photos that came along are not after the kept item''s own';
+  end if;
+  if (select item_id from public.photos where id = p3) <> dupe or (select item_id from public.comments where id = m2) <> dupe then
+    raise exception 'FAIL: what was taken back came along';
+  end if;
+  if (select status from public.items where id = dupe) <> 'removed' or (select status from public.items where id = keep) <> 'open' then
+    raise exception 'FAIL: the merged item was not removed, or the kept one was';
+  end if;
+  select ready, waiting_on_items into rec from public.items where id = waits;
+  if rec.ready or rec.waiting_on_items <> array[keep] then raise exception 'FAIL: what waited on the merged item does not wait on the kept one'; end if;
+  select * into rec from public.job_activity where kind = 'items_merged' and item_id = keep;
+  if rec.person_id is distinct from jake or (rec.detail ->> 'from_number')::int <> n_dupe or rec.detail ->> 'from_title' <> 'Sink outlet replace'
+     or rec.detail ->> 'into_title' <> 'Replace the outlet by the sink' or (rec.detail ->> 'photos')::int <> 2 or (rec.detail ->> 'comments')::int <> 1 then
+    raise exception 'FAIL: the merge is not in Activity as it happened';
+  end if;
+  -- Merging adds no photo, mark or comment to Activity.
+  if (select count(*) from public.job_activity where kind in ('photo_added', 'photo_marked', 'photo_removed', 'comment_added') and item_id = keep) <> 1 then
+    raise exception 'FAIL: the merge logged photos or comments as new';
+  end if;
+
+  begin
+    perform public.merge_items(keep, dupe);
+    raise exception 'FAIL: an item was merged twice';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.merge_items(keep, keep);
+    raise exception 'FAIL: an item was merged into itself';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.merge_items(keep, g);
+    raise exception 'FAIL: items on two jobs were merged';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.merge_items(keep, gen_random_uuid());
+    raise exception 'FAIL: an item that is not there was merged';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- The kept item waiting on the merged one just stops waiting on it.
+  declare
+    a uuid; b uuid;
+  begin
+    insert into public.items (job_id, location_id, title, company_id, ready) values (j, loc, 'Patch the drywall', c, true) returning id into b;
+    insert into public.items (job_id, location_id, title, company_id, ready, waiting_on_items) values (j, loc, 'Patch drywall', c, false, array[b]) returning id into a;
+    perform public.merge_items(a, b);
+    select ready, waiting_on_items into rec from public.items where id = a;
+    if not rec.ready or cardinality(rec.waiting_on_items) <> 0 then raise exception 'FAIL: the kept item still waits on the one merged into it'; end if;
+  end;
+  -- When waiting on the kept item would leave something waiting on itself, it just stops waiting.
+  declare
+    a uuid; b uuid; d uuid;
+  begin
+    insert into public.items (job_id, location_id, title, company_id, ready) values (j, loc, 'Seal the grout', c, true) returning id into d;
+    insert into public.items (job_id, location_id, title, company_id, ready, waiting_on_items) values (j, loc, 'Set the tile', c, false, array[d]) returning id into b;
+    insert into public.items (job_id, location_id, title, company_id, ready, waiting_on_items) values (j, loc, 'Seal grout', c, false, array[b]) returning id into a;
+    perform public.merge_items(a, d);
+    select ready, waiting_on_items into rec from public.items where id = b;
+    if not rec.ready or cardinality(rec.waiting_on_items) <> 0 then raise exception 'FAIL: what would wait on itself still waits'; end if;
+    if (select waiting_on_items from public.items where id = a) <> array[b] then raise exception 'FAIL: the kept item lost what it waits on'; end if;
+  end;
+
+  perform set_config('test.merge_keep', keep::text, false);
+  perform set_config('test.merge_photo', p1::text, false);
+  perform set_config('test.merge_comment', m1::text, false);
+  perform set_config('test.merge_other', waits::text, false);
+  perform set_config('test.gavin_item', g::text, false);
+end $$;
+reset role;
+
+-- Even with full rights, a comment stays with its item outside of a merge, and a merge never
+-- moves anything to another job.
+do $$
+declare
+  keep uuid := current_setting('test.merge_keep')::uuid;
+  p uuid := current_setting('test.merge_photo')::uuid;
+  m uuid := current_setting('test.merge_comment')::uuid;
+  g uuid := current_setting('test.gavin_item')::uuid;
+begin
+  begin
+    update public.comments set item_id = current_setting('test.merge_other')::uuid where id = m;
+    raise exception 'FAIL: a comment moved to another item';
+  exception when restrict_violation then null;
+  end;
+  perform set_config('punch.merging', 'on', true);
+  begin
+    update public.comments set item_id = g where id = m;
+    raise exception 'FAIL: a comment moved to another job';
+  exception when restrict_violation then null;
+  end;
+  update public.photos set item_id = g where id = p;
+  if (select item_id from public.photos where id = p) <> keep then raise exception 'FAIL: a photo moved to another job'; end if;
+  perform set_config('punch.merging', '', true);
+end $$;
+
+-- A team member merges only on the jobs they are on.
+set role authenticated;
+set request.jwt.claims = '{"email":"sam@rossbuilt.com"}';
+do $$
+begin
+  begin
+    perform public.merge_items(current_setting('test.gavin_item')::uuid, (select id from public.items where title = 'Install faucet' limit 1));
+    raise exception 'FAIL: a team member merged on a job they are not on';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
 -- ---------- who can sign in ----------
 do $$
 begin
@@ -1406,9 +1618,10 @@ begin
      + (select count(*) from public.photos) + (select count(*) from public.custom_fields)
      + (select count(*) from public.person_settings) + (select count(*) from public.job_activity)
      + (select count(*) from public.comments) + (select count(*) from public.company_links)
-     + (select count(*) from public.job_team) + (select count(*) from public.job_access) <> 0 then
+     + (select count(*) from public.job_team) + (select count(*) from public.job_access) + (select count(*) from public.ai_usage) <> 0 then
     raise exception 'FAIL: an uninvited account can see data';
   end if;
+  if public.ai_allowance() is not null then raise exception 'FAIL: an uninvited account has an allowance for Claude'; end if;
   begin
     insert into public.jobs (name) values ('Sneaky');
     raise exception 'FAIL: an uninvited account created a job';
@@ -1426,6 +1639,12 @@ set request.jwt.claims = '{"email":"former@rossbuilt.com"}';
 do $$
 begin
   if (select count(*) from public.items) <> 0 then raise exception 'FAIL: a switched off person can see items'; end if;
+  if public.ai_allowance() is not null then raise exception 'FAIL: a switched off person has an allowance for Claude'; end if;
+  begin
+    perform public.merge_items(current_setting('test.merge_keep')::uuid, current_setting('test.merge_other')::uuid);
+    raise exception 'FAIL: a switched off person merged items';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 reset role;
@@ -1436,6 +1655,18 @@ do $$
 begin
   perform 1 from public.items;
   raise exception 'FAIL: anonymous access reached items';
+exception when insufficient_privilege then null;
+end $$;
+do $$
+begin
+  perform public.ai_allowance();
+  raise exception 'FAIL: anonymous access reached the allowance';
+exception when insufficient_privilege then null;
+end $$;
+do $$
+begin
+  perform public.merge_items(gen_random_uuid(), gen_random_uuid());
+  raise exception 'FAIL: anonymous access merged items';
 exception when insufficient_privilege then null;
 end $$;
 reset role;
@@ -1652,12 +1883,28 @@ begin
     raise exception 'FAIL: a photo path does not name its job';
   end if;
   if public.alone_in_company() then raise exception 'FAIL: Pat is not alone at the company'; end if;
+  -- Claude: the usual allowance, nothing used, and nothing of Ross Built's seen or merged.
+  if public.ai_allowance() ->> 'org' <> mine or (public.ai_allowance() ->> 'limit_cents')::numeric <> 2500
+     or (public.ai_allowance() ->> 'used_cents')::numeric <> 0 or exists (select 1 from public.ai_usage) then
+    raise exception 'FAIL: the new company''s allowance for Claude is not the usual one: %', public.ai_allowance();
+  end if;
+  begin
+    perform public.merge_items(current_setting('test.merge_keep')::uuid, current_setting('test.merge_other')::uuid);
+    raise exception 'FAIL: one company merged another''s items';
+  exception when insufficient_privilege then null;
+  end;
   -- The company's name: its admin changes it.
   update public.orgs set name = '  Gulf Coast Homes  LLC ' where id = mine;
   if (select name from public.orgs) <> 'Gulf Coast Homes LLC' then raise exception 'FAIL: the admin could not rename the company'; end if;
   perform set_config('test.gulf', mine, false);
   perform set_config('test.bayview', j::text, false);
 end $$;
+reset role;
+
+-- What Claude cost the new company, and its own allowance, go with it when it is deleted.
+set role service_role;
+insert into public.ai_usage (org, task, model, cost_cents) values (current_setting('test.gulf'), 'fill-in', 'claude-sonnet-5-5', 1);
+insert into public.ai_limits (org, monthly_cents) values (current_setting('test.gulf'), 5000);
 reset role;
 
 -- Ross Built sees none of it, and nothing of its own changed.
@@ -1668,9 +1915,11 @@ begin
   if (select count(*) from public.orgs) <> 1 or (select name from public.orgs) <> 'Ross Built' then raise exception 'FAIL: Ross Built sees another company'; end if;
   if exists (select 1 from public.jobs where id = current_setting('test.bayview')::uuid) or public.can_see_job(current_setting('test.bayview')::uuid)
      or exists (select 1 from public.people where org <> 'ross_built') or exists (select 1 from public.trades where org <> 'ross_built')
-     or exists (select 1 from public.items where org <> 'ross_built') or exists (select 1 from public.job_access where org <> 'ross_built') then
+     or exists (select 1 from public.items where org <> 'ross_built') or exists (select 1 from public.job_access where org <> 'ross_built')
+     or exists (select 1 from public.ai_usage where org <> 'ross_built') then
     raise exception 'FAIL: Ross Built sees another company''s rows';
   end if;
+  if (public.ai_allowance() ->> 'used_cents')::numeric <> 1.84 then raise exception 'FAIL: another company''s use of Claude was counted as Ross Built''s'; end if;
   if exists (select 1 from public.people where name = 'Changed by another company') or exists (select 1 from public.items where title = 'Changed by another company')
      or exists (select 1 from public.jobs where name = 'Changed by another company') then
     raise exception 'FAIL: another company changed Ross Built''s rows';

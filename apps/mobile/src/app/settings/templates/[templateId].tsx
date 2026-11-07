@@ -62,7 +62,7 @@ function TemplateDetail({ template }: { template: Template }) {
       .join(' · ');
 
   return (
-    <Page title={template.name} eyebrow="Template" crumb={['Me', 'Templates', template.name]} backLabel="Templates" subtitle={[taskCount(tasks.length), template.active ? null : 'Switched off'].filter(Boolean).join(' · ')} tab={{}}>
+    <Page title={template.name} backLabel="Templates" subtitle={[taskCount(tasks.length), template.active ? null : 'Switched off'].filter(Boolean).join(' · ')} tab={{}}>
       {admin ? (
         <ListSection>
           <ListLabeledField label="Name" value={name} onChangeText={setName} onBlur={() => void saveName()} autoCapitalize="words" returnKeyType="done" testID="field-template-name" />
@@ -83,7 +83,7 @@ function TemplateDetail({ template }: { template: Template }) {
           ))}
         </ListSection>
       ))}
-      <ListSection footer="On a job, each task goes in every location it fits, with the company doing its trade there. Anything already on the list is left out.">
+      <ListSection footer="Each task goes in every location it fits. Anything already on the list is left out.">
         {admin ? <ListRow title="Add Task" tone="tint" onPress={() => setEditing({ task: null })} testID="add-task" /> : null}
         {template.active && tasks.length > 0 ? <ListRow title="Add to a Job" tone="tint" onPress={() => setPicking(true)} testID="template-to-job" /> : null}
       </ListSection>

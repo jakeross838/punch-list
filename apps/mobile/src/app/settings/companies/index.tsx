@@ -30,7 +30,7 @@ export default function CompaniesScreen() {
   const without = companies.filter((c) => contactsOf(contacts, c.id).filter((p) => p.getsLists).length === 0).length;
 
   return (
-    <Page title="Companies" eyebrow="Everyone who works on the jobs" crumb={['Me', 'Companies']} backLabel="Me" search={{ value: query, onChange: setQuery, placeholder: 'Search companies' }} tab={{}}>
+    <Page title="Companies" backLabel="Me" search={{ value: query, onChange: setQuery, placeholder: 'Search companies' }} tab={{}}>
       {shown.length === 0 ? (
         <EmptyState icon="building" title={query.trim() ? 'No Results' : 'No Companies Yet'} message={query.trim() ? `No company matches “${query.trim()}”.` : 'Companies are added to a job in Job Setup.'} />
       ) : (

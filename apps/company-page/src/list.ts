@@ -199,11 +199,11 @@ export function mountList(o: ListOptions): ListView {
     <div class="card you">
       <label class="label" for="name">Your name</label>
       <input id="name" value="${esc(name)}" placeholder="So ${esc(p.builder)} knows who answered" autocomplete="name" maxlength="80">
-      <p class="hint">On each item: Confirm it once you have looked it over and it is yours, say about how long it takes, and Mark Done when it is finished. ${esc(p.builder)} sees every answer right away, then checks the work and takes it off.</p>
+      <p class="hint">Confirm each item, say about how long it takes, and tap Mark Done when it is finished. ${esc(p.builder)} sees every answer right away.</p>
     </div>
     ${open.length === 0 ? `<div class="card empty"><h2>Nothing open</h2><p>Everything on your list here is done. Thank you.</p></div>` : ''}
-    ${sectionHtml('Ready Now', ordered ? 'These can be done any time. Start at number 1: the first ones hold up the most other work.' : 'These can be done any time.', ready)}
-    ${sectionHtml('Waiting', 'Not ready yet: each says what it waits on, and when it should be ready.', waiting)}
+    ${sectionHtml('Ready Now', ordered ? 'Start at number 1: it holds up the most other work.' : 'These can be done any time.', ready)}
+    ${sectionHtml('Waiting', 'Each says what it waits on.', waiting)}
     ${sectionHtml('To Be Quoted', 'Extra work: a price for each, before it starts.', quoted)}
     ${sectionHtml('Marked Done', `Waiting for ${p.builder} to check.`, done)}
     <section><div class="section"><h2>The Whole List</h2></div>${commentsHtml('list', listComments)}</section>

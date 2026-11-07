@@ -323,13 +323,15 @@ describe('pictures of the plan sheets', () => {
   });
 });
 
-describe('the read-plans function', () => {
-  it('asks Claude in the same words as the core', async () => {
+describe('the functions that ask Claude', () => {
+  it('ask in the same words as the core, with the shared code as it is', async () => {
     const { readFileSync } = await import('node:fs');
-    const { join } = await import('node:path');
     // @ts-expect-error: a plain script, without types
-    const { promptFile } = (await import('../../../tools/build-functions.mjs')) as { promptFile: () => Promise<string> };
-    const written = readFileSync(join(__dirname, '../../../supabase/functions/read-plans/prompt.js'), 'utf8');
-    expect(written, 'supabase/functions/read-plans/prompt.js is out of date: run node tools/build-functions.mjs').toBe(await promptFile());
+    const { functionFiles } = (await import('../../../tools/build-functions.mjs')) as { functionFiles: () => Promise<Record<string, string>> };
+    const files = await functionFiles();
+    expect(Object.keys(files).length).toBe(4);
+    for (const [path, fresh] of Object.entries(files)) {
+      expect(readFileSync(path, 'utf8'), `${path} is out of date: run node tools/build-functions.mjs`).toBe(fresh);
+    }
   });
 });

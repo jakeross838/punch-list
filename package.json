@@ -14,7 +14,7 @@
     "phase0": "tsx tools/phase0.ts",
     "test:db": "bash tools/db-test.sh",
     "test:live-writes": "tsx --tsconfig tools/live-writes.tsconfig.json tools/live-writes-db.ts",
-    "test:read-plans": "tsx tools/read-plans-check.ts",
+    "test:functions": "tsx tools/functions-check.ts",
     "build:functions": "node tools/build-functions.mjs",
     "preview:build": "cd apps/mobile && EXPO_NO_DOTENV=1 npx expo export --platform web && cd ../.. && node tools/build-preview.mjs",
     "test:preview": "tsx tools/preview-e2e.ts",

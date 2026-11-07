@@ -1,5 +1,5 @@
-// A square switch, Site Office style, the same on the iPhone and the preview page: slate deep with
-// a sand knob when on, an outlined white track when off. The knob slides; nothing stretches.
+// The iPhone's switch, the same on the iPhone and the preview page: green with the knob on the
+// right when on, light gray when off. The knob slides; nothing stretches.
 
 import { Pressable, StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -15,9 +15,9 @@ export interface SwitchProps {
   testID?: string;
 }
 
-const W = 46;
-const H = 26;
-const KNOB = 18;
+const W = 51;
+const H = 31;
+const KNOB = 27;
 
 export function Switch({ value, onValueChange, accessibilityLabel, disabled, testID }: SwitchProps) {
   return (
@@ -28,19 +28,19 @@ export function Switch({ value, onValueChange, accessibilityLabel, disabled, tes
       }}
       disabled={disabled}
       accessibilityRole="switch"
-      aria-checked={value} aria-disabled={disabled}
+      aria-checked={value}
+      aria-disabled={disabled}
       accessibilityLabel={accessibilityLabel}
       testID={testID}
-      hitSlop={10}
+      hitSlop={8}
       style={disabled ? styles.disabled : null}
     >
       <Animated.View
         style={[
           styles.track,
           {
-            backgroundColor: value ? colors.action : colors.cell,
-            borderColor: value ? colors.action : colors.quiet,
-            transitionProperty: ['backgroundColor', 'borderColor'],
+            backgroundColor: value ? colors.okFill : colors.surface,
+            transitionProperty: 'backgroundColor',
             transitionDuration: motion.base,
             transitionTimingFunction: easeOut,
           },
@@ -50,9 +50,8 @@ export function Switch({ value, onValueChange, accessibilityLabel, disabled, tes
           style={[
             styles.knob,
             {
-              backgroundColor: value ? colors.onBar : colors.quiet,
-              transform: [{ translateX: value ? W - 2 - 6 - KNOB : 0 }],
-              transitionProperty: ['transform', 'backgroundColor'],
+              transform: [{ translateX: value ? W - 4 - KNOB : 0 }],
+              transitionProperty: 'transform',
               transitionDuration: motion.slow,
               transitionTimingFunction: easeOut,
             },
@@ -64,7 +63,7 @@ export function Switch({ value, onValueChange, accessibilityLabel, disabled, tes
 }
 
 const styles = StyleSheet.create({
-  track: { width: W, height: H, borderWidth: 1, justifyContent: 'center', paddingHorizontal: 3 },
-  knob: { width: KNOB, height: KNOB },
+  track: { width: W, height: H, borderRadius: H / 2, justifyContent: 'center', padding: 2 },
+  knob: { width: KNOB, height: KNOB, borderRadius: KNOB / 2, backgroundColor: colors.white, boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16)' },
   disabled: { opacity: 0.4 },
 });

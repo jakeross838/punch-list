@@ -1,4 +1,5 @@
-// The search field: a white square box with a slate border, the magnifying glass and a clear button.
+// The iPhone's search field: a rounded light gray bar with the magnifying glass, and the round
+// clear button once there is something in it.
 
 import { StyleSheet, TextInput, View } from 'react-native';
 import { colors, fieldFont } from '@/constants/theme';
@@ -24,12 +25,12 @@ export function SearchField({
 }) {
   return (
     <View style={styles.field}>
-      <Icon name="magnifyingglass" size={17} color={colors.secondary} />
+      <Icon name="magnifyingglass" size={16} color={colors.placeholder} weight="medium" />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.secondary}
+        placeholderTextColor={colors.placeholder}
         selectionColor={colors.tint}
         autoCorrect={false}
         autoCapitalize="none"
@@ -45,7 +46,7 @@ export function SearchField({
       />
       {value !== '' ? (
         <Touchable feedback="opacity" onPress={() => onChangeText('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear search" testID="search-clear">
-          <Icon name="xmark" size={15} color={colors.secondary} weight="medium" />
+          <Icon name="xmark.circle.fill" size={17} color={colors.circle} />
         </Touchable>
       ) : null}
     </View>
@@ -54,14 +55,13 @@ export function SearchField({
 
 const styles = StyleSheet.create({
   field: {
-    height: 42,
-    backgroundColor: colors.cell,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.chip,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
+    gap: 6,
+    paddingHorizontal: 8,
   },
-  input: { ...fieldFont('callout'), flex: 1, height: 40, paddingVertical: 0, color: colors.label, outlineWidth: 0 },
+  input: { ...fieldFont('body'), flex: 1, height: 36, paddingVertical: 0, color: colors.label, outlineWidth: 0 },
 });

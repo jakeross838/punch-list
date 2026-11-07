@@ -6,7 +6,7 @@ export type LocationKind = 'room' | 'shared';
 export type ItemKind = 'deficiency' | 'completion' | 'added_scope';
 export type ItemStatus = 'open' | 'complete' | 'removed';
 /** How an item came onto the list: a photo on a walk, typed in, imported, pasted, or from a template. */
-export type ItemSource = 'walk' | 'typed' | 'import' | 'copy' | 'template';
+export type ItemSource = 'walk' | 'typed' | 'import' | 'copy' | 'template' | 'said';
 
 /** admin: adds people, makes and closes jobs, changes the setup. team: walks jobs, adds items, checks them off. */
 export type Role = 'admin' | 'team';

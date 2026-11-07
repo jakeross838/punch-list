@@ -156,7 +156,7 @@ function boardHtml(b: StationBoard): string {
       </button>`,
     )
     .join('');
-  return `<div class="bar"><span class="brand">${esc(b.builder.toUpperCase())}</span><span class="sub">JOB STATION</span></div>
+  return `<div class="bar"><span class="brand">${esc(b.builder)}</span><span class="sub">Job Station</span></div>
   <main class="wrap station">
     <header class="head">
       <div class="eyebrow">Job Station</div>
@@ -202,7 +202,7 @@ function open(companyId: string): void {
     root: app,
     call: callCompany(companyId),
     nameKey: `punch-station-name-${companyId}`,
-    bar: () => `<div class="bar"><button class="back" data-back aria-label="Back to every company">‹ All Companies</button><span class="sub">${esc(builder.toUpperCase())} · JOB STATION</span></div>`,
+    bar: () => `<div class="bar"><button class="back" data-back aria-label="Back to every company">‹ All Companies</button><span class="sub">${esc(builder)} · Job Station</span></div>`,
     footer: (p) =>
       SAMPLE
         ? 'This is a sample: nothing here is real, and nothing you do on it is sent anywhere.'
@@ -283,7 +283,7 @@ function renderTv(): void {
   const ready = work.reduce((n, w) => n + w.ready.length, 0);
   const now = new Date();
   app.innerHTML = `<div class="tv-top">
-      <div><div class="tv-brand">${esc(board.builder.toUpperCase())} · JOB STATION</div><div class="tv-job">${esc(board.job.name)}</div></div>
+      <div><div class="tv-brand">${esc(board.builder)} · Job Station</div><div class="tv-job">${esc(board.job.name)}</div></div>
       <div class="tv-when"><div>${esc(todayText(now))}</div><div class="tv-clock">${esc(clockText(now))}</div></div>
     </div>
     ${

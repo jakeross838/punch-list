@@ -1,9 +1,10 @@
-// Square buttons, Site Office style. On the slate bar they are outlined in sand; on sand and white
-// they are outlined in slate. The main one is filled: slate deep with sand words on light
-// backgrounds, sand with slate words on the bar. Words are JetBrains Mono in capitals.
+// Buttons the way the iPhone draws them. In a bar or a sheet's head they are blue words or a blue
+// icon with no box, and the main one (Done, Save) is in bold. Along the bottom of a screen they are
+// large and rounded: the main one filled blue with white words, the others light gray with blue
+// words.
 
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import { colors } from '@/constants/theme';
+import { colors, layout } from '@/constants/theme';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { Text } from './Text';
@@ -16,14 +17,14 @@ export interface BarButtonProps {
   iconOnly?: boolean;
   /** Shown in place of the label. */
   text?: string;
-  /** plain: outlined. tinted: outlined with gulf blue words. prominent: filled. */
+  /** plain: blue words. tinted: the same. prominent: bold in a bar, filled along the bottom. */
   variant?: 'plain' | 'tinted' | 'prominent';
   onPress: () => void;
   disabled?: boolean;
   testID?: string;
-  /** regular: 36 high, for bars and sheet heads. large: 48 high, for the buttons along the bottom. */
+  /** regular: words or an icon, for bars and sheet heads. large: a rounded button along the bottom. */
   size?: 'regular' | 'large';
-  /** dark: on the slate bar. light: on sand or white. */
+  /** dark: on something dark (the camera). light: everywhere else. */
   tone?: 'dark' | 'light';
   style?: StyleProp<ViewStyle>;
   /** A small count in the corner, like how many filters are on. */
@@ -44,37 +45,37 @@ export function BarButtonView({
   style,
   badge,
 }: BarButtonProps) {
-  const filled = variant === 'prominent';
+  const prominent = variant === 'prominent';
+  const large = size === 'large';
   const dark = tone === 'dark';
-  const fg = filled ? (dark ? colors.bar : colors.onBar) : dark ? colors.onBar : variant === 'tinted' ? colors.tint : colors.label;
-  const bg = filled ? (dark ? colors.onBar : colors.action) : 'transparent';
-  const edge = filled ? bg : dark ? colors.onBarEdge : colors.borderStrong;
-  const h = size === 'large' ? 48 : 36;
+  const fg = large ? (prominent ? colors.white : colors.tint) : dark ? colors.onDark : colors.tint;
+  const bg = large ? (prominent ? colors.action : colors.chip) : 'transparent';
   const shown = iconOnly ? null : (text ?? label);
   return (
     <Touchable
       feedback="opacity"
       onPress={onPress}
       disabled={disabled}
-      hitSlop={size === 'large' ? 0 : 4}
+      hitSlop={large ? 0 : 8}
       accessibilityRole="button"
       accessibilityLabel={badge ? `${label}, ${badge} on` : label}
       testID={testID}
       style={[
         styles.button,
-        { height: h, minWidth: h, backgroundColor: bg, borderColor: edge },
-        shown ? { paddingHorizontal: size === 'large' ? 16 : 12 } : { width: h },
+        large ? styles.large : styles.regular,
+        { backgroundColor: bg, opacity: disabled ? 0.4 : 1 },
+        !shown && !large ? styles.iconOnly : null,
         style,
       ]}
     >
-      {icon ? <Icon name={icon} size={size === 'large' ? 17 : 18} color={fg} weight={shown ? 'medium' : 'regular'} /> : null}
+      {icon ? <Icon name={icon} size={large ? 18 : 22} color={fg} weight={shown ? 'medium' : 'regular'} /> : null}
       {shown ? (
-        <Text variant="button" color={fg} numberOfLines={1}>
+        <Text variant="button" weight={prominent ? '600' : '400'} color={fg} numberOfLines={1}>
           {shown}
         </Text>
       ) : null}
       {badge ? (
-        <Text variant="stamp" weight="600" color={dark ? colors.bar : colors.onBar} style={[styles.badge, { backgroundColor: dark ? colors.onBar : colors.action }]}>
+        <Text variant="stamp" color={colors.white} style={styles.badge}>
           {badge}
         </Text>
       ) : null}
@@ -83,17 +84,21 @@ export function BarButtonView({
 }
 
 const styles = StyleSheet.create({
-  button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1 },
+  button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  regular: { height: 36, minWidth: 36, paddingHorizontal: 4 },
+  iconOnly: { width: 36, paddingHorizontal: 0 },
+  large: { height: 50, minWidth: 50, paddingHorizontal: 16, borderRadius: layout.buttonRadius },
   badge: {
     position: 'absolute',
-    top: -7,
-    right: -7,
+    top: -2,
+    right: -4,
     minWidth: 17,
     height: 17,
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
     lineHeight: 17,
+    borderRadius: 8.5,
     textAlign: 'center',
-    letterSpacing: 0.2,
     overflow: 'hidden',
+    backgroundColor: colors.destructive,
   },
 });

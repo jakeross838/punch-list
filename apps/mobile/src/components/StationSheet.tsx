@@ -144,11 +144,11 @@ export function StationSheet({ jobId, visible, onClose }: { jobId: string; visib
               <ListRow title="Copy the Link" icon="link" onPress={() => copy(tablet, 'Link')} testID="station-copy" />
               <ListRow title="Open the Station" icon="share" accessory="chevron" onPress={() => open(tablet)} testID="station-open" />
             </ListSection>
-            <ListSection header="TV" footer="The board in large type for the TV's web browser: what each company has ready and what to do next. It keeps itself up to date, and no one needs to touch it.">
+            <ListSection header="TV" footer="Open it in the TV's web browser. It keeps itself up to date.">
               <ListRow title="Copy the TV Link" icon="link" onPress={() => copy(tv, 'TV link')} testID="station-copy-tv" />
               <ListRow title="Open the TV Board" icon="share" accessory="chevron" onPress={() => open(tv)} testID="station-open-tv" />
             </ListSection>
-            <ListSection footer="Anyone with the link sees every company's list on this job and can answer for any of them, so keep it to the house.">
+            <ListSection footer="Anyone with the link sees and answers every company's list, so keep it to the house.">
               <ListRow title="Make a New Link" icon="undo" onPress={newLink} disabled={busy} testID="station-new" />
               <ListRow title="Turn Off the Station" tone="destructive" icon="xmark" onPress={turnOff} disabled={busy} testID="station-off" />
             </ListSection>
@@ -165,5 +165,5 @@ const styles = StyleSheet.create({
   waiting: { paddingVertical: 40, alignItems: 'center' },
   start: { marginHorizontal: layout.margin, marginTop: 12 },
   code: { alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 4, paddingHorizontal: layout.inset },
-  codeBox: { padding: 10, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border },
+  codeBox: { padding: 12, borderRadius: layout.radius, backgroundColor: colors.cell },
 });

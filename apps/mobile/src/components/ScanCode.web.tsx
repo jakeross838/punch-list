@@ -10,7 +10,7 @@ export const ScanCode = memo(function ScanCode({ url, size, label }: { url: stri
   return (
     <svg width={size} height={size} viewBox={`${-edge} ${-edge} ${n + edge * 2} ${n + edge * 2}`} role="img" aria-label={label} shapeRendering="crispEdges" style={{ display: 'block' }}>
       <rect x={-edge} y={-edge} width={n + edge * 2} height={n + edge * 2} fill="#FFFFFF" />
-      <path d={d} fill="#132028" />
+      <path d={d} fill="#000000" />
     </svg>
   );
 });

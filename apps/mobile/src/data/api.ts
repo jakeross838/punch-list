@@ -4,6 +4,7 @@
 // every write goes through the core rules.
 
 import { createContext, useContext } from 'react';
+import type { SamplePhotoFiles } from './sampleJob';
 import type {
   Activity,
   Comment,
@@ -168,6 +169,8 @@ export interface DataApi {
   useTemplateItems(): TemplateItem[];
   useLocations(jobId: string): Location[];
   useItems(jobId: string): Item[];
+  /** Every item on every job you see: for wording typed again and again. */
+  useAllItems(): Item[];
   /** The job's photos that are not removed, each item's in order. */
   usePhotos(jobId: string): Photo[];
   useTrades(): Trade[];
@@ -198,6 +201,11 @@ export interface DataApi {
   useComments(jobId: string): Comment[];
   /** Admins only. The Project Manager, when given, goes on the team. */
   createJob(input: { name: string; address: string; projectManagerId?: string | null }): Promise<string>;
+  /**
+   * Admins only. Adds the Sample Job, a whole job to try everything on, with the app's drawn photos
+   * and plan. Answers its id.
+   */
+  addSampleJob(photos: SamplePhotoFiles): Promise<string>;
   /** Admins only. Closed puts the job away; opening it again brings it back. */
   updateJob(id: string, patch: Partial<Pick<Job, 'name' | 'address' | 'closed'>>): Promise<void>;
   /**
@@ -256,6 +264,12 @@ export interface DataApi {
   addItems(items: PlannedItem[]): Promise<string[]>;
   /** Several items at once, as one change: clearing a holdup, moving a Ready By. */
   updateItems(changes: { id: string; patch: ItemPatch }[]): Promise<void>;
+  /**
+   * Two items that are the same work become one: the one kept takes the other's photos (after its
+   * own) and comments, what waited on the other waits on it, and the other is removed. Both on one
+   * job. On the phone it needs a signal. Answers how many photos and comments came along.
+   */
+  mergeItems(keepId: string, mergeId: string): Promise<{ photos: number; comments: number }>;
   /** Keeps the pictures with the item, after the ones it has. */
   addPhotos(photos: NewPhoto[]): Promise<void>;
   updatePhoto(id: string, patch: PhotoPatch): Promise<void>;

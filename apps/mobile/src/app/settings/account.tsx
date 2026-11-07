@@ -15,6 +15,10 @@ import { APP_NAME } from '@/constants/app';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { SheetScroll, haptic, ListRow, ListSection, ListTextField, Page, Sheet, Text, useFeedback } from '@/ui';
+import { useClaudeAllowance } from '@/ai/claude';
+
+/** Cents as dollars and cents, like $1.84. */
+const dollars = (cents: number) => `$${(Math.round(cents) / 100).toFixed(2)}`;
 
 export default function AccountScreen() {
   const data = useData();
@@ -26,6 +30,7 @@ export default function AccountScreen() {
   const people = data.usePeople();
   const org = data.useOrg();
   const [renaming, setRenaming] = useState<string | null>(null);
+  const allowance = useClaudeAllowance();
   // Signing out: the screen goes as the sign in comes up.
   if (!me) return <Page title="Me" tab={{}} />;
   const admin = isAdmin(me);
@@ -105,10 +110,10 @@ export default function AccountScreen() {
     });
 
   return (
-    <Page title={me.name} eyebrow={`${ROLE_LABELS[me.role]} · ${company}`} subtitle={me.email} crumb={['Home', 'Me']} back={false} tab={{}}>
+    <Page title={me.name} eyebrow={`${ROLE_LABELS[me.role]} · ${company}`} back={false} tab={{}}>
       <ListSection
         header={company}
-        footer={admin ? 'The name on every list, who works here, the companies you work with, what always needs doing in a house, and what the item form asks.' : 'An admin changes these.'}
+        footer={admin ? undefined : 'An admin changes these.'}
       >
         {admin ? (
           <ListRow title="Company Name" icon="building" value={org.name} accessory="chevron" onPress={() => setRenaming(org.name)} testID="company-name" />
@@ -118,6 +123,11 @@ export default function AccountScreen() {
         <ListRow title="Templates" icon="templates" accessory="chevron" onPress={() => router.push('/settings/templates')} testID="templates" />
         <ListRow title="Item Form" icon="list.bullet" accessory="chevron" onPress={() => router.push('/settings/item-form')} testID="item-form" />
       </ListSection>
+      {admin && allowance ? (
+        <ListSection header="Claude" footer="Claude's cost for your company this month. It starts over on the first.">
+          <ListRow title="This Month" value={`${dollars(allowance.usedCents)} of ${dollars(allowance.limitCents)}`} testID="claude-allowance" />
+        </ListSection>
+      ) : null}
       <ListSection header="You" footer={admin ? 'Change any of it in People.' : 'An admin changes these in People.'}>
         <ListRow title="Email" value={me.email} testID="account-email" />
         <ListRow title="Phone" value={me.phone ?? 'None'} />

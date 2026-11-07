@@ -62,7 +62,7 @@ function CompanyDetail({ companyId }: { companyId: string }) {
   const detail = (c: Contact) => [[c.email, c.phone].filter(Boolean).join(' · '), c.getsLists ? '' : 'Does not get the lists'].filter(Boolean).join('\n');
 
   return (
-    <Page title={company.name} eyebrow="Company" crumb={['Me', 'Companies', company.name]} backLabel="Companies" tab={{}}>
+    <Page title={company.name} backLabel="Companies" tab={{}}>
       <ListSection header="Company" footer={admin ? 'A new name changes it on every job.' : undefined}>
         <ListLabeledField
           label="Name"

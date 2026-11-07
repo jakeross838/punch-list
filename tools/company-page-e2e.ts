@@ -146,7 +146,7 @@ async function main(): Promise<void> {
     `the work is numbered in the order to do it, Priority first, then what holds up the most (${order.join('|')})`,
   );
   check((await page.getByText('Holds up 3 items').count()) === 1, 'an item says what it holds up');
-  check((await page.getByText('Start at number 1: the first ones hold up the most other work.').count()) === 1, 'Ready Now says to start at number 1');
+  check((await page.getByText('Start at number 1: it holds up the most other work.').count()) === 1, 'Ready Now says to start at number 1');
   check((await page.getByText('On Install tile floor (Volcano Stone, Guest Bath 210) and Owner · Ready by Friday, November 20').count()) === 1, 'a waiting item says what it waits on and when it should be ready');
   check((await page.locator('.section h2').allTextContents()).join('|') === 'Ready Now|Waiting|To Be Quoted|The Whole List|Checked Off Lately', 'the sections are in order');
   await shot('01-opened');

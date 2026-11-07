@@ -140,7 +140,6 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
   return (
     <Page
       title="New Item"
-      eyebrow={[roomLabel, typed ? 'Typed in' : shots.length > 0 ? `${shots.length === 1 ? 'A photo' : `${shots.length} photos`}` : null].filter(Boolean).join(' · ') || undefined}
       sheet
       right={[{ kind: 'button', label: 'Cancel', icon: 'xmark', iconOnly: true, onPress: cancel, testID: 'cancel' }]}
       bottom={[
@@ -167,6 +166,7 @@ function NewItem({ jobId, typed, saved, onNext }: { jobId: string; typed: boolea
         onAddPhoto={() => toCamera()}
         autoFocusTitle={Platform.OS === 'ios' && !initial.title}
         onTwin={shots.length > 0 ? { label: shots.length === 1 ? 'Add the photo to it instead.' : 'Add the photos to it instead.', onPress: (twin) => void addToItem(twin) } : undefined}
+        askClaude
         fillIn={filler.can && shots[0] ? { busy: filler.busy, onPress: () => void filler.fillIn(shots[0]!, value, (patch) => set(patch)) } : undefined}
       />
     </Page>

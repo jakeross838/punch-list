@@ -39,23 +39,23 @@ export function SpreadsheetSheet({
       testID="spreadsheet-sheet"
     >
       <ScrollView contentContainerStyle={styles.page}>
-        <Text variant="stamp" color={colors.secondary} style={styles.file}>
+        <Text variant="footnote" weight="600" color={colors.secondary} style={styles.file}>
           {fileName}
         </Text>
         <Text variant="subheadline" color={colors.secondary} style={styles.about}>
-          {`${rows.length} ${rows.length === 1 ? 'item' : 'items'}, one to a row, for Excel, Numbers or Google Sheets.${rows.length > SHOWN ? ` The first ${SHOWN} show here; the file has them all.` : ''}`}
+          {`${rows.length} ${rows.length === 1 ? 'item' : 'items'}, one to a row.${rows.length > SHOWN ? ` The first ${SHOWN} show here; the file has them all.` : ''}`}
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator scrollsToTop={false} style={styles.table} testID="spreadsheet-table">
           <View>
             <View style={[styles.row, styles.head]}>
               {SHEET_COLUMNS.map((c) => (
-                <Text key={c} variant="stamp" weight="600" color={colors.label} numberOfLines={1} style={[styles.cell, { width: width(c) }]}>
+                <Text key={c} variant="footnote" weight="600" color={colors.label} numberOfLines={1} style={[styles.cell, { width: width(c) }]}>
                   {c}
                 </Text>
               ))}
             </View>
             {shown.map((r, i) => (
-              <View key={i} style={[styles.row, i % 2 === 1 ? styles.stripe : null]}>
+              <View key={i} style={styles.row}>
                 {SHEET_COLUMNS.map((c, j) => (
                   <Text key={c} variant="footnote" color={colors.label} numberOfLines={2} style={[styles.cell, { width: width(c) }]}>
                     {r[j] ?? ''}
@@ -73,11 +73,10 @@ export function SpreadsheetSheet({
 
 const styles = StyleSheet.create({
   page: { paddingBottom: 40 },
-  file: { marginHorizontal: layout.margin, marginTop: 16, letterSpacing: 1 },
-  about: { marginHorizontal: layout.margin, marginTop: 6, marginBottom: 12 },
-  table: { marginHorizontal: layout.margin, marginBottom: 14, borderWidth: layout.hairline, borderColor: colors.border, backgroundColor: colors.cell },
+  file: { marginHorizontal: layout.margin + 4, marginTop: 16 },
+  about: { marginHorizontal: layout.margin + 4, marginTop: 4, marginBottom: 12 },
+  table: { marginHorizontal: layout.margin, marginBottom: 14, borderRadius: layout.radius, backgroundColor: colors.cell },
   row: { flexDirection: 'row', borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
-  head: { backgroundColor: colors.stripe },
-  stripe: { backgroundColor: '#F7F9F9' },
+  head: { backgroundColor: colors.background },
   cell: { paddingHorizontal: 10, paddingVertical: 8 },
 });

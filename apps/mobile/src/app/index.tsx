@@ -1,17 +1,18 @@
-// Jobs: the first screen. My Items at the top when anything is assigned to you, then the jobs:
-// yours, all of them, or the closed ones, each with how much is open, how much is ready and how much
-// waits. Admins make jobs with the plus in the bar, and swipe a job to close or delete it, or hold
-// it down to change its name and address too. People, Companies, Templates, Item Form and your
-// account are under Me, the round button in the bar.
+// Jobs: the first screen, laid out like Mail. Mine, All and Closed at the top when there is more
+// than one to pick, My Items when anything is assigned to you, then the jobs, each with how much is
+// open, how much is ready and how much waits. Admins make jobs with the plus in the bar, and swipe a
+// job to close or delete it, or hold it down to change its name and address too. People, Companies,
+// Templates, Item Form and your account are under Me, the round button in the bar.
 
-import { assignedTo, isAdmin, type Job } from '@punch/core';
+import { assignedTo, isAdmin, SAMPLE_JOB, type Job } from '@punch/core';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { useJobActions } from '@/components/JobActions';
-import { Button, ChipRow, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, SectionLabel, Stamp, SwipeRow, Text, type BarItem, type SwipeAction } from '@/ui';
+import { useSampleJob } from '@/components/useSampleJob';
+import { Button, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, Segmented, SwipeRow, Text, type BarItem, type SwipeAction } from '@/ui';
 
 const newJob = () => router.push('/jobs/new');
 
@@ -23,6 +24,7 @@ export default function JobsScreen() {
   const me = data.useMe();
   const team = data.useTeams();
   const admin = isAdmin(me);
+  const sample = useSampleJob();
   const [query, setQuery] = useState('');
   const mineIds = useMemo(() => new Set(team.filter((t) => t.personId === me?.id).map((t) => t.jobId)), [team, me?.id]);
   const open = jobs.filter((j) => !j.closed);
@@ -35,57 +37,44 @@ export default function JobsScreen() {
   const shown = show === 'closed' ? closed : show === 'mine' ? open.filter((j) => mineIds.has(j.id)) : open;
   const q = query.trim().toLowerCase();
   const found = q ? shown.filter((j) => `${j.name} ${j.address}`.toLowerCase().includes(q)) : shown;
+  const choices: (readonly [Show, string])[] = [...(hasMine ? [['mine', 'Mine'] as const] : []), ['all', 'All'], ...(closed.length > 0 ? [['closed', 'Closed'] as const] : [])];
+  // Add the Sample Job, until there is one to try things on.
+  const hasSample = jobs.some((j) => j.address === SAMPLE_JOB.address);
 
   const right: BarItem[] = admin ? [{ kind: 'button', label: 'New Job', icon: 'plus', iconOnly: true, onPress: newJob, testID: 'new-job' }] : [];
-  const eyebrow = [`${open.length} active`, closed.length > 0 ? `${closed.length} closed` : null].filter(Boolean).join(' · ');
 
   return (
     <Page
       title="Jobs"
-      eyebrow={eyebrow}
-      crumb={['Home', 'Jobs']}
       back={false}
       right={right}
       account
       search={{ value: query, onChange: setQuery, placeholder: 'Search jobs' }}
       tab={{ active: 'jobs' }}
     >
-      <ChipRow
-        chips={[
-          ...(hasMine ? [{ key: 'mine', label: 'Mine', on: show === 'mine', onPress: () => setShow('mine'), testID: 'show-mine' }] : []),
-          { key: 'all', label: 'All', on: show === 'all', onPress: () => setShow('all'), testID: 'show-all' },
-          ...(closed.length > 0 ? [{ key: 'closed', label: 'Closed', on: show === 'closed', onPress: () => setShow('closed'), testID: 'show-closed' }] : []),
-        ]}
-      />
+      {choices.length > 1 ? <Segmented<Show> options={choices} value={show} onChange={setShow} style={styles.show} testID="show" /> : null}
       {me && show !== 'closed' ? <MyItemsRow personId={me.id} /> : null}
       {open.length === 0 && show !== 'closed' ? (
-        <EmptyState icon="house.fill" title="No Jobs Yet" message={admin ? 'Set up the first job to start its list.' : 'Jobs show here once you are on one.'}>
+        <EmptyState icon="house.fill" title="No Jobs Yet" message={admin ? 'Set up a job, or try everything on the Sample Job first.' : 'Your jobs show here once you are on one.'}>
           {admin ? (
             <View style={styles.emptyAction}>
               <Button label="Set Up a New Job" icon="plus" onPress={newJob} testID="empty-new-job" />
+              <Button label={sample.adding ? 'Adding the Sample Job' : 'Add the Sample Job'} variant="tinted" onPress={sample.ask} disabled={sample.adding} testID="empty-sample-job" />
             </View>
           ) : null}
         </EmptyState>
+      ) : found.length === 0 ? (
+        <Text variant="subheadline" color={colors.secondary} align="center" style={styles.none}>
+          {q ? `No job matches “${query.trim()}”.` : 'No jobs here.'}
+        </Text>
       ) : (
-        <>
-          <SectionLabel
-            label={q ? `${found.length} ${found.length === 1 ? 'result' : 'results'}` : show === 'closed' ? 'Closed jobs' : show === 'mine' ? 'Your jobs' : 'Every job'}
-            right={q ? undefined : `${found.length}`}
-          />
-          {found.length === 0 ? (
-            <Text variant="subheadline" color={colors.secondary} style={styles.none}>
-              {q ? `No job matches “${query.trim()}”.` : 'No jobs here.'}
-            </Text>
-          ) : (
-            <Panel>
-              <JobRows jobs={found} />
-            </Panel>
-          )}
-        </>
+        <Panel style={styles.jobs}>
+          <JobRows jobs={found} />
+        </Panel>
       )}
-      {admin && open.length > 0 && show !== 'closed' ? (
-        <View style={styles.newJob}>
-          <Button label="Set Up a New Job" icon="plus" variant="tinted" onPress={newJob} testID="set-up-job" />
+      {admin && open.length > 0 && show !== 'closed' && !hasSample && !q ? (
+        <View style={styles.sample}>
+          <Button label={sample.adding ? 'Adding the Sample Job' : 'Add the Sample Job'} variant="plain" onPress={sample.ask} disabled={sample.adding} testID="add-sample-job" />
         </View>
       ) : null}
       {data.mode === 'preview' ? (
@@ -104,27 +93,24 @@ function MyItemsRow({ personId }: { personId: string }) {
   const ready = mine.filter((i) => i.ready).length;
   const jobs = new Set(mine.map((i) => i.jobId)).size;
   return (
-    <>
-      <SectionLabel label="Assigned to you" right={`${mine.length} open`} />
-      <Panel>
-        <LedgerRow
-          last
-          lead={<IconTile name="person" />}
-          onPress={() => router.push('/my')}
-          accessibilityLabel={`My Items, ${mine.length} open, ${ready} ready`}
-          testID="my-items"
-        >
-          <Text weight="500">My Items</Text>
-          <MetaLine
-            facts={[
-              { text: `${mine.length} open`, color: colors.label },
-              ready > 0 ? { text: `${ready} ready`, color: colors.ok } : null,
-              jobs > 1 ? `Across ${jobs} jobs` : null,
-            ]}
-          />
-        </LedgerRow>
-      </Panel>
-    </>
+    <Panel style={styles.mine}>
+      <LedgerRow
+        last
+        lead={<IconTile name="person" />}
+        onPress={() => router.push('/my')}
+        accessibilityLabel={`My Items, ${mine.length} open, ${ready} ready`}
+        testID="my-items"
+      >
+        <Text weight="600">My Items</Text>
+        <MetaLine
+          facts={[
+            `${mine.length} open`,
+            ready > 0 ? { text: `${ready} ready`, color: colors.ok } : null,
+            jobs > 1 ? `${jobs} jobs` : null,
+          ]}
+        />
+      </LedgerRow>
+    </Panel>
   );
 }
 
@@ -133,14 +119,14 @@ function JobRows({ jobs }: { jobs: Job[] }) {
   return (
     <>
       {jobs.map((job, i) => (
-        <JobRow key={job.id} job={job} last={i === jobs.length - 1} stripe={i % 2 === 1} actions={actions} />
+        <JobRow key={job.id} job={job} last={i === jobs.length - 1} actions={actions} />
       ))}
       {actions.sheet}
     </>
   );
 }
 
-function JobRow({ job, last, stripe, actions }: { job: Job; last: boolean; stripe: boolean; actions: ReturnType<typeof useJobActions> }) {
+function JobRow({ job, last, actions }: { job: Job; last: boolean; actions: ReturnType<typeof useJobActions> }) {
   const data = useData();
   const items = data.useItems(job.id);
   const photos = data.usePhotos(job.id);
@@ -162,55 +148,41 @@ function JobRow({ job, last, stripe, actions }: { job: Job; last: boolean; strip
     : [];
   return (
     <SwipeRow actions={swipes}>
-    <LedgerRow
-      last={last}
-      stripe={stripe}
-      onPress={() => router.push({ pathname: '/jobs/[jobId]', params: { jobId: job.id } })}
-      onLongPress={actions.admin ? () => actions.menu(job, counts) : undefined}
-      accessibilityLabel={said}
-      testID={`job-${job.id}`}
-      style={styles.jobRow}
-    >
-      <View style={styles.jobName}>
-        <Stamp color={job.closed ? colors.quiet : started ? colors.okFill : colors.quiet} size={7} />
-        <Text weight="500" numberOfLines={1} style={styles.jobTitle}>
+      <LedgerRow
+        last={last}
+        onPress={() => router.push({ pathname: '/jobs/[jobId]', params: { jobId: job.id } })}
+        onLongPress={actions.admin ? () => actions.menu(job, counts) : undefined}
+        accessibilityLabel={said}
+        testID={`job-${job.id}`}
+      >
+        <Text variant="headline" numberOfLines={1}>
           {job.name}
         </Text>
-      </View>
-      <View style={styles.jobBody}>
         {job.address ? (
           <Text variant="subheadline" color={colors.secondary} numberOfLines={1}>
             {job.address}
           </Text>
         ) : null}
         <MetaLine
-          style={styles.jobMeta}
           facts={
             job.closed
-              ? ['Closed', `${items.filter((i) => i.status === 'complete').length} complete`]
+              ? [`${items.filter((i) => i.status === 'complete').length} complete`]
               : started
-                ? [
-                    { text: `${open.length} open`, color: colors.label },
-                    { text: `${ready} ready`, color: colors.ok },
-                    waiting > 0 ? { text: `${waiting} waiting`, color: colors.secondary } : null,
-                  ]
-                : [{ text: 'Nothing on the list yet', color: colors.tint }]
+                ? [`${open.length} open`, ready > 0 ? { text: `${ready} ready`, color: colors.ok } : null, waiting > 0 ? `${waiting} waiting` : null]
+                : ['Nothing on the list yet']
           }
         />
-      </View>
-    </LedgerRow>
+      </LedgerRow>
     </SwipeRow>
   );
 }
 
 const styles = StyleSheet.create({
-  emptyAction: { marginTop: 14, alignSelf: 'stretch' },
-  none: { marginHorizontal: layout.inset, marginTop: 12 },
-  newJob: { marginHorizontal: layout.margin, marginTop: 16 },
+  show: { marginHorizontal: layout.margin, marginBottom: 16 },
+  mine: { marginBottom: 16 },
+  jobs: { marginBottom: 8 },
+  emptyAction: { marginTop: 14, gap: 10, alignSelf: 'stretch' },
+  none: { marginHorizontal: layout.inset, marginTop: 24 },
+  sample: { marginHorizontal: layout.margin, marginTop: 8 },
   preview: { marginTop: 28, marginHorizontal: 32 },
-  jobRow: { paddingVertical: 13 },
-  jobName: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  jobTitle: { flex: 1, fontSize: 16, lineHeight: 21 },
-  jobBody: { paddingLeft: 15, gap: 3 },
-  jobMeta: { marginTop: 3 },
 });

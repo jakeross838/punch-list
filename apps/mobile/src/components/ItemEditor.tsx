@@ -5,15 +5,15 @@
 // Details, with a line saying what is in it: priority, how long it takes, the type (Deficiency,
 // Incomplete or Additional, with its order only for additional work) and the added fields. The trade is not asked
 // for: it follows the company's trade on the job. On an item that already exists, every change saves
-// as it is made. Fill In From Photo asks Claude for what is still blank; the same title already in
-// the location is pointed out.
+// as it is made. Fill In From Photo asks Claude for what is still blank. The same work already in
+// the location is pointed out (the same title at once; the same thing said another way once Claude
+// says so), and so is the standard title for what was typed, and a title too vague to send.
 
 import {
   assigneeFields,
   assigneeKey,
   companyForTrade,
   defaultWaitingOnExtras,
-  duplicatesOf,
   formShows,
   hoursText,
   isAssigned,
@@ -31,6 +31,7 @@ import {
   tidyTitle,
   TITLE_MAX,
   tradeForTitle,
+  vagueTitle,
   writeOrder,
   type FormField,
   type Item,
@@ -47,6 +48,8 @@ import { afterSheets, haptic, Icon, ListLabeledField, ListRow, ListSection, List
 import { HoursField } from './HoursField';
 import { ExtraFields, useFormOptions, type ItemDraft } from './ItemForm';
 import { ReadyRow } from './ReadyRow';
+import { useSameWork } from './useSameWork';
+import { useStandardTitle } from './useStandardTitle';
 
 export interface EditorPhoto {
   key: string;
@@ -74,6 +77,8 @@ export function ItemEditor({
   itemId,
   fillIn,
   onTwin,
+  askClaude = false,
+  photoUri,
   hoursNote,
   children,
 }: {
@@ -92,8 +97,12 @@ export function ItemEditor({
   itemId?: string;
   /** Fill In From Photo, when Claude can look at the photo. */
   fillIn?: { busy: boolean; onPress: () => void };
-  /** What to offer when the same title is already in the location: putting the photo on it instead. */
+  /** What to offer when the same work is already in the location: putting the photo on it instead. */
   onTwin?: { label: string; onPress: (twin: Item) => void };
+  /** Ask Claude whether a close match is the same work, and for the standard title: a new item or a draft. */
+  askClaude?: boolean;
+  /** The item's first photo, for Claude to compare with the close matches' photos. */
+  photoUri?: string | null;
   /** Under How Long It Takes: who gave the time, when the company did. */
   hoursNote?: string;
   children?: ReactNode;
@@ -171,10 +180,18 @@ export function ItemEditor({
   const whereProblem = problem('locationId') ?? problem('companyId');
   const titleProblem = problem('title');
   const first = photos?.[0];
-  // The same thing in this location already: one on the lists first, then a draft.
-  const twins = !titleFocused && value.title.trim() ? duplicatesOf(value.title, value.locationId, items, itemId) : [];
-  const twin = twins.find((t) => !t.unfinished) ?? twins[0];
+  // The same work in this location already: one on the lists first, then a draft.
+  const same = useSameWork({ jobId, itemId, title: value.title, description: value.description, locationId: value.locationId, typing: titleFocused, ask: askClaude, photoUri: photoUri ?? first?.uri ?? null });
+  const twin = same?.twin;
+  // The standard title for what was typed, and a title too vague to send a company.
+  const standard = useStandardTitle(value.title, titleFocused, askClaude);
+  const vague = !titleFocused && vagueTitle(value.title);
   const blanks = !value.title.trim() || !isAssigned(value);
+
+  function takeStandard(title: string) {
+    haptic.selection();
+    set({ title, ...(!isAssigned(value) ? fillFrom(tradeForTitle(title, titles)) : {}) });
+  }
 
   // Details: what is in it, in a line, and open on its own when something in it needs fixing.
   const detailProblem = problem('poOrCo');
@@ -195,10 +212,10 @@ export function ItemEditor({
           <View style={styles.photoColumn}>
             {first ? (
               <Touchable feedback="scale" onPress={() => onPhotoPress?.(first.key)} accessibilityRole="button" accessibilityLabel="Change the markup" testID="photo-edit">
-                <PhotoView photo={first} width={72} height={72} />
+                <PhotoView photo={first} width={72} height={72} radius={8} />
                 {photos.length > 1 ? (
                   <View style={styles.badge}>
-                    <Text variant="stamp" weight="600" color={colors.onBar}>
+                    <Text variant="stamp" color={colors.white}>
                       +{photos.length - 1}
                     </Text>
                   </View>
@@ -206,20 +223,17 @@ export function ItemEditor({
               </Touchable>
             ) : (
               <Touchable feedback="scale" onPress={onAddPhoto} accessibilityRole="button" accessibilityLabel="Add a photo" style={styles.noPhoto}>
-                <Icon name="camera" size={22} color={colors.secondary} />
+                <Icon name="camera" size={24} color={colors.tint} />
               </Touchable>
             )}
             <Touchable feedback="opacity" onPress={onAddPhoto} accessibilityRole="button" accessibilityLabel="Add another photo" testID="add-photo" style={styles.addPhoto}>
-              <Text variant="stamp" weight="600" color={colors.tint} numberOfLines={1}>
+              <Text variant="footnote" weight="600" color={colors.tint} numberOfLines={1}>
                 Add Photo
               </Text>
             </Touchable>
           </View>
         ) : null}
         <View style={styles.textColumn}>
-          <Text variant="stamp" color={colors.secondary}>
-            Title
-          </Text>
           <TextInput
             value={value.title}
             onChangeText={(title) => {
@@ -243,14 +257,11 @@ export function ItemEditor({
           {shows('description') ? (
             <>
               <View style={styles.rule} />
-              <Text variant="stamp" color={colors.secondary}>
-                Where exactly
-              </Text>
               <TextInput
                 value={value.description}
                 onChangeText={(description) => set({ description }, true)}
                 onBlur={() => set({ description: value.description })}
-                placeholder="Left door at the hood, both hinges"
+                placeholder="Where exactly"
                 placeholderTextColor={colors.placeholder}
                 selectionColor={colors.tint}
                 autoCapitalize="sentences"
@@ -267,21 +278,33 @@ export function ItemEditor({
         <Text variant="footnote" color={colors.destructive} style={styles.note}>
           {sentence(titleProblem)}
         </Text>
-      ) : twin ? (
+      ) : twin && same ? (
         <Text variant="footnote" color={colors.secondary} style={styles.note} testID="duplicate-note">
-          {twin.unfinished ? 'Already saved' : 'Already on the list'}
-          {roomLabel ? ` in ${roomLabel}` : ' here'}: item {itemNumberLabel(twin)}.
+          {same.how === 'same-title'
+            ? `${twin.unfinished ? 'Already saved' : 'Already on the list'}${roomLabel ? ` in ${roomLabel}` : ' here'}: item ${itemNumberLabel(twin)}.`
+            : `${same.how === 'claude' ? 'Claude says this is' : 'This may be'} the same as item ${itemNumberLabel(twin)}, ${twin.title}${twin.unfinished ? ', a draft' : ''}.`}
           {onTwin ? (
             <Text variant="footnote" weight="600" color={colors.tint} onPress={() => onTwin.onPress(twin)} accessibilityRole="button" testID="twin-add">
               {` ${onTwin.label}`}
             </Text>
           ) : null}
         </Text>
+      ) : standard ? (
+        <Text variant="footnote" color={colors.secondary} style={styles.note} testID="standard-note">
+          {`The standard title is ${standard}.`}
+          <Text variant="footnote" weight="600" color={colors.tint} onPress={() => takeStandard(standard)} accessibilityRole="button" testID="standard-use">
+            {' Use It'}
+          </Text>
+        </Text>
+      ) : vague ? (
+        <Text variant="footnote" color={colors.secondary} style={styles.note} testID="vague-note">
+          {`Say what it is, like "Fix the cabinet door": a company cannot act on "${value.title.trim()}" alone.`}
+        </Text>
       ) : null}
       {fillIn && blanks ? (
         <Touchable feedback="opacity" onPress={fillIn.onPress} disabled={fillIn.busy} accessibilityRole="button" testID="fill-in" style={styles.fillIn}>
           {fillIn.busy ? <ActivityIndicator size="small" color={colors.tint} /> : <Icon name="sparkles" size={16} color={colors.tint} />}
-          <Text variant="label" weight="600" color={colors.tint}>
+          <Text weight="600" color={colors.tint}>
             {fillIn.busy ? 'Looking at the Photo' : 'Fill In From Photo'}
           </Text>
         </Touchable>
@@ -366,7 +389,7 @@ export function ItemEditor({
               haptic.selection();
               setOpen((o) => !o);
             }}
-            right={<Icon name={detailsOpen ? 'chevron.down' : 'plus'} size={15} color={colors.label} weight="medium" />}
+            right={<Icon name={detailsOpen ? 'chevron.down' : 'chevron.right'} size={15} color={colors.chevron} weight="semibold" />}
             accessibilityLabel={`Details${summary ? `, ${summary}` : ''}`}
             testID="item-details"
           />
@@ -383,7 +406,7 @@ export function ItemEditor({
           ) : null}
 
           {showPo ? (
-            <ListSection header="Order" footer="What covers the extra work once it is priced. Until it has one, it is to be quoted.">
+            <ListSection header="Order" footer="Until it has an order, it is to be quoted.">
               {ORDER_TYPES.map((t) => (
                 <ListRow key={t} title={ORDER_LABELS[t]} accessory={orderType === t ? 'checkmark' : 'none'} onPress={() => pickOrder(t)} testID={`order-${t}`} />
               ))}
@@ -403,7 +426,7 @@ export function ItemEditor({
             </ListSection>
           ) : null}
 
-          <ListSection footer="Wanted first: it goes to the top of its list, and of the company's list.">
+          <ListSection footer="It goes to the top of the lists.">
             <ListSwitchRow title="Priority" value={!!value.priority} onValueChange={(priority) => set({ priority })} testID="field-priority" />
           </ListSection>
 
@@ -488,22 +511,22 @@ export function ItemEditor({
 }
 
 const styles = StyleSheet.create({
-  card: { marginHorizontal: layout.margin, padding: 14, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border, flexDirection: 'row', gap: 12 },
+  card: { marginHorizontal: layout.margin, padding: 14, borderRadius: layout.radius, backgroundColor: colors.cell, flexDirection: 'row', gap: 12 },
   photoColumn: { width: 72, gap: 4 },
-  noPhoto: { width: 72, height: 72, borderWidth: 1.25, borderStyle: 'dashed', borderColor: colors.quiet, alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', right: 4, bottom: 4, minWidth: 24, height: 18, paddingHorizontal: 5, backgroundColor: 'rgba(19, 32, 40, 0.78)', alignItems: 'center', justifyContent: 'center' },
+  noPhoto: { width: 72, height: 72, borderRadius: 8, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.circle, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', right: 4, bottom: 4, minWidth: 26, height: 20, paddingHorizontal: 6, borderRadius: 10, backgroundColor: 'rgba(0, 0, 0, 0.55)', alignItems: 'center', justifyContent: 'center' },
   addPhoto: { height: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  textColumn: { flex: 1, minWidth: 0, gap: 3 },
+  textColumn: { flex: 1, minWidth: 0, gap: 0, paddingTop: 2 },
   title: { ...fieldFont('title2'), minHeight: 28, padding: 0, color: colors.label, outlineWidth: 0 },
   titleProblem: { color: colors.destructive },
   rule: { height: 0, borderBottomWidth: layout.fine, borderBottomColor: colors.separator, marginTop: 10, marginBottom: 9 },
   description: { ...typeScale.callout, minHeight: 48, padding: 0, color: colors.label, textAlignVertical: 'top', outlineWidth: 0 },
   note: { marginHorizontal: layout.margin + 4, marginTop: 8 },
-  suggestions: { marginHorizontal: layout.margin, marginTop: 8, borderWidth: layout.hairline, borderColor: colors.borderStrong, backgroundColor: colors.cell, overflow: 'hidden' },
-  suggestion: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, backgroundColor: colors.cell },
+  suggestions: { marginHorizontal: layout.margin, marginTop: 8, borderRadius: layout.radius, backgroundColor: colors.cell, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)' },
+  suggestion: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, backgroundColor: colors.cell },
   suggestionRule: { borderTopWidth: layout.fine, borderTopColor: colors.separator },
   suggestionHint: { maxWidth: '55%' },
   section: { marginTop: 14 },
   fillIn: { alignSelf: 'flex-start', height: 38, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6, marginHorizontal: layout.margin + 4 },
-  kind: { padding: 8, backgroundColor: colors.cell },
+  kind: { padding: 10, backgroundColor: colors.cell },
 });

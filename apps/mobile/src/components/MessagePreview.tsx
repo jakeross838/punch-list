@@ -74,7 +74,7 @@ export function MessagePreview({ message, attachments, onAddPeople, note }: { me
 }
 
 const styles = StyleSheet.create({
-  card: { marginHorizontal: 16, marginTop: 10, marginBottom: 6, padding: layout.rowPadding, borderWidth: layout.hairline, borderColor: colors.border, backgroundColor: colors.cell, gap: 6 },
+  card: { marginHorizontal: 16, marginTop: 10, marginBottom: 6, padding: layout.rowPadding, borderRadius: layout.radius, backgroundColor: colors.cell, gap: 6 },
   line: { flexDirection: 'row', gap: 10, alignItems: 'baseline' },
   label: { width: 62 },
   body: { marginTop: 8, paddingTop: 10, borderTopWidth: layout.hairline, borderTopColor: colors.separator },

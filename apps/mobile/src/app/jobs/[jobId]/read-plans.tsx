@@ -167,7 +167,6 @@ export default function ReadPlansScreen() {
   return (
     <Page
       title="Read the Plans"
-      eyebrow={job?.name}
       sheet
       left={[{ kind: 'button', label: 'Cancel', onPress: cancel, testID: 'plans-cancel' }]}
       right={

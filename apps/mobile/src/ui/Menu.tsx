@@ -1,6 +1,8 @@
-// A drop-down menu, the same on the iPhone and the preview page: a white square panel under the
-// button that opened it, with a check beside what is on. Tap a choice or anywhere else to close.
-// The choice runs once the menu has gone, so a sheet or question it opens does show on the iPhone.
+// A drop-down menu, the same on the iPhone and the preview page, drawn like the iPhone's own menus:
+// a rounded panel under the button that opened it, each choice with its icon on the right and a
+// check beside what is on, and a thicker gap between groups. Tap a choice or anywhere else to
+// close. The choice runs once the menu has gone, so a sheet or question it opens does show on the
+// iPhone.
 
 import { useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -46,6 +48,8 @@ export function MenuPanel({
 }) {
   const { height } = useWindowDimensions();
   const dismissed = useSheetPresence(anchor !== null);
+  // The check column only when something in the menu can be checked.
+  const checks = groups.some((g) => g.actions.some((a) => a.checked !== undefined));
   const choose = (action: MenuAction) => {
     haptic.selection();
     onClose();
@@ -68,7 +72,7 @@ export function MenuPanel({
             {groups.map((group, gi) => (
               <View key={gi} style={gi > 0 ? styles.group : null}>
                 {group.title ? (
-                  <Text variant="stamp" color={colors.secondary} style={styles.groupTitle}>
+                  <Text variant="footnote" color={colors.secondary} style={styles.groupTitle}>
                     {group.title}
                   </Text>
                 ) : null}
@@ -82,9 +86,9 @@ export function MenuPanel({
                       accessibilityRole="menuitem"
                       aria-checked={action.checked}
                       testID={action.testID}
-                      style={[styles.item, ai > 0 ? styles.itemRule : null]}
+                      style={[styles.item, ai > 0 || group.title ? styles.itemRule : null]}
                     >
-                      <View style={styles.check}>{action.checked ? <Icon name="checkmark" size={15} color={colors.label} weight="semibold" /> : null}</View>
+                      {checks ? <View style={styles.check}>{action.checked ? <Icon name="checkmark" size={15} color={colors.label} weight="semibold" /> : null}</View> : null}
                       <Text variant="body" color={color} style={styles.itemLabel} numberOfLines={2}>
                         {action.label}
                       </Text>
@@ -101,7 +105,7 @@ export function MenuPanel({
   );
 }
 
-/** A square button that opens a menu. */
+/** A button in the bar that opens a menu. */
 export function MenuButton({ menu, tone = 'light' }: { menu: BarMenu; tone?: 'dark' | 'light' }) {
   const holder = useRef<ComponentRef<typeof View>>(null);
   const { width } = useWindowDimensions();
@@ -125,16 +129,16 @@ const styles = StyleSheet.create({
   panel: {
     position: 'absolute',
     minWidth: 250,
-    maxWidth: 310,
-    backgroundColor: colors.cell,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    boxShadow: '0 10px 30px rgba(19, 32, 40, 0.18)',
+    maxWidth: 290,
+    borderRadius: 13,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(249, 249, 249, 0.98)',
+    boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)',
   },
-  group: { borderTopWidth: 1, borderTopColor: colors.border },
-  groupTitle: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2 },
-  item: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10 },
-  itemRule: { borderTopWidth: 1, borderTopColor: colors.separator },
+  group: { borderTopWidth: 8, borderTopColor: 'rgba(0, 0, 0, 0.06)' },
+  groupTitle: { paddingHorizontal: 16, paddingTop: 9, paddingBottom: 7 },
+  item: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 11 },
+  itemRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.separator },
   check: { width: 16, alignItems: 'center' },
   itemLabel: { flex: 1 },
 });

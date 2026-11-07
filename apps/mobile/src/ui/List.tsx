@@ -1,6 +1,6 @@
-// Lists, Site Office style: a mono label over a white square panel with a thin slate border, on
-// sand. Rows are divided by fine rules. Both variants look the same now; plain is kept for the
-// screens that still ask for it.
+// Lists the way the iPhone's own Settings and Reminders draw them: a short gray header, then a
+// white card with rounded corners on light gray, its rows divided by thin lines that start where
+// the words do. Both variants look the same; plain is kept for the screens that still ask for it.
 
 import { Children, createContext, isValidElement, useContext, useState, type ComponentRef, type ReactNode, type Ref } from 'react';
 import { Platform, StyleSheet, TextInput, View, type ColorValue, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
@@ -77,16 +77,17 @@ export function Separator({ inset = layout.rowPadding }: { inset?: number }) {
   return <View style={[styles.separator, { left: inset }]} />;
 }
 
-function useRow(_hasTile: boolean): { separator: ReactNode; rowStyle: StyleProp<ViewStyle> } {
+function useRow(hasTile: boolean): { separator: ReactNode; rowStyle: StyleProp<ViewStyle> } {
   const { last } = useContext(RowPosition);
-  return { separator: last ? null : <Separator inset={0} />, rowStyle: null };
+  // The line starts where the words do, after an icon when there is one.
+  return { separator: last ? null : <Separator inset={hasTile ? layout.rowPadding + TILE + 12 : layout.rowPadding} />, rowStyle: null };
 }
 
-/** A square outlined tile with an icon, at the start of a row. */
-export function IconTile({ name, color = colors.label, size = TILE }: { name: IconName; color?: ColorValue; size?: number }) {
+/** An icon at the start of a row, as the iPhone's Settings has them. */
+export function IconTile({ name, color = colors.tint, size = TILE }: { name: IconName; color?: ColorValue; size?: number }) {
   return (
     <View style={[styles.tile, { width: size, height: size }]}>
-      <Icon name={name} size={Math.round(size * 0.55)} color={color} />
+      <Icon name={name} size={Math.round(size * 0.72)} color={color} />
     </View>
   );
 }
@@ -116,7 +117,7 @@ export function ListRow({
   value,
   valueColor = colors.secondary,
   icon,
-  iconColor = colors.label,
+  iconColor = colors.tint,
   accessory = 'none',
   right,
   onPress,
@@ -133,7 +134,7 @@ export function ListRow({
     <>
       {icon ? <IconTile name={icon} color={iconColor} /> : null}
       <View style={styles.rowText}>
-        <Text variant={field ? 'label' : 'body'} color={field && tone === 'default' ? colors.secondary : titleColor} numberOfLines={titleLines}>
+        <Text variant="body" color={titleColor} numberOfLines={titleLines}>
           {title}
         </Text>
         {subtitle ? (
@@ -143,13 +144,13 @@ export function ListRow({
         ) : null}
       </View>
       {value ? (
-        <Text variant="callout" color={field && valueColor === colors.secondary ? colors.label : valueColor} numberOfLines={1} style={styles.value}>
+        <Text variant="body" color={valueColor} numberOfLines={1} style={styles.value}>
           {value}
         </Text>
       ) : null}
       {right}
-      {accessory === 'chevron' ? <Icon name="chevron.right" size={14} color={colors.quiet} weight="medium" /> : null}
-      {accessory === 'checkmark' ? <Icon name="checkmark" size={18} color={colors.label} weight="semibold" /> : null}
+      {accessory === 'chevron' ? <Icon name="chevron.right" size={15} color={colors.chevron} weight="semibold" /> : null}
+      {accessory === 'checkmark' ? <Icon name="checkmark" size={18} color={colors.tint} weight="semibold" /> : null}
       {separator}
     </>
   );
@@ -261,7 +262,7 @@ export function ListLabeledField({ label, invalid, ...props }: TextInputProps & 
   const { separator, rowStyle } = useRow(false);
   return (
     <View style={[styles.row, rowStyle, invalid ? styles.invalid : null]}>
-      <Text variant="label" color={colors.secondary} numberOfLines={1} style={styles.label}>
+      <Text variant="body" numberOfLines={1} style={styles.label}>
         {label}
       </Text>
       <TextInput
@@ -288,13 +289,13 @@ export function Button({
 }: {
   label: string;
   onPress: () => void;
-  /** filled: slate deep. tinted: outlined. plain: gulf blue words only. */
+  /** filled: blue with white words. tinted: light gray with blue words. plain: blue words only. */
   variant?: 'filled' | 'tinted' | 'plain';
   icon?: IconName;
   disabled?: boolean;
   testID?: string;
 }) {
-  const fg = variant === 'filled' ? colors.onBar : variant === 'plain' ? colors.tint : colors.label;
+  const fg = variant === 'filled' ? colors.white : colors.tint;
   return (
     <Touchable
       feedback="opacity"
@@ -303,10 +304,10 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={label}
       testID={testID}
-      style={[styles.button, variant === 'filled' ? styles.buttonFilled : variant === 'tinted' ? styles.buttonTinted : styles.buttonPlain]}
+      style={[styles.button, variant === 'filled' ? styles.buttonFilled : variant === 'tinted' ? styles.buttonTinted : styles.buttonPlain, disabled ? styles.buttonOff : null]}
     >
-      {icon ? <Icon name={icon} size={17} color={fg} weight="medium" /> : null}
-      <Text variant="button" color={fg} numberOfLines={1}>
+      {icon ? <Icon name={icon} size={18} color={fg} weight="medium" /> : null}
+      <Text variant="button" weight="600" color={fg} numberOfLines={1}>
         {label}
       </Text>
     </Touchable>
@@ -317,7 +318,7 @@ export function EmptyState({ icon, title, message, children }: { icon: IconName;
   return (
     <View style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Icon name={icon} size={24} color={colors.secondary} />
+        <Icon name={icon} size={44} color={colors.quiet} />
       </View>
       <Text variant="title3" align="center">
         {title}
@@ -332,7 +333,7 @@ export function EmptyState({ icon, title, message, children }: { icon: IconName;
   );
 }
 
-/** A note in a light box with a square stamp, like "You can start taking photos now." */
+/** A note in a rounded white box with an icon, like "You can start taking photos now." */
 export function Banner({ icon, children, tone = 'info' }: { icon?: IconName; children: string; tone?: 'info' | 'warning' }) {
   const mark = tone === 'warning' ? colors.destructive : colors.tint;
   return (
@@ -346,21 +347,11 @@ export function Banner({ icon, children, tone = 'info' }: { icon?: IconName; chi
 }
 
 const styles = StyleSheet.create({
-  section: { marginHorizontal: layout.margin, marginBottom: 20 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginHorizontal: 4,
-    marginBottom: 8,
-    paddingBottom: 8,
-    minHeight: 24,
-    borderBottomWidth: layout.hairline,
-    borderBottomColor: colors.border,
-  },
-  headerText: { flex: 1, fontSize: 11 },
-  card: { backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border, overflow: 'hidden' },
-  footer: { paddingHorizontal: 4, paddingTop: 8 },
+  section: { marginHorizontal: layout.margin, marginBottom: 24 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: layout.rowPadding, marginBottom: 6, minHeight: 18 },
+  headerText: { flex: 1 },
+  card: { backgroundColor: colors.cell, borderRadius: layout.radius, overflow: 'hidden' },
+  footer: { paddingHorizontal: layout.rowPadding, paddingTop: 6 },
   // A border, not a filled box: borders snap to the screen's pixels, so the line stays sharp.
   separator: { position: 'absolute', right: 0, bottom: 0, height: 0, borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
   row: {
@@ -374,21 +365,22 @@ const styles = StyleSheet.create({
   },
   rowText: { flex: 1, gap: 2 },
   value: { maxWidth: '60%', textAlign: 'right' },
-  tile: { alignItems: 'center', justifyContent: 'center', borderWidth: layout.hairline, borderColor: colors.borderStrong },
+  tile: { alignItems: 'center', justifyContent: 'center' },
   fieldRow: { paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
-  invalid: { backgroundColor: 'rgba(176, 85, 78, 0.06)' },
+  invalid: { backgroundColor: 'rgba(255, 59, 48, 0.06)' },
   // One line: no line height, so the words stay put as you type (see fieldFont). Wrapping fields add it.
   input: { ...fieldFont('body'), color: colors.label, minHeight: layout.rowMinHeight, paddingVertical: 0, outlineWidth: 0 },
-  titleInput: { ...fieldFont('sheetTitle'), minHeight: 56 },
+  titleInput: { ...fieldFont('title3'), minHeight: 52 },
   label: { flexShrink: 0 },
   // minWidth 0 lets the field shrink beside its label (a web input otherwise keeps its own width).
-  labeledInput: { flex: 1, minWidth: 0, textAlign: 'right' },
-  button: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18, borderWidth: 1 },
-  buttonFilled: { backgroundColor: colors.action, borderColor: colors.action },
-  buttonTinted: { backgroundColor: 'transparent', borderColor: colors.borderStrong },
-  buttonPlain: { backgroundColor: 'transparent', borderColor: 'transparent', height: 40 },
-  empty: { alignItems: 'center', gap: 8, paddingHorizontal: 40, paddingVertical: 44 },
-  emptyIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderWidth: layout.hairline, borderColor: colors.borderStrong, marginBottom: 6 },
+  labeledInput: { flex: 1, minWidth: 0, textAlign: 'right', color: colors.secondary },
+  button: { height: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20, borderRadius: layout.buttonRadius },
+  buttonFilled: { backgroundColor: colors.action },
+  buttonTinted: { backgroundColor: colors.chip },
+  buttonPlain: { backgroundColor: 'transparent', height: 44 },
+  buttonOff: { opacity: 0.4 },
+  empty: { alignItems: 'center', gap: 6, paddingHorizontal: 40, paddingVertical: 48 },
+  emptyIcon: { marginBottom: 8 },
   banner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -397,9 +389,8 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderWidth: layout.hairline,
-    borderColor: colors.border,
-    backgroundColor: colors.stripe,
+    borderRadius: layout.radius,
+    backgroundColor: colors.cell,
   },
-  bannerMark: { width: 8, height: 8, marginTop: 5 },
+  bannerMark: { width: 8, height: 8, marginTop: 6, borderRadius: 4 },
 });

@@ -18,7 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCanSuggest } from "@/ai/suggest";
+import { useClaudeReady } from "@/ai/claude";
 import { leaveOrConfirm } from "@/components/discard";
 import { CommonTasks } from "@/components/CommonTasks";
 import { draftFill } from "@/components/draftFill";
@@ -40,6 +40,9 @@ import {
   type Option,
 } from "@/ui";
 
+/** The most photos picked from the library at once on a walk. */
+const MOST_PICKED = 30;
+
 export default function CaptureScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const data = useData();
@@ -50,7 +53,8 @@ export default function CaptureScreen() {
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId);
   const formSettings = data.useFormSettings();
-  const canFill = useCanSuggest();
+  const canFill = useClaudeReady(true);
+  const canSay = useClaudeReady();
   const titles = data.useTitles();
   const trades = data.useTrades();
   const companies = data.useCompanies();
@@ -116,6 +120,17 @@ export default function CaptureScreen() {
     if (how === "take") haptic.tap();
     setBusy(true);
     try {
+      // On a walk, several from the library at once, each its own draft.
+      if (how === "pick" && walking) {
+        const picked = (await finder.current?.pickMany(MOST_PICKED)) ?? [];
+        for (const photo of picked) await saveSnap(photo);
+        if (picked.length > 1) {
+          capture.say(
+            `${picked.length} photos saved as drafts${canFill ? ". Claude fills them in" : ""}`,
+          );
+        }
+        return;
+      }
       const photo = await (how === "take"
         ? finder.current?.take()
         : finder.current?.pick());
@@ -183,6 +198,14 @@ export default function CaptureScreen() {
 
   function openForm() {
     router.push({ pathname: "/jobs/[jobId]/items/new", params: { jobId } });
+  }
+
+  /** Say what is left to do here, and Claude writes it down as items in this location. */
+  function openSay() {
+    router.push({
+      pathname: "/jobs/[jobId]/say",
+      params: { jobId, roomId: walk.roomId ?? "" },
+    });
   }
 
   /** Done here: this location is walked, and the camera goes on to the next one not walked yet, in floor order. */
@@ -272,11 +295,35 @@ export default function CaptureScreen() {
       !!shot || walk.shots.length > 0,
       feedback,
       () => {
+        const summary = walking ? walkSummary() : null;
         capture.end();
         router.back();
+        if (summary) feedback.toast(summary);
       },
       "this photo",
     );
+  }
+
+  /** How the walk went, as the camera closes: what was saved, and the drafts left to check. */
+  function walkSummary() {
+    if (walk.saved === 0) return null;
+    const mine = new Set(walk.snaps);
+    const drafts = items.filter((i) => mine.has(i.id) && i.status === "open" && i.unfinished);
+    const left = drafts.length > 0 ? ` ${drafts.length === 1 ? "One draft" : `${drafts.length} drafts`} to check.` : "";
+    return {
+      message: `${walk.saved} saved on this walk.${left}`,
+      action:
+        drafts.length > 0
+          ? {
+              label: "Drafts",
+              onPress: () =>
+                router.push({
+                  pathname: "/jobs/[jobId]/list/[by]/[key]",
+                  params: { jobId, by: "drafts", key: "all" },
+                }),
+            }
+          : undefined,
+    };
   }
 
   if (editing || shot) {
@@ -446,10 +493,24 @@ export default function CaptureScreen() {
               style={styles.stripButton}
             >
               <Icon name="textformat" size={16} color={colors.onDark} />
-              <Text variant="label" weight="600" color={colors.onDark}>
+              <Text variant="subheadline" weight="600" color={colors.onDark}>
                 Type an Item
               </Text>
             </Touchable>
+            {canSay ? (
+              <Touchable
+                feedback="opacity"
+                onPress={openSay}
+                accessibilityRole="button"
+                testID="camera-say"
+                style={styles.stripButton}
+              >
+                <Icon name="mic" size={16} color={colors.onDark} />
+                <Text variant="subheadline" weight="600" color={colors.onDark}>
+                  Say It
+                </Text>
+              </Touchable>
+            ) : null}
             <Touchable
               feedback="opacity"
               onPress={openCommon}
@@ -458,7 +519,7 @@ export default function CaptureScreen() {
               style={styles.stripButton}
             >
               <Icon name="checklist" size={16} color={colors.onDark} />
-              <Text variant="label" weight="600" color={colors.onDark}>
+              <Text variant="subheadline" weight="600" color={colors.onDark}>
                 Common Tasks
               </Text>
             </Touchable>
@@ -585,7 +646,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  square: { width: 40, height: 40, backgroundColor: colors.darkChip },
+  square: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.darkChip },
   room: {
     height: 40,
     maxWidth: 200,
@@ -593,8 +654,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingLeft: 12,
-    paddingRight: 10,
+    paddingLeft: 14,
+    paddingRight: 12,
+    borderRadius: 20,
     backgroundColor: colors.darkChip,
   },
   next: {
@@ -602,9 +664,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingLeft: 12,
-    paddingRight: 10,
+    paddingLeft: 14,
+    paddingRight: 12,
     marginLeft: 6,
+    borderRadius: 20,
     backgroundColor: colors.darkChip,
   },
   finder: { width: "100%", aspectRatio: 3 / 4, overflow: "hidden" },
@@ -619,14 +682,15 @@ const styles = StyleSheet.create({
   library: {
     width: 52,
     height: 52,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(247, 245, 236, 0.35)",
+    backgroundColor: colors.darkChip,
   },
   last: {
     width: 54,
     height: 54,
+    borderRadius: 10,
     borderWidth: 2,
     borderColor: colors.onDark,
     alignItems: "center",
@@ -662,9 +726,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "rgba(247, 245, 236, 0.22)",
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: colors.darkChip,
   },
   hint: { paddingHorizontal: 32, marginTop: 2 },
   saved: {
@@ -677,8 +741,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     height: 40,
-    backgroundColor: "rgba(19, 32, 40, 0.86)",
-    borderWidth: 1,
-    borderColor: "rgba(247, 245, 236, 0.16)",
+    borderRadius: 20,
+    backgroundColor: "rgba(28, 28, 30, 0.86)",
   },
 });

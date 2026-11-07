@@ -19,7 +19,7 @@ export {
   Separator,
 } from './List';
 export { matchRank, OptionPicker, type Option } from './OptionPicker';
-export { BottomButtons, Crumb, Eyebrow, Page, Wordmark } from './Page';
+export { BottomButtons, Eyebrow, Page } from './Page';
 export { measureAnchor, MenuButton, MenuPanel, type MenuAnchor } from './Menu';
 export {
   ChipRow,
@@ -31,12 +31,10 @@ export {
   ProgressBar,
   SectionLabel,
   Stamp,
-  Tiles,
   type ChipChoice,
   type Fact,
   type Figure,
   type PillTone,
-  type Tile,
 } from './Ledger';
 export type { BarButton, BarItem, BarMenu, MenuAction, MenuGroup, PageProps, PageScroll, PageTab } from './page-types';
 export { afterSheets } from './presence';

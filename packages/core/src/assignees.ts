@@ -53,3 +53,17 @@ export function assigneeName(item: Assigned, names: AssigneeNames): string | nul
   const key = assigneeKey(item);
   return key ? (keyName(key, names) ?? null) : null;
 }
+
+/**
+ * Whoever this person assigned their own items to lately, most recent first, each once: what goes
+ * at the top of Assigned To.
+ */
+export function recentAssignees(items: Pick<Item, 'companyId' | 'assignedTo' | 'createdBy' | 'createdAt' | 'status'>[], me: string, most = 3): string[] {
+  const out: string[] = [];
+  for (const i of [...items].filter((x) => x.createdBy === me && x.status !== 'removed').sort((a, b) => b.createdAt.localeCompare(a.createdAt))) {
+    const key = assigneeKey(i);
+    if (key && !out.includes(key)) out.push(key);
+    if (out.length >= most) break;
+  }
+  return out;
+}

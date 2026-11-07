@@ -1,7 +1,7 @@
-// Sign in: your email, then the six digit code it gets. There is no password. Someone an admin has
-// added under People goes straight in; someone new names their company next and is its admin,
-// then adds their people. The code goes in six square boxes that never move while you type; on the
-// iPhone it fills in from Mail. On the preview page no email is sent and any six digits sign in. On
+// Sign in: your email, then the six digit code it gets, the way most apps sign in by email. There
+// is no password. Someone an admin has added under People goes straight in; someone new names their
+// company next and is its admin, then adds their people. The code goes in six rounded boxes that
+// never move while you type; on the iPhone it fills in from Mail. On the preview page no email is sent and any six digits sign in. On
 // the iPhone, the first sign in waits here while the jobs come down to the phone.
 
 import { companyNameProblem, yourNameProblem } from '@punch/core';
@@ -10,28 +10,9 @@ import { Platform, StyleSheet, TextInput, View } from 'react-native';
 import { APP_NAME } from '@/constants/app';
 import { colors, fieldFont, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { Banner, Button, Eyebrow, haptic, Icon, ListRow, ListSection, ListTextField, Page, Text, Touchable } from '@/ui';
+import { Banner, Button, Eyebrow, haptic, ListRow, ListSection, ListTextField, Page, Text, Touchable } from '@/ui';
 
 const BOXES = 6;
-
-function Step({ n, label, state }: { n: string; label: string; state: 'on' | 'done' | 'next' }) {
-  return (
-    <View style={styles.step} accessible accessibilityLabel={`Step ${Number(n)}, ${label}${state === 'done' ? ', done' : ''}`}>
-      <View style={[styles.stepBox, state === 'on' ? styles.stepOn : null]}>
-        {state === 'done' ? (
-          <Icon name="checkmark" size={14} color={colors.ok} weight="semibold" />
-        ) : (
-          <Text variant="label" weight="600" color={state === 'on' ? colors.onBar : colors.secondary}>
-            {n}
-          </Text>
-        )}
-      </View>
-      <Text variant="label" weight={state === 'on' ? '600' : '500'} color={state === 'on' ? colors.label : colors.secondary}>
-        {label}
-      </Text>
-    </View>
-  );
-}
 
 export default function SignInScreen() {
   const data = useData();
@@ -127,16 +108,11 @@ export default function SignInScreen() {
           {newAccount ? 'Start Your Company' : 'Sign In'}
         </Text>
         <Text variant="callout" color={colors.secondary} style={styles.lead}>
-          {newAccount ? 'You are new here. Name your company: you are its admin, and you add your people next.' : 'No password: we email you a code.'}
+          {newAccount ? 'Name your company. You are its admin and add your people next.' : step === 'code' ? 'Check your email for the code.' : 'No password: we email you a code.'}
         </Text>
       </View>
       {newAccount ? (
         <>
-          <View style={styles.steps}>
-            <Step n="01" label="Email" state="done" />
-            <Step n="02" label="Code" state="done" />
-            <Step n="03" label="Company" state="on" />
-          </View>
           <ListSection
             header="Your Company"
             footer={problem ?? 'Its name goes at the top of every list you send.'}
@@ -209,15 +185,11 @@ export default function SignInScreen() {
         </ListSection>
       ) : (
         <>
-          <View style={styles.steps}>
-            <Step n="01" label="Email" state={step === 'email' ? 'on' : 'done'} />
-            <Step n="02" label="Code" state={step === 'code' ? 'on' : 'next'} />
-          </View>
           {step === 'email' ? (
             <>
               <ListSection
                 header="Your work email"
-                footer={problem ?? 'We send it a six digit code to sign in. New here? The same email starts your company.'}
+                footer={problem ?? 'New here? The same email starts your company.'}
                 footerTone={problem ? 'danger' : 'default'}
               >
                 <ListTextField
@@ -245,9 +217,6 @@ export default function SignInScreen() {
             <>
               <View style={styles.emailCard}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text variant="stamp" color={colors.secondary}>
-                    Email
-                  </Text>
                   <Text numberOfLines={1}>{email.trim().toLowerCase()}</Text>
                 </View>
                 <Touchable
@@ -261,20 +230,15 @@ export default function SignInScreen() {
                   accessibilityRole="button"
                   testID="sign-in-other"
                 >
-                  <Text variant="label" color={colors.tint}>
-                    Change
-                  </Text>
+                  <Text color={colors.tint}>Change</Text>
                 </Touchable>
               </View>
-              <Text variant="label" color={colors.secondary} style={styles.codeLabel}>
-                Six digit code
-              </Text>
               <Touchable feedback="none" onPress={() => codeField.current?.focus()} accessibilityRole="none" style={styles.boxes}>
                 {Array.from({ length: BOXES }, (_, i) => {
                   const on = focused && i === Math.min(code.length, BOXES - 1);
                   return (
                     <View key={i} style={[styles.box, on ? styles.boxOn : null, problem ? styles.boxProblem : null]} accessible={false}>
-                      <Text variant="mono" style={styles.digit}>
+                      <Text variant="title2" weight="600" tabular style={styles.digit}>
                         {code[i] ?? ''}
                       </Text>
                     </View>
@@ -319,13 +283,9 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  head: { paddingHorizontal: 24, paddingTop: 28 },
-  title: { marginTop: 8, fontSize: 34, lineHeight: 38 },
-  lead: { marginTop: 8 },
-  steps: { flexDirection: 'row', gap: 18, marginHorizontal: 24, marginTop: 26, marginBottom: 22 },
-  step: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepBox: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.borderStrong },
-  stepOn: { backgroundColor: colors.action, borderColor: colors.action },
+  head: { paddingHorizontal: layout.inset, paddingTop: 28, paddingBottom: 24 },
+  title: { marginTop: 4 },
+  lead: { marginTop: 6 },
   button: { marginHorizontal: layout.margin, marginTop: 4 },
   resend: { marginHorizontal: layout.margin, marginTop: 6, alignItems: 'center' },
   emailCard: {
@@ -333,20 +293,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     marginHorizontal: layout.margin,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: layout.rowPadding,
+    minHeight: layout.rowMinHeight,
+    borderRadius: layout.radius,
     backgroundColor: colors.cell,
-    borderWidth: layout.hairline,
-    borderColor: colors.border,
   },
-  codeLabel: { marginHorizontal: 24, marginTop: 22 },
-  boxes: { flexDirection: 'row', gap: 6, marginHorizontal: layout.margin, marginTop: 8 },
-  box: { flex: 1, height: 54, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cell, borderWidth: 1, borderColor: colors.borderStrong },
-  boxOn: { borderWidth: 2, borderColor: colors.action },
+  boxes: { flexDirection: 'row', gap: 8, marginHorizontal: layout.margin, marginTop: 20 },
+  box: { flex: 1, height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: colors.cell, borderWidth: 2, borderColor: 'transparent' },
+  boxOn: { borderColor: colors.action },
   boxProblem: { borderColor: colors.destructive },
-  digit: { fontSize: 22, lineHeight: 26 },
+  digit: { textAlign: 'center' },
   // The real field, over the boxes and out of sight: it takes the typing and the code from Mail.
   hiddenField: { ...fieldFont('mono'), position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.02, color: 'transparent', outlineWidth: 0 },
-  codeNote: { marginHorizontal: 24, marginTop: 10, marginBottom: 18 },
-  joinNote: { marginHorizontal: 24, marginTop: 18 },
+  codeNote: { marginHorizontal: layout.inset + 12, marginTop: 10, marginBottom: 18 },
+  joinNote: { marginHorizontal: layout.inset + 12, marginTop: 18 },
 });

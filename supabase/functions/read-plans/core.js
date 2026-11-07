@@ -1,4 +1,4 @@
-// Made by tools/build-functions.mjs from packages/core/src/planReading.ts. Change it there, then run that.
+// Made by tools/build-functions.mjs from packages/core. Change it there, then run that.
 // packages/core/src/planReading.ts
 var EXAMPLE = {
   name: "Smith Residence",
@@ -52,7 +52,27 @@ function picturesNote(pieces) {
   const sheets = pieces.map((n, i) => n > 1 ? `Sheet ${i + 1}: the whole sheet, then ${n} pieces of it at full size, left to right and top to bottom, overlapping a little.` : `Sheet ${i + 1}: the whole sheet.`);
   return `The plans are attached as pictures of ${pieces.length === 1 ? "one sheet" : `${pieces.length} sheets`}, in this order. ${sheets.join(" ")}`;
 }
+
+// packages/core/src/claude.ts
+var CLAUDE_MODELS = { quick: "claude-haiku-5-5", sharp: "claude-sonnet-5-5" };
+var PRICES = [
+  { model: "claude-haiku-5-5", input: 0.1, output: 0.5, long: { input: 0.5, output: 2.5 } },
+  { model: "claude-sonnet-5-5", input: 2, output: 10 },
+  { model: "claude-opus-5-5", input: 4, output: 20 }
+];
+var count = (v) => typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0;
+function costCents(model, usage) {
+  const price = PRICES.find((p) => model.startsWith(p.model)) ?? PRICES[PRICES.length - 1];
+  const fresh = count(usage.input_tokens);
+  const written = count(usage.cache_creation_input_tokens);
+  const read = count(usage.cache_read_input_tokens);
+  const rate = price.long && fresh + written + read > 1e5 ? price.long : price;
+  const dollars = ((fresh + written * 1.25 + read * 0.1) * rate.input + count(usage.output_tokens) * rate.output) / 1e6;
+  return Math.round(dollars * 100 * 1e4) / 1e4;
+}
 export {
+  CLAUDE_MODELS,
+  costCents,
   picturesNote,
   planPrompt
 };

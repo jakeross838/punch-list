@@ -28,6 +28,8 @@ export interface TakenPhoto {
 export interface ViewfinderHandle {
   take(): Promise<TakenPhoto | null>;
   pick(): Promise<TakenPhoto | null>;
+  /** Several from the library at once, in the order they were picked. */
+  pickMany(most: number): Promise<TakenPhoto[]>;
 }
 
 export function Viewfinder({ ref, flash }: { ref?: Ref<ViewfinderHandle>; flash: boolean }) {
@@ -54,6 +56,11 @@ export function Viewfinder({ ref, flash }: { ref?: Ref<ViewfinderHandle>; flash:
       const result = await launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
       const asset = result.canceled ? null : result.assets[0];
       return asset ? { uri: asset.uri, width: asset.width || 1200, height: asset.height || 1600 } : null;
+    },
+    async pickMany(most: number) {
+      const result = await launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsMultipleSelection: true, selectionLimit: most, orderedSelection: true });
+      if (result.canceled) return [];
+      return result.assets.slice(0, most).map((a) => ({ uri: a.uri, width: a.width || 1200, height: a.height || 1600 }));
     },
   }));
 

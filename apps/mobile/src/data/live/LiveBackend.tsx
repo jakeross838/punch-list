@@ -16,6 +16,8 @@ import {
   deleteJobOnServer,
   jobStationOnServer,
   deletePhotosOnServer,
+  jobFilesOnServer,
+  mergeItemsOnServer,
   myAccount,
   sendSignInCode,
   signOutOfSupabase,
@@ -232,9 +234,21 @@ const liveApi: DataApi = makeApi(keeper, {
       "SELECT storage_path FROM photos WHERE job_id = ? AND coalesce(storage_path, '') <> '' UNION SELECT storage_path FROM plan_sheets WHERE job_id = ? AND coalesce(storage_path, '') <> ''",
       [id, id],
     );
-    await deletePhotosOnServer(BUCKET, rows.map((r) => String(r.storage_path)));
+    // Every file in the job's folder goes too: plans left from a reading that stopped part way, say.
+    const paths = new Set([...rows.map((r) => String(r.storage_path)), ...(await jobFilesOnServer(BUCKET, id))]);
+    await deletePhotosOnServer(BUCKET, [...paths]);
     await deleteJobOnServer(id);
     hideJob(id);
+  },
+  async mergeItems(keepId, mergeId) {
+    // Both have to be on the server as they are here first.
+    const changes = (await db.getUploadQueueStats()).count;
+    if (changes > 0) {
+      throw new Error(
+        `${changes === 1 ? 'A change' : `${changes} changes`} made on this phone ${changes === 1 ? 'has' : 'have'} not gone up yet. Get a signal and wait a moment, then merge them.`,
+      );
+    }
+    return mergeItemsOnServer(keepId, mergeId);
   },
   async signOut() {
     const changes = (await db.getUploadQueueStats()).count + (await photosWaiting());

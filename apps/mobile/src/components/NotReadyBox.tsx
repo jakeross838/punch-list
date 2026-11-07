@@ -140,8 +140,9 @@ export function NotReadyBox({
         aria-checked={on}
         accessibilityLabel={[t.title, company, where].filter(Boolean).join(', ')}
         testID={`waiting-task-${t.id}`}
-        style={[styles.row, i > 0 ? styles.rule : null]}
+        style={styles.row}
       >
+        {i > 0 ? <View style={styles.ruleLine} /> : null}
         <Checkbox checked={on} label={t.title} />
         <View style={styles.rowText}>
           <Text numberOfLines={1}>{t.title}</Text>
@@ -238,9 +239,10 @@ export function NotReadyBox({
                   onPress={() => setNewTask({ title: '', assignee: null })}
                   accessibilityRole="button"
                   testID="waiting-add-task"
-                  style={[styles.row, here.length > 0 ? styles.rule : null]}
+                  style={styles.row}
                 >
-                  <Icon name="plus" size={15} color={colors.tint} weight="semibold" />
+                  {here.length > 0 ? <View style={styles.ruleLine} /> : null}
+                  <Icon name="plus.circle.fill" size={22} color={colors.tint} />
                   <Text color={colors.tint}>Add a Task</Text>
                 </Touchable>
               )}
@@ -254,7 +256,7 @@ export function NotReadyBox({
           </>
         )}
 
-        <ListSection header="Not on the List" footer="A decision or something to come, from someone without a task here.">
+        <ListSection header="Not on the List" footer="Something still to come, like the owner's decision.">
           {whoShown.map((w, i) => {
             const on = who.some((x) => same(x, w));
             return (
@@ -266,8 +268,9 @@ export function NotReadyBox({
                 aria-checked={on}
                 accessibilityLabel={w}
                 testID={`waiting-${w}`}
-                style={[styles.row, i > 0 ? styles.rule : null]}
+                style={styles.row}
               >
+                {i > 0 ? <View style={styles.ruleLine} /> : null}
                 <Checkbox checked={on} label={w} />
                 <Text numberOfLines={1} style={styles.rowText}>
                   {w}
@@ -276,7 +279,8 @@ export function NotReadyBox({
             );
           })}
           {addingWho ? (
-            <View style={[styles.row, styles.rule]}>
+            <View style={styles.row}>
+              <View style={styles.ruleLine} />
               <TextInput
                 value={newWho}
                 onChangeText={setNewWho}
@@ -298,14 +302,15 @@ export function NotReadyBox({
               </Touchable>
             </View>
           ) : (
-            <Touchable feedback="highlight" onPress={() => setAddingWho(true)} accessibilityRole="button" testID="waiting-other" style={[styles.row, styles.rule]}>
-              <Icon name="plus" size={15} color={colors.tint} weight="semibold" />
+            <Touchable feedback="highlight" onPress={() => setAddingWho(true)} accessibilityRole="button" testID="waiting-other" style={styles.row}>
+              <View style={styles.ruleLine} />
+              <Icon name="plus.circle.fill" size={22} color={colors.tint} />
               <Text color={colors.tint}>Someone Else</Text>
             </Touchable>
           )}
         </ListSection>
 
-        <ListSection footer="When it should be ready, if you know. The company sees it on its list.">
+        <ListSection footer="If you know. The company sees it on its list.">
           <ListRow title="Ready By" titleLines={1} right={<DateField value={date} onChange={setDate} label="Ready By" testID="not-ready-by" />} />
         </ListSection>
       </SheetScroll>
@@ -331,6 +336,8 @@ const styles = StyleSheet.create({
   search: { marginHorizontal: layout.margin, marginBottom: 14 },
   row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
   rule: { borderTopWidth: layout.hairline, borderTopColor: colors.separator },
+  // The line between two rows starts where the words do, past the circle.
+  ruleLine: { position: 'absolute', top: 0, left: layout.rowPadding + 22 + 12, right: 0, height: 0, borderTopWidth: layout.hairline, borderTopColor: colors.separator },
   rowText: { flex: 1, gap: 1 },
   input: { ...fieldFont('body'), flex: 1, height: 46, color: colors.label, outlineWidth: 0 },
   buttons: { justifyContent: 'flex-end', gap: 22 },

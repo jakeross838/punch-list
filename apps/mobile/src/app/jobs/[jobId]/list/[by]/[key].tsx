@@ -1,6 +1,6 @@
-// One location's items (or one company's or person's, or what they wait on), Site Office style: the
-// location's counts under its title, then its items in white panels by who they are assigned to, each with a status pill and a
-// short note. Completed items wait under Completed at the end, which opens and closes with a tap
+// One location's items (or one company's or person's, or what they wait on), laid out like a list
+// in Reminders: the location's counts under its title, then its items in white rounded cards by who
+// they are assigned to, each with a status tag and a short note. Completed items wait under Completed at the end, which opens and closes with a tap
 // (open from the start when View has Show Completed on). In a location the end of the list has New
 // Item, Common Tasks and the next location of the walk; Capture in the bottom bar takes the photo
 // here. Ready and Waiting list the job's items by state, by company. Drafts lists what was saved to
@@ -29,7 +29,6 @@ import {
   groupItems,
   isFiltered,
   neighborRooms,
-  SHARED_GROUP,
   sortItems,
   type GroupBy,
   type Item,
@@ -57,6 +56,7 @@ import {
   EmptyState,
   haptic,
   Icon,
+  IconTile,
   LedgerRow,
   MetaLine,
   OptionPicker,
@@ -236,18 +236,15 @@ export default function GroupScreen() {
       ? (STATES.find(([v]) => v === stateList)?.[1] ?? "Ready")
       : (room?.label ??
         (holdup ? `Waiting on ${holdup}` : (group?.label ?? GROUP_LABELS[by])));
-  const subtitle = drafts
-    ? `${open.length} ${open.length === 1 ? "draft" : "drafts"}. ${open.some((i) => isFilling(fill, i.id)) ? (open.length === 1 ? "Filling in from the photo." : "Filling in from the photos.") : open.length === 1 ? "Tap it to finish it." : "Tap one to finish it."}`
-    : undefined;
+  // Drafts: only whether Claude is still filling them in.
+  const subtitle = drafts && open.some((i) => isFilling(fill, i.id)) ? "Claude is filling them in." : undefined;
   const openNow = open.filter((i) => i.status === "open");
   const readyNow = openNow.filter((i) => i.ready && !i.unfinished).length;
-  const companiesNow = new Set(openNow.map((i) => i.companyId).filter(Boolean)).size;
   const meta = drafts ? null : (
     <MetaLine
       facts={[
         { text: `${openNow.length} ${stateList === "ready" ? "ready" : stateList === "waiting" ? "waiting" : stateList === "check" ? "to check" : "open"}`, color: stateList === "ready" ? colors.ok : colors.label },
         !stateList && readyNow > 0 ? { text: `${readyNow} ready`, color: colors.ok } : null,
-        stateList ? `${companiesNow} ${companiesNow === 1 ? "company" : "companies"}` : null,
       ]}
     />
   );
@@ -493,26 +490,8 @@ export default function GroupScreen() {
           : []),
       ];
 
-  const crumbWhere = drafts ? "Drafts" : stateList ? title : room ? null : title;
-  const crumb = [job?.name ?? "Job", ...(room ? [room.kind === "shared" ? SHARED_GROUP : (room.floor ?? ""), room.label].filter(Boolean) : crumbWhere ? [crumbWhere] : [])];
-  const eyebrow = drafts
-    ? "Saved to finish later"
-    : stateList === "ready"
-      ? "Can be done now"
-      : stateList === "waiting"
-        ? "Waiting on something first"
-        : stateList === "check"
-          ? "Done, the companies say: check each"
-          : room
-          ? `Location · ${room.kind === "shared" ? SHARED_GROUP : (room.floor ?? "On the job")}`
-          : by === "company"
-            ? personOfKey(key)
-              ? "Someone on your team"
-              : "Company"
-            : by === "waiting"
-              ? "Waiting on"
-              : undefined;
-  const marker = stateList === "ready" ? colors.okFill : undefined;
+  // Only the level, for a location: everything else here says itself.
+  const eyebrow = room && room.kind !== "shared" && room.floor ? room.floor : undefined;
   const noneOpen = open.length === 0 && !selecting;
 
   const renderRow = ({ item, index, section }: { item: Item; index: number; section: Section }) => (
@@ -528,7 +507,6 @@ export default function GroupScreen() {
         freed={section.kind === "open" ? work?.freed.get(item.id) : undefined}
         first={index === 0}
         last={index === section.data.length - 1}
-        stripe={index % 2 === 1}
         checking={actions.checking.has(item.id)}
         completedBy={item.status === "complete" ? personName.get(item.completedBy ?? "") : undefined}
         onOpen={drafts ? openUnfinished : actions.onOpen}
@@ -546,10 +524,8 @@ export default function GroupScreen() {
       <Page
         title={title}
         eyebrow={eyebrow}
-        marker={marker}
-        subtitle={selecting ? `${pickedItems.length} picked` : subtitle}
+        subtitle={selecting ? `${pickedItems.length} Selected` : subtitle}
         meta={selecting ? undefined : meta}
-        crumb={crumb}
         backLabel={job?.name}
         right={right}
         tab={selecting ? undefined : { active: "jobs", jobId, locationId: room?.id ?? null }}
@@ -589,31 +565,39 @@ export default function GroupScreen() {
                   />
                 ) : null}
                 {inLocation && copied && !selecting ? (
-                  <View style={styles.paste} testID="paste-banner">
-                    <Icon name="clipboard" size={18} color={colors.onBar} />
-                    <Text variant="subheadline" color={colors.onBar} style={{ flex: 1 }} numberOfLines={2}>
-                      {itemsWord(copied.items.length)} copied{copied.jobId === jobId ? "" : ` from ${jobs.find((j) => j.id === copied.jobId)?.name ?? "another job"}`}
-                    </Text>
-                    <Touchable feedback="opacity" onPress={() => void pasteHere()} accessibilityRole="button" testID="paste-here" hitSlop={8}>
-                      <Text variant="label" weight="600" color={colors.onBar}>
-                        Paste Here
+                  <Panel style={styles.card} testID="paste-banner">
+                    <LedgerRow
+                      last
+                      lead={<IconTile name="clipboard" />}
+                      trail={
+                        <>
+                          <Touchable feedback="opacity" onPress={() => void pasteHere()} accessibilityRole="button" testID="paste-here" hitSlop={8}>
+                            <Text weight="600" color={colors.tint}>
+                              Paste Here
+                            </Text>
+                          </Touchable>
+                          <Touchable feedback="opacity" onPress={() => clipboard.clear()} accessibilityRole="button" accessibilityLabel="Forget what was copied" testID="paste-clear" hitSlop={10}>
+                            <Icon name="xmark.circle.fill" size={20} color={colors.circle} />
+                          </Touchable>
+                        </>
+                      }
+                    >
+                      <Text numberOfLines={2}>
+                        {itemsWord(copied.items.length)} copied{copied.jobId === jobId ? "" : ` from ${jobs.find((j) => j.id === copied.jobId)?.name ?? "another job"}`}
                       </Text>
-                    </Touchable>
-                    <Touchable feedback="opacity" onPress={() => clipboard.clear()} accessibilityRole="button" accessibilityLabel="Forget what was copied" testID="paste-clear" hitSlop={10}>
-                      <Icon name="xmark" size={16} color={colors.onBarQuiet} />
-                    </Touchable>
-                  </View>
+                    </LedgerRow>
+                  </Panel>
                 ) : null}
                 {selecting ? (
                   <View style={styles.picking}>
                     <Touchable feedback="opacity" onPress={pickAll} accessibilityRole="button" testID="pick-all" hitSlop={8}>
-                      <Text variant="label" weight="600" color={colors.tint}>
-                        {allPicked ? "Unpick All" : "Pick All"}
-                      </Text>
+                      <Text color={colors.tint}>{allPicked ? "Deselect All" : "Select All"}</Text>
                     </Touchable>
-                    <Text variant="footnote" color={colors.secondary} style={{ flex: 1, textAlign: "right" }} numberOfLines={2}>
-                      {canDrag ? "Drag the lines to put them in order." : "Tap items to pick them."}
-                    </Text>
+                    {canDrag ? (
+                      <Text variant="footnote" color={colors.secondary} style={{ flex: 1, textAlign: "right" }} numberOfLines={2}>
+                        Drag the lines to put them in order.
+                      </Text>
+                    ) : null}
                   </View>
                 ) : null}
                 {canDrag ? (
@@ -625,23 +609,26 @@ export default function GroupScreen() {
                     onDrop={dropRow}
                     testID="drag-list"
                     renderRow={(item, handle) => (
-                      <ItemRow
-                        item={item}
-                        photo={firstPhoto.get(item.id)}
-                        comments={commentsOn.get(item.id)}
-                        holds={holds}
-                        location={locationFor(item)}
-                        assignee={assigneeFor(item)}
-                        first
-                        last
-                        checking={false}
-                        onOpen={actions.onOpen}
-                        onCheck={actions.onCheck}
-                        onReady={actions.onReady}
-                        onRemove={actions.onRemove}
-                        select={{ picked: picked.has(item.id), onToggle: togglePick }}
-                        trailing={handle}
-                      />
+                      // Each row its own card while they are dragged, a little apart.
+                      <View style={styles.dragRow}>
+                        <ItemRow
+                          item={item}
+                          photo={firstPhoto.get(item.id)}
+                          comments={commentsOn.get(item.id)}
+                          holds={holds}
+                          location={locationFor(item)}
+                          assignee={assigneeFor(item)}
+                          first
+                          last
+                          checking={false}
+                          onOpen={actions.onOpen}
+                          onCheck={actions.onCheck}
+                          onReady={actions.onReady}
+                          onRemove={actions.onRemove}
+                          select={{ picked: picked.has(item.id), onToggle: togglePick }}
+                          trailing={handle}
+                        />
+                      </View>
                     )}
                   />
                 ) : null}
@@ -653,8 +640,8 @@ export default function GroupScreen() {
                   />
                 )}
                 {holdup && heldUp.length > 0 ? (
-                  <Panel style={styles.holdup}>
-                    <LedgerRow last onPress={clearAll} chevron={false} lead={<Icon name="checkmark.circle.fill" size={18} color={colors.tint} />} testID="holdup-clear">
+                  <Panel style={styles.card}>
+                    <LedgerRow last onPress={clearAll} chevron={false} lead={<IconTile name="checkmark.circle.fill" />} testID="holdup-clear">
                       <Text color={colors.tint}>Stop Waiting on {holdup}</Text>
                     </LedgerRow>
                   </Panel>
@@ -665,12 +652,12 @@ export default function GroupScreen() {
                     title={drafts ? "No Drafts" : "Nothing Open"}
                     message={
                       drafts
-                        ? "Photos saved to finish later wait here to be filled in."
+                        ? "Photos saved to finish later wait here."
                         : room
                           ? isFiltered(filters)
-                            ? "Nothing here fits the filters. Take a photo, or tap New Item to type one in."
-                            : "Take a photo with Capture, or tap New Item to type one in."
-                          : "No open items here right now."
+                            ? "Nothing here fits the filters."
+                            : "Take a photo with Capture, or tap New Item."
+                          : undefined
                     }
                   />
                 ) : null}
@@ -688,52 +675,60 @@ export default function GroupScreen() {
                   testID="completed-toggle"
                   style={styles.doneHeader}
                 >
-                  <Text variant="label" color={colors.secondary} style={styles.doneLabel}>
+                  <Text variant="footnote" color={colors.secondary} style={styles.doneLabel}>
                     Completed
                   </Text>
-                  <Text variant="label" color={colors.secondary} tabular testID="completed-count">
+                  <Text variant="footnote" color={colors.secondary} tabular testID="completed-count">
                     {done.length}
                   </Text>
                   <Icon name={doneShown ? "chevron.down" : "chevron.right"} size={12} weight="semibold" color={colors.secondary} />
                 </Touchable>
               ) : section.title ? (
-                <SectionLabel
-                  label={section.title}
-                  right={String(section.data.length)}
-                  style={styles.sectionLabel}
-                  testID={`section-${section.key}`}
-                />
+                <SectionLabel label={section.title} testID={`section-${section.key}`} />
               ) : (
                 <View style={{ height: 8 }} />
               )
             }
-            renderSectionFooter={() => <View style={{ height: 2 }} />}
             renderItem={renderRow}
             ListFooterComponent={
               inLocation && !selecting ? (
                 <Panel style={styles.tail}>
-                  <LedgerRow onPress={newItem} chevron={false} lead={<Icon name="plus" size={16} color={colors.tint} weight="medium" />} testID="new-item-row">
-                    <Text variant="label" color={colors.tint}>
-                      New Item
-                    </Text>
+                  <LedgerRow onPress={newItem} chevron={false} lead={<IconTile name="plus" />} testID="new-item-row">
+                    <Text color={colors.tint}>New Item</Text>
                   </LedgerRow>
-                  <LedgerRow onPress={() => setCommon(true)} chevron={false} lead={<Icon name="checklist" size={16} color={colors.tint} />} testID="common-tasks-row" last={!next && !previous}>
-                    <Text variant="label" color={colors.tint}>
-                      Add common tasks
-                    </Text>
+                  <LedgerRow onPress={() => setCommon(true)} chevron={false} lead={<IconTile name="checklist" />} testID="common-tasks-row" last={!next && !previous}>
+                    <Text color={colors.tint}>Common Tasks</Text>
                   </LedgerRow>
                   {next ? (
-                    <LedgerRow onPress={() => goRoom(next.id)} trail={<Text variant="callout">{next.label}</Text>} testID="next-location" last={!previous} accessibilityLabel={`Next location, ${next.label}`}>
-                      <Text variant="label" color={colors.secondary}>
-                        Next location
-                      </Text>
+                    <LedgerRow
+                      onPress={() => goRoom(next.id)}
+                      lead={<IconTile name="arrow" color={colors.secondary} />}
+                      trail={
+                        <Text color={colors.secondary} numberOfLines={1}>
+                          {next.label}
+                        </Text>
+                      }
+                      testID="next-location"
+                      last={!previous}
+                      accessibilityLabel={`Next location, ${next.label}`}
+                    >
+                      <Text>Next</Text>
                     </LedgerRow>
                   ) : null}
                   {previous ? (
-                    <LedgerRow onPress={() => goRoom(previous.id)} trail={<Text variant="callout">{previous.label}</Text>} testID="previous-location" last accessibilityLabel={`Previous location, ${previous.label}`}>
-                      <Text variant="label" color={colors.secondary}>
-                        Previous location
-                      </Text>
+                    <LedgerRow
+                      onPress={() => goRoom(previous.id)}
+                      lead={<IconTile name="arrow.left" color={colors.secondary} />}
+                      trail={
+                        <Text color={colors.secondary} numberOfLines={1}>
+                          {previous.label}
+                        </Text>
+                      }
+                      testID="previous-location"
+                      last
+                      accessibilityLabel={`Previous location, ${previous.label}`}
+                    >
+                      <Text>Previous</Text>
                     </LedgerRow>
                   ) : null}
                 </Panel>
@@ -774,31 +769,19 @@ export default function GroupScreen() {
 }
 
 const styles = StyleSheet.create({
-  states: { marginHorizontal: layout.margin, marginTop: 2 },
-  paste: {
-    minHeight: 48,
-    marginHorizontal: layout.margin,
-    marginTop: 8,
-    paddingHorizontal: 14,
-    backgroundColor: colors.bar,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  picking: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: layout.inset, paddingTop: 6, paddingBottom: 10 },
-  holdup: { marginTop: 10 },
-  sectionLabel: { marginTop: 16, marginBottom: 8 },
+  states: { marginHorizontal: layout.margin, marginTop: 2, marginBottom: 4 },
+  card: { marginTop: 16 },
+  picking: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: layout.inset, paddingTop: 4, paddingBottom: 8 },
   doneHeader: {
     minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginHorizontal: layout.inset,
+    marginHorizontal: layout.margin + layout.rowPadding,
     marginTop: 18,
-    marginBottom: 8,
-    borderBottomWidth: layout.hairline,
-    borderBottomColor: colors.border,
+    marginBottom: 4,
   },
-  doneLabel: { flex: 1, fontSize: 11 },
-  tail: { marginTop: 18 },
+  doneLabel: { flex: 1 },
+  tail: { marginTop: 24 },
+  dragRow: { paddingBottom: 8 },
 });

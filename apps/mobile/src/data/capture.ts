@@ -34,6 +34,8 @@ export interface CaptureState {
   editing: string | null;
   /** Items saved on this walk. */
   saved: number;
+  /** The drafts photos made on this walk, for the summary when the camera closes. */
+  snaps: string[];
   /** What was just saved, for the camera to confirm over the viewfinder. */
   lastSaved: { title: string; room: string | null; at: number; text?: string } | null;
   /** The last photo saved as an item on this walk, to finish now. */
@@ -50,6 +52,7 @@ const EMPTY: CaptureState = {
   draft: null,
   editing: null,
   saved: 0,
+  snaps: [],
   lastSaved: null,
   last: null,
   resume: null,
@@ -106,6 +109,7 @@ export const capture = {
     set({
       ...state,
       saved: state.saved + 1,
+      snaps: [...state.snaps, itemId],
       last: { itemId, uri: photo.uri, width: photo.width, height: photo.height },
       lastSaved: note(room ? `Saved in ${room}` : 'Saved, with no location yet', room),
     });

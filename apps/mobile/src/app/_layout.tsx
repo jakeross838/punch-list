@@ -1,23 +1,11 @@
-// The app shell. Every screen draws its own frame (ui/Page.tsx): the slate bar, the crumb and the
-// bottom bar, so the iPhone shows no system header. On the iPhone, screens use the native stack:
-// system push and swipe back, real page sheets for New Job, New Item and Item Form, and the camera
-// over everything. The preview page uses the JavaScript stack with the same motion. Signed out, the
-// only screen is Sign In; signing in opens Jobs. The splash stays up until the fonts are in.
+// The app shell. Every screen draws its own frame (ui/Page.tsx): the light bar and the bottom bar,
+// so the iPhone shows no system header. On the iPhone, screens use the native stack: system push
+// and swipe back, real page sheets for New Job, New Item and Item Form, and the camera over
+// everything. The preview page uses the JavaScript stack with the same motion. Signed out, the only
+// screen is Sign In; signing in opens Jobs. The words are in the iPhone's own font, so nothing waits
+// to load.
 
 import '@/ui/web-setup';
-import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
-import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
-import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
-import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
-import { JetBrainsMono_400Regular } from '@expo-google-fonts/jetbrains-mono/400Regular';
-import { JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono/500Medium';
-import { JetBrainsMono_600SemiBold } from '@expo-google-fonts/jetbrains-mono/600SemiBold';
-import { JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono/700Bold';
-import { SpaceGrotesk_400Regular } from '@expo-google-fonts/space-grotesk/400Regular';
-import { SpaceGrotesk_500Medium } from '@expo-google-fonts/space-grotesk/500Medium';
-import { SpaceGrotesk_600SemiBold } from '@expo-google-fonts/space-grotesk/600SemiBold';
-import { SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk/700Bold';
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import JSStack, { TransitionPresets } from 'expo-router/js-stack';
 import * as SplashScreen from 'expo-splash-screen';
@@ -33,21 +21,6 @@ import { FeedbackProvider } from '@/ui';
 import { forSheetIOS } from '@/ui/sheetTransition';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
-
-const FONTS = {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  SpaceGrotesk_400Regular,
-  SpaceGrotesk_500Medium,
-  SpaceGrotesk_600SemiBold,
-  SpaceGrotesk_700Bold,
-  JetBrainsMono_400Regular,
-  JetBrainsMono_500Medium,
-  JetBrainsMono_600SemiBold,
-  JetBrainsMono_700Bold,
-};
 
 const SCREENS = [
   'index',
@@ -65,8 +38,9 @@ const SCREENS = [
   'jobs/[jobId]/list/[by]/[key]',
   'jobs/[jobId]/items/[itemId]/index',
   'jobs/[jobId]/activity',
+  'jobs/[jobId]/duplicates',
 ] as const;
-const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/read-plans', 'settings/item-form'] as const;
+const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/read-plans', 'jobs/[jobId]/say', 'settings/item-form'] as const;
 const CAMERA = 'jobs/[jobId]/capture';
 
 function NativeStack({ signedIn }: { signedIn: boolean }) {
@@ -144,18 +118,15 @@ function Navigator() {
 }
 
 export default function RootLayout() {
-  const [loaded, failed] = useFonts(FONTS);
-  const ready = loaded || !!failed;
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => undefined);
-  }, [ready]);
-  if (!ready) return null;
+    SplashScreen.hideAsync().catch(() => undefined);
+  }, []);
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bar }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaProvider>
         <DataProvider>
           <FeedbackProvider>
-            <StatusBar style="light" />
+            <StatusBar style="dark" />
             <Navigator />
           </FeedbackProvider>
         </DataProvider>

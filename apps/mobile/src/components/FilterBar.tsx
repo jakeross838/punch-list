@@ -92,7 +92,7 @@ export function FilterBar({
           testID="filter-clear"
           style={styles.clear}
         >
-          <Text variant="label" weight="600" color={colors.tint}>
+          <Text variant="subheadline" color={colors.tint}>
             Clear All
           </Text>
         </Touchable>
@@ -104,6 +104,6 @@ export function FilterBar({
 const styles = StyleSheet.create({
   bar: { flexGrow: 0, marginTop: -6, marginBottom: 6 },
   top: { marginTop: 0, marginBottom: 10 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: layout.inset },
-  clear: { height: 30, justifyContent: 'center', paddingHorizontal: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: layout.margin },
+  clear: { height: 32, justifyContent: 'center', paddingHorizontal: 6 },
 });

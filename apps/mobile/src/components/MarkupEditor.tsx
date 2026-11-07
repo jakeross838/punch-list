@@ -1,5 +1,6 @@
-// Markup on a photo, made for the job site. The marks used most come first: a circle, an arrow, and
-// a note that points at the work with an arrow, then Draw. A box, a measurement with its size
+// Markup on a photo, made for the job site. The marks used most come first: a circle, an arrow,
+// Text (words anywhere, or words that point at the work with an arrow), then Draw. A tap on the photo
+// with any of them puts words there: tap and type. A box, a measurement with its size
 // written out, and numbered spots for several places with the same work are under More. Tap a mark
 // to change it: drag it somewhere else, drag a square to change its shape, give it another color,
 // change its words or delete it. Undo and Redo sit at the top, the way Apple's Markup has them. The
@@ -51,10 +52,10 @@ interface ToolInfo {
 }
 
 const MAIN: ToolInfo[] = [
-  { tool: 'circle', label: 'Circle', icon: 'circle', hint: 'Drag across the spot to circle it.' },
-  { tool: 'arrow', label: 'Arrow', icon: 'arrow.up.right', hint: 'Drag toward the spot.' },
-  { tool: 'text', label: 'Note', icon: 'note.arrow', hint: 'Tap for a note, or drag to point it at a spot.' },
-  { tool: 'pen', label: 'Draw', icon: 'pencil.tip', hint: 'Draw with your finger.' },
+  { tool: 'circle', label: 'Circle', icon: 'circle', hint: 'Drag across the spot to circle it, or tap to type.' },
+  { tool: 'arrow', label: 'Arrow', icon: 'arrow.up.right', hint: 'Drag toward the spot, or tap to type.' },
+  { tool: 'text', label: 'Text', icon: 'textformat', hint: 'Tap where the words go, or drag to point them at a spot.' },
+  { tool: 'pen', label: 'Draw', icon: 'pencil.tip', hint: 'Draw with your finger, or tap to type.' },
 ];
 
 const MORE: ToolInfo[] = [
@@ -169,7 +170,7 @@ export function MarkupEditor({
 
   // A touch on the picked mark drags it, and on one of its squares changes its shape. Anywhere else,
   // a drag draws a new mark and a tap picks the mark under the finger, puts down a numbered spot or
-  // a note, or lets go of the mark picked.
+  // words to type, or lets go of the mark picked.
   const [touch] = useState<Touch>(() => {
     let g: Gesture | null = null;
     let origin = { x: 0, y: 0 };
@@ -190,16 +191,16 @@ export function MarkupEditor({
         dispatch({ type: 'pick', index: i >= 0 ? i : null });
         return;
       }
-      // With Number or Note, a tap inside a circle or a box puts a number or a note there.
-      const placing = t === 'number' || t === 'text';
-      const i = markAt(s.marks, p, width, height, 22, { inside: !placing });
+      // A tap on a mark picks it. Anywhere else, inside a circle or a box too, it puts a number down
+      // with Number, and with every other tool it puts words there to type: tap and type.
+      const i = markAt(s.marks, p, width, height, 22, { inside: false });
       if (i >= 0) {
         haptic.selection();
         dispatch({ type: 'pick', index: i });
       } else if (t === 'number') {
         haptic.selection();
         dispatch({ type: 'place', mark: newMark('number', c, p, p, s.marks) });
-      } else if (t === 'text') {
+      } else {
         dispatch({ type: 'note', at: p, color: c });
       }
     };
@@ -369,7 +370,7 @@ export function MarkupEditor({
               value={panel.draft.text}
               onChangeText={(text) => dispatch({ type: 'type', text })}
               onSubmitEditing={() => add()}
-              placeholder={panel.draft.to ? 'What is wrong there?' : 'Or type a short note'}
+              placeholder={panel.draft.to ? 'What is wrong there?' : 'Or type your own'}
               placeholderTextColor={colors.onDarkQuiet}
               selectionColor={colors.onDark}
               autoFocus
@@ -377,7 +378,7 @@ export function MarkupEditor({
               returnKeyType="done"
               maxLength={40}
               maxFontSizeMultiplier={TEXT_LARGEST}
-              accessibilityLabel="Note"
+              accessibilityLabel="Words on the photo"
               testID="markup-note"
               style={styles.input}
             />
@@ -563,7 +564,7 @@ function ToolButton({ label, icon, on, onPress, testID }: { label: string; icon:
       style={[styles.tool, on ? styles.toolOn : null]}
     >
       <Icon name={icon} size={22} color={colors.onDark} weight={on ? 'medium' : 'regular'} />
-      <Text variant="stamp" color={on ? colors.onDark : colors.onDarkQuiet} numberOfLines={1}>
+      <Text variant="caption1" weight="600" color={on ? colors.onDark : colors.onDarkQuiet} numberOfLines={1}>
         {label}
       </Text>
     </Touchable>
@@ -610,7 +611,6 @@ function Picked({ mark, width, height }: { mark: Mark; width: number; height: nu
 // On the preview page a drag on the photo draws instead of selecting or scrolling the page.
 const WEB_CANVAS = Platform.OS === 'web' ? ({ touchAction: 'none', userSelect: 'none', cursor: 'crosshair' } as object) : null;
 
-const EDGE = 'rgba(247, 245, 236, 0.22)';
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bar },
@@ -620,34 +620,34 @@ const styles = StyleSheet.create({
   history: { flexDirection: 'row', gap: 4 },
   barIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   off: { opacity: 0.35 },
-  next: { height: 36, paddingHorizontal: 14, backgroundColor: colors.onDark, alignItems: 'center', justifyContent: 'center' },
+  next: { height: 34, paddingHorizontal: 16, borderRadius: 17, backgroundColor: colors.onDark, alignItems: 'center', justifyContent: 'center' },
   area: { flex: 1 },
   canvas: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
   controls: { paddingTop: 2 },
   line: { height: LINE_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
   lineText: { flex: 1 },
-  lineButton: { height: 32, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: EDGE },
+  lineButton: { height: 32, paddingHorizontal: 14, justifyContent: 'center', borderRadius: 16, backgroundColor: colors.darkChip },
   tools: { height: TOOLS_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: TOOL_GAP },
   tool: { width: TOOL_WIDTH, height: 54, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  toolOn: { backgroundColor: colors.darkChipOn },
+  toolOn: { borderRadius: 12, backgroundColor: colors.darkChipOn },
   colors: { height: COLORS_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   swatchHit: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  swatch: { width: 26, height: 26 },
+  swatch: { width: 28, height: 28, borderRadius: 14 },
   swatchBlack: { borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.5)' },
   swatchOn: { borderWidth: 2.5, borderColor: colors.black, outlineWidth: 2, outlineColor: colors.white, outlineStyle: 'solid' },
-  frame: { position: 'absolute', borderWidth: 1, borderColor: 'rgba(19, 32, 40, 0.6)' },
+  frame: { position: 'absolute', borderWidth: 1, borderColor: 'rgba(0, 0, 0, 0.5)' },
   frameDash: { position: 'absolute', left: -1, top: -1, right: -1, bottom: -1, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.white },
-  grip: { position: 'absolute', width: GRIP, height: GRIP, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.bar, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.45)' },
+  grip: { position: 'absolute', width: GRIP, height: GRIP, borderRadius: GRIP / 2, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.tint, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.45)' },
   panel: { gap: 10, paddingTop: 12, paddingBottom: 12, backgroundColor: '#1C1C1E' },
   chips: { flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
-  chip: { height: 36, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: EDGE },
+  chip: { height: 36, paddingHorizontal: 14, justifyContent: 'center', borderRadius: 18, backgroundColor: colors.darkChip },
   chipOn: { backgroundColor: colors.white },
   entry: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16 },
-  input: { ...fieldFont('body'), flex: 1, minWidth: 0, height: 44, paddingHorizontal: 12, color: colors.onDark, backgroundColor: colors.darkChip, borderWidth: 1, borderColor: EDGE, outlineWidth: 0 },
+  input: { ...fieldFont('body'), flex: 1, minWidth: 0, height: 44, paddingHorizontal: 14, borderRadius: 10, color: colors.onDark, backgroundColor: colors.darkChip, outlineWidth: 0 },
   panelButton: { height: 44, paddingHorizontal: 8, justifyContent: 'center' },
-  morePanel: { position: 'absolute', width: 220, backgroundColor: '#1C1C1E', borderWidth: 1, borderColor: EDGE, boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)' },
+  morePanel: { position: 'absolute', width: 220, borderRadius: 13, overflow: 'hidden', backgroundColor: '#2C2C2E', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)' },
   moreRow: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
-  moreRule: { borderTopWidth: 1, borderTopColor: 'rgba(247, 245, 236, 0.12)' },
+  moreRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255, 255, 255, 0.16)' },
   moreCheck: { width: 16, alignItems: 'center' },
   moreLabel: { flex: 1 },
 });

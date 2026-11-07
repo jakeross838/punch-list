@@ -1,9 +1,11 @@
-// Every screen's frame, the same on the iPhone and the preview page, in Nightwork's Site Office
-// style. The slate bar across the top: back with the last screen's name (or the wordmark on Jobs,
-// or the job's name on Send), square buttons, and Me on the right. Under it a crumb of where you
-// are, then the header: a small eyebrow, the title, a line of counts. The content sits on sand. At
-// the bottom, either the screen's own buttons or the bar with Jobs, Capture and Send. A sheet has a
-// head of its own instead of the bar.
+// Every screen's frame, the same on the iPhone and the preview page, the way the iPhone's own apps
+// are laid out. A light bar across the top: back in blue with the last screen's name, and the
+// screen's own buttons on the right as blue icons or words. Under it the large title, with a small
+// line above it when it helps and a line under it (an address, a count), then the search field and,
+// on a job, its count tiles as Reminders has them. The content sits on light gray in white rounded
+// cards. At the bottom, either the screen's own buttons or the bar with Jobs,
+// Capture and Send. A sheet has a head of its own instead: Cancel on the left, the title in the
+// middle and Done on the right.
 
 import { router, useCanGoBack } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
@@ -24,18 +26,6 @@ function barItem(item: BarItem, tone: 'dark' | 'light') {
   return <BarButtonView key={item.label} {...item} tone={tone} />;
 }
 
-/** The app's name in the bar, with the thin rule beside it. */
-export function Wordmark() {
-  return (
-    <View style={styles.wordmark} accessible accessibilityRole="header" accessibilityLabel="Punch List">
-      <Text variant="title3" color={colors.onBar} style={styles.wordmarkText}>
-        punch list
-      </Text>
-      <View style={styles.beam} />
-    </View>
-  );
-}
-
 function BackButton({ label }: { label?: string }) {
   return (
     <Touchable
@@ -47,41 +37,18 @@ function BackButton({ label }: { label?: string }) {
       testID="back"
       style={styles.back}
     >
-      <Icon name="chevron.left" size={18} color={colors.onBar} weight="medium" />
-      <Text variant="button" color={colors.onBar} numberOfLines={1} style={styles.backText}>
+      <Icon name="chevron.left" size={24} color={colors.tint} weight="semibold" />
+      <Text variant="body" color={colors.tint} numberOfLines={1} style={styles.backText}>
         {label ?? 'Back'}
       </Text>
     </Touchable>
   );
 }
 
-/** Where you are, under the bar: Fish / Level 1 / Kitchen 109. */
-export function Crumb({ parts }: { parts: string[] }) {
+/** The small line above a title, with a dot when it is a status. */
+export function Eyebrow({ text, marker, color = colors.secondary, center }: { text: string; marker?: string; color?: string; center?: boolean }) {
   return (
-    <View style={styles.crumb} accessible accessibilityLabel={parts.join(', ')}>
-      {parts.map((p, i) => {
-        const last = i === parts.length - 1;
-        return (
-          <View key={`${i}-${p}`} style={[styles.crumbPart, last ? styles.crumbLast : null]}>
-            {i > 0 ? (
-              <Text variant="label" weight="400" color={colors.quiet}>
-                /
-              </Text>
-            ) : null}
-            <Text variant="label" weight={last ? '600' : '500'} color={last ? colors.label : colors.secondary} numberOfLines={1} style={last ? styles.crumbLastText : null}>
-              {p}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-/** The small line above a title, with its square stamp. */
-export function Eyebrow({ text, marker, color = colors.secondary }: { text: string; marker?: string; color?: string }) {
-  return (
-    <View style={styles.eyebrow}>
+    <View style={[styles.eyebrow, center ? styles.eyebrowCenter : null]}>
       {marker ? <View style={[styles.marker, { backgroundColor: marker }]} /> : null}
       <Text variant="eyebrow" color={color} numberOfLines={1} style={styles.eyebrowText}>
         {text}
@@ -117,10 +84,8 @@ export function Page({
   marker,
   subtitle,
   meta,
-  stamp,
-  crumb,
   hideHeader,
-  beforeSearch,
+  summary,
   backLabel,
   back = true,
   left,
@@ -147,13 +112,8 @@ export function Page({
     <View>
       {!hideHeader && !sheet ? (
         <View style={styles.header}>
-          {stamp ? (
-            <Text variant="stamp" color={colors.tint} style={styles.stamp}>
-              {stamp}
-            </Text>
-          ) : null}
           {eyebrow ? <Eyebrow text={eyebrow} marker={marker} /> : null}
-          <Text variant="largeTitle" accessibilityRole="header" numberOfLines={3} style={[eyebrow ? styles.titleUnder : null, stamp ? styles.titleBesideStamp : null]}>
+          <Text variant="largeTitle" accessibilityRole="header" numberOfLines={3} style={eyebrow ? styles.titleUnder : null}>
             {title}
           </Text>
           {subtitle ? (
@@ -164,7 +124,6 @@ export function Page({
           {meta ? <View style={styles.meta}>{meta}</View> : null}
         </View>
       ) : null}
-      {beforeSearch ? <View style={styles.beforeSearch}>{beforeSearch}</View> : null}
       {search ? (
         <View style={[styles.search, sheet ? styles.searchInSheet : null]}>
           <View style={styles.searchField}>
@@ -183,6 +142,7 @@ export function Page({
           ) : null}
         </View>
       ) : null}
+      {summary ? <View style={styles.summary}>{summary}</View> : null}
     </View>
   );
 
@@ -204,19 +164,17 @@ export function Page({
         <View style={styles.sheetHead}>
           <View style={styles.grabber} />
           <View style={styles.sheetRow}>
+            <View style={[styles.sheetSide, styles.sheetLeft]}>{left?.map((item) => barItem(item, 'light'))}</View>
             <View style={styles.sheetTitle}>
-              {eyebrow ? <Eyebrow text={eyebrow} marker={marker} /> : null}
-              <Text variant="sheetTitle" accessibilityRole="header" numberOfLines={2} style={eyebrow ? styles.sheetTitleUnder : null}>
+              <Text variant="sheetTitle" accessibilityRole="header" numberOfLines={1} align="center">
                 {title}
               </Text>
+              {eyebrow ? <Eyebrow text={eyebrow} marker={marker} center /> : null}
             </View>
-            <View style={styles.sheetButtons}>
-              {left?.map((item) => barItem(item, 'light'))}
-              {right?.map((item) => barItem(item, 'light'))}
-            </View>
+            <View style={[styles.sheetSide, styles.sheetRight]}>{right?.map((item) => barItem(item, 'light'))}</View>
           </View>
           {subtitle ? (
-            <Text variant="subheadline" color={colors.secondary} style={styles.sheetSubtitle}>
+            <Text variant="subheadline" color={colors.secondary} align="center" style={styles.sheetSubtitle}>
               {subtitle}
             </Text>
           ) : null}
@@ -225,17 +183,16 @@ export function Page({
         <View style={[styles.bar, { paddingTop: insets.top }]}>
           <View style={styles.barRow}>
             <View style={styles.barLeft}>
-              {showBack ? <BackButton label={backLabel} /> : jobSwitch ? <JobSwitch {...jobSwitch} /> : <Wordmark />}
-              {left?.map((item) => barItem(item, 'dark'))}
+              {showBack ? <BackButton label={backLabel} /> : jobSwitch ? <JobSwitch {...jobSwitch} /> : null}
+              {left?.map((item) => barItem(item, 'light'))}
             </View>
             <View style={styles.barRight}>
-              {right?.map((item) => barItem(item, 'dark'))}
+              {right?.map((item) => barItem(item, 'light'))}
               {account ? <AccountButton /> : null}
             </View>
           </View>
         </View>
       )}
-      {crumb?.length && !sheet ? <Crumb parts={crumb} /> : null}
       <View style={styles.body}>
         {list ? (
           list(scroll)
@@ -255,65 +212,40 @@ export function Page({
 
 const styles = StyleSheet.create({
   page: { flex: 1, overflow: 'hidden', backgroundColor: colors.background },
-  bar: { backgroundColor: colors.bar, zIndex: 10 },
-  barRow: { height: layout.barHeight, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingLeft: 20, paddingRight: 16 },
+  bar: { backgroundColor: colors.background, zIndex: 10 },
+  barRow: { height: layout.barHeight, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingLeft: 8, paddingRight: 12 },
   barLeft: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
-  barRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  wordmark: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  wordmarkText: { fontSize: 19, lineHeight: 24, letterSpacing: -0.57 },
-  beam: { width: 34, height: 1, backgroundColor: colors.stone, opacity: 0.7 },
-  back: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: -6, flexShrink: 1, minWidth: 0 },
-  backText: { flexShrink: 1, letterSpacing: 1.32 },
-  crumb: {
-    height: 34,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: layout.inset,
-    borderBottomWidth: layout.hairline,
-    borderBottomColor: colors.border,
-    overflow: 'hidden',
-  },
-  crumbPart: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
-  crumbLast: { flexShrink: 1, minWidth: 0 },
-  crumbLastText: { flexShrink: 1 },
-  header: { paddingTop: 16, paddingBottom: 14, paddingHorizontal: layout.inset },
-  stamp: {
-    position: 'absolute',
-    top: 16,
-    right: layout.inset,
-    paddingBottom: 2,
-    borderBottomWidth: layout.hairline,
-    borderBottomColor: colors.borderStrong,
-  },
-  eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  barRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  back: { height: 40, flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1, minWidth: 0 },
+  backText: { flexShrink: 1 },
+  header: { paddingTop: 2, paddingBottom: 12, paddingHorizontal: layout.inset },
+  eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  eyebrowCenter: { justifyContent: 'center' },
   eyebrowText: { flexShrink: 1 },
-  marker: { width: 7, height: 7 },
-  titleUnder: { marginTop: 6 },
-  titleBesideStamp: { paddingRight: 96 },
-  subtitle: { marginTop: 6 },
-  meta: { marginTop: 8 },
-  beforeSearch: { marginBottom: 12 },
-  search: { flexDirection: 'row', gap: 8, paddingHorizontal: layout.margin, paddingBottom: 10 },
+  marker: { width: 8, height: 8, borderRadius: 4 },
+  titleUnder: { marginTop: 2 },
+  subtitle: { marginTop: 4 },
+  meta: { marginTop: 6 },
+  summary: { marginBottom: 4 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: layout.margin, paddingBottom: 10 },
   searchInSheet: { paddingTop: 12 },
   searchField: { flex: 1, minWidth: 0 },
-  filter: { width: 42, height: 42, backgroundColor: colors.cell },
+  filter: { width: 40, height: 36 },
   body: { flex: 1 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 5 },
   bottom: {
     flexDirection: 'row',
-    gap: 8,
-    paddingTop: 12,
+    gap: 10,
+    paddingTop: 10,
     paddingHorizontal: layout.margin,
-    backgroundColor: colors.cell,
-    borderTopWidth: layout.hairline,
-    borderTopColor: colors.border,
+    backgroundColor: colors.background,
   },
-  sheetHead: { borderBottomWidth: layout.hairline, borderBottomColor: colors.border, backgroundColor: colors.background },
-  grabber: { alignSelf: 'center', width: 36, height: 4, marginTop: 8, backgroundColor: colors.quiet, opacity: 0.6 },
-  sheetRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingTop: 10, paddingBottom: 12, paddingLeft: layout.inset, paddingRight: layout.margin },
-  sheetTitle: { flex: 1, minWidth: 0, paddingTop: 2 },
-  sheetTitleUnder: { marginTop: 5 },
-  sheetButtons: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 2 },
-  sheetSubtitle: { marginTop: -4, marginBottom: 12, marginHorizontal: layout.inset },
+  sheetHead: { borderBottomWidth: layout.hairline, borderBottomColor: colors.separator, backgroundColor: colors.background },
+  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 2.5, marginTop: 6, backgroundColor: colors.quiet, opacity: 0.6 },
+  sheetRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: layout.margin, paddingVertical: 4 },
+  sheetSide: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  sheetLeft: { justifyContent: 'flex-start' },
+  sheetRight: { justifyContent: 'flex-end' },
+  sheetTitle: { flexShrink: 1, maxWidth: '50%', alignItems: 'center' },
+  sheetSubtitle: { marginTop: -2, marginBottom: 10, marginHorizontal: layout.inset },
 });

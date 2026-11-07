@@ -2,6 +2,7 @@
 // companies on the job and what the marks point at, and asked for the item the way a builder writes
 // it on a punch list. Its answer only fills in the form; the person checks it before it is kept.
 
+import { jsonIn } from './planReading';
 import { TITLE_MAX } from './rules';
 import { tidyHours } from './time';
 import { tidyTitle } from './titles';
@@ -9,6 +10,8 @@ import type { Company, Item, JobCompany, Mark, MarkColor, StandardTitle, Trade }
 
 export interface SuggestContext {
   room: string;
+  /** What the person said or typed about it, in their own words, if anything. */
+  words?: string;
   /** The standard titles with their trade and usual time, most used first. */
   titles: { title: string; trade: string | null; hours: number | null }[];
   /** The companies on the job and the trade each does here. */
@@ -81,6 +84,7 @@ export function suggestPrompt(ctx: SuggestContext): string {
     marks.length > 0
       ? `The superintendent marked the photo to show the problem:\n${marks.map((m) => `- ${m}`).join('\n')}`
       : 'The photo has no marks. Find the most likely unfinished work or problem in it.',
+    ...(ctx.words?.trim() ? [`They also said or typed: "${ctx.words.trim()}". That is the problem in their words: go by it.`] : []),
     '',
     'Write the item the way a builder writes it on a punch list:',
     '- title: a verb and the thing, as short as possible, like "Install toilet" or "Touch up paint". No room, no trade, no sizes, no brands. When one of the standard titles below fits, use it word for word.',
@@ -91,6 +95,7 @@ export function suggestPrompt(ctx: SuggestContext): string {
     ...(sized ? ['- A size marked on the photo goes in the description as it is written, like "24 inches left of the vanity."'] : []),
     '- trade: one of the trades below, or null when unsure.',
     '- company: the company on this job for that trade, from the list below, or null when unsure.',
+    '- others: when the marks point at separate problems that would be separate items (different work, or a different company), the first one goes above and each other one goes in others, in the same shape. Otherwise an empty list.',
     '',
     'Standard titles (title, trade):',
     ...ctx.titles.slice(0, 150).map((t) => `- ${t.title}${t.trade ? ` (${t.trade})` : ''}`),
@@ -100,7 +105,7 @@ export function suggestPrompt(ctx: SuggestContext): string {
     'Companies on this job (company, trade):',
     ...ctx.companies.map((c) => `- ${c.name} (${c.trade})`),
     '',
-    'Reply with only JSON, like {"title": "Touch up paint", "description": "Ceiling at the hood soffit.", "trade": "Painting", "company": "Triple H Painting"}.',
+    'Reply with only JSON, like {"title": "Touch up paint", "description": "Ceiling at the hood soffit.", "trade": "Painting", "company": "Triple H Painting", "others": []}.',
   ].join('\n');
 }
 
@@ -133,9 +138,27 @@ export function readSuggestion(raw: unknown, ctx: SuggestContext): ItemSuggestio
   return { title, description, trade, company, hours };
 }
 
+/**
+ * Every item Claude read from one photo: the first, then any others the marks point at, each
+ * checked the same way. Empty when nothing usable came back.
+ */
+export function readSuggestions(answer: unknown, ctx: SuggestContext): ItemSuggestion[] {
+  // The phone gets Claude's text; the preview gets it already read.
+  const raw = typeof answer === 'string' ? jsonIn(answer) : answer;
+  const first = readSuggestion(raw, ctx);
+  if (!first) return [];
+  const others = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).others : null;
+  const rest = Array.isArray(others) ? others.slice(0, 8).map((o) => readSuggestion(o, ctx)).filter((o): o is ItemSuggestion => o !== null) : [];
+  // The same title twice is one item.
+  const seen = new Set([first.title.toLowerCase()]);
+  return [first, ...rest.filter((o) => !seen.has(o.title.toLowerCase()) && seen.add(o.title.toLowerCase()))];
+}
+
 /** What Claude is told about the job for one photo: the location, the standard titles, the companies on the job and the marks. */
 export function suggestContext(input: {
   location: string | null;
+  /** What the person said or typed about it. */
+  words?: string | null;
   titles: StandardTitle[];
   trades: Trade[];
   companies: Company[];
@@ -145,6 +168,7 @@ export function suggestContext(input: {
   const tradeName = (id: string | null) => input.trades.find((t) => t.id === id)?.name ?? null;
   return {
     room: input.location ?? 'the job',
+    ...(input.words?.trim() ? { words: input.words.trim() } : {}),
     titles: [...input.titles]
       .filter((t) => t.approved)
       .sort((a, b) => b.uses - a.uses)

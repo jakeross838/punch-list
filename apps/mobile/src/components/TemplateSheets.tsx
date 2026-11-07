@@ -93,7 +93,7 @@ export function AddTemplateSheet({
     >
       <ScrollView contentContainerStyle={styles.content}>
         {templates.length === 0 ? (
-          <EmptyState icon="templates" title="No Templates Yet" message="An admin sets them up in Templates, from the gear on Jobs, or saves one from picked items." />
+          <EmptyState icon="templates" title="No Templates Yet" message="An admin sets them up in Templates." />
         ) : (
           <>
             {templates.length > 1 ? (

@@ -1,5 +1,5 @@
-// One item, everything about it in one calm place, Site Office style, and every part of it changes
-// right where it is: retype the title, tick Ready, pick another location, mark up a photo. Each
+// One item, everything about it in one calm place, laid out like the iPhone's own detail screens,
+// and every part of it changes right where it is: retype the title, tick Ready, pick another location, mark up a photo. Each
 // change saves as it is made. Up front: the photo, the status and who it is assigned to, then the
 // title, the location, Assigned To and Ready; the type, the order, Priority and the added fields wait under
 // Details. The checklist, the comments and the history follow. Complete is the big button along the
@@ -188,7 +188,6 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   const people = data.usePeople();
   // Someone on the team it is assigned to, when it is not a company's.
   const person = !item.companyId && item.assignedTo ? people.find((p) => p.id === item.assignedTo) : undefined;
-  const job = data.useJobs().find((j) => j.id === jobId);
   const holds = useHolds(jobId);
   const history = useActivityLines(jobId, item.id);
   const thread = itemComments(data.useComments(jobId), item.id);
@@ -315,8 +314,8 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
             ? {
                 icon: 'checkmark.circle.fill',
                 color: colors.stone,
-                line: `${companyName ?? 'The company'} says it is done`,
-                detail: `On ${dayOf(item.markedDoneAt)}, from their page. Check it, then tap Complete. If something is left, tap Not Done Yet in the menu and say what in a comment.`,
+                line: `${companyName ?? 'The company'} marked it done on ${dayOf(item.markedDoneAt)}`,
+                detail: 'Check it, then tap Complete. Something left? Tap Not Done Yet in the menu.',
               }
             : item.confirmedAt
               ? {
@@ -406,47 +405,36 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
     <Page
       title={item.title || label}
       hideHeader
-      crumb={[job?.name ?? 'Job', room?.label ?? 'No location yet', label]}
       backLabel={fromCamera ? 'Camera' : room?.label}
       right={[more]}
       bottom={bottom}
     >
-      <View style={styles.head}>
-        <Eyebrow text={[label, item.unfinished ? 'Draft' : kindText(item)].join(' · ')} marker={item.priority && item.status === 'open' ? colors.destructive : undefined} />
-        <Text variant="stamp" color={colors.secondary} numberOfLines={1} style={styles.added}>
-          {added}
-        </Text>
+      <View style={styles.head} testID="item-summary">
+        <View style={styles.headText}>
+          <Eyebrow text={[label, item.unfinished ? 'Draft' : kindText(item)].join(' · ')} marker={item.priority && item.status === 'open' ? colors.destructive : undefined} />
+          <Text variant="footnote" color={colors.secondary} numberOfLines={1}>
+            {added}
+          </Text>
+        </View>
+        <Pill text={st.text} tone={st.tone} />
       </View>
       {photo ? (
         <View style={styles.photoBlock}>
           <Touchable feedback="opacity" onPress={() => setViewing(photo)} accessibilityRole="button" accessibilityLabel="Show the whole photo">
-            <PhotoView photo={photo} width={photoWidth} height={photoHeight} testID="item-photo" />
+            <PhotoView photo={photo} width={photoWidth} height={photoHeight} radius={12} testID="item-photo" />
           </Touchable>
           {photos.length > 1 ? (
             <View style={styles.count} pointerEvents="none">
-              <Text variant="stamp" color={colors.onBar}>
+              <Text variant="footnote" weight="600" color={colors.white}>
                 {Math.min(shown, photos.length - 1) + 1} of {photos.length}
               </Text>
             </View>
           ) : null}
-          <View style={styles.photoActions}>
-            <Touchable feedback="opacity" onPress={addPhoto} accessibilityRole="button" accessibilityLabel="Add Photo" testID="add-photo" style={styles.photoAction}>
-              <Icon name="plus" size={15} color={colors.label} weight="medium" />
-            </Touchable>
-            <Touchable feedback="opacity" onPress={() => setMarking(photo)} accessibilityRole="button" accessibilityLabel="Mark Up" testID="mark-up" style={styles.photoActionWide}>
-              <Icon name="pencil.tip" size={14} color={colors.label} />
-              <Text variant="stamp" color={colors.label}>
-                Mark Up
-              </Text>
-            </Touchable>
-          </View>
         </View>
       ) : (
         <Touchable feedback="opacity" onPress={addPhoto} accessibilityRole="button" testID="add-photo" style={styles.noPhoto}>
-          <Icon name="camera" size={22} color={colors.secondary} />
-          <Text variant="label" color={colors.tint}>
-            Add a Photo
-          </Text>
+          <Icon name="camera" size={24} color={colors.tint} />
+          <Text color={colors.tint}>Add a Photo</Text>
         </Touchable>
       )}
       {photos.length > 1 ? (
@@ -460,28 +448,28 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
               accessibilityLabel={`Photo ${i + 1}`}
               style={[styles.thumb, i === shown ? styles.thumbOn : null]}
             >
-              <PhotoView photo={p} width={44} height={44} />
+              <PhotoView photo={p} width={44} height={44} radius={6} />
             </Touchable>
           ))}
         </View>
       ) : null}
+      {photo ? (
+        <View style={styles.photoActions}>
+          <Touchable feedback="opacity" onPress={() => setMarking(photo)} accessibilityRole="button" accessibilityLabel="Mark Up" testID="mark-up" style={styles.photoAction}>
+            <Icon name="pencil.tip" size={15} color={colors.tint} weight="medium" />
+            <Text variant="subheadline" weight="600" color={colors.tint}>
+              Mark Up
+            </Text>
+          </Touchable>
+          <Touchable feedback="opacity" onPress={addPhoto} accessibilityRole="button" accessibilityLabel="Add Photo" testID="add-photo" style={styles.photoAction}>
+            <Icon name="plus" size={15} color={colors.tint} weight="semibold" />
+            <Text variant="subheadline" weight="600" color={colors.tint}>
+              Add Photo
+            </Text>
+          </Touchable>
+        </View>
+      ) : null}
 
-      <View style={styles.grid} testID="item-summary">
-        <View style={styles.cell}>
-          <Text variant="stamp" color={colors.secondary}>
-            Status
-          </Text>
-          <Pill text={st.text} tone={st.tone} />
-        </View>
-        <View style={[styles.cell, styles.cellDivide]}>
-          <Text variant="stamp" color={colors.secondary}>
-            Assigned To
-          </Text>
-          <Text variant="callout" weight="500" numberOfLines={1}>
-            {company?.name ?? person?.name ?? 'Not assigned yet'}
-          </Text>
-        </View>
-      </View>
       {status ? (
         <View testID="item-status">
           <Banner>{status.detail ? `${status.line}. ${status.detail}` : status.line}</Banner>
@@ -498,9 +486,11 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
           showReady={item.status === 'open'}
           fillIn={filler.can && photo && !filling ? { busy: filler.busy, onPress: () => void filler.fillIn(photo, live.value, (patch) => live.set(patch)) } : undefined}
           onTwin={item.unfinished && item.status === 'open' && photos.length > 0 ? { label: 'Add the photo to it instead.', onPress: (twin) => void moveTo(twin) } : undefined}
+          askClaude={item.unfinished && item.status === 'open'}
+          photoUri={photo?.uri ?? null}
         >
           {targets.length > 0 ? (
-            <ListSection footer="When this photo is of something already on the list, it goes on that item and this draft comes off the list.">
+            <ListSection footer="The photo goes on that item, and this draft comes off the list.">
               <ListRow title={`Add to an Item in ${room?.label ?? 'This Location'}`} icon="plus" accessory="chevron" onPress={() => setMoving(true)} testID="add-to-item" />
             </ListSection>
           ) : null}
@@ -514,10 +504,10 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
               <ListRow
                 title="Comments"
                 field
-                subtitle={latest ? `${commentAuthor(latest, look)}: ${latest.body}` : company ? `Back and forth with ${company.name}.` : person ? 'Notes for your team.' : 'Back and forth with the company.'}
+                subtitle={latest ? `${commentAuthor(latest, look)}: ${latest.body}` : undefined}
                 value={thread.length > 0 ? String(thread.length) : undefined}
                 onPress={() => setShowComments((v) => !v)}
-                right={<Icon name={showComments ? 'chevron.down' : 'plus'} size={15} color={colors.label} weight="medium" />}
+                right={<Icon name={showComments ? 'chevron.down' : 'chevron.right'} size={15} color={colors.chevron} weight="semibold" />}
                 testID="item-comments-row"
               />
             </ListSection>
@@ -540,7 +530,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
                 subtitle={`${newest.who} ${newest.action}, ${whenOf(newest.at)}`}
                 value={history.length > 1 ? `${history.length}` : undefined}
                 onPress={() => setShowHistory((v) => !v)}
-                right={<Icon name={showHistory ? 'chevron.down' : 'plus'} size={15} color={colors.label} weight="medium" />}
+                right={<Icon name={showHistory ? 'chevron.down' : 'chevron.right'} size={15} color={colors.chevron} weight="semibold" />}
                 testID="item-history-row"
               />
             </ListSection>
@@ -584,30 +574,28 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
 }
 
 const styles = StyleSheet.create({
-  head: { gap: 6, paddingHorizontal: layout.inset, paddingTop: 16, paddingBottom: 12 },
-  added: { letterSpacing: 1.4 },
+  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: layout.inset, paddingTop: 8, paddingBottom: 12 },
+  headText: { flex: 1, minWidth: 0, gap: 2 },
   photoBlock: { marginHorizontal: layout.margin },
-  count: { position: 'absolute', left: 8, bottom: 8, paddingHorizontal: 7, paddingVertical: 3, backgroundColor: 'rgba(19, 32, 40, 0.78)' },
-  photoActions: { position: 'absolute', right: 8, bottom: 8, flexDirection: 'row', gap: 6 },
-  photoAction: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cell, borderWidth: 1, borderColor: colors.borderStrong },
-  photoActionWide: { height: 34, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, backgroundColor: colors.cell, borderWidth: 1, borderColor: colors.borderStrong },
+  count: { position: 'absolute', left: 10, bottom: 10, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 11, backgroundColor: 'rgba(0, 0, 0, 0.55)' },
+  // Under the photo, so they never cover its marks.
+  photoActions: { flexDirection: 'row', gap: 8, marginTop: 10, marginHorizontal: layout.margin },
+  photoAction: { height: 34, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 17, backgroundColor: colors.chip },
   noPhoto: {
     marginHorizontal: layout.margin,
     height: 96,
-    borderWidth: 1.25,
+    borderRadius: 12,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.quiet,
+    borderColor: colors.circle,
     backgroundColor: colors.cell,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   thumbs: { flexDirection: 'row', gap: 6, marginHorizontal: layout.margin, marginTop: 8 },
-  thumb: { padding: 2, borderWidth: 1, borderColor: 'transparent' },
+  thumb: { padding: 2, borderRadius: 8, borderWidth: 2, borderColor: 'transparent' },
   thumbOn: { borderColor: colors.action },
-  grid: { flexDirection: 'row', marginHorizontal: layout.margin, marginTop: 10, borderWidth: layout.hairline, borderColor: colors.border, backgroundColor: colors.cell },
-  cell: { flex: 1, gap: 7, paddingHorizontal: 14, paddingVertical: 10 },
-  cellDivide: { borderLeftWidth: layout.hairline, borderLeftColor: colors.border },
   editor: { marginTop: 14 },
   checklist: { marginTop: -6, marginBottom: 20 },
   fold: { marginBottom: 12 },

@@ -44,7 +44,8 @@ export type ActivityKind =
   | 'plan_added'
   | 'plan_removed'
   | 'item_confirmed'
-  | 'item_hours_given';
+  | 'item_hours_given'
+  | 'items_merged';
 
 export type ActivityDetail = Record<string, string | number | boolean | null>;
 
@@ -382,7 +383,7 @@ export function activityLines(entries: Activity[], look: ActivityLookups, option
     }
   }
   const groups: Group[] = [];
-  // Many items added at once, by Paste or a template, read as one line on the job.
+  // Many items added at once, by Paste, a template or Say It, read as one line on the job.
   if (!options.forItem) {
     const sourceOf = (e: Activity) => (e.kind === 'item_created' && e.itemId ? look.items.get(e.itemId)?.source : undefined);
     let run: Activity[] = [];
@@ -395,7 +396,7 @@ export function activityLines(entries: Activity[], look: ActivityLookups, option
     };
     for (const e of sorted) {
       const source = sourceOf(e);
-      if (source !== 'copy' && source !== 'template') continue;
+      if (source !== 'copy' && source !== 'template' && source !== 'said') continue;
       const prev = run[run.length - 1];
       if (prev && (prev.personId !== e.personId || sourceOf(prev) !== source || Date.parse(e.at) - Date.parse(prev.at) > 5000)) flush();
       run.push(e);
@@ -479,7 +480,8 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     const places = [...new Set(items.map((i) => look.locations.get(i.locationId) ?? '').filter(Boolean))];
     const where = places.length <= 3 ? listWords(places) : `${places.slice(0, 2).join(', ')} and ${places.length - 2} more locations`;
     const n = g.entries.length;
-    return done(items[0]?.source === 'template' ? `added ${n} items from a template` : `pasted ${n} items`, [where]);
+    const how = items[0]?.source === 'template' ? `added ${n} items from a template` : items[0]?.source === 'said' ? `said ${n} items` : `pasted ${n} items`;
+    return done(how, [where]);
   }
 
   if (first.kind === 'item_marked_done') {
@@ -515,6 +517,18 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
       action,
       detail: [forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? ''), 'From their page'].filter(Boolean).map(sentence).join(' '),
     };
+  }
+
+  if (first.kind === 'items_merged') {
+    // Two items that were the same work: the one kept took the other's photos and comments.
+    const d = first.detail ?? {};
+    const num = (v: unknown) => (typeof v === 'number' || (typeof v === 'string' && v !== '') ? `#${v} ` : '');
+    const from = `${num(d.from_number)}${String(d.from_title ?? '').trim() || 'an item'}`;
+    const into = forItem ? 'this one' : `${num(d.into_number)}${String(d.into_title ?? '').trim() || 'another item'}`;
+    const moved = [Number(d.photos) > 0 ? `${d.photos} ${Number(d.photos) === 1 ? 'photo' : 'photos'}` : '', Number(d.comments) > 0 ? `${d.comments} ${Number(d.comments) === 1 ? 'comment' : 'comments'}` : '']
+      .filter(Boolean)
+      .join(' and ');
+    return done(`merged ${from} into ${into}`, [moved ? `Its ${moved} came along` : 'It was the same work']);
   }
 
   if (first.kind === 'plan_added' || first.kind === 'plan_removed') {

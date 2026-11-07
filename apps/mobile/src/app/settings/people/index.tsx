@@ -12,7 +12,6 @@ const jobsWords = (n: number) => (n === 0 ? 'No jobs' : n === 1 ? '1 job' : `${n
 
 export default function PeopleScreen() {
   const data = useData();
-  const company = data.useOrg().name || 'Your Company';
   const me = data.useMe();
   const people = peopleInOrder(data.usePeople());
   const team = data.useTeams();
@@ -28,8 +27,6 @@ export default function PeopleScreen() {
   return (
     <Page
       title="People"
-      eyebrow={company}
-      crumb={['Me', 'People']}
       backLabel="Me"
       tab={{}}
       right={admin ? [{ kind: 'button', label: 'Add Person', icon: 'plus', iconOnly: true, onPress: () => setAdding(true), testID: 'add-person' }] : []}

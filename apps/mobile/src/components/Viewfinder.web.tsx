@@ -21,24 +21,25 @@ function measure(uri: string): Promise<TakenPhoto> {
 export function Viewfinder({ ref }: { ref?: Ref<ViewfinderHandle>; flash: boolean }) {
   const camera = useRef<HTMLInputElement | null>(null);
   const library = useRef<HTMLInputElement | null>(null);
-  const waiting = useRef<((photo: TakenPhoto | null) => void) | null>(null);
+  const waiting = useRef<((photos: TakenPhoto[]) => void) | null>(null);
 
-  function open(input: HTMLInputElement | null): Promise<TakenPhoto | null> {
-    if (!input) return Promise.resolve(null);
-    waiting.current?.(null);
+  function open(input: HTMLInputElement | null, many = false): Promise<TakenPhoto[]> {
+    if (!input) return Promise.resolve([]);
+    waiting.current?.([]);
     return new Promise((resolve) => {
       waiting.current = resolve;
       input.value = '';
+      input.multiple = many;
       input.click();
     });
   }
 
   async function chosen(input: HTMLInputElement) {
-    const file = input.files?.[0];
+    const files = [...(input.files ?? [])];
     const done = waiting.current;
     waiting.current = null;
     if (!done) return;
-    done(file ? await measure(URL.createObjectURL(file)) : null);
+    done(await Promise.all(files.map((f) => measure(URL.createObjectURL(f)))));
   }
 
   // Closing the camera or the library without a photo.
@@ -47,7 +48,7 @@ export function Viewfinder({ ref }: { ref?: Ref<ViewfinderHandle>; flash: boolea
     const cancelled = () => {
       const done = waiting.current;
       waiting.current = null;
-      done?.(null);
+      done?.([]);
     };
     for (const el of inputs) el?.addEventListener('cancel', cancelled);
     return () => {
@@ -56,8 +57,9 @@ export function Viewfinder({ ref }: { ref?: Ref<ViewfinderHandle>; flash: boolea
   }, []);
 
   useImperativeHandle(ref, () => ({
-    take: () => open(camera.current),
-    pick: () => open(library.current),
+    take: async () => (await open(camera.current))[0] ?? null,
+    pick: async () => (await open(library.current))[0] ?? null,
+    pickMany: async (most: number) => (await open(library.current, true)).slice(0, most),
   }));
 
   return (

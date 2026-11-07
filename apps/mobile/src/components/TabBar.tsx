@@ -1,6 +1,7 @@
-// The bar at the bottom of the app, the same everywhere: Jobs, Capture and Send. Capture is the
-// square in the middle, big enough to hit without looking. Capture and Send work on the job you are
-// in, or the last one you opened. Me is the round button in the top bar.
+// The bar at the bottom of the app, the same everywhere, like the iPhone's own tab bars: Jobs,
+// Capture and Send. Capture is the round blue button in the middle, big enough to hit without
+// looking. Capture and Send work on the job you are in, or the last one you opened. Me is the round
+// button in the top bar.
 //
 // It acts like tabs on one stack of screens. Jobs goes back to the job you were in before Send or
 // Me, and from there all the way back to the list of jobs, as tabs do. Send goes back to its screen
@@ -81,7 +82,7 @@ export function TabBar({ active, jobId, locationId = null, onCapture }: PageTab)
 
   const tab = (key: TabKey, label: string, icon: IconName) => {
     const on = key === active;
-    const color = on ? colors.onBar : colors.onBarQuiet;
+    const color = on ? colors.tint : colors.placeholder;
     return (
       <Touchable
         key={key}
@@ -96,9 +97,8 @@ export function TabBar({ active, jobId, locationId = null, onCapture }: PageTab)
         testID={`tab-${key}`}
         style={styles.tab}
       >
-        {on ? <View style={styles.indicator} /> : null}
-        <Icon name={icon} size={21} color={color} />
-        <Text variant="stamp" weight={on ? '600' : '500'} color={color} numberOfLines={1} style={styles.label}>
+        <Icon name={icon} size={25} color={color} weight={on ? 'semibold' : 'regular'} />
+        <Text variant="caption1" weight="500" color={color} numberOfLines={1} style={styles.label}>
           {label}
         </Text>
       </Touchable>
@@ -107,7 +107,7 @@ export function TabBar({ active, jobId, locationId = null, onCapture }: PageTab)
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom - 6, 8) }]} accessibilityRole="tablist">
-      {tab('jobs', 'Jobs', 'grid')}
+      {tab('jobs', 'Jobs', 'house.fill')}
       <Touchable
         feedback="opacity"
         onPress={() => {
@@ -120,11 +120,8 @@ export function TabBar({ active, jobId, locationId = null, onCapture }: PageTab)
         style={styles.tab}
       >
         <View style={styles.capture}>
-          <Icon name="camera" size={24} color={colors.bar} weight="medium" />
+          <Icon name="camera" size={24} color={colors.white} weight="medium" />
         </View>
-        <Text variant="stamp" weight="600" color={colors.onBar} style={styles.label}>
-          Capture
-        </Text>
       </Touchable>
       {tab('send', 'Send', 'send')}
     </View>
@@ -132,9 +129,15 @@ export function TabBar({ active, jobId, locationId = null, onCapture }: PageTab)
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 6, backgroundColor: colors.bar },
-  tab: { flex: 1, height: TAB_BAR_HEIGHT, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  indicator: { position: 'absolute', top: 0, width: 44, height: 2, backgroundColor: colors.oceanside },
-  capture: { width: 52, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.stone },
-  label: { letterSpacing: 1.26 },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 6,
+    backgroundColor: 'rgba(249, 249, 249, 0.96)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator,
+  },
+  tab: { flex: 1, height: TAB_BAR_HEIGHT, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  capture: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.action },
+  label: { fontSize: 10, lineHeight: 12 },
 });

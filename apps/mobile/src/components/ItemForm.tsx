@@ -5,6 +5,7 @@
 import {
   inWalkOrder,
   assigneeName,
+  recentAssignees,
   checkItem,
   floorOf,
   kindDefaults,
@@ -174,6 +175,8 @@ export function useFormOptions(jobId: string, locationId: string) {
   const builder = data.useOrg().name;
   const people = data.usePeople();
   const team = data.useTeams().filter((t) => t.jobId === jobId);
+  const items = data.useItems(jobId);
+  const me = data.useMe();
 
   const roomOptions = useMemo<Option[]>(
     () =>
@@ -199,8 +202,9 @@ export function useFormOptions(jobId: string, locationId: string) {
     if (onJob.length === 0 || others.length === 0) return [...onJob, ...others];
     return [...onJob.map((o) => ({ ...o, group: 'On This Job' })), ...others.map((o) => ({ ...o, group: 'Other Companies' }))];
   }, [jobCompanies, companies, trades]);
-  // Assigned To: the companies on this job, then the job's team, then every other company, then
-  // everyone else at the builder. A company gets it on its list; a person gets it on their My Items.
+  // Assigned To: whoever this person assigned their own items to lately on this job, then the
+  // companies on this job, then the job's team, then every other company, then everyone else at the
+  // builder. A company gets it on its list; a person gets it on their My Items.
   const assigneeOptions = useMemo<Option[]>(() => {
     const onJob = companyOptions.filter((o) => o.group !== 'Other Companies').map((o) => ({ ...o, group: 'On This Job' }));
     const others = companyOptions.filter((o) => o.group === 'Other Companies');
@@ -213,8 +217,11 @@ export function useFormOptions(jobId: string, locationId: string) {
       label: p.name,
       group: `Everyone Else at ${builder}`,
     }));
-    return [...onJob, ...crew, ...others, ...rest];
-  }, [companyOptions, team, people, builder]);
+    const all = [...onJob, ...crew, ...others, ...rest];
+    const recent = me ? recentAssignees(items, me.id).flatMap((key) => all.filter((o) => o.value === key).slice(0, 1).map((o) => ({ ...o, group: 'Recent' }))) : [];
+    // A short list needs no Recent at the top.
+    return all.length > 8 && recent.length > 0 ? [...recent, ...all] : all;
+  }, [companyOptions, team, people, builder, items, me]);
   const waitingOptions = useMemo<Option[]>(
     () => waitingOnChoices(jobCompanies, companies, extras.length > 0 ? extras : defaultWaitingOnExtras(builder)).map((name) => ({ value: name, label: name })),
     [jobCompanies, companies, extras, builder],
