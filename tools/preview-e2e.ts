@@ -305,7 +305,7 @@ async function main(): Promise<void> {
       await settle(400);
       await shot('11-camera-saved');
     });
-    await step('tap the last photo to finish it now: Claude filled it in; mark it up with a circle, a measurement, numbered spots and a quick note', async () => {
+    await step('tap the last photo to finish it now: Claude filled it in; mark it up with a circle, a measurement, numbered spots, a quick note and a note that points, then change the marks', async () => {
       await app.getByTestId('camera-last').click();
       await app.getByTestId('done-camera').waitFor();
       // The stand-in for Claude answers after a moment.
@@ -323,7 +323,13 @@ async function main(): Promise<void> {
       await app.getByTestId('tool-pen').click();
       await drag([0.1, 0.7], [0.35, 0.8]);
       await app.getByTestId('markup-undo').click();
-      // A measurement: the size is written out on the photo as it is typed.
+      // Redo puts the line back, and Undo takes it off again.
+      await app.getByTestId('markup-redo').click();
+      await app.getByTestId('markup-undo').click();
+      // A measurement, under More: the size is written out on the photo as it is typed.
+      await app.getByTestId('tool-more').click();
+      await settle(200);
+      await shot('11d-more-tools');
       await app.getByTestId('tool-measure').click();
       await app.getByText('Drag from one end to the other, then type the size.').waitFor();
       await drag([0.12, 0.58], [0.88, 0.58]);
@@ -339,7 +345,8 @@ async function main(): Promise<void> {
       await settle(300);
       await shot('12-measure');
       await app.getByTestId('markup-size-add').click();
-      // Numbered spots: one tap each.
+      // Numbered spots, under More: one tap each.
+      await app.getByTestId('tool-more').click();
       await app.getByTestId('tool-number').click();
       await app.getByText('Tap each spot to number it.').waitFor();
       for (const x of [0.28, 0.5, 0.72]) await drag([x, 0.8], [x, 0.8]);
@@ -352,8 +359,33 @@ async function main(): Promise<void> {
       await shot('12b-quick-notes');
       await app.getByTestId('quick-gap').click();
       await app.getByTestId('markup').getByText('Gap', { exact: true }).first().waitFor();
+      // A note that points: a drag from where the words go to the spot.
+      await drag([0.2, 0.95], [0.42, 0.68]);
+      await app.getByTestId('markup-note').fill('chip in the paint');
+      await app.getByTestId('markup-note-add').click();
+      await app.getByTestId('markup').getByText('Chip in the paint', { exact: true }).first().waitFor();
+      // Tap the circle's line to pick it: another color, then dragged by its line.
+      await drag([0.5, 0.12], [0.5, 0.12]);
+      await app.getByTestId('markup-picked').waitFor();
+      await app.getByText('Drag it, or drag a corner.').waitFor();
+      await app.getByTestId('color-yellow').click();
+      await drag([0.5, 0.12], [0.5, 0.18]);
       await settle(300);
-      await shot('12c-marked-up');
+      await shot('12c-picked');
+      // Delete takes it off, and Undo puts it back.
+      await app.getByTestId('markup-delete').click();
+      await app.getByTestId('markup-picked').waitFor({ state: 'detached' });
+      await app.getByTestId('markup-undo').click();
+      // A tap picks the note, and a second tap opens its words.
+      await drag([0.62, 0.3], [0.62, 0.3]);
+      await app.getByText('Drag to move it.').waitFor();
+      await drag([0.62, 0.3], [0.62, 0.3]);
+      await app.getByTestId('markup-note').fill('Gap at the corner');
+      await app.getByTestId('markup-note-add').getByText('Save').waitFor();
+      await app.getByTestId('markup-note-add').click();
+      await app.getByTestId('markup').getByText('Gap at the corner', { exact: true }).first().waitFor();
+      await settle(300);
+      await shot('12d-marked-up');
       await app.getByTestId('markup-next').click();
       await app.getByTestId('markup-canvas').waitFor({ state: 'detached' });
       await settle(400);

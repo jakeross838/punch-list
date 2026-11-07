@@ -47,7 +47,7 @@ export { Sheet } from './Sheet';
 export { SheetScroll } from './SheetScroll';
 export { SwipeRow, type SwipeAction } from './SwipeRow';
 export { Switch } from './Switch';
-export { Text } from './Text';
+export { Text, TEXT_LARGEST } from './Text';
 export { easeOut, easeSheet, Touchable } from './Touchable';
 export { MarkLayer } from './MarkLayer';
 export { croppedHeight, fitPhoto, PhotoView, type PhotoLike } from './PhotoView';

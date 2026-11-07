@@ -298,7 +298,11 @@ export type Mark =
   | { tool: 'measure'; color: MarkColor; from: MarkPoint; to: MarkPoint; text: string }
   /** A numbered spot: one of several places with the same work, numbered in the order they were tapped. */
   | { tool: 'number'; color: MarkColor; at: MarkPoint; n: number }
-  | { tool: 'text'; color: MarkColor; at: MarkPoint; text: string };
+  /**
+   * A note: its words set where it was placed (at). With to, an arrow runs from the words to that
+   * spot: the most used mark there is, after a circle and a plain arrow.
+   */
+  | { tool: 'text'; color: MarkColor; at: MarkPoint; text: string; to?: MarkPoint };
 
 export interface Photo {
   id: string;

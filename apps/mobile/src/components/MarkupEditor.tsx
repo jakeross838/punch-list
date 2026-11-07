@@ -1,41 +1,66 @@
-// Markup on a photo, made for the job site and laid out like Apple's Markup: draw, arrow, circle,
-// box, a measurement with its size written out, numbered spots for several places with the same
-// work, and a short note with the standard words one tap away. Red, yellow, white or black, with
-// Undo. A line under the photo says how to use the tool picked. Words and numbers carry an outline
-// so they read on any wall. Next keeps the photo as it is when nothing was drawn. The marks are kept
-// apart from the picture, so the original is never changed.
+// Markup on a photo, made for the job site. The marks used most come first: a circle, an arrow, and
+// a note that points at the work with an arrow, then Draw. A box, a measurement with its size
+// written out, and numbered spots for several places with the same work are under More. Tap a mark
+// to change it: drag it somewhere else, drag a square to change its shape, give it another color,
+// change its words or delete it. Undo and Redo sit at the top, the way Apple's Markup has them. The
+// tool and color picked last carry over to the next photo. Next keeps the photo as it is when
+// nothing was drawn. The marks are kept apart from the picture, so the original is never changed.
 
 import {
-  addPenPoint,
   clampPoint,
-  isTooSmall,
+  handleAt,
+  markAt,
+  markFrame,
+  markHandles,
   MARK_COLOR_NAMES,
   MARK_COLORS,
-  measureText,
-  nextNumber,
+  moveHandle,
+  moveMark,
   QUICK_NOTES,
-  tidyTitle,
   type Mark,
   type MarkColor,
+  type MarkHandle,
   type MarkPoint,
   type MarkTool,
   type MeasureUnit,
 } from '@punch/core';
 import { Image } from 'expo-image';
-import { useMemo, useReducer, useState } from 'react';
-import { KeyboardAvoidingView, PanResponder, Platform, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+  View,
+  type GestureResponderEvent,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, type as typeScale } from '@/constants/theme';
-import { fitPhoto, haptic, Icon, MarkLayer, Text, Touchable, type IconName } from '@/ui';
+import { colors, fieldFont } from '@/constants/theme';
+import { fitPhoto, haptic, Icon, leaveOrConfirm, MarkLayer, Text, TEXT_LARGEST, Touchable, useFeedback, type IconName } from '@/ui';
+import { markupReducer, newMark, pickedMark, sameMarks, shownMarks, startMarkup } from './markupEdits';
 
-const TOOLS: { tool: MarkTool; label: string; icon: IconName; hint: string }[] = [
-  { tool: 'pen', label: 'Draw', icon: 'pencil.tip', hint: 'Draw with your finger.' },
+interface ToolInfo {
+  tool: MarkTool;
+  label: string;
+  icon: IconName;
+  hint: string;
+}
+
+const MAIN: ToolInfo[] = [
+  { tool: 'circle', label: 'Circle', icon: 'circle', hint: 'Drag across the spot to circle it.' },
   { tool: 'arrow', label: 'Arrow', icon: 'arrow.up.right', hint: 'Drag toward the spot.' },
-  { tool: 'circle', label: 'Circle', icon: 'circle', hint: 'Drag across the area to circle it.' },
+  { tool: 'text', label: 'Note', icon: 'note.arrow', hint: 'Tap for a note, or drag to point it at a spot.' },
+  { tool: 'pen', label: 'Draw', icon: 'pencil.tip', hint: 'Draw with your finger.' },
+];
+
+const MORE: ToolInfo[] = [
   { tool: 'box', label: 'Box', icon: 'square', hint: 'Drag across the area to box it.' },
   { tool: 'measure', label: 'Measure', icon: 'ruler', hint: 'Drag from one end to the other, then type the size.' },
   { tool: 'number', label: 'Number', icon: '1.circle', hint: 'Tap each spot to number it.' },
-  { tool: 'text', label: 'Note', icon: 'textformat', hint: 'Tap where the note goes.' },
 ];
 
 const COLORS: MarkColor[] = ['red', 'yellow', 'white', 'black'];
@@ -44,80 +69,52 @@ const UNITS: [MeasureUnit, string][] = [
   ['feet', 'Feet'],
 ];
 
-/** The box open under the photo: a note being written, or the size of the measurement just drawn. */
-type Panel = { kind: 'note'; at: MarkPoint; color: MarkColor; text: string } | { kind: 'size'; text: string; unit: MeasureUnit };
+/** The tool, color and unit picked last, so the next photo starts with them. */
+const kept: { tool: MarkTool; color: MarkColor; unit: MeasureUnit } = { tool: 'circle', color: 'red', unit: 'inches' };
+const keep = (change: Partial<typeof kept>) => void Object.assign(kept, change);
 
-interface Drawing {
-  marks: Mark[];
-  /** The mark under the finger, kept once the finger lifts unless it was only a tap. */
-  drawing: Mark | null;
-  panel: Panel | null;
-  /** The unit picked last, so the next measurement starts with it. */
-  unit: MeasureUnit;
+/** How far a finger moves before a touch is a drag and not a tap, in points. */
+const SLOP = 6;
+
+/** The row sizes under the photo, so the More menu opens just above the tools. */
+const LINE_HEIGHT = 40;
+const TOOLS_HEIGHT = 58;
+const COLORS_HEIGHT = 46;
+const TOOL_WIDTH = 64;
+const TOOL_GAP = 4;
+const TOOLS_WIDTH = (MAIN.length + 1) * TOOL_WIDTH + MAIN.length * TOOL_GAP;
+
+/** A square on a picked mark for a part that drags on its own, and the room around a picked mark's frame. */
+const GRIP = 14;
+const FRAME_PAD = 6;
+
+/** What a finger on the photo does, from the moment it touches to the moment it lifts. */
+interface Touch {
+  grant: (e: GestureResponderEvent) => void;
+  move: (e: GestureResponderEvent) => void;
+  end: (lifted: boolean) => void;
 }
 
-type Action =
-  | { type: 'start'; tool: MarkTool; color: MarkColor; at: MarkPoint }
-  | { type: 'move'; at: MarkPoint }
-  | { type: 'end'; aspect: number }
-  | { type: 'type'; text: string }
-  | { type: 'unit'; unit: MeasureUnit }
-  | { type: 'add'; text?: string }
-  | { type: 'cancel' }
-  | { type: 'undo' };
+/** A finger on the photo: pressed and not moved yet, drawing a new mark, or dragging the picked one or one of its squares. */
+type Gesture =
+  | { kind: 'press'; at: MarkPoint; x: number; y: number }
+  | { kind: 'draw' }
+  | { kind: 'move'; mark: Mark; from: MarkPoint; x: number; y: number; moved: boolean }
+  | { kind: 'reshape'; mark: Mark; handle: MarkHandle; x: number; y: number; moved: boolean };
 
-/** The size typed so far, written out on the measurement as it is typed. */
-function withSize(s: Drawing, panel: Extract<Panel, { kind: 'size' }>): Drawing {
-  const last = s.marks[s.marks.length - 1];
-  if (last?.tool !== 'measure') return { ...s, panel };
-  return { ...s, panel, marks: [...s.marks.slice(0, -1), { ...last, text: measureText(panel.text, panel.unit) }] };
-}
-
-function draw(s: Drawing, a: Action): Drawing {
-  const { panel } = s;
-  switch (a.type) {
-    case 'start': {
-      if (panel) return s;
-      if (a.tool === 'text') return { ...s, panel: { kind: 'note', at: a.at, color: a.color, text: '' } };
-      if (a.tool === 'number') return { ...s, marks: [...s.marks, { tool: 'number', color: a.color, at: a.at, n: nextNumber(s.marks) }] };
-      const drawing: Mark =
-        a.tool === 'pen'
-          ? { tool: 'pen', color: a.color, points: [a.at] }
-          : a.tool === 'measure'
-            ? { tool: 'measure', color: a.color, from: a.at, to: a.at, text: '' }
-            : { tool: a.tool, color: a.color, from: a.at, to: a.at };
-      return { ...s, drawing };
-    }
-    case 'move': {
-      const d = s.drawing;
-      if (!d) return s;
-      if (d.tool === 'pen') return { ...s, drawing: { ...d, points: addPenPoint(d.points, a.at) } };
-      if ('to' in d) return { ...s, drawing: { ...d, to: a.at } };
-      return s;
-    }
-    case 'end': {
-      const d = s.drawing;
-      if (!d) return s;
-      if (isTooSmall(d, a.aspect)) return { ...s, drawing: null };
-      // A measurement asks for its size straight away.
-      return { ...s, marks: [...s.marks, d], drawing: null, panel: d.tool === 'measure' ? { kind: 'size', text: '', unit: s.unit } : panel };
-    }
-    case 'type':
-      if (panel?.kind === 'note') return { ...s, panel: { ...panel, text: a.text } };
-      if (panel?.kind === 'size') return withSize(s, { ...panel, text: a.text });
-      return s;
-    case 'unit':
-      return panel?.kind === 'size' ? withSize({ ...s, unit: a.unit }, { ...panel, unit: a.unit }) : s;
-    case 'add': {
-      if (panel?.kind !== 'note') return { ...s, panel: null };
-      const text = tidyTitle(a.text ?? panel.text);
-      return { ...s, panel: null, marks: text ? [...s.marks, { tool: 'text', color: panel.color, at: panel.at, text }] : s.marks };
-    }
-    case 'cancel':
-      // A measurement still waiting for its size goes too.
-      return { ...s, panel: null, marks: panel?.kind === 'size' ? s.marks.slice(0, -1) : s.marks };
-    case 'undo':
-      return panel ? s : { ...s, marks: s.marks.slice(0, -1) };
+/** What the finger on a picked mark does, in a few words. */
+function pickedHint(mark: Mark): string {
+  switch (mark.tool) {
+    case 'arrow':
+    case 'measure':
+      return 'Drag it, or drag an end.';
+    case 'circle':
+    case 'box':
+      return 'Drag it, or drag a corner.';
+    case 'text':
+      return mark.to ? 'Drag the words or the tip.' : 'Drag to move it.';
+    default:
+      return 'Drag to move it.';
   }
 }
 
@@ -142,56 +139,195 @@ export function MarkupEditor({
   doneLabel?: string;
 }) {
   const insets = useSafeAreaInsets();
-  const [{ marks, drawing, panel }, dispatch] = useReducer(draw, { marks: shot.marks, drawing: null, panel: null, unit: 'inches' });
-  const [tool, setTool] = useState<MarkTool>('arrow');
-  const [color, setColor] = useState<MarkColor>('red');
+  const feedback = useFeedback();
+  const { width: windowWidth } = useWindowDimensions();
+  const [state, dispatch] = useReducer(markupReducer, shot.marks, (marks) => startMarkup(marks, kept.unit));
+  const [tool, setTool] = useState<MarkTool>(kept.tool);
+  const [color, setColor] = useState<MarkColor>(kept.color);
+  // The tool's hint shows until a mark is drawn with it.
+  const [since, setSince] = useState(shot.marks.length);
+  const [more, setMore] = useState(false);
   const [box, setBox] = useState({ width: 0, height: 0 });
 
+  const { marks, picked, panel } = state;
   const shown = fitPhoto(shot, box, 'contain');
   const aspect = shot.width / (shot.height || 1);
-  const hint = TOOLS.find((t) => t.tool === tool)?.hint;
+  const drawn = useMemo(() => shownMarks(state), [state]);
+  const selected = pickedMark(state);
+  const canUndo = state.past.length > 0 && !panel;
+  const canRedo = state.future.length > 0 && !panel;
+  const info = [...MAIN, ...MORE].find((t) => t.tool === tool) ?? MAIN[0]!;
+  const extra = MORE.find((t) => t.tool === tool);
+  const hint = marks.length <= since ? info.hint : 'Tap a mark to change it.';
+  const bottom = Math.max(insets.bottom, 12);
 
-  // A touch starts a mark, a drag shapes it, and lifting the finger keeps it unless it was only a
-  // tap. Numbered spots and notes go where the finger touches.
-  const responder = useMemo(() => {
-    const at = (x: number, y: number): MarkPoint => clampPoint([x / (shown.width || 1), y / (shown.height || 1)]);
-    const end = () => dispatch({ type: 'end', aspect });
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: (e) => {
-        if (tool === 'number') haptic.selection();
-        dispatch({ type: 'start', tool, color, at: at(e.nativeEvent.locationX, e.nativeEvent.locationY) });
-      },
-      onPanResponderMove: (e) => dispatch({ type: 'move', at: at(e.nativeEvent.locationX, e.nativeEvent.locationY) }),
-      onPanResponderRelease: () => {
-        if (tool !== 'number' && tool !== 'text') haptic.selection();
-        end();
-      },
-      onPanResponderTerminate: end,
-    });
-  }, [tool, color, shown.width, shown.height, aspect]);
+  // What the finger reads, kept up to date after each render.
+  const latest = useRef({ state, tool, color, width: shown.width, height: shown.height, aspect });
+  useEffect(() => {
+    latest.current = { state, tool, color, width: shown.width, height: shown.height, aspect };
+  });
 
+  // A touch on the picked mark drags it, and on one of its squares changes its shape. Anywhere else,
+  // a drag draws a new mark and a tap picks the mark under the finger, puts down a numbered spot or
+  // a note, or lets go of the mark picked.
+  const [touch] = useState<Touch>(() => {
+    let g: Gesture | null = null;
+    let origin = { x: 0, y: 0 };
+    const pointAt = (x: number, y: number): MarkPoint => {
+      const { width, height } = latest.current;
+      return clampPoint([x / (width || 1), y / (height || 1)]);
+    };
+    // Measured from where the touch began, so a finger that leaves the photo still lines up.
+    const here = (e: GestureResponderEvent) => pointAt(e.nativeEvent.pageX - origin.x, e.nativeEvent.pageY - origin.y);
+    const far = (e: GestureResponderEvent, x: number, y: number) => Math.hypot(e.nativeEvent.pageX - x, e.nativeEvent.pageY - y) >= SLOP;
+
+    const tapped = (p: MarkPoint) => {
+      const { state: s, tool: t, color: c, width, height } = latest.current;
+      if (s.picked !== null) {
+        // Another mark under the finger is picked instead; anywhere else lets go of the one picked.
+        const i = markAt(s.marks, p, width, height);
+        if (i >= 0) haptic.selection();
+        dispatch({ type: 'pick', index: i >= 0 ? i : null });
+        return;
+      }
+      // With Number or Note, a tap inside a circle or a box puts a number or a note there.
+      const placing = t === 'number' || t === 'text';
+      const i = markAt(s.marks, p, width, height, 22, { inside: !placing });
+      if (i >= 0) {
+        haptic.selection();
+        dispatch({ type: 'pick', index: i });
+      } else if (t === 'number') {
+        haptic.selection();
+        dispatch({ type: 'place', mark: newMark('number', c, p, p, s.marks) });
+      } else if (t === 'text') {
+        dispatch({ type: 'note', at: p, color: c });
+      }
+    };
+
+    const end = (lifted: boolean) => {
+      const was = g;
+      g = null;
+      if (!was) return;
+      if (was.kind === 'press') {
+        if (lifted) tapped(was.at);
+      } else if (was.kind === 'draw') {
+        haptic.selection();
+        dispatch({ type: 'drop', aspect: latest.current.aspect });
+      } else if (was.kind === 'move' && !was.moved && lifted && (was.mark.tool === 'text' || was.mark.tool === 'measure')) {
+        // A second tap on a picked note or measurement opens its words.
+        dispatch({ type: 'edit' });
+      } else {
+        dispatch({ type: 'changed' });
+      }
+    };
+
+    return {
+      grant: (e) => {
+        const { pageX, pageY, locationX, locationY } = e.nativeEvent;
+        origin = { x: pageX - locationX, y: pageY - locationY };
+        const { state: s, width, height } = latest.current;
+        g = null;
+        if (s.panel) return;
+        const p = pointAt(locationX, locationY);
+        const m = s.picked === null ? undefined : s.marks[s.picked];
+        if (m) {
+          const handle = handleAt(m, p, width, height);
+          if (handle) {
+            g = { kind: 'reshape', mark: m, handle, x: pageX, y: pageY, moved: false };
+            return;
+          }
+          if (markAt([m], p, width, height) === 0) {
+            g = { kind: 'move', mark: m, from: p, x: pageX, y: pageY, moved: false };
+            return;
+          }
+        }
+        g = { kind: 'press', at: p, x: pageX, y: pageY };
+      },
+      move: (e) => {
+        if (!g) return;
+        const p = here(e);
+        if (g.kind === 'press') {
+          if (!far(e, g.x, g.y)) return;
+          const { state: s, tool: t, color: c } = latest.current;
+          dispatch({ type: 'start', mark: newMark(t, c, g.at, p, s.marks) });
+          g = { kind: 'draw' };
+        } else if (g.kind === 'draw') {
+          dispatch({ type: 'move', at: p });
+        } else {
+          if (!g.moved && !far(e, g.x, g.y)) return;
+          g.moved = true;
+          const mark = g.kind === 'move' ? moveMark(g.mark, p[0] - g.from[0], p[1] - g.from[1]) : moveHandle(g.mark, g.handle, p);
+          dispatch({ type: 'change', mark });
+        }
+      },
+      end,
+    };
+  });
+
+  const pickTool = (t: MarkTool) => {
+    haptic.selection();
+    setMore(false);
+    setTool(t);
+    keep({ tool: t });
+    setSince(marks.length);
+    if (picked !== null) dispatch({ type: 'pick', index: null });
+  };
+  const pickColor = (c: MarkColor) => {
+    haptic.selection();
+    setColor(c);
+    keep({ color: c });
+    if (picked !== null) dispatch({ type: 'recolor', color: c });
+  };
   const add = (text?: string) => {
     haptic.selection();
     dispatch({ type: 'add', text });
   };
   const cancel = () => dispatch({ type: 'cancel' });
+  // Words still open go on with the rest.
+  const finish = () => onDone(markupReducer(state, { type: 'add' }).marks);
+  const retake = () => leaveOrConfirm(!sameMarks(marks, shot.marks), feedback, onRetake, 'this photo');
+  const inkShown = selected?.color ?? color;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.screen, { paddingTop: insets.top }]} testID="markup">
       <View style={styles.bar}>
-        <Touchable feedback="opacity" onPress={onRetake} accessibilityRole="button" testID="markup-retake" style={styles.barSide}>
+        <Touchable feedback="opacity" onPress={retake} accessibilityRole="button" testID="markup-retake" style={styles.barSide}>
           <Text variant="button" color={colors.onDark}>
             {retakeLabel}
           </Text>
         </Touchable>
-        <Text variant="label" weight="600" color={colors.onDark} accessibilityRole="header">
-          Mark Up
-        </Text>
+        <View style={styles.history}>
+          <Touchable
+            feedback="opacity"
+            onPress={() => {
+              haptic.selection();
+              dispatch({ type: 'undo' });
+            }}
+            disabled={!canUndo}
+            accessibilityRole="button"
+            accessibilityLabel="Undo"
+            testID="markup-undo"
+            style={[styles.barIcon, canUndo ? null : styles.off]}
+          >
+            <Icon name="undo" size={21} color={colors.onDark} />
+          </Touchable>
+          <Touchable
+            feedback="opacity"
+            onPress={() => {
+              haptic.selection();
+              dispatch({ type: 'redo' });
+            }}
+            disabled={!canRedo}
+            accessibilityRole="button"
+            accessibilityLabel="Redo"
+            testID="markup-redo"
+            style={[styles.barIcon, canRedo ? null : styles.off]}
+          >
+            <Icon name="redo" size={21} color={colors.onDark} />
+          </Touchable>
+        </View>
         <View style={[styles.barSide, styles.barRight]}>
-          <Touchable feedback="opacity" onPress={() => onDone(marks)} accessibilityRole="button" testID="markup-next" style={styles.next}>
+          <Touchable feedback="opacity" onPress={finish} accessibilityRole="button" testID="markup-next" style={styles.next}>
             <Text variant="button" weight="600" color={colors.bar}>
               {doneLabel}
             </Text>
@@ -203,15 +339,16 @@ export function MarkupEditor({
         {box.width > 0 ? (
           <View style={{ position: 'absolute', left: shown.left, top: shown.top, width: shown.width, height: shown.height }}>
             <Image source={{ uri: shot.uri }} style={{ width: shown.width, height: shown.height }} contentFit="fill" accessibilityIgnoresInvertColors />
-            <MarkLayer marks={drawing ? [...marks, drawing] : marks} width={shown.width} height={shown.height} />
-            <View {...responder.panHandlers} style={styles.canvas} testID="markup-canvas" accessibilityLabel="Draw on the photo" />
+            <MarkLayer marks={drawn} width={shown.width} height={shown.height} />
+            {selected ? <Picked mark={selected} width={shown.width} height={shown.height} /> : null}
+            <Canvas touch={touch} />
           </View>
         ) : null}
       </View>
 
       {panel?.kind === 'note' ? (
         <View style={styles.panel}>
-          <View style={styles.chips}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.chips}>
             {QUICK_NOTES.map((word) => (
               <Touchable
                 key={word}
@@ -221,24 +358,25 @@ export function MarkupEditor({
                 testID={`quick-${word.toLowerCase().replace(/ /g, '-')}`}
                 style={styles.chip}
               >
-                <Text variant="label" weight="600" color={colors.onDark}>
+                <Text variant="subheadline" weight="600" color={colors.onDark}>
                   {word}
                 </Text>
               </Touchable>
             ))}
-          </View>
+          </ScrollView>
           <View style={styles.entry}>
             <TextInput
-              value={panel.text}
+              value={panel.draft.text}
               onChangeText={(text) => dispatch({ type: 'type', text })}
               onSubmitEditing={() => add()}
-              placeholder="Or type a short note"
+              placeholder={panel.draft.to ? 'What is wrong there?' : 'Or type a short note'}
               placeholderTextColor={colors.onDarkQuiet}
               selectionColor={colors.onDark}
               autoFocus
               autoCapitalize="sentences"
               returnKeyType="done"
               maxLength={40}
+              maxFontSizeMultiplier={TEXT_LARGEST}
               accessibilityLabel="Note"
               testID="markup-note"
               style={styles.input}
@@ -248,7 +386,7 @@ export function MarkupEditor({
             </Touchable>
             <Touchable feedback="opacity" onPress={() => add()} accessibilityRole="button" testID="markup-note-add" style={styles.panelButton}>
               <Text weight="600" color={colors.onDark}>
-                Add
+                {panel.index === null ? 'Add' : 'Save'}
               </Text>
             </Touchable>
           </View>
@@ -262,6 +400,7 @@ export function MarkupEditor({
                 feedback="opacity"
                 onPress={() => {
                   haptic.selection();
+                  keep({ unit });
                   dispatch({ type: 'unit', unit });
                 }}
                 accessibilityRole="radio"
@@ -287,6 +426,7 @@ export function MarkupEditor({
               keyboardType="numbers-and-punctuation"
               returnKeyType="done"
               maxLength={24}
+              maxFontSizeMultiplier={TEXT_LARGEST}
               accessibilityLabel="Size"
               testID="markup-size"
               style={styles.input}
@@ -296,105 +436,218 @@ export function MarkupEditor({
             </Touchable>
             <Touchable feedback="opacity" onPress={() => add()} accessibilityRole="button" testID="markup-size-add" style={styles.panelButton}>
               <Text weight="600" color={colors.onDark}>
-                Add
+                {panel.index === null ? 'Add' : 'Save'}
               </Text>
             </Touchable>
           </View>
         </View>
       ) : (
-        <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <Text variant="footnote" color={colors.onDarkQuiet} align="center" numberOfLines={1} testID="markup-hint">
-            {hint}
-          </Text>
+        <View style={[styles.controls, { paddingBottom: bottom }]}>
+          <View style={styles.line}>
+            {selected ? (
+              <>
+                <Text variant="footnote" color={colors.onDarkQuiet} numberOfLines={1} style={styles.lineText} testID="markup-hint">
+                  {pickedHint(selected)}
+                </Text>
+                {selected.tool === 'text' || selected.tool === 'measure' ? (
+                  <LineButton label={selected.tool === 'text' ? 'Edit Words' : 'Edit Size'} onPress={() => dispatch({ type: 'edit' })} testID="markup-edit" />
+                ) : null}
+                <LineButton
+                  label="Delete"
+                  onPress={() => {
+                    haptic.heavy();
+                    dispatch({ type: 'remove' });
+                  }}
+                  testID="markup-delete"
+                />
+              </>
+            ) : (
+              <Text variant="footnote" color={colors.onDarkQuiet} align="center" numberOfLines={1} style={styles.lineText} testID="markup-hint">
+                {hint}
+              </Text>
+            )}
+          </View>
           <View style={styles.tools} accessibilityRole="toolbar">
-            {TOOLS.map((t) => (
+            {MAIN.map((t) => (
+              <ToolButton key={t.tool} label={t.label} icon={t.icon} on={tool === t.tool} onPress={() => pickTool(t.tool)} testID={`tool-${t.tool}`} />
+            ))}
+            <ToolButton
+              label={extra?.label ?? 'More'}
+              icon={extra?.icon ?? 'ellipsis'}
+              on={!!extra}
+              onPress={() => {
+                haptic.selection();
+                setMore(true);
+              }}
+              testID="tool-more"
+            />
+          </View>
+          <View style={styles.colors} accessibilityRole="radiogroup" accessibilityLabel={selected ? 'Color of the mark' : 'Ink color'}>
+            {COLORS.map((c) => (
               <Touchable
-                key={t.tool}
+                key={c}
                 feedback="opacity"
-                onPress={() => {
-                  haptic.selection();
-                  setTool(t.tool);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={t.label}
-                aria-selected={tool === t.tool}
-                testID={`tool-${t.tool}`}
-                style={[styles.tool, tool === t.tool ? styles.toolOn : null]}
+                onPress={() => pickColor(c)}
+                accessibilityRole="radio"
+                accessibilityLabel={MARK_COLOR_NAMES[c]}
+                aria-checked={inkShown === c}
+                testID={`color-${c}`}
+                style={styles.swatchHit}
               >
-                <Icon name={t.icon} size={22} color={colors.onDark} />
+                <View style={[styles.swatch, { backgroundColor: MARK_COLORS[c] }, c === 'black' ? styles.swatchBlack : null, inkShown === c ? styles.swatchOn : null]} />
               </Touchable>
             ))}
           </View>
-          <View style={styles.colors}>
-            <View style={styles.colorSet} accessibilityRole="radiogroup" accessibilityLabel="Ink color">
-              {COLORS.map((c) => (
-                <Touchable
-                  key={c}
-                  feedback="scale"
-                  onPress={() => {
-                    haptic.selection();
-                    setColor(c);
-                  }}
-                  accessibilityRole="radio"
-                  accessibilityLabel={MARK_COLOR_NAMES[c]}
-                  aria-checked={color === c}
-                  testID={`color-${c}`}
-                  style={styles.swatchHit}
-                >
-                  <View
-                    style={[
-                      styles.swatch,
-                      { backgroundColor: MARK_COLORS[c] },
-                      c === 'black' ? styles.swatchBlack : null,
-                      color === c ? styles.swatchOn : null,
-                    ]}
-                  />
-                </Touchable>
-              ))}
-            </View>
-            <View style={styles.rule} />
-            <Touchable
-              feedback="opacity"
-              onPress={() => dispatch({ type: 'undo' })}
-              disabled={marks.length === 0}
-              accessibilityRole="button"
-              accessibilityLabel="Undo"
-              testID="markup-undo"
-              style={[styles.tool, marks.length === 0 ? { opacity: 0.35 } : null]}
-            >
-              <Icon name="undo" size={22} color={colors.onDark} />
-            </Touchable>
-          </View>
         </View>
       )}
+
+      {more ? (
+        <>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMore(false)} accessibilityRole="button" accessibilityLabel="Close the menu" testID="markup-more-close" />
+          <View
+            style={[styles.morePanel, { right: Math.max(8, (windowWidth - TOOLS_WIDTH) / 2), bottom: bottom + COLORS_HEIGHT + TOOLS_HEIGHT + 6 }]}
+            accessibilityRole="menu"
+            accessibilityLabel="More tools"
+          >
+            {MORE.map((t, i) => (
+              <Touchable
+                key={t.tool}
+                feedback="opacity"
+                onPress={() => pickTool(t.tool)}
+                accessibilityRole="menuitem"
+                aria-checked={tool === t.tool}
+                testID={`tool-${t.tool}`}
+                style={[styles.moreRow, i > 0 ? styles.moreRule : null]}
+              >
+                <View style={styles.moreCheck}>{tool === t.tool ? <Icon name="checkmark" size={15} color={colors.onDark} weight="semibold" /> : null}</View>
+                <Text variant="body" color={colors.onDark} style={styles.moreLabel}>
+                  {t.label}
+                </Text>
+                <Icon name={t.icon} size={20} color={colors.onDark} />
+              </Touchable>
+            ))}
+          </View>
+        </>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
+
+/** The photo's touch surface, over the marks. */
+function Canvas({ touch }: { touch: Touch }) {
+  const [handlers] = useState(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
+        onPanResponderGrant: (e) => touch.grant(e),
+        onPanResponderMove: (e) => touch.move(e),
+        onPanResponderRelease: () => touch.end(true),
+        onPanResponderTerminate: () => touch.end(false),
+      }).panHandlers,
+  );
+  return <View {...handlers} style={[styles.canvas, WEB_CANVAS]} testID="markup-canvas" accessibilityLabel="Draw on the photo" />;
+}
+
+function ToolButton({ label, icon, on, onPress, testID }: { label: string; icon: IconName; on: boolean; onPress: () => void; testID: string }) {
+  return (
+    <Touchable
+      feedback="opacity"
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      aria-selected={on}
+      testID={testID}
+      style={[styles.tool, on ? styles.toolOn : null]}
+    >
+      <Icon name={icon} size={22} color={colors.onDark} weight={on ? 'medium' : 'regular'} />
+      <Text variant="stamp" color={on ? colors.onDark : colors.onDarkQuiet} numberOfLines={1}>
+        {label}
+      </Text>
+    </Touchable>
+  );
+}
+
+function LineButton({ label, onPress, testID }: { label: string; onPress: () => void; testID: string }) {
+  return (
+    <Touchable feedback="opacity" onPress={onPress} accessibilityRole="button" testID={testID} style={styles.lineButton}>
+      <Text variant="button" color={colors.onDark}>
+        {label}
+      </Text>
+    </Touchable>
+  );
+}
+
+/** The picked mark: a dashed frame around it and a square on each part that drags on its own. */
+function Picked({ mark, width, height }: { mark: Mark; width: number; height: number }) {
+  const px = ([x, y]: MarkPoint): [number, number] => [x * width, y * height];
+  let frame: { x: number; y: number; width: number; height: number } | null = null;
+  if (mark.tool === 'circle' || mark.tool === 'box') {
+    const [a, b] = [px(mark.from), px(mark.to)];
+    frame = { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), width: Math.abs(b[0] - a[0]), height: Math.abs(b[1] - a[1]) };
+  } else if (mark.tool !== 'arrow' && mark.tool !== 'measure') {
+    // The words of a note that points, which drag on their own; a line, a spot or plain words whole.
+    const f = markFrame(mark.tool === 'text' ? { tool: 'text', color: mark.color, at: mark.at, text: mark.text } : mark, width, height);
+    frame = { x: f.x - FRAME_PAD, y: f.y - FRAME_PAD, width: f.width + 2 * FRAME_PAD, height: f.height + 2 * FRAME_PAD };
+  }
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill} testID="markup-picked">
+      {frame ? (
+        <View style={[styles.frame, { left: frame.x, top: frame.y, width: frame.width, height: frame.height }]}>
+          <View style={styles.frameDash} />
+        </View>
+      ) : null}
+      {markHandles(mark).map(({ handle, at }) => {
+        const [x, y] = px(at);
+        return <View key={handle} style={[styles.grip, { left: x - GRIP / 2, top: y - GRIP / 2 }]} />;
+      })}
+    </View>
+  );
+}
+
+// On the preview page a drag on the photo draws instead of selecting or scrolling the page.
+const WEB_CANVAS = Platform.OS === 'web' ? ({ touchAction: 'none', userSelect: 'none', cursor: 'crosshair' } as object) : null;
+
+const EDGE = 'rgba(247, 245, 236, 0.22)';
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bar },
   bar: { height: 48, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
   barSide: { flex: 1, height: 44, justifyContent: 'center' },
   barRight: { alignItems: 'flex-end' },
+  history: { flexDirection: 'row', gap: 4 },
+  barIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  off: { opacity: 0.35 },
   next: { height: 36, paddingHorizontal: 14, backgroundColor: colors.onDark, alignItems: 'center', justifyContent: 'center' },
   area: { flex: 1 },
   canvas: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
-  controls: { paddingTop: 10, gap: 6 },
-  tools: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
-  tool: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
+  controls: { paddingTop: 2 },
+  line: { height: LINE_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
+  lineText: { flex: 1 },
+  lineButton: { height: 32, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: EDGE },
+  tools: { height: TOOLS_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: TOOL_GAP },
+  tool: { width: TOOL_WIDTH, height: 54, alignItems: 'center', justifyContent: 'center', gap: 4 },
   toolOn: { backgroundColor: colors.darkChipOn },
-  colors: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  colorSet: { flexDirection: 'row', gap: 6 },
-  rule: { width: 1, height: 26, marginHorizontal: 12, backgroundColor: 'rgba(255, 255, 255, 0.24)' },
+  colors: { height: COLORS_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   swatchHit: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  swatch: { width: 28, height: 28 },
+  swatch: { width: 26, height: 26 },
   swatchBlack: { borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.5)' },
   swatchOn: { borderWidth: 2.5, borderColor: colors.black, outlineWidth: 2, outlineColor: colors.white, outlineStyle: 'solid' },
-  panel: { gap: 10, paddingTop: 12, paddingBottom: 12, paddingHorizontal: 16, backgroundColor: '#1C1C1E' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { height: 36, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(247, 245, 236, 0.22)' },
+  frame: { position: 'absolute', borderWidth: 1, borderColor: 'rgba(19, 32, 40, 0.6)' },
+  frameDash: { position: 'absolute', left: -1, top: -1, right: -1, bottom: -1, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.white },
+  grip: { position: 'absolute', width: GRIP, height: GRIP, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.bar, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.45)' },
+  panel: { gap: 10, paddingTop: 12, paddingBottom: 12, backgroundColor: '#1C1C1E' },
+  chips: { flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
+  chip: { height: 36, paddingHorizontal: 12, justifyContent: 'center', borderWidth: 1, borderColor: EDGE },
   chipOn: { backgroundColor: colors.white },
-  entry: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  input: { ...typeScale.body, flex: 1, minWidth: 0, height: 44, paddingHorizontal: 12, color: colors.onDark, backgroundColor: colors.darkChip, borderWidth: 1, borderColor: 'rgba(247, 245, 236, 0.22)', outlineWidth: 0 },
+  entry: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16 },
+  input: { ...fieldFont('body'), flex: 1, minWidth: 0, height: 44, paddingHorizontal: 12, color: colors.onDark, backgroundColor: colors.darkChip, borderWidth: 1, borderColor: EDGE, outlineWidth: 0 },
   panelButton: { height: 44, paddingHorizontal: 8, justifyContent: 'center' },
+  morePanel: { position: 'absolute', width: 220, backgroundColor: '#1C1C1E', borderWidth: 1, borderColor: EDGE, boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)' },
+  moreRow: { height: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+  moreRule: { borderTopWidth: 1, borderTopColor: 'rgba(247, 245, 236, 0.12)' },
+  moreCheck: { width: 16, alignItems: 'center' },
+  moreLabel: { flex: 1 },
 });

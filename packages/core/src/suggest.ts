@@ -58,7 +58,11 @@ export function describeMarks(marks: Mark[]): string[] {
       case 'number':
         return [`Spot ${m.n}, a ${COLOR[m.color]} numbered dot at ${pct(m.at[0])} across and ${pct(m.at[1])} down.`];
       case 'text':
-        return [`A note reading "${m.text}" at ${pct(m.at[0])} across and ${pct(m.at[1])} down.`];
+        return [
+          m.to
+            ? `A note reading "${m.text}" with an arrow pointing at the spot ${pct(m.to[0])} across and ${pct(m.to[1])} down.`
+            : `A note reading "${m.text}" at ${pct(m.at[0])} across and ${pct(m.at[1])} down.`,
+        ];
       default:
         return [];
     }

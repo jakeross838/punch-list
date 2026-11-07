@@ -92,49 +92,73 @@ describe('titles', () => {
 });
 
 describe('marks', () => {
-  it('draws marks at any size, each line with a soft edge under it so it shows on any wall', () => {
-    const [boxEdge, box] = markShapes({ tool: 'box', color: 'red', from: [0.5, 0.5], to: [0.25, 0.25] }, 400, 300);
-    expect(box).toMatchObject({ type: 'rect', x: 100, y: 75, width: 100, height: 75, rx: 3, stroke: '#D70015' });
-    expect(boxEdge).toMatchObject({ type: 'rect', x: 100, y: 75, stroke: 'rgba(0, 0, 0, 0.3)' });
-    expect((boxEdge as { strokeWidth: number }).strokeWidth).toBeGreaterThan((box as { strokeWidth: number }).strokeWidth);
-    const [circleEdge, circle] = markShapes({ tool: 'circle', color: 'white', from: [0, 0], to: [1, 1] }, 200, 100);
+  it('draws marks at any size, each line with a faint halo under it so it shows on any wall', () => {
+    const [boxHalo, box] = markShapes({ tool: 'box', color: 'red', from: [0.5, 0.5], to: [0.25, 0.25] }, 400, 300);
+    expect(box).toMatchObject({ type: 'rect', x: 100, y: 75, width: 100, height: 75, stroke: '#D70015' });
+    expect(boxHalo).toMatchObject({ type: 'rect', x: 100, y: 75, stroke: 'rgba(0, 0, 0, 0.22)' });
+    // The halo is only a little wider than the line: a faint edge, not an outline.
+    const extra = (boxHalo as { strokeWidth: number }).strokeWidth - (box as { strokeWidth: number }).strokeWidth;
+    expect(extra).toBeGreaterThan(0);
+    expect(extra).toBeLessThan((box as { strokeWidth: number }).strokeWidth * 0.4);
+    const [circleHalo, circle] = markShapes({ tool: 'circle', color: 'white', from: [0, 0], to: [1, 1] }, 200, 100);
     expect(circle).toMatchObject({ type: 'ellipse', cx: 100, cy: 50, rx: 100, ry: 50, stroke: '#FFFFFF' });
-    expect(circleEdge).toMatchObject({ type: 'ellipse', stroke: 'rgba(0, 0, 0, 0.42)' });
-    // An arrow: the shaft, then a solid head with its point on the spot.
+    expect(circleHalo).toMatchObject({ type: 'ellipse', stroke: 'rgba(0, 0, 0, 0.4)' });
+    // An arrow: both halos first, then the shaft, then a sharp head with its point on the spot.
     const arrow = markShapes({ tool: 'arrow', color: 'yellow', from: [0, 0], to: [0.5, 0.5] }, 100, 100);
     expect(arrow.map((a) => a.type)).toEqual(['path', 'path', 'path', 'path']);
     expect(arrow[3]).toMatchObject({ fill: '#FFD60A' });
     expect((arrow[3] as { d: string }).d).toMatch(/^M50 50L.*Z$/);
+    // The shaft stops in the head's notch, so the point stays sharp.
+    expect((arrow[2] as { d: string }).d).toMatch(/^M0 0L4\d(\.\d)? 4\d(\.\d)?$/);
   });
 
-  it('sets a note in a tag centered where it was placed', () => {
-    const [edge, pill, words] = markShapes({ tool: 'text', color: 'black', at: [0.5, 0.5], text: 'Rubs the hood' }, 390, 520);
-    expect(edge).toMatchObject({ type: 'rect', fill: 'rgba(255, 255, 255, 0.6)' });
-    expect(pill).toMatchObject({ type: 'rect', fill: '#000000', stroke: 'none' });
-    const { x, width } = pill as { x: number; width: number };
+  it('sets a note in a square label centered where it was placed', () => {
+    const [halo, labelBox, words] = markShapes({ tool: 'text', color: 'black', at: [0.5, 0.5], text: 'Rubs the hood' }, 390, 520);
+    expect(halo).toMatchObject({ type: 'rect', fill: 'rgba(255, 255, 255, 0.5)' });
+    expect(labelBox).toMatchObject({ type: 'rect', fill: '#000000', stroke: 'none' });
+    const { x, width, height, rx } = labelBox as { x: number; width: number; height: number; rx: number };
     expect(x + width / 2).toBeCloseTo(195, 0);
-    expect(width).toBeGreaterThan(textWidth('Rubs the hood', 15.6));
+    expect(width).toBeGreaterThan(textWidth('Rubs the hood', 14.8));
+    // Square, not a pill.
+    expect(rx).toBeLessThan(height / 6);
     expect(words).toMatchObject({ type: 'text', x: 195, text: 'Rubs the hood', fill: '#FFFFFF', anchor: 'middle' });
   });
 
-  it('draws a measurement like a dimension on the plans: a bar and an arrowhead at each end, and the size in a tag', () => {
+  it('points a note at the work with an arrow from the edge of its label', () => {
+    const shapes = markShapes({ tool: 'text', color: 'red', at: [0.3, 0.2], text: 'Caulk', to: [0.7, 0.8] }, 400, 400);
+    // Halos, then the shaft, the head, the label and its words.
+    expect(shapes.map((s) => s.type)).toEqual(['path', 'path', 'rect', 'path', 'path', 'rect', 'text']);
+    const head = shapes[4] as { d: string; fill: string };
+    expect(head.d).toMatch(/^M280 320L/);
+    expect(head.fill).toBe('#D70015');
+    const label = shapes[5] as { x: number; y: number; width: number; height: number };
+    // The shaft starts just past the label's edge, not under the words.
+    const [sx, sy] = (shapes[3] as { d: string }).d.slice(1).split('L')[0]!.split(' ').map(Number);
+    expect(sy).toBeGreaterThan(label.y + label.height);
+    expect(sx).toBeGreaterThan(label.x);
+    expect(shapes[6]).toMatchObject({ text: 'Caulk', x: 120 });
+    // Pointing at a spot under its own words: just the label.
+    expect(markShapes({ tool: 'text', color: 'red', at: [0.5, 0.5], text: 'Caulk', to: [0.51, 0.5] }, 400, 400).map((s) => s.type)).toEqual(['rect', 'rect', 'text']);
+  });
+
+  it('draws a measurement like a dimension on the plans: a bar and an arrowhead at each end, and the size in a label', () => {
     const shapes = markShapes({ tool: 'measure', color: 'red', from: [0.1, 0.5], to: [0.9, 0.5], text: '24 inches' }, 400, 300);
-    expect(shapes.map((s) => s.type)).toEqual(['path', 'path', 'path', 'path', 'path', 'path', 'rect', 'rect', 'text']);
-    expect(shapes[1]).toMatchObject({ d: 'M40 150L360 150M40 157.2L40 142.8M360 157.2L360 142.8', stroke: '#D70015' });
-    expect(shapes[3]).toMatchObject({ fill: '#D70015' });
-    expect((shapes[3] as { d: string }).d).toMatch(/^M40 150L/);
-    expect((shapes[5] as { d: string }).d).toMatch(/^M360 150L/);
+    expect(shapes.map((s) => s.type)).toEqual(['path', 'path', 'path', 'rect', 'path', 'path', 'path', 'rect', 'text']);
+    expect(shapes[4]).toMatchObject({ d: 'M40 150L360 150M40 156.6L40 143.4M360 156.6L360 143.4', stroke: '#D70015' });
+    expect(shapes[5]).toMatchObject({ fill: '#D70015' });
+    expect((shapes[5] as { d: string }).d).toMatch(/^M40 150L/);
+    expect((shapes[6] as { d: string }).d).toMatch(/^M360 150L/);
     expect(shapes[7]).toMatchObject({ type: 'rect', fill: '#D70015' });
     expect(shapes[8]).toMatchObject({ text: '24 inches', anchor: 'middle', x: 200, fill: '#FFFFFF' });
     // With no size typed, just the line, its ends and its arrowheads.
     expect(markShapes({ tool: 'measure', color: 'red', from: [0.1, 0.5], to: [0.9, 0.5], text: ' ' }, 400, 300)).toHaveLength(6);
   });
 
-  it('draws a numbered spot as a pin with its number in the middle', () => {
-    const [edge, dot, number] = markShapes({ tool: 'number', color: 'yellow', at: [0.5, 0.5], n: 3 }, 400, 300);
-    expect(dot).toMatchObject({ type: 'ellipse', cx: 200, cy: 150, fill: '#FFD60A', stroke: '#FFFFFF' });
-    expect(edge).toMatchObject({ type: 'ellipse', cx: 200, cy: 150, fill: 'rgba(0, 0, 0, 0.42)' });
-    expect((edge as { rx: number }).rx).toBeGreaterThan((dot as { rx: number }).rx);
+  it('draws a numbered spot as a plain dot with its number in the middle', () => {
+    const [halo, dot, number] = markShapes({ tool: 'number', color: 'yellow', at: [0.5, 0.5], n: 3 }, 400, 300);
+    expect(dot).toMatchObject({ type: 'ellipse', cx: 200, cy: 150, fill: '#FFD60A', stroke: 'none' });
+    expect(halo).toMatchObject({ type: 'ellipse', cx: 200, cy: 150, fill: 'rgba(0, 0, 0, 0.4)' });
+    expect((halo as { rx: number }).rx).toBeGreaterThan((dot as { rx: number }).rx);
     expect(number).toMatchObject({ type: 'text', x: 200, text: '3', anchor: 'middle', fill: '#1C1C1E' });
     const spots: Mark[] = [
       { tool: 'number', color: 'red', at: [0.1, 0.1], n: 1 },
@@ -364,8 +388,8 @@ describe('the lists that go to the subs', () => {
     expect(page.body).toContain('<img src="data:image/jpeg;base64,AAAA"');
     expect(page.body).toContain('viewBox="0 0 1000 1333" preserveAspectRatio="xMidYMid slice"');
     expect(page.body).toMatch(/<ellipse [^>]*stroke="#D70015"/);
-    // A numbered spot is a pin with its number centered; a size is set in a tag.
-    expect(page.body).toMatch(/<ellipse [^>]*stroke="#FFFFFF"[^>]*fill="#D70015"\/>/);
+    // A numbered spot is a dot with its number centered; a size is set in a label.
+    expect(page.body).toMatch(/<ellipse [^>]*stroke="none"[^>]*fill="#D70015"\/>/);
     expect(page.body).toMatch(/<text [^>]*text-anchor="middle">1<\/text>/);
     expect(page.body).toMatch(/<rect [^>]*rx="[\d.]+" stroke="none" stroke-width="0" fill="#D70015"/);
     expect(page.body).toMatch(/<text [^>]*fill="#FFFFFF"[^>]*text-anchor="middle">24 inches<\/text>/);
