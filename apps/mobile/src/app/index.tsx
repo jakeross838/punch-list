@@ -77,16 +77,9 @@ export default function JobsScreen() {
               {q ? `No job matches “${query.trim()}”.` : 'No jobs here.'}
             </Text>
           ) : (
-            <>
-              <Panel>
-                <JobRows jobs={found} />
-              </Panel>
-              {admin && !q ? (
-                <Text variant="footnote" color={colors.secondary} style={styles.hint}>
-                  Swipe a job left to close or delete it, or hold it down to rename it.
-                </Text>
-              ) : null}
-            </>
+            <Panel>
+              <JobRows jobs={found} />
+            </Panel>
           )}
         </>
       )}
@@ -213,7 +206,6 @@ function JobRow({ job, last, stripe, actions }: { job: Job; last: boolean; strip
 const styles = StyleSheet.create({
   emptyAction: { marginTop: 14, alignSelf: 'stretch' },
   none: { marginHorizontal: layout.inset, marginTop: 12 },
-  hint: { marginHorizontal: layout.inset, marginTop: 8 },
   newJob: { marginHorizontal: layout.margin, marginTop: 16 },
   preview: { marginTop: 28, marginHorizontal: 32 },
   jobRow: { paddingVertical: 13 },

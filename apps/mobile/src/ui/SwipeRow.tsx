@@ -1,4 +1,6 @@
-// iPhone: swipe a row left to show its actions, with the gesture handler's native tracking.
+// iPhone: swipe a row left to show its actions, with the gesture handler's native tracking. The
+// actions wait behind the row, so the row is laid on solid white: a lightly tinted row (every other
+// one on a ledger) would otherwise show them through it before it is swiped.
 
 import { useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -18,6 +20,7 @@ export function SwipeRow({ actions, children, style }: SwipeRowProps) {
     <Swipeable
       ref={ref}
       containerStyle={style}
+      childrenContainerStyle={styles.row}
       friction={1}
       overshootRight={false}
       rightThreshold={ACTION_WIDTH / 2}
@@ -51,6 +54,7 @@ export function SwipeRow({ actions, children, style }: SwipeRowProps) {
 }
 
 const styles = StyleSheet.create({
+  row: { backgroundColor: colors.cell },
   actions: { flexDirection: 'row' },
   action: { width: ACTION_WIDTH, alignItems: 'center', justifyContent: 'center', gap: 6 },
 });
