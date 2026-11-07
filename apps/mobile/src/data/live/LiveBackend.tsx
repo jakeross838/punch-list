@@ -14,6 +14,7 @@ import { SupabaseConnector } from '../powersync/connector';
 import {
   deleteAccountOnServer,
   deleteJobOnServer,
+  jobStationOnServer,
   deletePhotosOnServer,
   myAccount,
   sendSignInCode,
@@ -218,6 +219,7 @@ const liveApi: DataApi = makeApi(keeper, {
     await deleteAccountOnServer();
     await clearPhone();
   },
+  jobStation: (jobId, action) => jobStationOnServer(jobId, action),
   async deleteJob(id) {
     if (!isAdmin(store.get().me)) throw new Error('Only an admin can delete a job.');
     const changes = (await db.getUploadQueueStats()).count + (await photosWaiting());

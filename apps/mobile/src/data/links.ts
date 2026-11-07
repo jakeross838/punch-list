@@ -13,3 +13,12 @@ export function companyPageUrl(token: string): string {
 export function pageUrlFor(mode: 'preview' | 'live', token: string): string {
   return companyPageUrl(mode === 'preview' ? 'sample' : token);
 }
+
+/**
+ * The job's station, on the same hosting: /s for a tablet, /tv for a TV. On the preview it is the
+ * sample station.
+ */
+export function stationUrlFor(mode: 'preview' | 'live', token: string, on: 'tablet' | 'tv' = 'tablet'): string {
+  const site = BASE.replace(/[#/]+$/, '').replace(/\/[^/]*$/, '');
+  return `${site}/${on === 'tv' ? 'tv' : 's'}#${mode === 'preview' ? 'sample' : token}`;
+}

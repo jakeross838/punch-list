@@ -63,6 +63,13 @@ export async function deleteAccountOnServer(): Promise<void> {
 }
 
 /** Deletes a job and everything on it, for an admin. Its photos come out of storage first. */
+/** The job's station link, asked for, made, made again or turned off. */
+export async function jobStationOnServer(jobId: string, action: 'get' | 'make' | 'new' | 'off'): Promise<string | null> {
+  const { data, error } = await supabase.rpc('job_station', { p_job: jobId, p_action: action });
+  if (error) throw new Error(/fetch|network/i.test(error.message) ? 'The station needs a signal. Check it and try again.' : sentence(error.message));
+  return typeof data === 'string' && data ? data : null;
+}
+
 export async function deleteJobOnServer(jobId: string): Promise<void> {
   const { error } = await supabase.rpc('delete_job', { p_job: jobId });
   if (error) throw new Error(/fetch|network/i.test(error.message) ? 'That did not go. Check the signal and try again.' : sentence(error.message));

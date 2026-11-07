@@ -71,7 +71,7 @@ export interface Keeper {
 
 /** What differs between the backends besides where the changes are kept. */
 export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signOut' | 'startCompany' | 'deleteAccount'> &
-  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useUpdates' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'companyMarkDone' | 'previewAs' | 'deleteJob'>>;
+  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useUpdates' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'companyMarkDone' | 'previewAs' | 'deleteJob' | 'jobStation'>>;
 
 const now = () => new Date().toISOString();
 
@@ -192,6 +192,8 @@ const newToken = () => `${randomUUID()}${randomUUID()}`.replace(/-/g, '').toLowe
 
 export function makeApi(keeper: Keeper, extras: Extras): DataApi {
   const get = keeper.get;
+  /** The preview's station links, by job. */
+  const stations = new Map<string, string>();
   const save = (next: Partial<State>, happened: Happened[] = []) => keeper.save(next, happened);
   const useStore = (): State => useSyncExternalStore(keeper.subscribe, get, get);
 
@@ -322,6 +324,16 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       if (patch.closed !== undefined && patch.closed !== job.closed) happened.push({ jobId: id, kind: patch.closed ? 'job_closed' : 'job_reopened' });
       await save({ jobs: state.jobs.map((j) => (j.id === id ? { ...j, ...patch } : j)) }, happened);
     },
+    // The preview keeps each job's station link in memory: its page is the sample station.
+    jobStation:
+      extras.jobStation ??
+      (async (jobId, action) => {
+        if (!get().jobs.some((j) => j.id === jobId)) throw new Error('That job is not here.');
+        if (action === 'new' || action === 'off') stations.delete(jobId);
+        if (action === 'off') return null;
+        if (!stations.has(jobId) && (action === 'make' || action === 'new')) stations.set(jobId, newToken());
+        return stations.get(jobId) ?? null;
+      }),
     deleteJob:
       extras.deleteJob ??
       (async (id) => {

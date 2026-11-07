@@ -6,6 +6,17 @@
 
 **Design:** [Punch List App Design](https://claude.ai/artifact/MkYkFBRyhwxCDGG488omuC), the approved canvas. Jake's review asked for less text up front, the rest one tap in, very calm and easy to use, with a clear way to check things complete.
 
+## The job's station, for a tablet or a TV in the house (7 November 2026)
+
+Jake: "a feature would be to be able to broadcast these lists and such on TV or tablet in a central station of a house for subs to click on their assignments and work through the lists."
+
+- **Turn it on from the job:** the job's menu has Job Station. Turn On the Station makes the job's link, with a code to scan with the tablet's camera, Copy the Link and Open the Station, and the same for the TV board. Make a New Link stops the old one; Turn Off the Station stops it altogether. Anyone who can see the job can do this; it needs a signal.
+- **On the tablet:** every company with work on the job, the one with the most ready work first. Each tile says how much is ready, waiting, to be quoted and to check, and what to do next, in the same order as the company's own list. A company taps its name for its list: numbered in the order to do it, with Confirm, how long it takes, Mark Done and comments, the same as its own page. The name typed is kept on the station for that company. ‹ All Companies goes back, and after three minutes untouched the station goes back by itself for whoever comes next.
+- **On a TV:** the same board in large type on a dark screen, six companies at a time, moving to the next six every 15 seconds: each company's ready, waiting and to check, and its next three items, numbered. A code on the screen opens the station on a phone. It keeps itself up to date every minute and needs no one to touch it. It stands on its end too.
+- **Safe to leave up:** the station opens a company's list through that company's own link, so everything the company's page checks still holds, and the screen never sees a company's link. Anyone with the station's link sees every company's list on the job and can answer for any of them, which is why the app says to keep it to the house; marked done still waits for your team to check it.
+- **The database:** `job_stations` (one working link per job, never read directly), `job_station` for the app, and `station_page` and `station_company` for the company-page function alone (`job_station` migration). A deleted job takes its station with it. Jake said to put it live: the migration is on the live project (as 20261107181556), the company-page function answers the station (version 2), and the station is on Expo's hosting at /s and /tv.
+- Checked: the database checks (the link made, made again, replaced and turned off; who can call what; the board's work; a company's list through its own link; a replaced link opening nothing, and never a company page), the station walked in Chromium on a tablet and a TV against a stand-in (the order, a company's list and back, Mark Done under the name kept for that company, going back after three minutes, the TV's pages and code, a turned off station, the sample), the company's page again after it was split to share its list with the station, and the preview walk-through with the Job Station sheet.
+
 ## Markup that looks professional, and one Assigned To (7 November 2026)
 
 Jake, on build 8: "Can we really fine tune the markup feature, just seems kinda cheesy. The most common uses are circles, arrows and arrows with text." And: "remove the company thing, should just be assigned to, kinda the same thing. Again, simple and effective."

@@ -800,6 +800,95 @@ begin
 end $$;
 reset role;
 
+-- ---------- the job's station ----------
+-- One link per job for a tablet or a TV in the house, made and turned off from the app; the screen
+-- talks to the database only through the company-page function.
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+declare
+  j uuid := (select id from public.jobs where name = 'Fish');
+  a text; b text; c text;
+begin
+  if public.job_station(j, 'get') is not null then raise exception 'FAIL: a job had a station before one was made'; end if;
+  a := public.job_station(j, 'make');
+  if a !~ '^[0-9a-f]{64}$' then raise exception 'FAIL: the station link is too easy to guess'; end if;
+  if public.job_station(j, 'make') <> a or public.job_station(j, 'get') <> a then raise exception 'FAIL: making the station again made another link'; end if;
+  b := public.job_station(j, 'new');
+  if b = a or public.job_station(j, 'get') <> b then raise exception 'FAIL: a new station link did not replace the old one'; end if;
+  if public.job_station(j, 'off') is not null or public.job_station(j, 'get') is not null then raise exception 'FAIL: the station did not turn off'; end if;
+  c := public.job_station(j, 'make');
+  perform set_config('test.station_old', a, false);
+  perform set_config('test.station', c, false);
+  begin
+    perform 1 from public.job_stations;
+    raise exception 'FAIL: the app read the station links directly';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.job_station(j, 'open');
+    raise exception 'FAIL: the station took an action it does not have';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.station_page(c);
+    raise exception 'FAIL: the app can open the station''s board';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+set role anon;
+do $$
+begin
+  begin
+    perform public.job_station((select gen_random_uuid()), 'make');
+    raise exception 'FAIL: anyone can make a station';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.station_page(current_setting('test.station'));
+    raise exception 'FAIL: the station''s board opens for anyone';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.station_company(current_setting('test.station'), gen_random_uuid());
+    raise exception 'FAIL: anyone can open a company''s list through the station';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+set request.jwt.claims = '';
+set role service_role;
+do $$
+declare
+  board jsonb := public.station_page(current_setting('test.station'));
+  gator uuid := (select id from public.companies where name = 'Gator Plumbing');
+  gator_items jsonb;
+begin
+  if board is null or board -> 'job' ->> 'name' <> 'Fish' then raise exception 'FAIL: the station''s board did not open'; end if;
+  select x -> 'items' into gator_items from jsonb_array_elements(board -> 'companies') x where x ->> 'name' = 'Gator Plumbing';
+  if gator_items is null or jsonb_array_length(gator_items) = 0 then raise exception 'FAIL: the board left out a company''s open work'; end if;
+  if exists (select 1 from jsonb_array_elements(gator_items) x where x ->> 'id' not in (select id::text from public.items where company_id = gator and status = 'open' and not unfinished)) then
+    raise exception 'FAIL: the board showed work that is not open and finished';
+  end if;
+  if not exists (select 1 from jsonb_array_elements(gator_items) x where x ? 'holds_up') then raise exception 'FAIL: the board does not say what work frees up'; end if;
+  -- A company's list opens through its own link, the one it already has.
+  if public.station_company(current_setting('test.station'), gator) <> current_setting('test.link') then raise exception 'FAIL: the station did not open the company''s own list'; end if;
+  begin
+    perform public.station_company(current_setting('test.station'), gen_random_uuid());
+    raise exception 'FAIL: the station opened a company that is not on the job';
+  exception when insufficient_privilege then null;
+  end;
+  -- A station link turned off, or one that was replaced, opens nothing; nor does it open a company page.
+  if public.station_page(current_setting('test.station_old')) is not null or public.station_company(current_setting('test.station_old'), gator) is not null then
+    raise exception 'FAIL: a station link that was replaced still works';
+  end if;
+  if public.trade_page(current_setting('test.station')) is not null then raise exception 'FAIL: a station link opened a company page'; end if;
+end $$;
+reset role;
+
 -- ---------- back in the app: the company's comments, and taking a link back ----------
 set role authenticated;
 set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
@@ -1402,6 +1491,7 @@ begin
   insert into public.photos (job_id, item_id, width, height) values (j, x, 900, 1200);
   insert into public.comments (job_id, item_id, body) values (j, x, 'Broom is in the truck.');
   insert into public.company_links (job_id, company_id) values (j, c);
+  perform public.job_station(j, 'make');
   perform set_config('test.old_job', j::text, false);
   perform set_config('test.fish_count', fish_items::text, false);
   -- Not some other job, and not one that is not there.
@@ -1435,7 +1525,7 @@ declare
   j uuid := current_setting('test.old_job')::uuid;
   tbl text; n int;
 begin
-  foreach tbl in array array['job_team', 'job_companies', 'job_activity', 'item_history', 'comments', 'list_sends', 'company_links', 'photos', 'items', 'visits', 'plan_sheets', 'job_waiting_on', 'locations', 'job_access'] loop
+  foreach tbl in array array['job_team', 'job_companies', 'job_activity', 'item_history', 'comments', 'list_sends', 'company_links', 'job_stations', 'photos', 'items', 'visits', 'plan_sheets', 'job_waiting_on', 'locations', 'job_access'] loop
     execute format('select count(*) from public.%I where job_id = %L', tbl, j) into n;
     if n <> 0 then raise exception 'FAIL: % still has the deleted job''s rows', tbl; end if;
   end loop;

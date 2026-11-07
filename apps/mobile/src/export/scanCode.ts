@@ -6,13 +6,17 @@ import qrcode from 'qrcode-generator';
 /** Modules of white around the code: phone cameras need a clear edge to find it. */
 const EDGE = 2;
 
-export function scanCode(url: string): string | null {
+/**
+ * The code for a link as one path on a square of modules: n across, the quiet edge outside it, at
+ * -EDGE to n + EDGE. Null when the link is too long for a code.
+ */
+export function scanCodePath(url: string): { n: number; edge: number; d: string } | null {
   try {
     const qr = qrcode(0, 'M');
     qr.addData(url);
     qr.make();
     const n = qr.getModuleCount();
-    // Each row's dark runs as one rectangle, to keep the page small.
+    // Each row's dark runs as one rectangle, to keep it small.
     const runs: string[] = [];
     for (let y = 0; y < n; y++) {
       for (let x = 0; x < n; ) {
@@ -26,9 +30,15 @@ export function scanCode(url: string): string | null {
         x = end;
       }
     }
-    const size = n + EDGE * 2;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-EDGE} ${-EDGE} ${size} ${size}" shape-rendering="crispEdges"><rect x="${-EDGE}" y="${-EDGE}" width="${size}" height="${size}" fill="#FFFFFF"/><path fill="#1D1D1F" d="${runs.join('')}"/></svg>`;
+    return { n, edge: EDGE, d: runs.join('') };
   } catch {
     return null;
   }
+}
+
+export function scanCode(url: string): string | null {
+  const code = scanCodePath(url);
+  if (!code) return null;
+  const size = code.n + EDGE * 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-EDGE} ${-EDGE} ${size} ${size}" shape-rendering="crispEdges"><rect x="${-EDGE}" y="${-EDGE}" width="${size}" height="${size}" fill="#FFFFFF"/><path fill="#1D1D1F" d="${code.d}"/></svg>`;
 }

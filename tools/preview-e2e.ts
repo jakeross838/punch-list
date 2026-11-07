@@ -1643,6 +1643,32 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
+    await step("New: the job's station puts every company's list on a tablet or a TV, and turns off", async () => {
+      await menu('job-station');
+      await app.getByTestId('station-sheet').waitFor();
+      await app.getByTestId('station-on').waitFor();
+      await settle(400);
+      await shot('99f-station-off');
+      await app.getByTestId('station-on').click();
+      await app.getByTestId('station-code').waitFor();
+      await settle(400);
+      await shot('99g-station-on');
+      await app.getByTestId('station-copy').click();
+      await app.getByText(/^Link copied$|^The link did not copy/).first().waitFor();
+      await app.getByTestId('station-copy-tv').click();
+      await app.getByText(/^TV link copied$|^The link did not copy/).first().waitFor();
+      // A new link, then off: the station asks first each time.
+      await app.getByTestId('station-new').click();
+      await app.getByRole('button', { name: 'Make a New Link', exact: true }).last().click();
+      await app.getByText('New link made. The old one no longer works.').waitFor();
+      await app.getByTestId('station-off').click();
+      await app.getByRole('button', { name: 'Turn Off the Station', exact: true }).last().click();
+      await app.getByText('The station is off').waitFor();
+      await app.getByTestId('station-on').waitFor();
+      await app.getByTestId('station-done').click();
+      await app.getByTestId('station-sheet').waitFor({ state: 'detached' });
+      await settle(500);
+    });
     await step('Me: the company name, Sign Out, and signing in with a code sent by email', async () => {
       await app.getByTestId('back').last().click();
       await app.getByTestId('job-job-preview').waitFor();

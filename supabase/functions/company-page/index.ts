@@ -4,6 +4,10 @@
 // through the trade_* functions alone, and signs the photos for an hour. It answers with the page as
 // it now stands.
 //
+// The job's station (a tablet or a TV in the house) sends its own link as s instead: alone, for its
+// board of every company on the job; with a company, for that company's list, opened through the
+// company's own link, which never leaves here.
+//
 //   Deployed with verify_jwt off: the link is the only key, and nobody signs in.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -119,9 +123,27 @@ Deno.serve(async (req: Request) => {
   } catch {
     return reply({ error: 'Send the page what it asks for' }, 400);
   }
-  const token = typeof body.t === 'string' ? body.t.trim().toLowerCase() : '';
-  if (!TOKEN.test(token)) return reply({ error: 'This link does not work. Ask for a new one.' }, 404);
+  let token = typeof body.t === 'string' ? body.t.trim().toLowerCase() : '';
   try {
+    if (body.s !== undefined) {
+      const station = typeof body.s === 'string' ? body.s.trim().toLowerCase() : '';
+      if (!TOKEN.test(station)) return reply({ error: 'This station link does not work. Ask for a new one.' }, 404);
+      const company = typeof body.company === 'string' && UUID.test(body.company) ? body.company.toLowerCase() : null;
+      if (!company) {
+        const { data, error } = await db.rpc('station_page', { p_token: station });
+        if (error) throw error;
+        if (!data) return reply({ error: 'This station is turned off. Ask for a new link.' }, 404);
+        return reply(data);
+      }
+      const { data, error } = await db.rpc('station_company', { p_token: station, p_company: company });
+      if (error) {
+        if (error.code === '42501') throw new Refused(error.message);
+        throw error;
+      }
+      if (!data) return reply({ error: 'This station is turned off. Ask for a new link.' }, 404);
+      token = String(data);
+    }
+    if (!TOKEN.test(token)) return reply({ error: 'This link does not work. Ask for a new one.' }, 404);
     if (body.action && body.action !== 'page') await answer(token, body);
     const shown = await page(token);
     if (!shown) return reply({ error: 'This link no longer works. Ask for a new one.' }, 404);

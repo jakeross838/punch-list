@@ -46,3 +46,33 @@ export interface Page {
   completed: { id: string; number: number | null; title: string; location: string; completed_at: string }[];
   comments: PageComment[];
 }
+
+/** One item on the station's board, in short: enough to count it and to put it in order. */
+export interface StationItem {
+  id: string;
+  number: number | null;
+  title: string;
+  location: string;
+  kind: ItemKind;
+  ready: boolean;
+  ready_by: string | null;
+  hours: number | null;
+  priority: boolean;
+  po_or_co: string | null;
+  confirmed_at: string | null;
+  marked_done_at: string | null;
+  holds_up?: { items: number; hours: number } | null;
+}
+export interface StationCompany {
+  id: string;
+  name: string;
+  /** The trade it does on the job, when it is on the job in Job Setup. */
+  trade: string | null;
+  items: StationItem[];
+}
+/** What the company-page function answers the job's station with: every company with work on the job. */
+export interface StationBoard {
+  builder: string;
+  job: { name: string; address: string; closed: boolean };
+  companies: StationCompany[];
+}

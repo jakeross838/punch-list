@@ -24,6 +24,7 @@ How each service behind the app is set up, and where its secrets are kept. Secre
   ```
 
 - The function: `supabase/functions/company-page`, deployed with verify_jwt off (the link is the only key). Every call is a POST with the token in its body; it checks the link, answers through the `trade_*` database functions as the service role (nobody else can call them), and signs the photos for an hour. Supabase does not serve web pages from functions, which is why the page itself is on Expo's hosting.
+- The job's station is built into the same place by the same command: `https://punch-list.expo.app/s#<token>` on a tablet and `https://punch-list.expo.app/tv#<token>` on a TV, with `#sample` for the sample. Its calls go to the same function with the station's token as `s`: alone for the board (`station_page`), or with a company for that company's list, opened through the company's own link (`station_company` finds it, or makes it), which never leaves the function. The app gets, makes and turns off the station's link through `job_station`, so it needs a signal. `npx tsx tools/station-e2e.ts` walks it against a stand-in, after `COMPANY_PAGE_FUNCTION=http://localhost:4321/fn node tools/build-company-page.mjs`.
 - Later: the page can move to the company's own address (for example `link.rossbuilt.com`, or one for Punch List) by pointing a domain at Expo's hosting and setting `EXPO_PUBLIC_COMPANY_PAGE_URL` in the app's build.
 
 ## PowerSync

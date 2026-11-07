@@ -138,6 +138,9 @@ export interface SyncInfo {
 /** A visit's dates, days, confirmation and note. New dates, or confirming it, answer what the company asked for. */
 export type VisitPatch = Partial<Pick<Visit, 'start' | 'days' | 'confirmed' | 'note'>>;
 
+/** What the job's station link is asked for. */
+export type StationAction = 'get' | 'make' | 'new' | 'off';
+
 export interface DataApi {
   /** preview: sample data, nothing saved beyond this browser tab. live: the real database. */
   mode: 'preview' | 'live';
@@ -200,6 +203,12 @@ export interface DataApi {
    * everyone, for good. On the phone it needs a signal, and every change made here up first.
    */
   deleteJob(id: string): Promise<void>;
+  /**
+   * The job's station: one link for a tablet or a TV in the house, with every company's list on
+   * the job. get: the link that works, or null. make: that one, or a new one. new: a new one, and
+   * the old one stops working. off: none works. Needs a signal.
+   */
+  jobStation(jobId: string, action: StationAction): Promise<string | null>;
   /** Admins only. */
   addPerson(person: NewPerson): Promise<string>;
   /** Admins only. There is always at least one admin. */
