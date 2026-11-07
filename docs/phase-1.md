@@ -6,6 +6,19 @@
 
 **Design:** [Punch List App Design](https://claude.ai/artifact/MkYkFBRyhwxCDGG488omuC), the approved canvas. Jake's review asked for less text up front, the rest one tap in, very calm and easy to use, with a clear way to check things complete.
 
+## Markup that looks professional, and one Assigned To (7 November 2026)
+
+Jake, on build 8: "Can we really fine tune the markup feature, just seems kinda cheesy. The most common uses are circles, arrows and arrows with text." And: "remove the company thing, should just be assigned to, kinda the same thing. Again, simple and effective."
+
+- **The marks:** a plainer, sharper look, like a drawing marked up by hand in red: solid lines with round ends, a sharp notched arrowhead, words in a square label in the mark's color, and a thin faint halo that keeps a mark clear on a white wall or a dark floor without reading as an outline. A note near the edge of the photo stays on it. The same look on the phone, the printed lists and the company's page.
+- **The tools:** Circle, Arrow, Note and Draw up front, labeled; Box, Measure and Number under More. Note does arrows with text: drag from where the words go to the spot, then tap one of the standard words (one row now) or type. A tap places words alone. The tool, color and unit picked last carry over to the next photo.
+- **Changing a mark:** tap it to pick it. Drag it to move it; drag a square to change its shape (the ends of an arrow, two corners of a circle or a box, the tip of a note's arrow; a note's words move on their own and the arrow keeps pointing). Tap a color to change it, Edit Words or Edit Size, or Delete (numbered spots after it move down). A second tap on a note opens its words.
+- **Undo and Redo** at the top, like Apple's Markup, back and forth through every change. Retake and Cancel ask first when there are marks that would be lost.
+- **Assigned To:** one field in place of Company and Assigned To. Pick a company (on this job, or any other) or someone on your team. A company gets the item on its list, its page and its emails, numbered in order as before; someone on the team gets it on their My Items. Picking one clears the other. A new task added from Not Ready is assigned the same way, and Select's Assign takes a company or a person for all the items picked, with Undo.
+- Everywhere it shows: the item's summary and form, its row, View and Filter (By Location, Assigned To, Waiting On; one Assigned To filter with the companies and the team), Make a List, the printed lists, the spreadsheet (one Assigned To column), what work waits on ("Waiting on Taylor Brooks"), and Activity ("assigned Install pendant lights to Taylor Brooks", with nothing about the company it came off). A draft says it "Needs someone assigned".
+- **The database:** an open item needs a company or someone on the team (`items_open_is_assigned`, in `assigned_to`); a draft can wait for it, and completed or removed work keeps its record. When someone deletes their account, open work that was theirs alone goes back to Drafts to be assigned. This one needs Jake's word before it goes onto the live project.
+- Checked: 260 unit tests (new ones for the markup changes, Undo and Redo, and Assigned To), the type checks, lint, the database checks (with work assigned to a person alone, and a deleted account's work going to Drafts), 108 of the phone's writes, and the full preview walk-through (57 steps, with the markup's new tools, picking and changing marks, Redo, and assigning to a person).
+
 ## Behaving like an iPhone app, and each company's work in order (6 November 2026)
 
 Jake, on build 6: "check everything and if you notice it doesn't behave as an apple application would behave, fix it now." And: "set priorities for each company, like numbered do this then this then this so they can always be working on the thing that holds up the most amount of work first when possible."

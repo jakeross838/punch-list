@@ -21,8 +21,8 @@ export const KIND_HINTS: Record<ItemKind, string> = {
 
 export const FORM_FIELDS: { field: FormField; label: string }[] = [
   { field: 'description', label: 'Description' },
-  { field: 'company', label: 'Company' },
-  { field: 'assignedTo', label: 'Assigned To' },
+  // A company or someone on the team: one field, saved as company or assignedTo.
+  { field: 'company', label: 'Assigned To' },
   { field: 'kind', label: 'Type' },
   { field: 'ready', label: 'Ready' },
   { field: 'waitingOn', label: 'Waiting On' },

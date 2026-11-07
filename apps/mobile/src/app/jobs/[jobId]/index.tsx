@@ -7,6 +7,7 @@
 // fit; copied items paste here into a location picked from the job.
 
 import {
+  assigneeKey,
   byFloor,
   commentCounts,
   pastePlan,
@@ -76,7 +77,7 @@ interface Section {
 const openWords = (n: number) => `${n} open`;
 
 function matchesQuery(item: Item, q: string, name: (id: string | null) => string): boolean {
-  const hay = [item.title, item.description, item.waitingOn.join(' '), item.poOrCo ?? '', String(item.number ?? ''), name(item.companyId), name(item.locationId)]
+  const hay = [item.title, item.description, item.waitingOn.join(' '), item.poOrCo ?? '', String(item.number ?? ''), name(item.companyId), name(item.assignedTo), name(item.locationId)]
     .join(' ')
     .toLowerCase();
   return q
@@ -103,6 +104,7 @@ export default function JobScreen() {
   const locations = data.useLocations(jobId);
   const trades = data.useTrades();
   const companies = data.useCompanies();
+  const people = data.usePeople();
   const jobCompanies = data.useJobCompanies(jobId);
   const titles = data.useTitles();
   const canFill = useCanSuggest();
@@ -121,7 +123,7 @@ export default function JobScreen() {
   // How much of each location (or company) is done, for its bar.
   const doneShare = useMemo(() => {
     const counts = new Map<string, { done: number; all: number }>();
-    const keyOf = (i: Item) => (view.groupBy === 'company' ? (i.companyId ?? '') : i.locationId);
+    const keyOf = (i: Item) => (view.groupBy === 'company' ? (assigneeKey(i) ?? 'none') : i.locationId);
     for (const i of items) {
       if (i.status === 'removed' || i.unfinished) continue;
       const c = counts.get(keyOf(i)) ?? { done: 0, all: 0 };
@@ -135,9 +137,10 @@ export default function JobScreen() {
   const names = useMemo(() => {
     const map = new Map<string, string>();
     for (const c of companies) map.set(c.id, c.name);
+    for (const p of people) map.set(p.id, p.name);
     for (const l of locations) map.set(l.id, l.label);
     return (id: string | null) => (id ? (map.get(id) ?? '') : '');
-  }, [companies, locations]);
+  }, [companies, people, locations]);
   const firstPhoto = useMemo(() => {
     const map = new Map<string, Photo>();
     for (const p of photos) if (!map.has(p.itemId)) map.set(p.itemId, p);
@@ -148,7 +151,7 @@ export default function JobScreen() {
   const filters = view.filters;
   const narrowed = isFiltered(filters);
   // Each list keeps a trade's items together, in the trades' order.
-  const lookups = useMemo(() => ({ locations, companies, trades }), [locations, companies, trades]);
+  const lookups = useMemo(() => ({ locations, companies, people, trades }), [locations, companies, people, trades]);
   const groups = useMemo(() => groupItems(items, view.groupBy, lookups, { filters, context }), [items, view.groupBy, lookups, filters, context]);
   const draftItems = items.filter((i) => i.unfinished && i.status === 'open');
   const drafts = draftItems.length;
@@ -375,7 +378,7 @@ export default function JobScreen() {
       style={styles.groups}
       chips={(['room', 'company', 'waiting'] as GroupBy[]).map((g) => ({
         key: g,
-        label: g === 'waiting' ? 'Waiting On' : `By ${GROUP_LABELS[g]}`,
+        label: g === 'room' ? `By ${GROUP_LABELS[g]}` : GROUP_LABELS[g],
         on: view.groupBy === g,
         onPress: () => {
           haptic.selection();
@@ -458,7 +461,7 @@ export default function JobScreen() {
                   photo={firstPhoto.get(item.id)}
                   comments={commentsOn.get(item.id)}
                   holds={holds}
-                  company={names(item.companyId) || undefined}
+                  assignee={names(item.companyId) || names(item.assignedTo) || undefined}
                   first={index === 0}
                   last={index === section.data.length - 1}
                   stripe={index % 2 === 1}

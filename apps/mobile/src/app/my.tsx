@@ -63,7 +63,7 @@ function JobBlock({ job, items }: { job: Job; items: Item[] }) {
           comments={commentsOn.get(item.id)}
           holds={holds}
           location={locations.find((l) => l.id === item.locationId)?.label}
-          company={companies.find((c) => c.id === item.companyId)?.name}
+          assignee={companies.find((c) => c.id === item.companyId)?.name}
           last={index === rows.length - 1}
           checking={actions.checking.has(item.id)}
           onOpen={(i) => router.push({ pathname: '/jobs/[jobId]/items/[itemId]', params: { jobId: job.id, itemId: i.id } })}

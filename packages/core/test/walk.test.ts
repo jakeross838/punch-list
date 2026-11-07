@@ -31,7 +31,7 @@ describe('the walk', () => {
       boughtOut: true, poOrCo: null, status: 'open', completedBy: null, completedAt: null, extra: {}, unfinished: true, visitId: null, hours: null,
     };
     expect(checkItem(draft)).toEqual([]);
-    expect(missingText(draft)).toBe('Needs a title, location and company');
+    expect(missingText(draft)).toBe('Needs a title, a location and someone assigned');
     const named = { ...draft, title: 'Install mirror', companyId: 'c' };
     expect(tidyItem(named).unfinished).toBe(true);
     expect(tidyItem({ ...named, locationId: 'k' }).unfinished).toBe(false);

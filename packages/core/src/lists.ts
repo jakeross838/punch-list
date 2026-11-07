@@ -5,10 +5,11 @@
 // is numbered in the order to do it (workOrder.ts): the ready items first, Priority first, then
 // whatever holds up the most other work.
 
+import { assigneeName, NOT_ASSIGNED, type AssigneeNames } from './assignees';
 import { matchesFilters, type FilterContext, type ItemFilters } from './filters';
 import { holdLookups, holdText, readyByOf, type HoldLookups } from './holds';
 import { isPriced } from './rules';
-import type { Company, Item, Location, Trade, Visit } from './types';
+import type { Company, Item, Location, Person, Trade, Visit } from './types';
 import { floorOf, NO_FLOOR } from './rooms';
 import { sortItems, tradeRanks } from './views';
 import { doFirst, FREES_NOTHING, freedWork, type Freed } from './workOrder';
@@ -16,6 +17,8 @@ import { doFirst, FREES_NOTHING, freedWork, type Freed } from './workOrder';
 export interface ListLookups {
   locations: Location[];
   companies: Company[];
+  /** The team's names, for work assigned to someone on it. */
+  people?: Pick<Person, 'id' | 'name'>[];
   /**
    * The job's items and visits. With them a line names the tasks it waits on and, from their
    * visits, when it should be ready.
@@ -32,6 +35,7 @@ export interface ListLine {
   item: Item;
   room: string;
   floor: string;
+  /** Who it is assigned to: the company, or the person on the team. */
   company: string;
   /** What it waits on, as it reads after "Waiting on"; empty when it is ready. */
   waiting: string;
@@ -46,6 +50,17 @@ export interface ListLine {
 }
 
 const holdCache = new WeakMap<ListLookups, HoldLookups>();
+const nameCache = new WeakMap<ListLookups, AssigneeNames>();
+
+/** The companies' and the team's names, looked up once for each set of list lookups. */
+function namesFor(lookups: ListLookups): AssigneeNames {
+  let names = nameCache.get(lookups);
+  if (!names) {
+    names = { companies: new Map(lookups.companies.map((c) => [c.id, c.name])), people: new Map((lookups.people ?? []).map((p) => [p.id, p.name])) };
+    nameCache.set(lookups, names);
+  }
+  return names;
+}
 const freedCache = new WeakMap<ListLookups, Map<string, Freed>>();
 
 /** What each item frees up, worked out once for each set of list lookups. */
@@ -62,7 +77,7 @@ function freedFor(lookups: ListLookups): Map<string, Freed> {
 export function holdsFor(lookups: ListLookups): HoldLookups {
   let look = holdCache.get(lookups);
   if (!look) {
-    look = holdLookups({ items: lookups.items ?? [], companies: lookups.companies, locations: lookups.locations, visits: lookups.visits, today: lookups.today });
+    look = holdLookups({ items: lookups.items ?? [], companies: lookups.companies, people: lookups.people, locations: lookups.locations, visits: lookups.visits, today: lookups.today });
     holdCache.set(lookups, look);
   }
   return look;
@@ -101,7 +116,7 @@ export function lineFor(item: Item, lookups: ListLookups): ListLine {
     item,
     room: room?.label ?? 'Not set',
     floor: room ? floorOf(room) : NO_FLOOR,
-    company: lookups.companies.find((c) => c.id === item.companyId)?.name ?? 'Not set',
+    company: assigneeName(item, namesFor(lookups)) ?? NOT_ASSIGNED,
     waiting: item.ready ? '' : holdText(item, look),
     waitingGroup: item.ready ? '' : holdText(item, look, { everywhere: true }),
     readyBy: readyByOf(item, look),

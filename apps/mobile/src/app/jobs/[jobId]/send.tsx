@@ -135,7 +135,7 @@ export default function SendScreen() {
   const today = dayOfDate(new Date());
   // With the items, every list says which tasks an item waits on.
   const trades = data.useTrades();
-  const lookups = useMemo(() => ({ locations, companies, items, trades }), [locations, companies, items, trades]);
+  const lookups = useMemo(() => ({ locations, companies, people, items, trades }), [locations, companies, people, items, trades]);
   const look = useMemo(
     () => ({ people: new Map(people.map((p) => [p.id, p.name])), companies: new Map(companies.map((c) => [c.id, c.name])) }),
     [people, companies],

@@ -240,7 +240,7 @@ function fieldWords(field: string, before: string | null, after: string | null, 
     case 'location_id':
       return [`Location: ${look.locations.get(after ?? '') ?? 'another location'}`];
     case 'company_id':
-      return [after ? `Company: ${look.companies.get(after) ?? 'another company'}` : 'Company cleared'];
+      return [after ? `Assigned to ${look.companies.get(after) ?? 'another company'}` : 'No longer assigned'];
     case 'assigned_to':
       return [after ? `Assigned to ${look.people.get(after) ?? 'someone'}` : 'No longer assigned'];
     case 'kind':
@@ -308,7 +308,7 @@ function fieldWords(field: string, before: string | null, after: string | null, 
 /** Fields that are not worth a line: they follow from others, or the database sets them. */
 // The trade follows the company (the company's trade on the job), so a change to it says nothing new.
 /** Changes made to many items at once that read as one line on the job. */
-const BULK_FIELDS = new Set(['status', 'assigned_to', 'location_id']);
+const BULK_FIELDS = new Set(['status', 'assigned_to', 'company_id', 'location_id']);
 
 const QUIET = new Set(['bought_out', 'number', 'source', 'bt_external_id', 'org', 'completed_by', 'completed_at', 'job_id', 'trade_id', 'position', 'pin_x', 'pin_y']);
 
@@ -354,6 +354,18 @@ export function activityLines(entries: Activity[], look: ActivityLookups, option
   // visit's line rather than a line each. An item's own History keeps them.
   const onVisit = new Map<string, number>();
   const folded = new Set<string>();
+  // Assigned To is a company or someone on the team: assigning one clears the other, which says
+  // nothing more than the assigning does.
+  const OTHER: Record<string, string> = { company_id: 'assigned_to', assigned_to: 'company_id' };
+  for (const e of sorted) {
+    const other = e.kind === 'item_changed' && e.field && !e.after ? OTHER[e.field] : undefined;
+    if (!other) continue;
+    const t = Date.parse(e.at);
+    const assigned = sorted.some(
+      (f) => f.kind === 'item_changed' && f.field === other && !!f.after && f.itemId === e.itemId && f.personId === e.personId && Math.abs(Date.parse(f.at) - t) <= 5000,
+    );
+    if (assigned) folded.add(e.id);
+  }
   if (!options.forItem) {
     for (const v of sorted) {
       if (v.kind !== 'visit_added' && v.kind !== 'visit_changed' && v.kind !== 'visit_removed') continue;
@@ -452,6 +464,7 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     const where = places.length <= 3 ? listWords(places) : `${places.slice(0, 2).join(', ')} and ${places.length - 2} more locations`;
     const { field, after, before } = first;
     if (field === 'assigned_to') return done(after ? `assigned ${n} items to ${look.people.get(after) ?? 'someone'}` : `unassigned ${n} items`, [where]);
+    if (field === 'company_id') return done(after ? `assigned ${n} items to ${look.companies.get(after) ?? 'another company'}` : `unassigned ${n} items`, [where]);
     if (field === 'location_id') {
       const from = [...new Set(g.entries.map((e) => look.locations.get(e.before ?? '') ?? ''))];
       return done(`moved ${n} items to ${look.locations.get(after ?? '') ?? 'another location'}`, [from.length === 1 && from[0] ? `From ${from[0]}` : '']);
@@ -580,9 +593,14 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
       const rest = ready ? [] : wordsOf(fields.filter((f) => f !== 'ready'));
       return done(`marked ${title} ${ready ? 'ready' : 'not ready'}`, [where, ...rest, ...photoWords]);
     }
-    if (only('assigned_to')) {
-      const to = net.get('assigned_to')!.after;
-      return to ? done(`assigned ${title} to ${look.people.get(to) ?? 'someone'}`, [where, ...photoWords]) : done(`unassigned ${title}`, [where, ...photoWords]);
+    // Assigned To is a company or someone on the team: picking one clears the other, and a new
+    // company takes the item off the old one's visit.
+    if (only('assigned_to', 'company_id', 'visit_id') && (net.has('assigned_to') || net.has('company_id'))) {
+      const company = net.get('company_id')?.after;
+      const person = net.get('assigned_to')?.after;
+      const to = company ? (look.companies.get(company) ?? 'another company') : person ? (look.people.get(person) ?? 'someone') : null;
+      const offVisit = net.has('visit_id') && !net.get('visit_id')!.after ? ['Off its visit'] : [];
+      return to ? done(`assigned ${title} to ${to}`, [where, ...offVisit, ...photoWords]) : done(`unassigned ${title}`, [where, ...photoWords]);
     }
     if (only('location_id')) {
       return done(`moved ${title} to ${look.locations.get(net.get('location_id')!.after ?? '') ?? 'another location'}`, photoWords);

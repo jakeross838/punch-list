@@ -29,20 +29,24 @@ describe('the job as a spreadsheet', () => {
     const upstairs = item({ title: 'Set vanity tops', locationId: 'l2', ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09' });
     const kitchen = item({ title: 'Adjust cabinet door', priority: true });
     const gone = item({ title: 'Old one', status: 'removed' });
-    const items = [done, upstairs, kitchen, gone];
+    const ours = item({ title: 'Touch up trim', companyId: null, assignedTo: 'p1', locationId: 'l2' });
+    const items = [done, upstairs, kitchen, gone, ours];
     const rows = itemsSheet(items, look(items));
-    expect(rows.map((r) => r[1])).toEqual(['Adjust cabinet door', 'Set vanity tops', 'Grout shower floor']);
+    expect(rows.map((r) => r[1])).toEqual(['Adjust cabinet door', 'Set vanity tops', 'Touch up trim', 'Grout shower floor']);
     const at = (name: (typeof SHEET_COLUMNS)[number]) => SHEET_COLUMNS.indexOf(name);
     expect(rows[0]![at('Location')]).toBe('Kitchen 109');
-    expect(rows[0]![at('Company')]).toBe('SMS Carpentry');
+    // Assigned To: the company, or the person on the team.
+    expect(rows[0]![at('Assigned To')]).toBe('SMS Carpentry');
+    expect(rows[2]![at('Assigned To')]).toBe('Jake Ross');
+    expect(SHEET_COLUMNS).not.toContain('Company');
     expect(rows[0]![at('Priority')]).toBe('Yes');
     expect(rows[1]![at('Waiting On')]).toBe('Owner');
     // No dates or time: the schedule is not part of the app for now.
     expect(SHEET_COLUMNS).not.toContain('Ready By');
     expect(SHEET_COLUMNS).not.toContain('Estimated Hours');
     expect(rows[0]).toHaveLength(SHEET_COLUMNS.length);
-    expect(rows[2]![at('Status')]).toBe('Complete');
-    expect(rows[2]![at('Completed By')]).toBe('Jake Ross');
+    expect(rows[3]![at('Status')]).toBe('Complete');
+    expect(rows[3]![at('Completed By')]).toBe('Jake Ross');
   });
 
   it('says the status the app shows', () => {

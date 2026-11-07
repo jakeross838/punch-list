@@ -311,7 +311,7 @@ async function main(): Promise<void> {
       // The stand-in for Claude answers after a moment.
       await app.getByText('Check it over, then tap Done to put it on the lists.').waitFor({ timeout: 20000 });
       if ((await app.getByTestId('field-title').inputValue()) !== 'Install towel bar') throw new Error('The photo did not fill in its title');
-      await app.getByTestId('pick-company').last().getByText('SMS Carpentry').waitFor();
+      await app.getByTestId('pick-assigned').last().getByText('SMS Carpentry').waitFor();
       await settle(400);
       await shot('11b-finish-now');
       await app.getByTestId('mark-up').click();
@@ -404,7 +404,7 @@ async function main(): Promise<void> {
       await settle(300);
       await shot('14-title-suggestions');
       await app.getByTestId('suggestion-0').click();
-      await app.getByText('Company filled in from the title.').waitFor();
+      await app.getByText('Assigned To filled in from the title.').waitFor();
       await app.getByText('SMS Carpentry').last().waitFor();
       if ((await app.getByTestId('pick-trade').count()) !== 0) throw new Error('The form still asks for the trade');
       await app.getByTestId('item-details').getByText('Incomplete', { exact: true }).waitFor();
@@ -426,7 +426,7 @@ async function main(): Promise<void> {
       await settle(800);
       await app.getByTestId('field-title').fill('Set mirror');
       await app.getByTestId('field-description').click();
-      await app.getByTestId('pick-company').click();
+      await app.getByTestId('pick-assigned').click();
       await app.getByRole('button', { name: 'Triple H Painting' }).click();
       await settle(400);
       await app.getByTestId('ready-check').click();
@@ -436,7 +436,7 @@ async function main(): Promise<void> {
       // The wallpaper is not on the list yet: Add a Task puts it there and picks it.
       await app.getByTestId('waiting-add-task').click();
       await app.getByTestId('waiting-task-title').fill('Hang wallpaper');
-      await app.getByTestId('waiting-task-company').click();
+      await app.getByTestId('waiting-task-assigned').click();
       await settle(600);
       await app.getByRole('button', { name: 'Triple H Painting' }).last().click();
       await settle(600);
@@ -541,7 +541,7 @@ async function main(): Promise<void> {
       await app.getByTestId('item-status').waitFor({ state: 'detached' });
       await settle(700);
       if ((await app.getByTestId('field-title').last().inputValue()) !== 'Install towel bar') throw new Error('The draft did not fill in its title');
-      await app.getByTestId('pick-company').last().getByText('SMS Carpentry').waitFor();
+      await app.getByTestId('pick-assigned').last().getByText('SMS Carpentry').waitFor();
       if ((await app.getByTestId('fill-in').count()) !== 0) throw new Error('Fill In shows with nothing left to fill');
       await settle(400);
       await shot('24b-draft-filled-in');
@@ -694,13 +694,13 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
-    await step('View and Filter: by company, saved as the default', async () => {
+    await step('View and Filter: by Assigned To, saved as the default', async () => {
       await app.getByTestId('filter').click();
       await app.getByTestId('view-done').waitFor();
       await settle(600);
       await shot('29-view');
       if ((await app.getByRole('tab', { name: 'Trade' }).count()) !== 0) throw new Error('The lists still group by trade');
-      await app.getByRole('tab', { name: 'Company' }).click();
+      await app.getByRole('tab', { name: 'Assigned To' }).click();
       await app.getByTestId('filter-state-not_ready').click();
       await settle(300);
       await app.getByTestId('save-default').click();
@@ -1112,36 +1112,37 @@ async function main(): Promise<void> {
       await app.getByTestId('job-job-preview').waitFor();
       await settle(500);
     });
-    await step('assign an item: it goes on My Items, and the person goes on the team', async () => {
+    await step('assign an item to someone on your team: Assigned To takes a company or a person, it goes on their My Items, and the person goes on the team', async () => {
       await app.getByTestId('job-job-preview').click();
       await app.getByTestId('group-room-1').waitFor();
       await settle();
       await app.getByTestId('group-room-1').click();
       await settle(700);
-      await app.getByTestId(/^item-/).filter({ hasText: 'Install cabinet hardware' }).first().click();
-      await app.getByTestId('pick-person').waitFor();
+      await app.getByTestId(/^item-/).filter({ hasText: 'Install pendant lights' }).first().click();
+      await app.getByTestId('pick-assigned').filter({ hasText: 'Metro Electric' }).waitFor();
       await settle(700);
-      await app.getByTestId('pick-person').click();
+      await app.getByTestId('pick-assigned').click();
       await settle(500);
       await shot('56-assign');
       await app.getByRole('button', { name: 'Taylor Brooks', exact: true }).click();
-      await app.getByTestId('pick-person').filter({ hasText: 'Taylor Brooks' }).waitFor();
+      await app.getByTestId('pick-assigned').filter({ hasText: 'Taylor Brooks' }).waitFor();
       await settle(300);
-      await app.getByTestId('pick-person').click();
+      await app.getByTestId('pick-assigned').click();
       await settle(500);
       await app.getByRole('button', { name: 'Jake Ross', exact: true }).click();
-      await app.getByTestId('pick-person').filter({ hasText: 'Jake Ross' }).waitFor();
+      await app.getByTestId('pick-assigned').filter({ hasText: 'Jake Ross' }).waitFor();
       await settle(400);
       await app.getByTestId('back').last().click();
       await settle(500);
       await app.getByTestId('back').last().click();
       await settle(500);
       await app.getByTestId('back').last().click();
-      await app.getByTestId('my-items').filter({ hasText: '4 open' }).waitFor();
+      await app.getByTestId('my-items').filter({ hasText: '3 open' }).waitFor();
       await settle(400);
       await shot('57-jobs-my-items');
       await app.getByTestId('my-items').click();
-      await app.getByText('Install cabinet hardware').waitFor();
+      await app.getByText('Install pendant lights').waitFor();
+      await app.getByText('Hang house numbers').waitFor();
       await settle(700);
       await shot('58-my-items');
       await app.getByTestId('back').last().click();
@@ -1294,9 +1295,13 @@ async function main(): Promise<void> {
       await settle(300);
       await app.getByTestId('picked-assign').click();
       await settle(600);
+      // Assigned To takes a company or someone on the team, for all of them at once; Undo puts each back.
+      await app.getByText('Your Team', { exact: true }).first().waitFor();
       await app.getByRole('button', { name: 'Sam Rivera', exact: true }).click();
       await app.getByText(/^Assigned \d items to Sam Rivera$/).waitFor();
       await settle(300);
+      await undo(/Assigned \d items to Sam Rivera/);
+      await settle(400);
       await app.getByTestId('select').click();
       await app.getByTestId('pick-all').click();
       await app.getByTestId('picked-complete').click();
@@ -1553,7 +1558,7 @@ async function main(): Promise<void> {
       await app.getByTestId('filter').click();
       await app.getByTestId('view-done').waitFor();
       await settle(600);
-      await app.getByRole('tab', { name: 'Company' }).click();
+      await app.getByRole('tab', { name: 'Assigned To' }).click();
       await app.getByTestId('view-done').click();
       await app.getByTestId('group-company-4').waitFor();
       await settle(500);
@@ -1727,13 +1732,13 @@ async function main(): Promise<void> {
       await app.getByTestId('camera-last').click();
       await app.getByTestId('done-camera').waitFor();
       await settle(1500);
-      await app.getByTestId('pick-company').last().click();
+      await app.getByTestId('pick-assigned').last().click();
       await app.getByTestId('picker-search').last().fill('Harbor Glass');
       await app.getByTestId('picker-add').click();
       await app.getByText('Trade for Harbor Glass').waitFor();
       await settle(400);
       await app.getByRole('button', { name: 'Windows and Doors' }).last().click();
-      await app.getByTestId('pick-company').last().getByText('Harbor Glass').waitFor();
+      await app.getByTestId('pick-assigned').last().getByText('Harbor Glass').waitFor();
       await settle(500);
       await shot('86c-walked-right-away');
       await app.getByTestId('done-camera').click();

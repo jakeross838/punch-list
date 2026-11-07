@@ -36,10 +36,11 @@ export function useHolds(jobId: string): HoldLookups {
   const data = useData();
   const items = data.useItems(jobId);
   const companies = data.useCompanies();
+  const people = data.usePeople();
   const locations = data.useLocations(jobId);
   const visits = data.useVisits(jobId);
   const today = dayOfDate(new Date());
-  return useMemo(() => holdLookups({ items, companies, locations, visits, today }), [items, companies, locations, visits, today]);
+  return useMemo(() => holdLookups({ items, companies, people, locations, visits, today }), [items, companies, people, locations, visits, today]);
 }
 
 /** What the filters and totals need on a job: today, its visits, which items have a photo, its locations, what items wait on. */

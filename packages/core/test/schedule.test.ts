@@ -170,13 +170,16 @@ describe('keeping the list current', () => {
 });
 
 describe('unfinished items', () => {
-  it('may wait for a title and company, and finish themselves once they have them', () => {
+  it('may wait for a title and someone assigned, and finish themselves once they have them', () => {
     const draft = item({ unfinished: true, title: '', companyId: null, tradeId: null });
     expect(checkItem(draft)).toEqual([]);
-    expect(missingText(draft)).toBe('Needs a title and company');
-    expect(missingText({ ...draft, title: 'Install toilet' })).toBe('Needs a company');
+    expect(missingText(draft)).toBe('Needs a title and someone assigned');
+    expect(missingText({ ...draft, title: 'Install toilet' })).toBe('Needs someone assigned');
     expect(tidyItem({ ...draft, title: 'Install toilet' }).unfinished).toBe(true);
     expect(tidyItem({ ...draft, title: 'Install toilet', companyId: 'c-sms' }).unfinished).toBe(false);
+    // Someone on the team counts the same as a company.
+    expect(tidyItem({ ...draft, title: 'Install toilet', assignedTo: 'p1' }).unfinished).toBe(false);
+    expect(checkItem({ ...draft, title: 'Install toilet', unfinished: false }).map((p) => p.message)).toEqual(['Pick who it is assigned to']);
     expect(() => complete(draft, { id: 'p1', email: 'jake@rossbuilt.com', name: 'Jake Ross', active: true, role: 'admin', sees: 'all', phone: null })).toThrow(RuleError);
   });
 });

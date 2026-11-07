@@ -6,13 +6,15 @@
 
 import { isDay, visitEnd } from './dates';
 import type { ItemFields } from './rules';
-import type { Company, Item, Location, Visit } from './types';
+import type { Company, Item, Location, Person, Visit } from './types';
 import { waitingOnText } from './waitingOn';
 
 export interface HoldLookups {
   items: Map<string, Item>;
   /** Company names by id. */
   companies: Map<string, string>;
+  /** The team's names by id, for a task assigned to someone on the team. */
+  people?: Map<string, string>;
   /** Location labels by id. */
   locations: Map<string, string>;
   /** The live visits by id. */
@@ -24,6 +26,7 @@ export interface HoldLookups {
 export function holdLookups(input: {
   items: Item[];
   companies: Pick<Company, 'id' | 'name'>[];
+  people?: Pick<Person, 'id' | 'name'>[];
   locations: Pick<Location, 'id' | 'label'>[];
   visits?: Visit[];
   today?: string;
@@ -31,6 +34,7 @@ export function holdLookups(input: {
   return {
     items: new Map(input.items.map((i) => [i.id, i])),
     companies: new Map(input.companies.map((c) => [c.id, c.name])),
+    people: new Map((input.people ?? []).map((p) => [p.id, p.name])),
     locations: new Map(input.locations.map((l) => [l.id, l.label])),
     visits: new Map((input.visits ?? []).filter((v) => !v.removed).map((v) => [v.id, v])),
     today: input.today,
@@ -51,9 +55,9 @@ export function openHolds(item: Pick<Item, 'waitingOnItems'>, look: HoldLookups)
  */
 export function taskText(task: Item, look: HoldLookups, here?: string): string {
   const title = task.title.trim() || 'A draft';
-  const company = task.companyId ? look.companies.get(task.companyId) : undefined;
+  const who = doerOf(task, look);
   const where = task.locationId !== here ? look.locations.get(task.locationId) : undefined;
-  const about = [company, where].filter(Boolean).join(', ');
+  const about = [who, where].filter(Boolean).join(', ');
   return about ? `${title} (${about})` : title;
 }
 
@@ -68,8 +72,14 @@ export function holdText(item: Pick<Item, 'waitingOnItems' | 'waitingOn' | 'loca
   return waitingOnText([...openHolds(item, look).map((t) => taskText(t, look, here)), ...item.waitingOn]);
 }
 
+/** Who a task is assigned to, by name: its company, or the person on the team doing it. */
+function doerOf(task: Item, look: HoldLookups): string | undefined {
+  if (task.companyId) return look.companies.get(task.companyId);
+  return task.assignedTo ? look.people?.get(task.assignedTo) : undefined;
+}
+
 /**
- * Who holds it up, by name: the company doing each task it waits on, then anyone else, each once.
+ * Who holds it up, by name: whoever is assigned each task it waits on, then anyone else, each once.
  * What the job groups and filters by, so everything waiting on Volcano Stone's work shows together.
  */
 export function holdNames(item: Pick<Item, 'waitingOnItems' | 'waitingOn'>, look: HoldLookups): string[] {
@@ -78,7 +88,7 @@ export function holdNames(item: Pick<Item, 'waitingOnItems' | 'waitingOn'>, look
     const n = name?.trim();
     if (n && !out.some((o) => o.toLowerCase() === n.toLowerCase())) out.push(n);
   };
-  for (const task of openHolds(item, look)) add(task.companyId ? look.companies.get(task.companyId) : 'A company not set');
+  for (const task of openHolds(item, look)) add(doerOf(task, look) ?? 'No one assigned yet');
   for (const w of item.waitingOn) add(w);
   return out;
 }

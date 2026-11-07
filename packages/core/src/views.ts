@@ -1,4 +1,5 @@
-// How the lists are cut: by location (floor order), by company or by what items wait on,
+// How the lists are cut: by location (floor order), by who they are assigned to (each company, then
+// each person on the team) or by what items wait on,
 // narrowed by the filters. Removed items never show, and drafts stay in Drafts until they are filled
 // in. Every location shows, even an empty one, so items can be added to it. Show Completed (as in
 // Reminders) adds completed items that fit the filters, after the open ones. By Waiting On shows what
@@ -13,7 +14,8 @@ import { holdLookups, holdNames, type HoldLookups } from './holds';
 import { floorOf, NO_FLOOR } from './rooms';
 import { isPriced } from './rules';
 import { NO_TIME, totalTime, type TimeTotal } from './time';
-import type { Company, Item, Location, Trade } from './types';
+import { assigneeKey, NOT_ASSIGNED, personOfKey } from './assignees';
+import type { Company, Item, Location, Person, Trade } from './types';
 
 export type GroupBy = 'room' | 'company' | 'waiting';
 
@@ -26,7 +28,8 @@ export interface ViewSettings {
 
 export const DEFAULT_VIEW: ViewSettings = { groupBy: 'room', showCompleted: false, filters: NO_FILTERS };
 
-export const GROUP_LABELS: Record<GroupBy, string> = { room: 'Location', company: 'Company', waiting: 'Waiting On' };
+/** By company is by Assigned To: each company, and each person on the team with work assigned. */
+export const GROUP_LABELS: Record<GroupBy, string> = { room: 'Location', company: 'Assigned To', waiting: 'Waiting On' };
 
 const GROUPS: GroupBy[] = ['room', 'company', 'waiting'];
 
@@ -81,6 +84,8 @@ export interface ItemGroup {
 export interface Lookups {
   locations: Location[];
   companies: Company[];
+  /** The team's names, for work assigned to someone on it. */
+  people?: Pick<Person, 'id' | 'name'>[];
   /** With them, each list keeps a trade's items together, in the trades' order. */
   trades?: Trade[];
 }
@@ -104,13 +109,13 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
   );
   // Who holds each item up: the company doing each task it waits on, or the name it waits on.
   let look: HoldLookups | undefined;
-  const holds = () => (look ??= context?.holds ?? holdLookups({ items, companies: lookups.companies, locations: lookups.locations }));
+  const holds = () => (look ??= context?.holds ?? holdLookups({ items, companies: lookups.companies, people: lookups.people, locations: lookups.locations }));
   const keysOf = (i: Item): string[] => {
     switch (by) {
       case 'room':
         return [i.locationId];
       case 'company':
-        return [i.companyId ?? 'none'];
+        return [assigneeKey(i) ?? 'none'];
       case 'waiting': {
         if (i.status === 'complete') return ['complete'];
         const keys = i.ready ? [] : holdNames(i, holds()).map(waitingKey);
@@ -152,10 +157,17 @@ export function groupItems(items: Item[], by: GroupBy, lookups: Lookups, options
       { key: 'complete', label: 'Completed' },
     ];
   } else {
-    const names = new Map(lookups.companies.map((x) => [x.id, x.name]));
+    // The companies, then the people on the team, each by name; work assigned to no one last.
+    const companies = new Map(lookups.companies.map((x) => [x.id, x.name]));
+    const people = new Map((lookups.people ?? []).map((x) => [x.id, x.name]));
+    const rank = (key: string) => (key === 'none' ? 2 : personOfKey(key) ? 1 : 0);
     order = [...groups.keys()]
-      .map((key) => ({ key, label: names.get(key) ?? 'Not set' }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .map((key) => {
+        const person = personOfKey(key);
+        const label = key === 'none' ? NOT_ASSIGNED : person ? (people.get(person) ?? 'Someone on the team') : (companies.get(key) ?? 'A company');
+        return { key, label };
+      })
+      .sort((a, b) => rank(a.key) - rank(b.key) || a.label.localeCompare(b.label));
   }
 
   const rank = lookups.trades ? tradeRanks(lookups.trades) : undefined;

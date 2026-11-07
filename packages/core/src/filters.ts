@@ -135,7 +135,12 @@ function matchesState(item: Item, state: StateFilter, ctx: FilterContext | undef
 export function matchesFilters(item: Item, f: ItemFilters, ctx?: FilterContext): boolean {
   if (f.states.length > 0 && item.status === 'open' && !f.states.some((s) => matchesState(item, s, ctx))) return false;
   if (f.kinds.length > 0 && !f.kinds.includes(item.kind)) return false;
-  if (f.companyIds.length > 0 && !(item.companyId && f.companyIds.includes(item.companyId))) return false;
+  // Assigned To takes companies and people together: an item assigned to any of them fits.
+  if (f.companyIds.length > 0 || f.assignedTo.length > 0) {
+    const company = !!item.companyId && f.companyIds.includes(item.companyId);
+    const person = !!item.assignedTo && f.assignedTo.includes(item.assignedTo);
+    if (!company && !person) return false;
+  }
   if (f.floors.length > 0) {
     const location = ctx?.locations.find((l) => l.id === item.locationId);
     const level = location ? floorOf(location) : NO_FLOOR;
@@ -147,7 +152,6 @@ export function matchesFilters(item: Item, f: ItemFilters, ctx?: FilterContext):
     if (item.ready || !names.some((w) => f.waitingOn.some((x) => same(x, w)))) return false;
   }
   if (f.addedBy.length > 0 && !f.addedBy.includes(item.createdBy)) return false;
-  if (f.assignedTo.length > 0 && !(item.assignedTo && f.assignedTo.includes(item.assignedTo))) return false;
   if (f.photo !== null && (ctx?.photoItemIds.has(item.id) ?? false) !== f.photo) return false;
   if (f.scheduled !== null) {
     const booked = !!item.visitId && (ctx ? ctx.visits.some((v) => v.id === item.visitId && !v.removed) : true);

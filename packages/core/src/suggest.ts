@@ -157,7 +157,7 @@ export function suggestContext(input: {
   };
 }
 
-type Fillable = Pick<Item, 'title' | 'description' | 'companyId' | 'tradeId' | 'hours'>;
+type Fillable = Pick<Item, 'title' | 'description' | 'companyId' | 'tradeId' | 'hours'> & { assignedTo?: string | null };
 
 /** What a suggestion fills in: only what is still blank, never what was typed. Empty when there is nothing to fill. */
 export function suggestionPatch(s: ItemSuggestion, value: Fillable, trades: Trade[], companies: Company[]): Partial<Fillable> {
@@ -166,7 +166,8 @@ export function suggestionPatch(s: ItemSuggestion, value: Fillable, trades: Trad
   const patch: Partial<Fillable> = {};
   if (!value.title.trim()) patch.title = s.title;
   if (!value.description.trim() && s.description) patch.description = s.description;
-  if (!value.companyId && !value.tradeId && companyId && tradeId) {
+  // Someone on the team assigned already: Claude does not pick a company over them.
+  if (!value.companyId && !value.assignedTo && !value.tradeId && companyId && tradeId) {
     patch.companyId = companyId;
     patch.tradeId = tradeId;
   } else if (!value.tradeId && tradeId) patch.tradeId = tradeId;

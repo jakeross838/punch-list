@@ -199,8 +199,9 @@ declare
   c2 uuid; d uuid; v uuid; v2 uuid; s uuid;
   rec record;
 begin
-  -- An unfinished item may wait for its title and company; a finished one may not. The trade is
-  -- never asked for: it follows the company's trade on the job.
+  -- An unfinished item may wait for its title and who it is assigned to; a finished one may not.
+  -- Assigned To is a company or someone on the team. The trade is never asked for: it follows the
+  -- company's trade on the job.
   insert into public.items (job_id, location_id, title, ready, unfinished) values (j, loc, '', true, true) returning id into d;
   begin
     insert into public.items (job_id, location_id, title, ready) values (j, loc, '', true);
@@ -209,7 +210,7 @@ begin
   end;
   begin
     insert into public.items (job_id, location_id, title, ready) values (j, loc, 'Install vanity', true);
-    raise exception 'FAIL: a finished item with no company was accepted';
+    raise exception 'FAIL: a finished item assigned to no one was accepted';
   exception when check_violation then null;
   end;
   declare
@@ -1010,6 +1011,21 @@ begin
     raise exception 'FAIL: an item was assigned to someone switched off';
   exception when check_violation then null;
   end;
+  -- Assigned To is a company or someone on the team: work that is Sam's alone needs no company,
+  -- but open work needs one or the other.
+  declare
+    ours uuid;
+  begin
+    insert into public.items (job_id, location_id, title, ready, assigned_to) values (j2, loc2, 'Order towel bar', true, sam) returning id into ours;
+    begin
+      update public.items set assigned_to = null where id = ours;
+      raise exception 'FAIL: an open item was left assigned to no one';
+    exception when check_violation then null;
+    end;
+    -- Done work keeps its record, assigned or not.
+    update public.items set status = 'removed' where id = ours;
+    update public.items set assigned_to = null where id = ours;
+  end;
   -- Off Gavin Addition's team again: Sam no longer sees it.
   delete from public.job_team where job_id = j2 and person_id = sam;
   if exists (select 1 from public.job_access where job_id = j2 and person_id = sam) or (select count(*) from public.job_activity where job_id = j2 and kind = 'team_removed') <> 1 then
@@ -1598,6 +1614,8 @@ begin
   exception when check_violation then null;
   end;
   update public.items set assigned_to = (select id from public.people where email = 'sam@gulfcoast.example') where title = 'Install toilet';
+  -- Work that is Sam's alone, with no company.
+  update public.items set company_id = null where title = 'Install toilet' and org = current_setting('test.gulf');
 end $$;
 reset role;
 
@@ -1621,6 +1639,9 @@ begin
     raise exception 'FAIL: the deleted person is still assigned or on a team';
   end if;
   if (select count(*) from public.items where org = current_setting('test.gulf')) <> 1 then raise exception 'FAIL: the company lost its items'; end if;
+  if not (select unfinished from public.items where org = current_setting('test.gulf') and title = 'Install toilet') then
+    raise exception 'FAIL: open work that was the deleted person''s alone did not go back to Drafts';
+  end if;
 end $$;
 
 -- The last one at the company deletes their account: the whole company goes, and nothing else.

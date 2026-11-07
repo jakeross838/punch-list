@@ -245,9 +245,10 @@ export function sampleState(): SampleState {
   const items: Item[] = [
     // Waits on the range backsplash going in first (the last item), and comes free when its visit is done.
     item('Kitchen 109', 'Set upper cabinets', 'Range wall, both sides of the hood.', 'SMS Carpentry', { ready: false, waitingOnItems: ['item-25'] }),
-    item('Kitchen 109', 'Install pendant lights', 'Over the island, three fixtures.', 'Metro Electric', { ready: false, waitingOn: ['Owner'], assignedTo: me.id }),
+    item('Kitchen 109', 'Install pendant lights', 'Over the island, three fixtures.', 'Metro Electric', { ready: false, waitingOn: ['Owner'] }),
     item('Kitchen 109', 'Touch up paint', 'Ceiling at the hood soffit.', 'Triple H Painting', { kind: 'deficiency' }),
-    item('Living 107', 'Install refrigerator drawers', 'Bar under the stair.', 'Ross Built', { kind: 'added_scope', boughtOut: false, assignedTo: taylor.id }),
+    // Your own team's work: assigned to someone on the team, not to a company.
+    item('Living 107', 'Install refrigerator drawers', 'Bar under the stair.', 'Ross Built', { kind: 'added_scope', boughtOut: false, companyId: null, assignedTo: taylor.id }),
     item('Guest Bedroom 114', 'Replace outlet cover', 'North wall, left of the window.', 'Metro Electric', { kind: 'deficiency' }),
     item('Bathroom 116', 'Install toilet', 'Toilet room, left of the vanity.', 'Gator Plumbing'),
     item('Bathroom 116', 'Grout shower floor', '', 'Rangel Custom Tile', { status: 'complete', completedBy: me.id, completedAt: at }),
@@ -255,9 +256,9 @@ export function sampleState(): SampleState {
     item('Laundry 119', 'Install dryer vent cover', 'Exterior wall above the washer.', 'Climatic'),
     // Waits on SMS Carpentry's pocket door hardware (the very last item).
     item('Master Bathroom 207', 'Paint pocket doors', 'Both doors, after the hardware.', 'Triple H Painting', { ready: false, waitingOnItems: ['item-26'] }),
-    item('Master Bathroom 207', 'Set vanity tops', 'Double vanity, east wall.', 'Volcano Stone', { ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09', assignedTo: me.id }),
-    item('Whole House', 'Mount thermostats', 'All zones, at the end of the job.', 'Climatic', { ready: false, waitingOn: ['Ross Built'], assignedTo: sam.id }),
-    item('Foyer 115', 'Hang front door', 'Pivot door at the entry. Set the hardware after paint.', 'SMS Carpentry', { ready: false, waitingOn: ['Owner'], readyBy: '2026-10-26', assignedTo: me.id }),
+    item('Master Bathroom 207', 'Set vanity tops', 'Double vanity, east wall.', 'Volcano Stone', { ready: false, waitingOn: ['Owner'], readyBy: '2026-11-09' }),
+    item('Whole House', 'Mount thermostats', 'All zones, at the end of the job.', 'Climatic', { ready: false, waitingOn: ['Ross Built'] }),
+    item('Foyer 115', 'Hang front door', 'Pivot door at the entry. Set the hardware after paint.', 'SMS Carpentry', { ready: false, waitingOn: ['Owner'], readyBy: '2026-10-26' }),
     item('Master Bedroom 206', 'Install closet system', 'Walk in closet, both long walls.', 'SMS Carpentry', { kind: 'added_scope', boughtOut: true, poOrCo: 'CO 14' }),
     item('Living 107', 'Patch drywall', 'Behind the television mount, two screw holes.', 'Triple H Painting', { kind: 'deficiency' }),
     item('Kitchen 109', 'Adjust cabinet door', 'Upper cabinet left of the hood. The right door rubs the hood.', 'SMS Carpentry', { kind: 'deficiency', source: 'walk' }),
@@ -275,6 +276,9 @@ export function sampleState(): SampleState {
     // What other work waits on: the stone behind the range, on a visit, and the pocket door hardware.
     item('Kitchen 109', 'Install range backsplash', 'Full height slab behind the range.', 'Volcano Stone', { hours: 4 }),
     item('Master Bathroom 207', 'Install pocket door hardware', 'Both pocket doors.', 'SMS Carpentry', { hours: 1 }),
+    // Work for you: it shows on My Items.
+    item('Bathroom 116', 'Order towel bar', 'The one picked for this bath never came.', 'Ross Built', { companyId: null, assignedTo: me.id, hours: null }),
+    item('Foyer 115', 'Hang house numbers', 'Beside the front door, from the owner’s pick.', 'Ross Built', { companyId: null, assignedTo: me.id }),
   ];
 
   // The schedule: a confirmed visit next, and one that ended with work still open.

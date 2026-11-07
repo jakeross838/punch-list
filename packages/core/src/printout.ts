@@ -11,6 +11,7 @@
 // comes back. Plain HTML, so the phone turns it into a PDF and the preview page shows the very same
 // thing.
 
+import { NOT_ASSIGNED } from './assignees';
 import { addDays, dayOfDate, daysBetween, holidayGroups, holidayOn, holidaysBetween, isDay, mondayOf, visitEnd } from './dates';
 import { holdText } from './holds';
 import { kindText, orderText } from './orders';
@@ -348,13 +349,13 @@ export function partyPrintout(party: string, lines: ListLine[], settings: PrintS
 export type ListGroupBy = 'location' | 'company' | 'waiting';
 export type ListDetail = 'description' | 'location' | 'company' | 'type' | 'status' | 'comments' | 'photo';
 
-export const LIST_GROUP_LABELS: Record<ListGroupBy, string> = { location: 'Location', company: 'Company', waiting: 'Waiting On' };
+export const LIST_GROUP_LABELS: Record<ListGroupBy, string> = { location: 'Location', company: 'Assigned To', waiting: 'Waiting On' };
 
 /** What each line can show, in the order the sheet offers them. */
 export const LIST_DETAILS: { detail: ListDetail; label: string }[] = [
   { detail: 'description', label: 'Description' },
   { detail: 'location', label: 'Location' },
-  { detail: 'company', label: 'Company' },
+  { detail: 'company', label: 'Assigned To' },
   { detail: 'type', label: 'Type' },
   { detail: 'status', label: 'Ready or Waiting' },
   { detail: 'comments', label: 'Comments' },
@@ -409,7 +410,7 @@ function groupLines(lines: ListLine[], by: ListGroupBy): LineGroup[] {
         add(item.locationId, line.room, line, 0, { floor: line.floor });
         break;
       case 'company':
-        add(line.company, line.company, line, line.company === 'Not set' ? 1 : 0);
+        add(line.company, line.company, line, line.company === NOT_ASSIGNED ? 1 : 0);
         break;
       case 'waiting': {
         if (item.status === 'complete') add('complete', 'Completed', line, 4);

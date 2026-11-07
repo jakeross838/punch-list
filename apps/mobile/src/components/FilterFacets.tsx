@@ -1,6 +1,6 @@
-// The filters, each kind with its values as chips to switch on or off: Status, Type, Company,
-// Assigned To, Level, Location, Waiting On, Added By and Photo. The values come from the job. Used
-// by View and Filter and by Make a List.
+// The filters, each kind with its values as chips to switch on or off: Status, Type, Assigned To
+// (the companies, then the people on the team), Level, Location, Waiting On, Added By and Photo.
+// The values come from the job. Used by View and Filter and by Make a List.
 
 import {
   floorOf,
@@ -96,18 +96,14 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
           <Chip key={k} label={KIND_LABELS[k]} on={f.kinds.includes(k)} onPress={() => toggle('kinds', k)} testID={id(`kind-${k}`)} />
         ))}
       </Facet>
-      <Facet title="Company">
+      <Facet title="Assigned To">
         {choices.companies.map((c) => (
           <Chip key={c.id} label={c.name} on={companyIds.includes(c.id)} onPress={() => toggle('companyIds', c.id)} testID={id(`company-${c.id}`)} />
         ))}
+        {choices.assignees.map((p) => (
+          <Chip key={p.id} label={p.name} on={assignedTo.includes(p.id)} onPress={() => toggle('assignedTo', p.id)} testID={id(`assigned-${p.id}`)} />
+        ))}
       </Facet>
-      {choices.assignees.length > 0 ? (
-        <Facet title="Assigned To">
-          {choices.assignees.map((p) => (
-            <Chip key={p.id} label={p.name} on={assignedTo.includes(p.id)} onPress={() => toggle('assignedTo', p.id)} testID={id(`assigned-${p.id}`)} />
-          ))}
-        </Facet>
-      ) : null}
       {choices.floors.length > 1 ? (
         <Facet title="Level">
           {choices.floors.map((x) => (

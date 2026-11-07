@@ -1,5 +1,5 @@
-// One location's items (or one company's, or what they wait on), Site Office style: the location's
-// counts under its title, then its items in white panels by company, each with a status pill and a
+// One location's items (or one company's or person's, or what they wait on), Site Office style: the
+// location's counts under its title, then its items in white panels by who they are assigned to, each with a status pill and a
 // short note. Completed items wait under Completed at the end, which opens and closes with a tap
 // (open from the start when View has Show Completed on). In a location the end of the list has New
 // Item, Common Tasks and the next location of the walk; Capture in the bottom bar takes the photo
@@ -11,6 +11,11 @@
 // job or another.
 
 import {
+  assigneeFields,
+  assigneeKey,
+  assigneeName,
+  keyName,
+  personOfKey,
   companyList,
   clearHoldup,
   complete,
@@ -37,7 +42,6 @@ import { SectionList, StyleSheet, View } from "react-native";
 import { CommonTasks } from "@/components/CommonTasks";
 import { DragList } from "@/components/DragList";
 import { fieldsOf, useFormOptions } from "@/components/ItemForm";
-import { usePersonOptions } from "@/components/people";
 import { SelectionBar } from "@/components/SelectionBar";
 import { AddTemplateSheet, SaveTemplateSheet } from "@/components/TemplateSheets";
 import { isFilling, useDraftFill } from "@/components/draftFill";
@@ -70,8 +74,8 @@ interface Section {
   key: string;
   kind: "open" | "done";
   title: string | null;
-  /** The company the section is. */
-  companyId?: string | null;
+  /** Who the section's items are assigned to, as a key: a company's id or a person's key. */
+  assignee?: string | null;
   data: Item[];
 }
 
@@ -135,10 +139,10 @@ export default function GroupScreen() {
         items,
         by,
         // Each trade's items together, so the list does not jump between trades.
-        { locations, companies, trades },
+        { locations, companies, people, trades },
         { filters, showCompleted: true, context },
       ).find((g) => g.key === key),
-    [items, by, key, filters, context, locations, companies, trades],
+    [items, by, key, filters, context, locations, companies, people, trades],
   );
   const firstPhoto = useMemo(() => {
     const map = new Map<string, Photo>();
@@ -174,7 +178,7 @@ export default function GroupScreen() {
   // A company's list goes in the order to do the work, numbered the same as on its printed list
   // and its page: what is ready first, starting with whatever holds up the most other work.
   const work = useMemo(() => {
-    if (by !== "company" || drafts || stateList) return null;
+    if (by !== "company" || drafts || stateList || personOfKey(key) || key === "none") return null;
     const list = companyList(key, items, { locations, companies, items, trades });
     const lines = [...list.ready, ...list.waiting.flatMap((g) => g.lines)];
     return {
@@ -190,15 +194,16 @@ export default function GroupScreen() {
     (i) => i.status === "complete" && !actions.checking.has(i.id),
   );
   const doneShown = doneOpen ?? view.showCompleted;
-  // In a location and on the state lists, the open items go by company, in the order they come.
+  // In a location and on the state lists, the open items go by who they are assigned to, in the order they come.
   const byCompany = (by === "room" && !drafts) || !!stateList;
   const openSections: Section[] = [];
   if (byCompany) {
     for (const item of open) {
-      const company = item.companyId ?? null;
-      let section = openSections.find((x) => x.companyId === company);
+      const assignee = assigneeKey(item);
+      let section = openSections.find((x) => x.assignee === assignee);
       if (!section) {
-        section = { key: `open-${company ?? "none"}`, kind: "open", title: company ? (companyName.get(company) ?? "Company") : "No company yet", companyId: company, data: [] };
+        const title = assignee ? (keyName(assignee, { companies: companyName, people: personName }) ?? "Someone") : "Not assigned yet";
+        section = { key: `open-${assignee ?? "none"}`, kind: "open", title, assignee, data: [] };
         openSections.push(section);
       }
       section.data.push(item);
@@ -250,10 +255,10 @@ export default function GroupScreen() {
   const inRoom = by === "room" && !drafts && !stateList;
   const locationFor = (item: Item) =>
     inRoom ? undefined : roomName.get(item.locationId);
-  const companyFor = (item: Item) =>
+  const assigneeFor = (item: Item) =>
     drafts || byCompany || by === "company"
       ? undefined
-      : (companyName.get(item.companyId ?? "") ?? undefined);
+      : (assigneeName(item, { companies: companyName, people: personName }) ?? undefined);
   const noteFor = (item: Item) =>
     drafts && isFilling(fill, item.id)
       ? "Filling in from the photo"
@@ -335,7 +340,7 @@ export default function GroupScreen() {
 
   // ---------- picking items, and what can be done to them all at once ----------
   const formOptions = useFormOptions(jobId, room?.id ?? "");
-  const personOptions = usePersonOptions(jobId);
+
   const pickable = open.filter((i) => i.status === "open" || picked.has(i.id));
   const pickedItems = items.filter((i) => picked.has(i.id));
   const canDrag = selecting && !!room && !drafts;
@@ -381,14 +386,30 @@ export default function GroupScreen() {
     feedback.toast({ message: `Copied ${count}. Open any location, on any job, and tap Paste.` });
     stopPicking();
   };
-  const assignTo = (personId: string | null) => {
-    const before = pickedItems.map((i) => ({ id: i.id, patch: { assignedTo: i.assignedTo } }));
+  // Assigned To: a company, or someone on the team. Picking one clears the other, and a new
+  // company takes the items off the old one's visit and does them in its own trade.
+  const assignTo = (key: string) => {
+    const fields = assigneeFields(key);
+    const before = pickedItems.map((i) => ({ id: i.id, patch: { companyId: i.companyId, assignedTo: i.assignedTo, tradeId: i.tradeId, visitId: i.visitId } }));
     setSheet(null);
     haptic.success();
-    void data.updateItems(pickedItems.map((i) => ({ id: i.id, patch: { assignedTo: personId } })));
-    const who = personOptions.find((o) => o.value === personId)?.label;
+    void data.updateItems(
+      pickedItems.map((i) => ({
+        id: i.id,
+        patch: {
+          ...fields,
+          ...(fields.companyId ? { tradeId: formOptions.tradeFor(fields.companyId, i.tradeId) } : {}),
+          ...(fields.companyId !== i.companyId ? { visitId: null } : {}),
+        },
+      })),
+    );
+    if (fields.companyId && !formOptions.jobCompanies.some((jc) => jc.companyId === fields.companyId)) {
+      const usual = companies.find((c) => c.id === fields.companyId)?.defaultTradeId;
+      if (usual) void data.addCompanyToJob(jobId, fields.companyId, usual).catch(() => undefined);
+    }
+    const who = formOptions.assigneeOptions.find((o) => o.value === key)?.label ?? "them";
     feedback.toast({
-      message: personId ? `Assigned ${count} to ${who}` : `${count.charAt(0).toUpperCase()}${count.slice(1)} assigned to no one`,
+      message: `Assigned ${count} to ${who}`,
       action: { label: "Undo", onPress: () => void data.updateItems(before) },
     });
     stopPicking();
@@ -485,7 +506,9 @@ export default function GroupScreen() {
           : room
           ? `Location · ${room.kind === "shared" ? SHARED_GROUP : (room.floor ?? "On the job")}`
           : by === "company"
-            ? "Company"
+            ? personOfKey(key)
+              ? "Someone on your team"
+              : "Company"
             : by === "waiting"
               ? "Waiting on"
               : undefined;
@@ -499,7 +522,7 @@ export default function GroupScreen() {
         comments={commentsOn.get(item.id)}
         holds={holds}
         location={locationFor(item)}
-        company={companyFor(item)}
+        assignee={assigneeFor(item)}
         note={noteFor(item)}
         step={section.kind === "open" && !selecting ? work?.step.get(item.id) : undefined}
         freed={section.kind === "open" ? work?.freed.get(item.id) : undefined}
@@ -608,7 +631,7 @@ export default function GroupScreen() {
                         comments={commentsOn.get(item.id)}
                         holds={holds}
                         location={locationFor(item)}
-                        company={companyFor(item)}
+                        assignee={assigneeFor(item)}
                         first
                         last
                         checking={false}
@@ -730,11 +753,11 @@ export default function GroupScreen() {
       <OptionPicker
         visible={sheet === "assign"}
         title={`Assign ${itemsTitle(pickedItems.length)} To`}
-        options={personOptions}
+        options={formOptions.assigneeOptions}
         value={null}
-        onSelect={(v) => assignTo(v === "none" ? null : v)}
+        onSelect={assignTo}
         onClose={() => setSheet(null)}
-        footer="They show on that person's My Items."
+        footer="A company gets them on its list. Someone on your team gets them on their My Items."
       />
       {room ? <AddTemplateSheet jobId={jobId} locationId={room.id} visible={sheet === "template"} onClose={() => setSheet(null)} /> : null}
       {admin ? <SaveTemplateSheet jobId={jobId} items={pickedItems} visible={sheet === "save"} onClose={() => setSheet(null)} onSaved={stopPicking} /> : null}

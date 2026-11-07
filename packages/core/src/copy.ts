@@ -86,8 +86,10 @@ export function pastePlan(copied: Item[], target: { jobId: string; locationId: s
     const ready = item.ready || (item.waitingOn.length === 0 && waitingOnItems.length === 0 && readyBy === null);
     // An order number belongs to the original's own order: the copy is to be quoted again.
     const poOrCo = item.kind === 'added_scope' ? null : item.poOrCo;
+    // Someone on this job's team stays assigned on the same job only.
+    const assignedTo = sameJob ? item.assignedTo : null;
     const fields: ItemFields = {
-      assignedTo: sameJob ? item.assignedTo : null,
+      assignedTo,
       title: item.title,
       description: item.description,
       tradeId: item.tradeId,
@@ -103,7 +105,8 @@ export function pastePlan(copied: Item[], target: { jobId: string; locationId: s
       completedBy: null,
       completedAt: null,
       extra: item.extra,
-      unfinished: item.unfinished,
+      // Assigned to no one on the other job: it waits in Drafts to be assigned.
+      unfinished: item.unfinished || (!item.companyId && !assignedTo),
       visitId: null,
       hours: item.hours,
     };

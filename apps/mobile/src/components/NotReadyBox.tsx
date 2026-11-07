@@ -4,7 +4,7 @@
 // on who. Ready By, when it is known, is the day it should be ready: the company sees it on its
 // list. Done keeps it; Cancel leaves the item as it was.
 
-import { checkItem, holdChoices, tidyItem, tidyTitle, type HoldLookups, type Item } from '@punch/core';
+import { assigneeFields, assigneeName, checkItem, holdChoices, tidyItem, tidyTitle, type HoldLookups, type Item } from '@punch/core';
 import { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { colors, fieldFont, layout } from '@/constants/theme';
@@ -57,8 +57,9 @@ export function NotReadyBox({
   const [query, setQuery] = useState('');
   const [addingWho, setAddingWho] = useState(false);
   const [newWho, setNewWho] = useState('');
-  const [newTask, setNewTask] = useState<{ title: string; companyId: string | null } | null>(null);
-  const [pickingCompany, setPickingCompany] = useState(false);
+  // A task added here: its title, and who it is assigned to, a company's id or a person's key.
+  const [newTask, setNewTask] = useState<{ title: string; assignee: string | null } | null>(null);
+  const [pickingAssignee, setPickingAssignee] = useState(false);
   const [opened, setOpened] = useState(false);
 
   // Start from the item's own answers each time the box opens.
@@ -82,8 +83,8 @@ export function NotReadyBox({
   const found = q
     ? choices
         .filter((t) => {
-          const company = t.companyId ? (holds.companies.get(t.companyId) ?? '') : '';
-          return `${t.title} ${t.description} ${company} ${holds.locations.get(t.locationId) ?? ''}`.toLowerCase().includes(q);
+          const who = assigneeName(t, { companies: holds.companies, people: holds.people ?? new Map() }) ?? '';
+          return `${t.title} ${t.description} ${who} ${holds.locations.get(t.locationId) ?? ''}`.toLowerCase().includes(q);
         })
         .sort(byPlace)
     : [];
@@ -111,12 +112,13 @@ export function NotReadyBox({
   async function addTask() {
     if (!newTask) return;
     const title = tidyTitle(newTask.title);
-    if (title === '' || !newTask.companyId) return;
+    if (title === '' || !newTask.assignee) return;
+    const assigned = assigneeFields(newTask.assignee);
     const fields = tidyItem({
       ...blankDraft(locationId),
       title,
-      companyId: newTask.companyId,
-      tradeId: options.tradeFor(newTask.companyId, null),
+      ...assigned,
+      tradeId: assigned.companyId ? options.tradeFor(assigned.companyId, null) : null,
     });
     const id = await data.createItem({ ...fields, jobId, source: 'typed', unfinished: checkItem({ ...fields, unfinished: false }).length > 0 });
     haptic.success();
@@ -126,7 +128,7 @@ export function NotReadyBox({
 
   const taskRow = (t: Item, i: number) => {
     const on = tasks.includes(t.id);
-    const company = t.companyId ? holds.companies.get(t.companyId) : undefined;
+    const company = assigneeName(t, { companies: holds.companies, people: holds.people ?? new Map() }) ?? undefined;
     const where = t.locationId !== locationId ? holds.locations.get(t.locationId) : undefined;
     const state = t.ready ? 'Ready' : 'Not ready';
     return (
@@ -152,7 +154,7 @@ export function NotReadyBox({
   };
 
   const roomLabel = holds.locations.get(locationId) ?? 'this location';
-  const companyName = newTask?.companyId ? options.companyName(newTask.companyId) : null;
+  const assigneeLabel = newTask?.assignee ? options.assigneeOptions.find((o) => o.value === newTask.assignee)?.label : null;
 
   return (
     <Sheet
@@ -205,12 +207,12 @@ export function NotReadyBox({
                     />
                   </View>
                   <ListRow
-                    title="Company"
-                    value={companyName ?? 'Pick'}
-                    valueColor={companyName ? colors.secondary : colors.tint}
+                    title="Assigned To"
+                    value={assigneeLabel ?? 'Pick'}
+                    valueColor={assigneeLabel ? colors.secondary : colors.tint}
                     accessory="chevron"
-                    onPress={() => setPickingCompany(true)}
-                    testID="waiting-task-company"
+                    onPress={() => setPickingAssignee(true)}
+                    testID="waiting-task-assigned"
                   />
                   <View style={[styles.row, styles.rule, styles.buttons]}>
                     <Touchable feedback="opacity" onPress={() => setNewTask(null)} accessibilityRole="button" testID="waiting-task-cancel" style={styles.textButton}>
@@ -219,10 +221,10 @@ export function NotReadyBox({
                     <Touchable
                       feedback="opacity"
                       onPress={() => void addTask()}
-                      disabled={!newTask.title.trim() || !newTask.companyId}
+                      disabled={!newTask.title.trim() || !newTask.assignee}
                       accessibilityRole="button"
                       testID="waiting-task-save"
-                      style={[styles.textButton, !newTask.title.trim() || !newTask.companyId ? { opacity: 0.35 } : null]}
+                      style={[styles.textButton, !newTask.title.trim() || !newTask.assignee ? { opacity: 0.35 } : null]}
                     >
                       <Text weight="600" color={colors.tint}>
                         Add to the List
@@ -233,7 +235,7 @@ export function NotReadyBox({
               ) : (
                 <Touchable
                   feedback="highlight"
-                  onPress={() => setNewTask({ title: '', companyId: null })}
+                  onPress={() => setNewTask({ title: '', assignee: null })}
                   accessibilityRole="button"
                   testID="waiting-add-task"
                   style={[styles.row, here.length > 0 ? styles.rule : null]}
@@ -309,15 +311,15 @@ export function NotReadyBox({
       </SheetScroll>
 
       <OptionPicker
-        visible={pickingCompany}
-        title="Company"
-        options={options.companyOptions}
-        value={newTask?.companyId ?? null}
-        onSelect={(companyId) => {
-          setNewTask((t) => (t ? { ...t, companyId } : t));
-          setPickingCompany(false);
+        visible={pickingAssignee}
+        title="Assigned To"
+        options={options.assigneeOptions}
+        value={newTask?.assignee ?? null}
+        onSelect={(assignee) => {
+          setNewTask((t) => (t ? { ...t, assignee } : t));
+          setPickingAssignee(false);
         }}
-        onClose={() => setPickingCompany(false)}
+        onClose={() => setPickingAssignee(false)}
       />
     </Sheet>
   );

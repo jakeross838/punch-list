@@ -6,7 +6,7 @@
 // Ready and Remove. Rows sit in a white panel, every other one striped; the first and last close the
 // panel's edges.
 
-import { commentCountText, freesText, holdText, hoursText, kindText, missingDetails, waitingOnText, type Freed, type HoldLookups, type Item, type Photo } from '@punch/core';
+import { commentCountText, freesText, holdText, hoursText, kindText, missingDetails, needsText, waitingOnText, type Freed, type HoldLookups, type Item, type Photo } from '@punch/core';
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -30,8 +30,8 @@ export function itemStatus(
     return { tone: 'check', text: 'To Check', note: when ? `Done ${when}, by the company` : 'Done, by the company' };
   }
   if (item.unfinished) {
-    const needs = missingDetails(item).filter((m) => m !== 'title');
-    return { tone: 'draft', text: 'Draft', note: note ?? (needs.length > 0 ? `Needs a ${needs.join(' and ')}` : undefined) };
+    const needs = needsText(missingDetails(item).filter((m) => m !== 'title'));
+    return { tone: 'draft', text: 'Draft', note: note ?? (needs || undefined) };
   }
   if (!item.ready) {
     const on = holds ? holdText(item, holds) : waitingOnText(item.waitingOn);
@@ -47,7 +47,7 @@ export const ItemRow = memo(function ItemRow({
   item,
   photo,
   location,
-  company,
+  assignee,
   note,
   comments = 0,
   holds,
@@ -72,8 +72,8 @@ export const ItemRow = memo(function ItemRow({
   photo?: Photo;
   /** Where it is, in lists that are not one location's. */
   location?: string;
-  /** Who does it, in lists that are not one company's. */
-  company?: string;
+  /** Who it is assigned to, a company or someone on the team, in lists that are not one company's. */
+  assignee?: string;
   /** For a draft: said in place of what it still needs, like "Filling in from the photo". */
   note?: string;
   /** How many comments it has. */
@@ -114,7 +114,7 @@ export const ItemRow = memo(function ItemRow({
   const kind = item.kind === 'completion' || item.unfinished ? undefined : kindText(item);
   const time = item.hours !== null && item.hours > 0 && open ? hoursText(item.hours) : undefined;
   const frees = open && freed ? freesText(freed) || undefined : undefined;
-  const where = [frees, location, company, kind, time].filter(Boolean).join(' · ');
+  const where = [frees, location, assignee, kind, time].filter(Boolean).join(' · ');
   const numbered = open && !!step && !select;
   const confirmed = open && !!item.confirmedAt && !item.markedDoneAt && !item.unfinished;
   const talk = comments > 0 ? commentCountText(comments) : undefined;

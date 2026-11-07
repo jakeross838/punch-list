@@ -79,7 +79,7 @@ export function AddTemplateSheet({
   const notes = [
     plan.skipped > 0 ? `${plan.skipped === 1 ? '1 is' : `${plan.skipped} are`} on the list already and ${plan.skipped === 1 ? 'is' : 'are'} left out.` : '',
     plan.missing.length > 0 ? `Nowhere on this job for ${plan.missing.map((p) => placeHeading(p)).join(', ')}, so ${plan.missing.length === 1 ? 'its' : 'their'} tasks are left out.` : '',
-    plan.needCompany > 0 ? `${plan.needCompany === 1 ? '1 goes' : `${plan.needCompany} go`} to Drafts to pick the company (${tradesShort.join(', ')}).` : '',
+    plan.needCompany > 0 ? `${plan.needCompany === 1 ? '1 goes' : `${plan.needCompany} go`} to Drafts to be assigned (${tradesShort.join(', ')}).` : '',
   ].filter(Boolean);
 
   return (

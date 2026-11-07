@@ -1,6 +1,7 @@
 // One simple form for an item, the same when making one and when looking at one later. Up front:
-// the title (typing offers the standard titles, and picking one fills in the company), the
-// description, the location, the company and Ready as a checkbox. Everything else waits under
+// the title (typing offers the standard titles, and picking one fills in who it is assigned to), the
+// description, the location, Assigned To (a company, or someone on your team) and Ready as a
+// checkbox. Everything else waits under
 // Details, with a line saying what is in it: priority, how long it takes, the type (Deficiency,
 // Incomplete or Additional, with its order only for additional work) and the added fields. The trade is not asked
 // for: it follows the company's trade on the job. On an item that already exists, every change saves
@@ -8,11 +9,15 @@
 // the location is pointed out.
 
 import {
+  assigneeFields,
+  assigneeKey,
   companyForTrade,
   defaultWaitingOnExtras,
   duplicatesOf,
   formShows,
   hoursText,
+  isAssigned,
+  personOfKey,
   itemNumberLabel,
   KIND_HINTS,
   KIND_LABELS,
@@ -38,7 +43,6 @@ import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, StyleSheet, TextInput, View } from 'react-native';
 import { colors, fieldFont, layout, type as typeScale } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { usePersonOptions } from './people';
 import { afterSheets, haptic, Icon, ListLabeledField, ListRow, ListSection, ListSwitchRow, OptionPicker, PhotoView, Segmented, Text, Touchable, useFeedback } from '@/ui';
 import { HoursField } from './HoursField';
 import { ExtraFields, useFormOptions, type ItemDraft } from './ItemForm';
@@ -106,13 +110,12 @@ export function ItemEditor({
     .filter((f) => f.active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
   const options = useFormOptions(jobId, value.locationId);
-  const [picker, setPicker] = useState<'room' | 'company' | 'trade' | 'person' | null>(null);
+  const [picker, setPicker] = useState<'room' | 'assignee' | 'trade' | null>(null);
   // A company typed in on the walk: its trade is asked next, then it is made and picked.
   const [newCompany, setNewCompany] = useState('');
   const trades = data.useTrades();
   const companies = data.useCompanies();
   const locations = data.useLocations(jobId);
-  const people = data.usePeople();
   const [titleFocused, setTitleFocused] = useState(false);
   const [filled, setFilled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -120,14 +123,11 @@ export function ItemEditor({
   const shows = (field: FormField) => formShows(settings, field);
   const suggestions = titleFocused ? suggestTitles(value.title, titles, items, 4) : [];
   const roomLabel = options.roomLabel(value.locationId);
-  const companyName = options.companyName(value.companyId);
+  const assignee = options.assigneeName(value);
 
-  // A field the rules need always shows, even when Item Form setup turned it off.
-  const showCompany = shows('company') || !!problem('companyId');
-  // Assigned To shows when it is on the form, or when the item is assigned to someone.
-  const showAssigned = shows('assignedTo') || !!value.assignedTo;
-  const assignedName = people.find((p) => p.id === value.assignedTo)?.name ?? null;
-  const personOptions = usePersonOptions(jobId);
+  // A field the rules need always shows, even when Item Form setup turned it off, and so does one
+  // with something in it.
+  const showAssignee = shows('company') || !!problem('companyId') || isAssigned(value);
 
   // The order is for additional work; one already there always shows, so nothing is hidden.
   const showPo = value.kind === 'added_scope' || !!value.poOrCo;
@@ -144,6 +144,8 @@ export function ItemEditor({
 
   function fillFrom(tradeId: string | null): Partial<ItemDraft> {
     if (!tradeId) return {};
+    // Someone on the team assigned already stays assigned: the title only says its trade.
+    if (value.assignedTo) return { tradeId };
     const companyId = companyForTrade(tradeId, options.jobCompanies);
     setFilled(true);
     return { tradeId, companyId: companyId ?? (value.tradeId === tradeId ? value.companyId : null) };
@@ -162,7 +164,7 @@ export function ItemEditor({
     const title = tidyTitle(value.title);
     set({
       title,
-      ...(!value.companyId ? fillFrom(tradeForTitle(title, titles)) : {}),
+      ...(!isAssigned(value) ? fillFrom(tradeForTitle(title, titles)) : {}),
     });
   }
 
@@ -172,7 +174,7 @@ export function ItemEditor({
   // The same thing in this location already: one on the lists first, then a draft.
   const twins = !titleFocused && value.title.trim() ? duplicatesOf(value.title, value.locationId, items, itemId) : [];
   const twin = twins.find((t) => !t.unfinished) ?? twins[0];
-  const blanks = !value.title.trim() || !value.companyId;
+  const blanks = !value.title.trim() || !isAssigned(value);
 
   // Details: what is in it, in a line, and open on its own when something in it needs fixing.
   const detailProblem = problem('poOrCo');
@@ -315,7 +317,7 @@ export function ItemEditor({
 
       <ListSection
         style={styles.section}
-        footer={sentence(whereProblem) ?? (filled && companyName ? 'Company filled in from the title.' : undefined)}
+        footer={sentence(whereProblem) ?? (filled && value.companyId ? 'Assigned To filled in from the title.' : undefined)}
         footerTone={whereProblem ? 'danger' : 'default'}
       >
         <ListRow
@@ -327,26 +329,15 @@ export function ItemEditor({
           onPress={() => setPicker('room')}
           testID="pick-room"
         />
-        {showCompany ? (
-          <ListRow
-            title="Company"
-          field
-            value={companyName ?? 'Choose'}
-            valueColor={companyName ? colors.secondary : colors.tint}
-            accessory="chevron"
-            onPress={() => setPicker('company')}
-            testID="pick-company"
-          />
-        ) : null}
-        {showAssigned ? (
+        {showAssignee ? (
           <ListRow
             title="Assigned To"
-          field
-            value={assignedName ?? 'No One'}
-            valueColor={colors.secondary}
+            field
+            value={assignee ?? 'Choose'}
+            valueColor={assignee ? colors.secondary : colors.tint}
             accessory="chevron"
-            onPress={() => setPicker('person')}
-            testID="pick-person"
+            onPress={() => setPicker('assignee')}
+            testID="pick-assigned"
           />
         ) : null}
       </ListSection>
@@ -443,18 +434,25 @@ export function ItemEditor({
         }}
       />
       <OptionPicker
-        visible={picker === 'company'}
-        title="Company"
-        options={options.companyOptions}
-        value={value.companyId}
-        onSelect={(companyId) => {
-          // The trade follows the company; one not on the job yet joins it, for its usual trade.
-          set({ companyId, tradeId: options.tradeFor(companyId, value.tradeId), ...(companyId !== value.companyId ? { visitId: null } : {}) });
+        visible={picker === 'assignee'}
+        title="Assigned To"
+        options={options.assigneeOptions}
+        value={assigneeKey(value)}
+        onSelect={(key) => {
           setFilled(false);
+          // Someone on the team: it goes on their My Items, and off any company's visit.
+          if (personOfKey(key)) {
+            set({ ...assigneeFields(key), visitId: null });
+            return;
+          }
+          // A company: the trade follows it; one not on the job yet joins it, for its usual trade.
+          const companyId = key;
+          set({ companyId, assignedTo: null, tradeId: options.tradeFor(companyId, value.tradeId), ...(companyId !== value.companyId ? { visitId: null } : {}) });
           const usual = companies.find((c) => c.id === companyId)?.defaultTradeId;
           if (usual && !options.jobCompanies.some((jc) => jc.companyId === companyId)) void data.addCompanyToJob(jobId, companyId, usual).catch(() => undefined);
         }}
         onClose={() => setPicker(null)}
+        footer="A company gets it on its list. Someone on your team gets it on their My Items."
         add={{
           noun: 'Company',
           onAdd: async (name) => {
@@ -475,7 +473,7 @@ export function ItemEditor({
             try {
               const companyId = await data.addCompany({ name: newCompany, defaultTradeId: tradeId });
               await data.addCompanyToJob(jobId, companyId, tradeId).catch(() => undefined);
-              set({ companyId, tradeId, visitId: null });
+              set({ companyId, assignedTo: null, tradeId, visitId: null });
               setFilled(false);
             } catch (e) {
               feedback.toast({ message: e instanceof Error && e.message ? e.message : 'The company was not added. Try again.' });
@@ -484,15 +482,6 @@ export function ItemEditor({
         }}
         onClose={() => setPicker(null)}
         footer={`What ${newCompany || 'the company'} does. It is kept with the company for every job.`}
-      />
-      <OptionPicker
-        visible={picker === 'person'}
-        title="Assigned To"
-        options={personOptions}
-        value={value.assignedTo ?? 'none'}
-        onSelect={(v) => set({ assignedTo: v === 'none' ? null : v })}
-        onClose={() => setPicker(null)}
-        footer="It shows on their My Items. Someone not on the team goes on it as Field."
       />
     </>
   );

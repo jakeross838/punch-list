@@ -104,8 +104,25 @@ describe('activity', () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({
       action: 'changed Patch drywall',
-      detail: 'Laundry 119. Company: SMS Carpentry. Not ready. Waiting on Owner and Volcano Stone. Found By: Owner.',
+      detail: 'Laundry 119. Assigned to SMS Carpentry. Not ready. Waiting on Owner and Volcano Stone. Found By: Owner.',
     });
+  });
+
+  it('says who it is assigned to, a company or someone on the team, with nothing about the one it was before', () => {
+    const toSam = activityLines([change(40, 'company_id', 'triple-h', null), change(40, 'assigned_to', null, 'sam'), change(40, 'visit_id', 'v1', null)], look);
+    expect(toSam).toHaveLength(1);
+    expect(toSam[0]).toMatchObject({ action: 'assigned Patch drywall to Sam Rivera', detail: 'Laundry 119. Off its visit.' });
+    const back = activityLines([change(50, 'assigned_to', 'sam', null), change(50, 'company_id', null, 'sms')], look);
+    expect(back.map((l) => l.action)).toEqual(['assigned Patch drywall to SMS Carpentry']);
+    // Several items at once: one line.
+    const many = activityLines(
+      ['i1', 'i2'].flatMap((itemId) => [
+        { ...change(60, 'company_id', null, 'sms'), itemId },
+        { ...change(60, 'assigned_to', 'sam', null), itemId },
+      ]),
+      look,
+    );
+    expect(many.map((l) => l.action)).toEqual(['assigned 2 items to SMS Carpentry']);
   });
 
   it('keeps completing its own line, and starts a new line after a while or for someone else', () => {

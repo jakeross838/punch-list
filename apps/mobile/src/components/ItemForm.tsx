@@ -3,9 +3,14 @@
 // and the fields added in Item Form setup. ItemEditor lays them out.
 
 import {
+  assigneeName,
   checkItem,
   floorOf,
   kindDefaults,
+  PART_LABELS,
+  peopleInOrder,
+  personKey,
+  teamInOrder,
   tidyExtra,
   tidyItem,
   tradeForCompany,
@@ -166,6 +171,8 @@ export function useFormOptions(jobId: string, locationId: string) {
   const jobCompanies = data.useJobCompanies(jobId);
   const extras = data.useWaitingOnExtras(jobId);
   const builder = data.useOrg().name;
+  const people = data.usePeople();
+  const team = data.useTeams().filter((t) => t.jobId === jobId);
 
   const roomOptions = useMemo<Option[]>(
     () =>
@@ -194,6 +201,22 @@ export function useFormOptions(jobId: string, locationId: string) {
     if (onJob.length === 0 || others.length === 0) return [...onJob, ...others];
     return [...onJob.map((o) => ({ ...o, group: 'On This Job' })), ...others.map((o) => ({ ...o, group: 'Other Companies' }))];
   }, [jobCompanies, companies, trades]);
+  // Assigned To: the companies on this job, then the job's team, then every other company, then
+  // everyone else at the builder. A company gets it on its list; a person gets it on their My Items.
+  const assigneeOptions = useMemo<Option[]>(() => {
+    const onJob = companyOptions.filter((o) => o.group !== 'Other Companies').map((o) => ({ ...o, group: 'On This Job' }));
+    const others = companyOptions.filter((o) => o.group === 'Other Companies');
+    const crew = teamInOrder(team, people).flatMap((t) => {
+      const p = people.find((x) => x.id === t.personId && x.active);
+      return p ? [{ value: personKey(p.id), label: p.name, hint: PART_LABELS[t.part], group: 'Your Team' }] : [];
+    });
+    const rest = peopleInOrder(people.filter((p) => p.active && !team.some((t) => t.personId === p.id))).map((p) => ({
+      value: personKey(p.id),
+      label: p.name,
+      group: `Everyone Else at ${builder}`,
+    }));
+    return [...onJob, ...crew, ...others, ...rest];
+  }, [companyOptions, team, people, builder]);
   const waitingOptions = useMemo<Option[]>(
     () => waitingOnChoices(jobCompanies, companies, extras.length > 0 ? extras : defaultWaitingOnExtras(builder)).map((name) => ({ value: name, label: name })),
     [jobCompanies, companies, extras, builder],
@@ -206,10 +229,14 @@ export function useFormOptions(jobId: string, locationId: string) {
   return {
     roomOptions,
     companyOptions,
+    assigneeOptions,
     waitingOptions,
     jobCompanies,
     roomLabel: (id: string) => locations.find((l) => l.id === id)?.label,
     companyName: (id: string | null) => companies.find((c) => c.id === id)?.name,
+    /** Who it is assigned to, by name: the company, or the person on the team. */
+    assigneeName: (item: { companyId: string | null; assignedTo: string | null }) =>
+      assigneeName(item, { companies: new Map(companies.map((c) => [c.id, c.name])), people: new Map(people.map((p) => [p.id, p.name])) }) ?? undefined,
     tradeFor,
   };
 }

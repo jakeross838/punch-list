@@ -1,7 +1,7 @@
 // One item, everything about it in one calm place, Site Office style, and every part of it changes
 // right where it is: retype the title, tick Ready, pick another location, mark up a photo. Each
-// change saves as it is made. Up front: the photo, the status and the company, then the title, the
-// location, the company and Ready; the type, the order, Priority and the added fields wait under
+// change saves as it is made. Up front: the photo, the status and who it is assigned to, then the
+// title, the location, Assigned To and Ready; the type, the order, Priority and the added fields wait under
 // Details. The checklist, the comments and the history follow. Complete is the big button along the
 // bottom. Only your own team marks items complete, and removing never deletes. A draft says what it
 // still needs (or that Claude is filling it in from the photo) and steps to the next one, for
@@ -186,6 +186,8 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   const fill = useDraftFill();
   const filling = item.unfinished && isFilling(fill, item.id);
   const people = data.usePeople();
+  // Someone on the team it is assigned to, when it is not a company's.
+  const person = !item.companyId && item.assignedTo ? people.find((p) => p.id === item.assignedTo) : undefined;
   const job = data.useJobs().find((j) => j.id === jobId);
   const holds = useHolds(jobId);
   const history = useActivityLines(jobId, item.id);
@@ -473,10 +475,10 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
         </View>
         <View style={[styles.cell, styles.cellDivide]}>
           <Text variant="stamp" color={colors.secondary}>
-            Company
+            Assigned To
           </Text>
           <Text variant="callout" weight="500" numberOfLines={1}>
-            {company?.name ?? 'Not picked yet'}
+            {company?.name ?? person?.name ?? 'Not assigned yet'}
           </Text>
         </View>
       </View>
@@ -512,7 +514,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
               <ListRow
                 title="Comments"
                 field
-                subtitle={latest ? `${commentAuthor(latest, look)}: ${latest.body}` : company ? `Back and forth with ${company.name}.` : 'Back and forth with the company.'}
+                subtitle={latest ? `${commentAuthor(latest, look)}: ${latest.body}` : company ? `Back and forth with ${company.name}.` : person ? 'Notes for your team.' : 'Back and forth with the company.'}
                 value={thread.length > 0 ? String(thread.length) : undefined}
                 onPress={() => setShowComments((v) => !v)}
                 right={<Icon name={showComments ? 'chevron.down' : 'plus'} size={15} color={colors.label} weight="medium" />}
@@ -525,7 +527,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
               <CommentThread
                 comments={thread}
                 onPost={(body, internal) => void data.addComment({ jobId, itemId: item.id, companyId: item.companyId, body, internal })}
-                hint={company ? `${company.name} sees comments on its next list.` : 'The company sees comments on its next list.'}
+                hint={company ? `${company.name} sees comments on its next list.` : person ? 'Only your team sees these.' : 'The company sees comments on its next list.'}
                 testID="item-comments"
               />
             </View>

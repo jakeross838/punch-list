@@ -349,6 +349,11 @@ async function main(): Promise<void> {
       { id: third, patch: { assignedTo: sam.id } },
     ]);
   });
+  await step('Assigned To: work for someone on the team with no company, and back to a company', async () => {
+    const ours = await api.createItem(blank({ jobId, locationId: kitchen, title: 'Order towel bar', companyId: null, assignedTo: sam.id }));
+    await api.updateItem(ours, { companyId: sms, assignedTo: null });
+    await api.updateItem(ours, { companyId: null, assignedTo: sam.id });
+  });
   await step('the company moves to another trade on the job, and is renamed', async () => {
     await api.setJobCompanyTrade(jobId, sparks, electrical, carpentry);
     await api.updateCompany(sparks, { name: 'Sparks Electric LLC' });
@@ -441,7 +446,12 @@ async function main(): Promise<void> {
 
   check("the company's name, tidied", `select name from public.orgs where id = ${lit(ORG)}`, 'Ross Built Custom Homes');
   check('every row on the job is the company\'s', `select count(*) from public.items where job_id = ${lit(jobId)} and org <> ${lit(ORG)}`, '0');
-  check('every item numbered in the order it arrived', `select string_agg(number::text, ',' order by number) from public.items where job_id = ${lit(jobId)}`, '1,2,3,4,5,6,7,8');
+  check('every item numbered in the order it arrived', `select string_agg(number::text, ',' order by number) from public.items where job_id = ${lit(jobId)}`, '1,2,3,4,5,6,7,8,9');
+  check(
+    "work for someone on the team needs no company",
+    `select (company_id is null)::text || ',' || (assigned_to = ${lit(sam.id)})::text || ',' || unfinished::text from public.items where job_id = ${lit(jobId)} and title = 'Order towel bar'`,
+    'true,true,false',
+  );
   check(
     'the trade follows the company',
     `select count(*) from public.items i where i.job_id = ${lit(jobId)} and i.company_id = ${lit(sms)} and i.trade_id is distinct from ${lit(carpentry)}::uuid`,

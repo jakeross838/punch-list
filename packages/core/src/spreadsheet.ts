@@ -1,8 +1,9 @@
 // A job's items as a spreadsheet, for Excel, Numbers or Google Sheets: one row per item with its
-// number, title, location, company, type, status and the rest, in the same words the app uses. It
+// number, title, location, who it is assigned to, type, status and the rest, in the same words the app uses. It
 // is written as CSV, which every spreadsheet opens. A cell that starts like a formula is kept as
 // text, so nothing in a title can run in someone's spreadsheet.
 
+import { assigneeName } from './assignees';
 import { waitingOnText } from './waitingOn';
 import { kindText } from './orders';
 import type { Item } from './types';
@@ -21,13 +22,12 @@ export const SHEET_COLUMNS = [
   'Description',
   'Level',
   'Location',
-  'Company',
+  'Assigned To',
   'Type',
   'Status',
   'Ready',
   'Waiting On',
   'Priority',
-  'Assigned To',
   'Checklist',
   'Added',
   'Completed',
@@ -75,13 +75,12 @@ export function itemsSheet(items: Item[], look: SheetLookups): string[][] {
       i.description,
       loc?.floor ?? '',
       loc?.label ?? '',
-      i.companyId ? (look.companies.get(i.companyId) ?? '') : '',
+      assigneeName(i, look) ?? '',
       kindText(i),
       sheetStatus(i),
       i.ready ? 'Yes' : 'No',
       i.ready ? '' : waitingOnText([...tasks, ...i.waitingOn]),
       i.priority ? 'Yes' : '',
-      i.assignedTo ? (look.people.get(i.assignedTo) ?? '') : '',
       steps.length > 0 ? `${steps.filter((s) => s.done).length} of ${steps.length} done` : '',
       day(i.createdAt),
       i.status === 'complete' ? day(i.completedAt) : '',

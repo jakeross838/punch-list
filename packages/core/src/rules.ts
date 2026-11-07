@@ -1,6 +1,7 @@
 // The rules the app enforces on every item, wherever it is written from. Buildertrend could not
 // enforce these; the app can, so it does.
 
+import { isAssigned } from './assignees';
 import { MAX_HOURS, tidyHours } from './time';
 import type { Item, ItemKind, Person } from './types';
 
@@ -43,8 +44,9 @@ export type ItemFields = Pick<
 
 /**
  * Everything that stops an item from saving, in plain words. An empty list means it saves. An
- * unfinished item may still be missing its title, location and company; the other rules still
- * hold. The trade is not asked for: it follows the company's trade on the job.
+ * unfinished item may still be missing its title, location and who it is assigned to (a company or
+ * someone on the team); the other rules still hold. The trade is not asked for: it follows the
+ * company's trade on the job.
  */
 export function checkItem(item: ItemFields & { locationId?: string }): Problem[] {
   const problems: Problem[] = [];
@@ -53,7 +55,7 @@ export function checkItem(item: ItemFields & { locationId?: string }): Problem[]
   // A photo saves before a location is picked; a finished item needs one.
   if (item.locationId !== undefined && item.locationId === '' && !item.unfinished) problems.push({ field: 'locationId', message: 'Pick the location' });
   if (title.length > TITLE_MAX) problems.push({ field: 'title', message: `Keep the title under ${TITLE_MAX} characters` });
-  if (!item.companyId && !item.unfinished) problems.push({ field: 'companyId', message: 'Pick the company' });
+  if (!isAssigned(item) && !item.unfinished && item.status === 'open') problems.push({ field: 'companyId', message: 'Pick who it is assigned to' });
   if (!item.ready && item.waitingOn.every((w) => w.trim() === '') && item.waitingOnItems.length === 0) {
     problems.push({ field: 'waitingOn', message: 'Pick what it is waiting on' });
   }
@@ -72,21 +74,31 @@ export function checkItem(item: ItemFields & { locationId?: string }): Problem[]
   return problems;
 }
 
+export type Missing = 'title' | 'location' | 'assignee';
+
+type Finishing = Pick<ItemFields, 'title' | 'companyId'> & { assignedTo?: string | null; locationId?: string };
+
 /** What an unfinished item still needs, in the order the form asks for it. */
-export function missingDetails(item: Pick<ItemFields, 'title' | 'companyId'> & { locationId?: string }): ('title' | 'location' | 'company')[] {
-  const out: ('title' | 'location' | 'company')[] = [];
+export function missingDetails(item: Finishing): Missing[] {
+  const out: Missing[] = [];
   if (item.title.trim() === '') out.push('title');
   if (item.locationId === '') out.push('location');
-  if (!item.companyId) out.push('company');
+  if (!isAssigned(item)) out.push('assignee');
   return out;
 }
 
-/** "Needs a title, location and company." */
-export function missingText(item: Pick<ItemFields, 'title' | 'companyId'> & { locationId?: string }): string {
-  const words = missingDetails(item);
-  if (words.length === 0) return '';
-  const list = words.length === 1 ? words[0]! : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
-  return `Needs a ${list}`;
+const MISSING_WORDS: Record<Missing, string> = { title: 'a title', location: 'a location', assignee: 'someone assigned' };
+
+/** "Needs a title, a location and someone assigned." Empty when nothing is missing. */
+export function needsText(words: Missing[]): string {
+  const said = words.map((w) => MISSING_WORDS[w]);
+  if (said.length === 0) return '';
+  return `Needs ${said.length === 1 ? said[0]! : `${said.slice(0, -1).join(', ')} and ${said[said.length - 1]}`}`;
+}
+
+/** What an unfinished item still needs, in words. */
+export function missingText(item: Finishing): string {
+  return needsText(missingDetails(item));
 }
 
 /**
