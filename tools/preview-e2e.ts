@@ -61,6 +61,27 @@ async function main(): Promise<void> {
     await p.close();
   }
 
+  // A floor plan as an architect's PDF: room tags and a title block in its text.
+  const plansPath = join(root, 'local', 'test-plans.pdf');
+  {
+    const p = await browser.newPage();
+    const tag = (x: number, y: number, name: string, number: string) =>
+      `<div style="position:absolute;left:${x}in;top:${y}in;text-align:center;font:bold 11pt Arial">${name}<br>${number}<br><span style="font:8pt Arial">12'-6" x 14'-0"</span></div>`;
+    await p.setContent(
+      `<html><body style="margin:0;position:relative;width:36in;height:24in">` +
+        tag(4, 4, 'GARAGE', '101') +
+        tag(12, 4, 'LIVING', '107') +
+        tag(18, 4, 'KITCHEN', '109') +
+        tag(22, 4, 'PANTRY', '110') +
+        tag(18, 10, 'MUDROOM', '120') +
+        `<div style="position:absolute;left:1in;top:21in;font:bold 20pt Arial">FIRST FLOOR PLAN</div>` +
+        `<div style="position:absolute;left:28in;top:20in;font:10pt Arial">PREVIEW RESIDENCE<br>412 BAY ISLES ROAD, LONGBOAT KEY, FLORIDA 34228</div>` +
+        `</body></html>`,
+    );
+    writeFileSync(plansPath, await p.pdf({ width: '36in', height: '24in', printBackground: true }));
+    await p.close();
+  }
+
   const context = await browser.newContext({
     viewport: { width: 393, height: 852 },
     deviceScaleFactor: 3,
@@ -77,8 +98,23 @@ async function main(): Promise<void> {
     (() => {
       const sample = Object.assign(async () => ({ text: '' }), {
         limits: async () => ({ maxPromptBytes: 262144, images: { maxCount: 4, maxInputBytes: 20000000, mediaTypes: ['image/jpeg'] } }),
-        json: async () => {
+        json: async (input, options) => {
           await new Promise((done) => setTimeout(done, 2000));
+          // Reading the plans: what it was asked is kept, and it answers like Claude reading a set of plans.
+          if (typeof input === 'string' && /These are the plans for a house/.test(input)) {
+            window.__plansAsked = { input, images: (options && options.images ? options.images.length : 0) };
+            return {
+              name: 'Preview Residence',
+              address: '412 Bay Isles Road, Longboat Key, Florida 34228',
+              levels: [
+                { name: 'Level 1', rooms: [{ name: 'Garage', number: '101' }, { name: 'Living', number: '107' }, { name: 'Kitchen', number: '109' }, { name: 'Pantry', number: '110' }, { name: 'Mudroom', number: '120' }] },
+                { name: 'Level 2', rooms: [{ name: 'Master Bedroom', number: '206' }, { name: 'Master Bathroom', number: '207' }, { name: 'Master Closet', number: null }] },
+                { name: 'Level 3', rooms: [{ name: 'Bunk Room', number: '303' }] },
+              ],
+              outside: ['Pool', 'Driveway', 'Dock'],
+              notes: 'The third floor sheet was hard to read: check its rooms.',
+            };
+          }
           return { title: 'install towel bar', description: 'Left of the vanity, 24 inches.', trade: 'Carpentry', company: 'SMS Carpentry' };
         },
       });
@@ -971,7 +1007,8 @@ async function main(): Promise<void> {
       await app.getByText('2 New').waitFor();
       await app.getByTestId('paste-add').click();
       await app.getByText('2 locations added').waitFor();
-      await app.getByText('Roof Deck 301').first().waitFor();
+      // The new level comes before the outside areas, so the job behind has it drawn too: the one in Job Setup.
+      await app.getByTestId(/^setup-location-/).filter({ hasText: 'Roof Deck 301' }).waitFor();
       await settle(400);
     });
     await step('fix a location in Job Setup: a new name, then remove it and Undo', async () => {
@@ -1669,6 +1706,120 @@ async function main(): Promise<void> {
       await app.getByTestId('station-sheet').waitFor({ state: 'detached' });
       await settle(500);
     });
+    await step('New: Job Setup: type locations in at the end of each level, add a level, rename it, move it, and move a location', async () => {
+      await menu('job-setup');
+      const row = (name: string | RegExp) => app.getByTestId(/^setup-location-/).filter({ hasText: name });
+      const level1 = app.getByTestId('add-to-Level 1');
+      await level1.waitFor();
+      await settle();
+      await shot('99h-setup-locations');
+      // Typed at the end of a level, like a line of the room list; Return keeps going.
+      await level1.fill('mudroom');
+      await level1.press('Enter');
+      await row(/^Mudroom$/).waitFor();
+      await level1.fill('kitchen 109');
+      await level1.press('Enter');
+      await app.getByTestId('add-to-Level 1-problem').getByText('Kitchen 109 is already a location on this job.').waitFor();
+      await level1.fill('');
+      // A new level, its first location, then a new name and a place higher up.
+      await app.getByTestId('add-level').fill('level 4');
+      await app.getByTestId('add-level').press('Enter');
+      await app.getByTestId('add-to-Level 4').fill('Loft 401');
+      await app.getByTestId('add-to-Level 4').press('Enter');
+      await row('Loft 401').waitFor();
+      await settle(300);
+      await app.getByTestId('level-Level 4').click();
+      await app.getByRole('button', { name: 'Rename Level', exact: true }).last().click();
+      await app.getByTestId('field-level').waitFor();
+      await settle(600);
+      await app.getByTestId('field-level').fill('level 2');
+      await app.getByText('Level 2 is already a level on this job.').waitFor();
+      await app.getByTestId('field-level').fill('roof level');
+      await shot('99i-level');
+      await app.getByTestId('level-save').click();
+      await app.getByText('Renamed Level 4 to Roof Level').waitFor();
+      await app.getByTestId('level-Roof Level').waitFor();
+      await settle(500);
+      const order = async () => (await app.getByTestId(/^add-to-[^-]*$/).evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')))).filter((t) => t !== 'add-to-Level 1-problem');
+      const before = await order();
+      await app.getByTestId('level-Roof Level').click();
+      await app.getByRole('button', { name: 'Move Up', exact: true }).last().click();
+      await settle(500);
+      const after = await order();
+      const at = (list: (string | null)[]) => list.indexOf('add-to-Roof Level');
+      if (at(after) !== at(before) - 1 || after[at(after) + 1] !== before[at(before) - 1]) throw new Error(`Move Up left the levels in this order: ${after.join(', ')}`);
+      // A location moved to another level goes to the end of it; the level left empty goes.
+      await row('Loft 401').click();
+      await app.getByTestId('pick-location-level').waitFor();
+      await settle(600);
+      await app.getByTestId('pick-location-level').click();
+      await app.getByRole('button', { name: 'Level 2', exact: true }).click();
+      await settle(400);
+      await shot('99j-location-level');
+      await app.getByTestId('location-save').click();
+      await app.getByText('Moved Loft 401 to Level 2').waitFor();
+      await app.getByTestId('add-to-Roof Level').waitFor({ state: 'detached' });
+      await settle(500);
+      await shot('99k-setup-after');
+    });
+    await step('New: read the plans from a PDF, check what Claude found, and add it', async () => {
+      await app.getByTestId('read-plans').click();
+      await app.getByTestId('plans-pdf').waitFor();
+      await settle(600);
+      await shot('99l-read-plans');
+      const chooser = tab.waitForEvent('filechooser');
+      await app.getByTestId('plans-pdf').click();
+      await (await chooser).setFiles(plansPath);
+      await app.getByTestId('plans-working').waitFor();
+      await settle(300);
+      await shot('99m-reading');
+      await app.getByTestId('plans-summary').waitFor({ timeout: 30_000 });
+      // Claude was given the PDF's text with where each piece sits, and the job's levels.
+      const asked = await tab.mainFrame().childFrames()[0]?.evaluate(() => (window as unknown as { __plansAsked?: { input: string; images: number } }).__plansAsked);
+      if (!asked || !/\n\d+,\d+ KITCHEN\n/.test(asked.input) || !asked.input.includes('PANTRY') || asked.images !== 0) throw new Error(`Claude was not given the PDF's text: ${asked?.input.slice(-300)}`);
+      if (!asked.input.includes('The job already has these levels: Level 1, Level 2')) throw new Error("Claude was not told the job's levels");
+      const plansRow = (label: string) => app.getByTestId(`plans-row-${label}`);
+      await plansRow('Garage 101').waitFor();
+      await plansRow('Kitchen 109').getByText('On the job already').waitFor();
+      await plansRow('Mudroom 120').getByText('Fills in Mudroom, on the job already').waitFor();
+      await app.getByText('The third floor sheet was hard to read: check its rooms.').waitFor();
+      await app.getByTestId('plans-add').getByText('Add 6').waitFor();
+      await settle(400);
+      await shot('99n-plans-read');
+      // Leave one out, fix a name, and take the address from the title block.
+      await plansRow('Bunk Room 303').click();
+      await app.getByTestId('plans-add').getByText('Add 5').waitFor();
+      await app.getByTestId('plans-row-Master Closet-fix').click();
+      await app.getByTestId('field-fix-location').waitFor();
+      await settle(600);
+      await app.getByTestId('field-fix-location').fill('Kitchen 109');
+      await app.getByText('Kitchen 109 is already a location on this job.').waitFor();
+      await app.getByTestId('field-fix-location').fill('master closet 208');
+      await app.getByTestId('fix-done').click();
+      await plansRow('Master Closet 208').waitFor();
+      await app.getByTestId('plans-use-address').click();
+      await app.getByTestId('plans-add').getByText('Add 6').waitFor();
+      await settle(400);
+      await shot('99o-plans-checked');
+      await app.getByTestId('plans-add').click();
+      await app.getByText('4 locations added and 1 filled in from the plans').waitFor();
+      await settle(400);
+      if ((await app.getByTestId('field-job-address').inputValue()) !== '412 Bay Isles Road, Longboat Key, Florida 34228') throw new Error("The job's address did not come from the plans");
+      // Among the job's own, in the plans' walk order: the garage just ahead of Living 107, its
+      // neighbor on the plans (the job's own order stays as it was), and the outside areas last.
+      await app.getByTestId(/^setup-location-/).filter({ hasText: 'Master Closet 208' }).waitFor();
+      if ((await app.getByTestId(/^setup-location-/).filter({ hasText: 'Bunk Room 303' }).count()) !== 0) throw new Error('A location left out was added');
+      const labels = (await app.getByTestId(/^setup-location-/).allInnerTexts()).map((t) => t.trim());
+      const garage = labels.indexOf('Garage 101');
+      if (garage < 0 || labels[garage + 1] !== 'Living 107') throw new Error(`The garage is not just ahead of Living 107: ${labels.slice(0, 8).join(', ')}`);
+      if (labels[labels.length - 1] !== 'Dock') throw new Error(`The outside areas are not last: ${labels.slice(-3).join(', ')}`);
+      await settle(400);
+      await shot('99p-plans-added');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
+      await shot('99q-job-from-plans');
+    });
     await step('Me: the company name, Sign Out, and signing in with a code sent by email', async () => {
       await app.getByTestId('back').last().click();
       await app.getByTestId('job-job-preview').waitFor();
@@ -1710,7 +1861,8 @@ async function main(): Promise<void> {
     await step('New: someone new signs up, walks their first job right away, manages it, and deletes their account', async () => {
       // Signed out after the steps before; signed in on a quick run.
       if ((await app.getByTestId('sign-in-email').count()) === 0) {
-        if ((await app.getByTestId('job-job-preview').filter({ visible: true }).count()) === 0) await app.getByTestId('back').last().click();
+        // On a job: back to Jobs. (Jobs can stay drawn under a job after a sheet, so look for the job.)
+        if ((await app.getByTestId('group-room-1').count()) > 0 || (await app.getByTestId('job-job-preview').filter({ visible: true }).count()) === 0) await app.getByTestId('back').last().click();
         await app.getByTestId('job-job-preview').waitFor();
         await settle(400);
         await app.getByTestId('account').last().click();
@@ -1742,6 +1894,8 @@ async function main(): Promise<void> {
       await app.getByText('Bayview', { exact: true }).first().waitFor();
       await settle(600);
       await shot('86b-first-job');
+      // Claude can read the plans for a new job from its first screen.
+      await app.getByTestId('empty-read-plans').waitFor();
       // Walked right away: a room typed in on the walk, and a company typed in for the item.
       await app.getByTestId('empty-walk').click();
       await app.getByTestId('shutter').waitFor();

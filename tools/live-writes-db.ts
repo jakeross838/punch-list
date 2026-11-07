@@ -9,7 +9,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { DEFAULT_FORM, DEFAULT_VIEW, type Item, type Person } from '@punch/core';
+import { DEFAULT_FORM, DEFAULT_VIEW, moveLevel, outsideAreas, planLocations, type Item, type Person } from '@punch/core';
 import type { NewItem } from '../apps/mobile/src/data/api';
 import { makeApi, type Keeper, type State } from '../apps/mobile/src/data/engine';
 import { planWrites, type HoldupRow, type Write } from '../apps/mobile/src/data/live/writes';
@@ -366,6 +366,26 @@ async function main(): Promise<void> {
     await api.setWalked([kitchen, bath], true);
     await api.setWalked([kitchen], false);
   });
+  let office = '';
+  await step('locations typed in by level, a level renamed and moved, and the plans read in', async () => {
+    // Typed in with no number, then the plans give it its number and level.
+    office = await api.addLocation(jobId, 'Office');
+    await api.addLocations(jobId, [{ name: 'Pantry', number: '102', label: 'Pantry 102', floor: 'First Floor', kind: 'room', sortOrder: 1 }]);
+    const pantry = state.locations.find((l) => l.label === 'Pantry 102')!.id;
+    await api.moveLocation(pantry, { floor: 'Second Floor', kind: 'room' });
+    await api.renameLevel(jobId, 'Second Floor', 'Level 2');
+    const live = state.locations.filter((l) => l.jobId === jobId && l.active);
+    await api.reorderLocations(jobId, moveLevel(live, 'First Floor', -1)!.map((l) => l.id));
+    const reading = {
+      name: null,
+      address: null,
+      levels: [{ name: 'Level 3', rooms: [{ name: 'Office', number: '301' }, { name: 'Bunk Room', number: '302' }] }],
+      outside: outsideAreas(['Dock']),
+      notes: null,
+    };
+    const result = await api.addPlanLocations(jobId, planLocations(reading, state.locations.filter((l) => l.jobId === jobId)));
+    if (result.added !== 8 || result.filledIn !== 1) failures.push(`the plans added ${result.added} and filled in ${result.filledIn}, not 8 and 1`);
+  });
   await step('someone new under People, then changed', async () => {
     const id = await api.addPerson({ name: 'Taylor Brooks', email: 'Taylor@RossBuilt.com', phone: null, role: 'team', sees: 'all' });
     await api.updatePerson(id, { phone: '941 555 0142', sees: 'assigned' });
@@ -481,6 +501,13 @@ async function main(): Promise<void> {
   );
   check('the template name tidied', `select name from public.templates`, 'End of House');
   check('the room Sam typed in, on its floor', `select label || ',' || coalesce(floor, '') from public.locations where id = ${lit(laundry)}`, 'Laundry 112,First Floor');
+  check(
+    // Sam's room goes on the end: only an admin moves the others to make room.
+    'the walk order: each level together, the plans read in, the outside areas last',
+    `select string_agg(label, ',' order by sort_order) from public.locations where job_id = ${lit(jobId)} and active`,
+    '101 Kitchen and Pantry,201 Primary Bath,Pantry 102,Office 301,Bunk Room 302,North Elevation,South Elevation,East Elevation,West Elevation,Roof,Site,Whole House,Dock,Laundry 112',
+  );
+  check('the room typed in with no number, filled in from the plans', `select label || ',' || floor from public.locations where id = ${lit(office)}`, 'Office 301,Level 3');
   check('the company Sam added, tidied and on the job', `select c.name || ',' || count(jc.*) from public.companies c left join public.job_companies jc on jc.company_id = c.id and jc.job_id = ${lit(jobId)} where c.id = ${lit(tile)} group by c.name`, 'Gulf Coast Tile,1');
   check('the standard title counted as used', `select uses from public.title_library where title = 'Install towel bar'`, '1');
   check('the sent schedule kept as it went', `select snapshot -> 'bars' -> 0 ->> 'companyId' = ${lit(sms)} from public.list_sends where list = 'schedule'`, 't');

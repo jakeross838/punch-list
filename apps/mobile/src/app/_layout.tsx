@@ -66,7 +66,7 @@ const SCREENS = [
   'jobs/[jobId]/items/[itemId]/index',
   'jobs/[jobId]/activity',
 ] as const;
-const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'settings/item-form'] as const;
+const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/read-plans', 'settings/item-form'] as const;
 const CAMERA = 'jobs/[jobId]/capture';
 
 function NativeStack({ signedIn }: { signedIn: boolean }) {

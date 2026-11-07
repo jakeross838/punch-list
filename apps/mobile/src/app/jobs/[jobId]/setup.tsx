@@ -1,16 +1,35 @@
 // Job Setup, laid out like Settings: the job's name and address at the top, changed in place, then
-// Locations, Companies, Team and Waiting On, one at a time. Locations come from pasting the plan's
-// room list; companies are added with the trade they do on this job; the team is who works the job
-// and as what. Tap a location, a company or a person to fix it or take it off the job. Admins change
-// the setup and close the job; everyone else sees it as it is.
+// Locations, Companies, Team and Waiting On, one at a time. Locations come from reading the plans
+// (Claude reads the rooms on each level), from pasting a room list, or typed in at the end of each
+// level; levels are added, renamed and put in order here too. Companies are added with the trade
+// they do on this job; the team is who works the job and as what. Tap a location, a company or a
+// person to fix it or take it off the job. Admins change the setup and close the job; everyone else
+// sees it as it is.
 
-import { floorOf, isAdmin, parseRoomList, PART_LABELS, SHARED_GROUP, TEAM_PARTS, teamInOrder, type Location, type TeamPart } from '@punch/core';
+import {
+  isAdmin,
+  levelName,
+  locationGroups,
+  moveLevel,
+  newLocation,
+  parseRoomList,
+  PART_LABELS,
+  SHARED_AREAS,
+  SHARED_GROUP,
+  TEAM_PARTS,
+  teamInOrder,
+  type Location,
+  type LocationGroup,
+  type LocationKind,
+  type TeamPart,
+} from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { colors, layout, type as typeScale } from '@/constants/theme';
+import { useCanReadPlans } from '@/ai/readPlans';
 import { DragList } from '@/components/DragList';
-import { CompanySheet, JobFields, LocationSheet, type Pairing } from '@/components/SetupSheets';
+import { CompanySheet, JobFields, LevelSheet, levelKey, LocationSheet, type LevelChoice, type Pairing } from '@/components/SetupSheets';
 import { useData } from '@/data/api';
 import {
   SheetScroll,
@@ -29,6 +48,7 @@ import {
   Text,
   Touchable,
   useFeedback,
+  type IconName,
   type Option,
 } from '@/ui';
 
@@ -46,7 +66,17 @@ export default function SetupScreen() {
   const [sheet, setSheet] = useState<'rooms' | 'company' | null>(null);
   // The one being fixed stays set while its sheet slides away.
   const [location, setLocation] = useState<{ id: string; open: boolean } | null>(null);
+  const [level, setLevel] = useState<{ name: string; floor: string | null; open: boolean } | null>(null);
   const [company, setCompany] = useState<(Pairing & { open: boolean }) | null>(null);
+  // Levels just added, with nothing on them yet.
+  const [newLevels, setNewLevels] = useState<string[]>([]);
+  const locations = data.useLocations(jobId);
+  const groups = useMemo(() => locationGroups(locations.filter((l) => l.active)), [locations]);
+  const levelChoices = useMemo<LevelChoice[]>(() => {
+    const rooms = groups.filter((g) => !g.shared).map((g) => ({ name: g.name, floor: g.locations[0]?.floor ?? null, kind: 'room' as LocationKind }));
+    const fresh = newLevels.filter((n) => !rooms.some((r) => r.name.toLowerCase() === n.toLowerCase())).map((n) => ({ name: n, floor: n, kind: 'room' as LocationKind }));
+    return [...rooms, ...fresh, { name: SHARED_GROUP, floor: null, kind: 'shared' as LocationKind }].map((l) => ({ ...l, key: levelKey(l) }));
+  }, [groups, newLevels]);
 
   return (
     <Page title="Job Setup" eyebrow="Locations, companies, team" crumb={[job?.name ?? 'Job', 'Job Setup']} backLabel={job?.name} subtitle={admin ? undefined : 'Only an admin changes the setup.'} tab={{ active: 'jobs', jobId }}>
@@ -65,7 +95,16 @@ export default function SetupScreen() {
         />
       </View>
       {tab === 'rooms' ? (
-        <RoomsTab jobId={jobId} admin={admin} onPaste={() => setSheet('rooms')} onOpen={(id) => setLocation({ id, open: true })} />
+        <RoomsTab
+          jobId={jobId}
+          admin={admin}
+          groups={groups}
+          newLevels={newLevels}
+          onNewLevels={setNewLevels}
+          onPaste={() => setSheet('rooms')}
+          onOpen={(id) => setLocation({ id, open: true })}
+          onRename={(g) => setLevel({ name: g.name, floor: g.locations[0]?.floor ?? null, open: true })}
+        />
       ) : null}
       {tab === 'companies' ? (
         <CompaniesTab jobId={jobId} admin={admin} onAdd={() => setSheet('company')} onOpen={(pairing) => setCompany({ ...pairing, open: true })} />
@@ -112,8 +151,16 @@ export default function SetupScreen() {
       <LocationSheet
         jobId={jobId}
         locationId={location?.id ?? null}
+        levels={levelChoices}
         visible={!!location?.open}
         onClose={() => setLocation((l) => (l ? { ...l, open: false } : l))}
+      />
+      <LevelSheet
+        jobId={jobId}
+        level={level}
+        levels={levelChoices.filter((l) => l.kind === 'room').map((l) => l.name)}
+        visible={!!level?.open}
+        onClose={() => setLevel((l) => (l ? { ...l, open: false } : l))}
       />
       <CompanySheet jobId={jobId} pairing={company} visible={!!company?.open} onClose={() => setCompany((c) => (c ? { ...c, open: false } : c))} />
     </Page>
@@ -125,23 +172,43 @@ function countOf(n: number, noun: string): string {
   return `${n} ${n === 1 ? noun : plural}`;
 }
 
-function floorsOf(locations: Location[]): { name: string; rooms: Location[] }[] {
-  const out: { name: string; rooms: Location[] }[] = [];
-  for (const l of [...locations].sort((a, b) => a.sortOrder - b.sortOrder)) {
-    const name = floorOf(l);
-    const group = out.find((g) => g.name === name);
-    if (group) group.rooms.push(l);
-    else out.push({ name, rooms: [l] });
-  }
-  return out;
-}
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-function RoomsTab({ jobId, admin, onPaste, onOpen }: { jobId: string; admin: boolean; onPaste: () => void; onOpen: (id: string) => void }) {
+function RoomsTab({
+  jobId,
+  admin,
+  groups,
+  newLevels,
+  onNewLevels,
+  onPaste,
+  onOpen,
+  onRename,
+}: {
+  jobId: string;
+  admin: boolean;
+  /** The job's locations by level, in walk order. */
+  groups: LocationGroup<Location>[];
+  newLevels: string[];
+  onNewLevels: (levels: string[]) => void;
+  onPaste: () => void;
+  onOpen: (id: string) => void;
+  onRename: (group: LocationGroup<Location>) => void;
+}) {
   const data = useData();
+  const feedback = useFeedback();
+  const canRead = useCanReadPlans();
   const locations = data.useLocations(jobId);
-  const floors = useMemo(() => floorsOf(locations.filter((l) => l.active)), [locations]);
   // Putting the locations in walk order: drag the lines at the end of each row.
   const [ordering, setOrdering] = useState(false);
+  // The level whose Add row the keyboard goes to next: one just added, or just given its first location.
+  const [typingIn, setTypingIn] = useState<string | null>(null);
+  const levels = groups.filter((g) => !g.shared);
+  const shared = groups.find((g) => g.shared);
+  // A level just added waits here for its first location; a job with none starts with Level 1.
+  const waiting = newLevels.filter((n) => !levels.some((l) => l.name.toLowerCase() === n.toLowerCase()));
+  const empty = levels.length === 0 && waiting.length === 0 ? ['Level 1'] : waiting;
+  const allNames = [...levels.map((l) => l.name), ...empty];
+
   const drop = (rooms: Location[], key: string, before: string | null) => {
     const rest = rooms.filter((r) => r.id !== key);
     const at = before === null ? rest.length : rest.findIndex((r) => r.id === before);
@@ -151,57 +218,248 @@ function RoomsTab({ jobId, admin, onPaste, onOpen }: { jobId: string; admin: boo
       next.map((r) => r.id),
     );
   };
+
+  /** Adds what was typed at the end of a level: the problem with it, or null once it is added. */
+  async function addTo(place: { floor: string | null; kind: LocationKind }, text: string): Promise<string | null> {
+    const got = newLocation(text, locations);
+    if ('problem' in got) return got.problem;
+    if (got.restore) {
+      await data.updateLocation(got.restore, { active: true });
+      await data.moveLocation(got.restore, place);
+    } else {
+      await data.addLocations(jobId, [{ name: got.name, number: got.number, label: got.label, ...place, sortOrder: 1 }]);
+    }
+    // A level just added is one of the job's now, and the typing goes on there.
+    if (place.floor && newLevels.includes(place.floor)) {
+      onNewLevels(newLevels.filter((n) => n !== place.floor));
+      setTypingIn(place.floor);
+    }
+    haptic.tap();
+    return null;
+  }
+
+  function addLevel(text: string): string | null {
+    const got = levelName(text, allNames);
+    if ('problem' in got) return got.problem;
+    haptic.tap();
+    onNewLevels([...newLevels.filter((n) => n.toLowerCase() !== got.name.toLowerCase()), got.name]);
+    setTypingIn(got.name);
+    return null;
+  }
+
+  async function addOutside() {
+    const have = new Set(locations.filter((l) => l.active).map((l) => l.label.toLowerCase()));
+    const missing = SHARED_AREAS.filter((a) => !have.has(a.toLowerCase()));
+    const added = await data.addLocations(
+      jobId,
+      missing.map((name) => ({ name, number: null, label: name, floor: null, kind: 'shared', sortOrder: 1 })),
+    );
+    haptic.success();
+    feedback.toast({ message: `${plural(added, 'area', 'areas')} added outside and across the house` });
+  }
+
+  function levelMenu(group: LocationGroup<Location>) {
+    const live = groups.flatMap((g) => g.locations);
+    const move = (by: -1 | 1) => {
+      const next = moveLevel(live, group.name, by);
+      if (!next) return;
+      haptic.tap();
+      void data.reorderLocations(
+        jobId,
+        next.map((l) => l.id),
+      );
+    };
+    const at = levels.findIndex((l) => l.name === group.name);
+    feedback.actionSheet({
+      title: group.name,
+      actions: [
+        { label: group.locations[0]?.floor === null ? 'Name This Level' : 'Rename Level', onPress: () => onRename(group) },
+        ...(at > 0 ? [{ label: 'Move Up', onPress: () => move(-1) }] : []),
+        ...(at >= 0 && at < levels.length - 1 ? [{ label: 'Move Down', onPress: () => move(1) }] : []),
+      ],
+    });
+  }
+
+  const count = (g: LocationGroup<Location>) => (
+    <Text variant="subheadline" color={colors.secondary} tabular>
+      {plural(g.locations.length, 'location', 'locations')}
+    </Text>
+  );
+
+  const rows = (g: LocationGroup<Location>) =>
+    ordering ? (
+      <DragList
+        data={g.locations}
+        keyOf={(r) => r.id}
+        onDrop={(key, before) => drop(g.locations, key, before)}
+        testID={`reorder-${g.name}`}
+        renderRow={(room, handle) => <ListRow title={room.label} right={handle} testID={`setup-location-${room.id}`} />}
+      />
+    ) : (
+      g.locations.map((room) => (
+        <ListRow
+          key={room.id}
+          title={room.label}
+          accessory={admin ? 'chevron' : 'none'}
+          onPress={admin ? () => onOpen(room.id) : undefined}
+          testID={`setup-location-${room.id}`}
+        />
+      ))
+    );
+
   return (
     <>
       {admin ? (
         <View style={styles.action}>
+          {canRead ? (
+            <Button icon="map" label="Read the Plans" onPress={() => router.push({ pathname: '/jobs/[jobId]/read-plans', params: { jobId } })} testID="read-plans" />
+          ) : null}
           <View style={styles.actionRow}>
             <View style={{ flex: 1 }}>
-              <Button variant="tinted" icon="plus" label="Paste Locations" onPress={onPaste} testID="paste-rooms" />
+              <Button variant="tinted" icon="clipboard" label="Paste a List" onPress={onPaste} testID="paste-rooms" />
             </View>
-            {floors.length > 0 ? (
-              <Button variant={ordering ? 'filled' : 'tinted'} label={ordering ? 'Done' : 'Reorder'} onPress={() => setOrdering((o) => !o)} testID="reorder-rooms" />
+            {levels.length > 0 || shared ? (
+              <View style={{ flex: 1 }}>
+                <Button variant={ordering ? 'filled' : 'tinted'} icon={ordering ? undefined : 'handle'} label={ordering ? 'Done' : 'Reorder'} onPress={() => setOrdering((o) => !o)} testID="reorder-rooms" />
+              </View>
             ) : null}
           </View>
           <Text variant="footnote" color={colors.secondary} style={styles.actionNote}>
-            {ordering ? 'Drag the lines to set the walk order on each level.' : 'From the plans, one on each line.'}
+            {ordering
+              ? 'Drag the lines to set the walk order on each level.'
+              : canRead
+                ? 'Claude reads the rooms on each level from the plan PDF or pictures of the sheets. Or type each one in at the end of its level.'
+                : 'Paste the room list from the plans, or type each one in at the end of its level.'}
           </Text>
         </View>
       ) : null}
-      {floors.length === 0 ? <EmptyState icon="door" title="No Locations Yet" message="Paste them from the plans, or type each one in as you walk." /> : null}
-      {floors.map((floor) => (
+      {!admin && groups.length === 0 ? <EmptyState icon="door" title="No Locations Yet" message="An admin sets them up from the plans, or they are typed in on the walk." /> : null}
+      {levels.map((g) => (
         <ListSection
-          key={floor.name}
+          key={`r:${g.name}`}
           variant="plain"
-          header={floor.name}
+          header={g.name}
           headerRight={
-            <Text variant="subheadline" color={colors.secondary} tabular>
-              {countOf(floor.rooms.length, 'location')}
-            </Text>
+            <View style={styles.headerRight}>
+              {count(g)}
+              {admin && !ordering ? (
+                <Touchable feedback="opacity" hitSlop={10} onPress={() => levelMenu(g)} accessibilityRole="button" accessibilityLabel={`Change ${g.name}`} testID={`level-${g.name}`}>
+                  <Icon name="ellipsis" size={20} color={colors.tint} />
+                </Touchable>
+              ) : null}
+            </View>
           }
         >
-          {ordering ? (
-            <DragList
-              data={floor.rooms}
-              keyOf={(r) => r.id}
-              onDrop={(key, before) => drop(floor.rooms, key, before)}
-              testID={`reorder-${floor.name}`}
-              renderRow={(room, handle) => <ListRow title={room.label} right={handle} testID={`setup-location-${room.id}`} />}
-            />
-          ) : (
-            floor.rooms.map((room) => (
-              <ListRow
-                key={room.id}
-                title={room.label}
-                accessory={admin ? 'chevron' : 'none'}
-                onPress={admin ? () => onOpen(room.id) : undefined}
-                testID={`setup-location-${room.id}`}
-              />
-            ))
-          )}
+          {rows(g)}
+          {admin && !ordering ? (
+            <AddRow placeholder={`Add to ${g.name}`} autoFocus={typingIn === g.name} onAdd={(t) => addTo({ floor: g.locations[0]?.floor ?? null, kind: 'room' }, t)} testID={`add-to-${g.name}`} />
+          ) : null}
         </ListSection>
       ))}
+      {admin && !ordering
+        ? empty.map((name) => (
+            <ListSection key={`new:${name}`} variant="plain" header={name} footer={levels.length === 0 ? 'Type each location on this level, like Kitchen 109, and press Return for the next.' : 'Nothing on it yet.'}>
+              <AddRow placeholder={`Add to ${name}`} autoFocus={typingIn === name} onAdd={(t) => addTo({ floor: name, kind: 'room' }, t)} testID={`add-to-${name}`} />
+            </ListSection>
+          ))
+        : null}
+      {admin && !ordering ? (
+        <ListSection variant="plain">
+          <AddRow placeholder={`Add a Level, like Level ${allNames.length + 1}`} icon="rooms" onAdd={async (t) => addLevel(t)} testID="add-level" />
+        </ListSection>
+      ) : null}
+      {shared ? (
+        <ListSection key="shared" variant="plain" header={shared.name} headerRight={count(shared)}>
+          {rows(shared)}
+          {admin && !ordering ? <AddRow placeholder="Add an Area, like Dock" onAdd={(t) => addTo({ floor: null, kind: 'shared' }, t)} testID="add-outside-area" /> : null}
+        </ListSection>
+      ) : admin && !ordering ? (
+        <ListSection variant="plain" header={SHARED_GROUP} footer={`${SHARED_AREAS.slice(0, -1).join(', ')} and ${SHARED_AREAS[SHARED_AREAS.length - 1]}.`}>
+          <ListRow title="Add the Areas Outside" icon="plus" tone="tint" onPress={() => void addOutside()} testID="add-outside" />
+        </ListSection>
+      ) : null}
     </>
+  );
+}
+
+/**
+ * The row at the end of a level for typing its next location in. Return adds it and keeps the
+ * keyboard up for the next one; what cannot be added says why under it.
+ */
+function AddRow({
+  placeholder,
+  onAdd,
+  icon = 'plus.circle.fill',
+  autoFocus,
+  testID,
+}: {
+  placeholder: string;
+  onAdd: (text: string) => Promise<string | null>;
+  icon?: IconName;
+  autoFocus?: boolean;
+  testID: string;
+}) {
+  const [text, setText] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const clean = text.trim();
+
+  /** given: what the field held when Return was pressed, which may be ahead of what this screen has seen. */
+  async function add(given?: string) {
+    const value = (given ?? text).trim();
+    if (value === '' || saving) return;
+    setSaving(true);
+    try {
+      const why = await onAdd(value);
+      if (why) {
+        haptic.warning();
+        setProblem(why);
+        return;
+      }
+      setText('');
+      setProblem(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <View>
+      <View style={styles.addRow}>
+        <Icon name={icon} size={22} color={clean ? colors.tint : colors.chevron} />
+        <TextInput
+          value={text}
+          onChangeText={(t) => {
+            setText(t);
+            setProblem(null);
+          }}
+          onSubmitEditing={(e) => void add(e.nativeEvent.text)}
+          submitBehavior="submit"
+          placeholder={placeholder}
+          placeholderTextColor={colors.placeholder}
+          selectionColor={colors.tint}
+          autoCapitalize="words"
+          autoCorrect={false}
+          autoFocus={autoFocus}
+          returnKeyType="next"
+          accessibilityLabel={placeholder}
+          testID={testID}
+          style={styles.addInput}
+        />
+        {clean ? (
+          <Touchable feedback="opacity" onPress={() => void add()} accessibilityRole="button" accessibilityLabel="Add" hitSlop={10} testID={`${testID}-add`}>
+            <Text weight="600" color={colors.tint}>
+              Add
+            </Text>
+          </Touchable>
+        ) : null}
+      </View>
+      {problem ? (
+        <Text variant="footnote" color={colors.destructive} style={styles.problem} accessibilityLiveRegion="polite" testID={`${testID}-problem`}>
+          {problem}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -581,6 +839,8 @@ const styles = StyleSheet.create({
   action: { marginHorizontal: layout.inset, gap: 8, marginBottom: 6 },
   actionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   actionNote: { paddingHorizontal: 4 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  problem: { paddingHorizontal: layout.rowPadding, paddingBottom: 10, backgroundColor: colors.cell },
   sheetContent: { paddingTop: 4, paddingBottom: 48 },
   closeJob: { marginTop: 36 },
   addRow: {
@@ -588,8 +848,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingRight: layout.inset,
-    backgroundColor: colors.background,
+    paddingHorizontal: layout.rowPadding,
+    backgroundColor: colors.cell,
   },
   addInput: { ...typeScale.body, flex: 1, minHeight: layout.rowMinHeight, color: colors.label, outlineWidth: 0 },
 });

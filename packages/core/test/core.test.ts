@@ -96,7 +96,7 @@ describe('fixing a location or a company in Job Setup', () => {
   it('says why a location name cannot be used', () => {
     expect(renameLocation('  ', 'r2', rooms)).toEqual({ problem: 'Type a name, like Kitchen 109.' });
     expect(renameLocation('kitchen 109', 'r2', rooms)).toEqual({ problem: 'Kitchen 109 is already a location on this job.' });
-    expect(renameLocation('Study 303', 'r2', rooms)).toEqual({ problem: 'Study 303 was removed from this job. Add it again with Paste Locations.' });
+    expect(renameLocation('Study 303', 'r2', rooms)).toEqual({ problem: 'Study 303 was removed from this job. Add it again at the end of a level to bring it back.' });
   });
 
   it('keeps items waiting on a company that is renamed', () => {

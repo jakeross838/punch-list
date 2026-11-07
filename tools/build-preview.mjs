@@ -14,11 +14,17 @@ const out = join(root, 'local', 'preview', 'index.html');
 
 let html = readFileSync(join(dist, 'index.html'), 'utf8');
 
-// Absolute script tags become inline scripts, in the same order.
+// Absolute script tags become inline scripts, in the same order. Inside an inline script the page
+// must never see </script, nor <!-- (which with a later <script in the code would swallow the rest
+// of the page), and the PDF reader's start of a PDF file is not to look like a PDF inside the page:
+// each is written another way that means the same in a string or a pattern.
 const scripts = [...html.matchAll(/<script src="(\/_expo\/[^"]+)" defer><\/script>/g)];
 if (scripts.length === 0) throw new Error('No exported scripts found in dist/index.html');
 for (const [tag, src] of scripts) {
-  const code = readFileSync(join(dist, src), 'utf8').replace(/<\/script/gi, '<\\/script');
+  const code = readFileSync(join(dist, src), 'utf8')
+    .replace(/<\/script/gi, '<\\/script')
+    .replace(/<!--/g, '<\\x21--')
+    .replace(/%PDF-/g, '%\\x50DF-');
   html = html.replace(tag, () => `<script>${code}</script>`);
 }
 html = html.replace(/<link rel="icon"[^>]*>/, '').replace('<title>Punch List</title>', '<title>Punch List Preview</title>');

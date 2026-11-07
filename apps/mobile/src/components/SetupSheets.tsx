@@ -1,9 +1,10 @@
 // Fixing a job's setup where it is: the job's name and address change right in place, and tapping a
-// location or a company opens it to rename it, change the trade it does on this job, or take it off
-// the job. Nothing is deleted: a location removed from the job stays in the history, and Undo puts
-// either one back. Neither can come off while it still has open items.
+// location or a company opens it to rename it, move it to another level, change the trade it does on
+// this job, or take it off the job. A level is renamed in its own sheet. Nothing is deleted: a
+// location removed from the job stays in the history, and Undo puts either one back. Neither can
+// come off while it still has open items.
 
-import { renameLocation, type Job } from '@punch/core';
+import { levelName, renameLocation, SHARED_GROUP, type Job, type LocationKind } from '@punch/core';
 import { router } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import { StyleSheet, type TextInput } from 'react-native';
@@ -20,6 +21,13 @@ export function JobFields({ job, editable = true }: { job: Job; editable?: boole
   const [name, setName] = useState(job.name);
   const [address, setAddress] = useState(job.address);
   const addressField = useRef<ComponentRef<typeof TextInput>>(null);
+  // Changed somewhere else (read from the plans): the fields show it.
+  const [was, setWas] = useState({ name: job.name, address: job.address });
+  if (was.name !== job.name || was.address !== job.address) {
+    setWas({ name: job.name, address: job.address });
+    if (job.name !== was.name) setName(job.name);
+    if (job.address !== was.address) setAddress(job.address);
+  }
 
   function saveName() {
     const clean = oneLine(name);
@@ -78,32 +86,64 @@ export function JobFields({ job, editable = true }: { job: Job; editable?: boole
   );
 }
 
-export function LocationSheet({ jobId, locationId, visible, onClose }: { jobId: string; locationId: string | null; visible: boolean; onClose: () => void }) {
+/** A level as the Location sheet offers it: where a location can be moved. */
+export interface LevelChoice {
+  key: string;
+  name: string;
+  floor: string | null;
+  kind: LocationKind;
+}
+
+export const levelKey = (place: { floor: string | null; kind: LocationKind }) => (place.kind === 'shared' ? 's:' : `r:${(place.floor ?? '').toLowerCase()}`);
+
+export function LocationSheet({
+  jobId,
+  locationId,
+  levels,
+  visible,
+  onClose,
+}: {
+  jobId: string;
+  locationId: string | null;
+  /** The levels it can be on: the job's, any just added with nothing on them yet, and Outside and Whole House. */
+  levels: LevelChoice[];
+  visible: boolean;
+  onClose: () => void;
+}) {
   const data = useData();
   const feedback = useFeedback();
   const locations = data.useLocations(jobId);
   const items = data.useItems(jobId);
   const location = locations.find((l) => l.id === locationId);
   const [text, setText] = useState('');
+  const [level, setLevel] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const [loaded, setLoaded] = useState<string | null>(null);
 
   // Fill the form for the location being opened, once per opening.
   const key = visible && location ? location.id : null;
   if (key !== loaded) {
     setLoaded(key);
-    if (location) setText(location.label);
+    if (location) {
+      setText(location.label);
+      setLevel(levelKey(location));
+    }
   }
 
   const result = location ? renameLocation(text, location.id, locations) : null;
   const problem = result && 'problem' in result ? result.problem : null;
   const renamed = result && !('problem' in result) && location && result.label !== location.label ? result : null;
+  const moved = location && level !== null && level !== levelKey(location) ? levels.find((l) => l.key === level) ?? null : null;
+  const here = levels.find((l) => l.key === level);
   const open = location ? items.filter((i) => i.locationId === location.id && i.status === 'open').length : 0;
 
   async function save() {
-    if (!location || !renamed) return;
-    await data.updateLocation(location.id, { name: renamed.name, number: renamed.number, label: renamed.label });
+    if (!location || problem || (!renamed && !moved)) return;
+    if (renamed) await data.updateLocation(location.id, { name: renamed.name, number: renamed.number, label: renamed.label });
+    if (moved) await data.moveLocation(location.id, { floor: moved.floor, kind: moved.kind });
     haptic.success();
-    feedback.toast({ message: `Saved ${renamed.label}` });
+    const label = renamed?.label ?? location.label;
+    feedback.toast({ message: moved ? `Moved ${label} to ${moved.name}` : `Saved ${label}` });
     onClose();
   }
 
@@ -122,8 +162,8 @@ export function LocationSheet({ jobId, locationId, visible, onClose }: { jobId: 
       onClose={onClose}
       title="Location"
       left={{ label: 'Cancel', onPress: onClose, testID: 'location-cancel' }}
-      right={{ label: 'Save', variant: 'prominent', onPress: () => void save(), disabled: !renamed, testID: 'location-save' }}
-      dirty={!!location && text !== location.label}
+      right={{ label: 'Save', variant: 'prominent', onPress: () => void save(), disabled: !!problem || (!renamed && !moved), testID: 'location-save' }}
+      dirty={!!location && (text !== location.label || !!moved)}
       what="this location"
     >
       <SheetScroll contentContainerStyle={styles.content}>
@@ -140,10 +180,91 @@ export function LocationSheet({ jobId, locationId, visible, onClose }: { jobId: 
             testID="field-location"
           />
         </ListSection>
+        <ListSection footer="Moving it puts it at the end of that level in the walk.">
+          <ListRow title="Level" value={here?.name ?? SHARED_GROUP} accessory="chevron" onPress={() => setPicking(true)} testID="pick-location-level" />
+        </ListSection>
         <ListSection
           footer={open > 0 ? `It has ${itemCount(open)}. Finish them or move them to another location first.` : 'Its completed items stay in the history.'}
         >
           <ListRow title="Remove from Job" tone="destructive" disabled={open > 0} onPress={removeFromJob} testID="location-remove" />
+        </ListSection>
+      </SheetScroll>
+      <OptionPicker
+        visible={picking}
+        title="Level"
+        options={levels.map((l) => ({ value: l.key, label: l.name }))}
+        value={level}
+        onSelect={(v) => {
+          setLevel(v);
+          setPicking(false);
+        }}
+        onClose={() => setPicking(false)}
+      />
+    </Sheet>
+  );
+}
+
+/** A level's name, changed for every location on it. */
+export function LevelSheet({
+  jobId,
+  level,
+  levels,
+  visible,
+  onClose,
+}: {
+  jobId: string;
+  /** The level being renamed: its name as shown, and its floor (null for Locations, those with no level). */
+  level: { name: string; floor: string | null } | null;
+  /** Every level's name on the job, to keep them apart. */
+  levels: string[];
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const data = useData();
+  const feedback = useFeedback();
+  const [text, setText] = useState('');
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const key = visible && level ? level.name : null;
+  if (key !== loaded) {
+    setLoaded(key);
+    if (level) setText(level.floor === null ? '' : level.name);
+  }
+  const result = level ? levelName(text, levels, level.name) : null;
+  const problem = text.trim() !== '' && result && 'problem' in result ? result.problem : null;
+  const name = result && 'name' in result && result.name !== level?.floor ? result.name : null;
+
+  async function save() {
+    if (!level || !name) return;
+    await data.renameLevel(jobId, level.floor, name);
+    haptic.success();
+    feedback.toast({ message: `Renamed ${level.name} to ${name}` });
+    onClose();
+  }
+
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Level"
+      left={{ label: 'Cancel', onPress: onClose, testID: 'level-cancel' }}
+      right={{ label: 'Save', variant: 'prominent', onPress: () => void save(), disabled: !name, testID: 'level-save' }}
+      dirty={!!level && text !== (level.floor === null ? '' : level.name)}
+      what="the level's name"
+    >
+      <SheetScroll contentContainerStyle={styles.content}>
+        <ListSection footer={problem ?? 'Every location on it moves with the new name.'} footerTone={problem ? 'danger' : 'default'}>
+          <ListTextField
+            placeholder="Level 1"
+            value={text}
+            onChangeText={setText}
+            autoFocus
+            autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={() => void save()}
+            accessibilityLabel="Level name"
+            testID="field-level"
+          />
         </ListSection>
       </SheetScroll>
     </Sheet>

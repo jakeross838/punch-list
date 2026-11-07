@@ -3,6 +3,7 @@
 // The values come from the job. Used by View and Filter and by Make a List.
 
 import {
+  inWalkOrder,
   floorOf,
   holdNames,
   KIND_LABELS,
@@ -39,7 +40,7 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
   const choices = useMemo(() => {
     const live = items.filter((i) => i.status !== 'removed' && !i.unfinished);
     const onJob = new Set(jobCompanies.map((jc) => jc.companyId));
-    const shown = [...locations].filter((l) => l.active || locationIds.includes(l.id)).sort((a, b) => a.sortOrder - b.sortOrder);
+    const shown = inWalkOrder(locations.filter((l) => l.active || locationIds.includes(l.id)));
     const levels: { floor: string; locations: typeof shown }[] = [];
     for (const l of shown) {
       const floor = floorOf(l);

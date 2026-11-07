@@ -62,7 +62,7 @@ export function parseRoomList(text: string, options: { includeShared?: boolean }
       const line = cleanLine(raw);
       if (line === '') return;
       if (line.endsWith(':')) {
-        floor = tidyName(line.slice(0, -1));
+        floor = properCase(line.slice(0, -1));
         return;
       }
       const last = line.match(NUMBER_LAST);
@@ -73,7 +73,7 @@ export function parseRoomList(text: string, options: { includeShared?: boolean }
         problems.push(`Line ${lineNo}: "${raw.trim()}" has no name`);
         return;
       }
-      const name = tidyName(rawName);
+      const name = properCase(rawName);
       const label = roomLabel(name, number);
       const key = label.toLowerCase();
       const firstSeen = seen.get(key);
@@ -108,7 +108,7 @@ export function renameLocation(
   if (!parsed) return { problem: 'Type a name, like Kitchen 109.' };
   const taken = locations.find((l) => l.id !== id && l.label.toLowerCase() === parsed.label.toLowerCase());
   if (taken?.active) return { problem: `${parsed.label} is already a location on this job.` };
-  if (taken) return { problem: `${parsed.label} was removed from this job. Add it again with Paste Locations.` };
+  if (taken) return { problem: `${parsed.label} was removed from this job. Add it again at the end of a level to bring it back.` };
   return { name: parsed.name, number: parsed.number, label: parsed.label };
 }
 
@@ -122,7 +122,7 @@ function cleanLine(raw: string): string {
 }
 
 /** Proper capitalization: each word capitalized except small joining words; words in capitals stay. */
-function tidyName(name: string): string {
+export function properCase(name: string): string {
   return name
     .trim()
     .split(' ')
@@ -143,4 +143,101 @@ export const NO_FLOOR = 'Locations';
 /** What a location is listed under on the job: its level, Outside and Whole House, or Locations when it has no level. */
 export function floorOf(location: Pick<Location, 'kind' | 'floor'>): string {
   return location.kind === 'shared' ? SHARED_GROUP : (location.floor ?? NO_FLOOR);
+}
+
+/** A level of the job as Job Setup and the walk show it: its locations in walk order. */
+export interface LocationGroup<T> {
+  /** The level's name, Outside and Whole House, or Locations for those with no level. */
+  name: string;
+  /** The outside and whole house areas: always last. */
+  shared: boolean;
+  locations: T[];
+}
+
+type Placed = Pick<Location, 'kind' | 'floor' | 'sortOrder'>;
+
+/**
+ * The job's locations by level, in walk order: the levels in the order they first come, each with
+ * its locations in order, and the outside and whole house areas last.
+ */
+export function locationGroups<T extends Placed>(locations: T[]): LocationGroup<T>[] {
+  const groups = new Map<string, LocationGroup<T>>();
+  for (const l of [...locations].sort((a, b) => a.sortOrder - b.sortOrder)) {
+    const shared = l.kind === 'shared';
+    // A level that happens to be called Outside and Whole House is still a level.
+    const key = `${shared ? 's' : 'r'}:${floorOf(l).toLowerCase()}`;
+    const group = groups.get(key);
+    if (group) group.locations.push(l);
+    else groups.set(key, { name: floorOf(l), shared, locations: [l] });
+  }
+  const all = [...groups.values()];
+  return [...all.filter((g) => !g.shared), ...all.filter((g) => g.shared)];
+}
+
+/** The locations in walk order: each one's place, from the first. */
+export function inWalkOrder<T extends Placed>(locations: T[]): T[] {
+  return locationGroups(locations).flatMap((g) => g.locations);
+}
+
+/** The level names on the job, in walk order (Locations for those with no level). */
+export function levelNames(locations: Placed[]): string[] {
+  return locationGroups(locations)
+    .filter((g) => !g.shared)
+    .map((g) => g.name);
+}
+
+/**
+ * The walk order with one level moved up (-1) or down (1) past the level next to it; the outside
+ * and whole house areas stay last. Null when it cannot move that way.
+ */
+export function moveLevel<T extends Placed>(locations: T[], level: string, by: -1 | 1): T[] | null {
+  const groups = locationGroups(locations);
+  const levels = groups.filter((g) => !g.shared);
+  const at = levels.findIndex((g) => g.name.toLowerCase() === level.toLowerCase());
+  const to = at + by;
+  if (at < 0 || to < 0 || to >= levels.length) return null;
+  [levels[at], levels[to]] = [levels[to]!, levels[at]!];
+  return [...levels, ...groups.filter((g) => g.shared)].flatMap((g) => g.locations);
+}
+
+/**
+ * The walk order with one location moved to the end of another level (floor null and kind room
+ * for Locations, kind shared for Outside and Whole House). The moved location comes back with its
+ * new level.
+ */
+export function moveToLevel<T extends Placed & { id: string }>(
+  locations: T[],
+  id: string,
+  to: { floor: string | null; kind: LocationKind },
+): T[] {
+  const last = locations.reduce((m, l) => Math.max(m, l.sortOrder), 0) + 1;
+  const floor = to.kind === 'shared' ? null : to.floor;
+  return inWalkOrder(locations.map((l) => (l.id === id ? { ...l, floor, kind: to.kind, sortOrder: last } : l)));
+}
+
+/** A level's name typed in Job Setup, with proper capitalization, or why it cannot be used. */
+export function levelName(text: string, levels: string[], current: string | null = null): { name: string } | { problem: string } {
+  const line = text.replace(/\s+/g, ' ').trim().replace(/:$/, '').trim();
+  if (!/[A-Za-z0-9]/.test(line)) return { problem: 'Type a name, like Level 2.' };
+  const name = properCase(line);
+  if (name.toLowerCase() === SHARED_GROUP.toLowerCase()) return { problem: `${SHARED_GROUP} is for the areas outside, not a level.` };
+  const taken = levels.find((l) => l.toLowerCase() === name.toLowerCase() && l.toLowerCase() !== (current ?? '').toLowerCase());
+  if (taken) return { problem: `${taken} is already a level on this job.` };
+  return { name };
+}
+
+/**
+ * A location typed in at the end of a level in Job Setup: read like a line of the pasted list, or
+ * why it cannot be added. One removed from the job before comes back.
+ */
+export function newLocation(
+  text: string,
+  locations: Pick<Location, 'id' | 'label' | 'active'>[],
+): { name: string; number: string | null; label: string; restore: string | null } | { problem: string } {
+  const line = text.replace(/\s+/g, ' ').trim().replace(/:$/, '');
+  const parsed = parseRoomList(line, { includeShared: false }).locations[0];
+  if (!parsed) return { problem: 'Type a name, like Kitchen 109.' };
+  const taken = locations.find((l) => l.label.toLowerCase() === parsed.label.toLowerCase());
+  if (taken?.active) return { problem: `${parsed.label} is already a location on this job.` };
+  return { name: parsed.name, number: parsed.number, label: parsed.label, restore: taken ? taken.id : null };
 }

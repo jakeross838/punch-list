@@ -31,6 +31,8 @@ npm run test:preview      walks the preview at iPhone size in Chromium, under th
 node tools/build-company-page.mjs   builds the company's page into apps/company-page/dist
 COMPANY_PAGE_FUNCTION=http://localhost:4320/fn node tools/build-company-page.mjs && npx tsx tools/company-page-e2e.ts
                           walks the company's page against a stand-in for its function
+npm run build:functions   writes the read-plans function's words to Claude from the core (prompt.js)
+DENO=/path/to/deno npm run test:read-plans   runs the read-plans function against stand-ins for Supabase and Claude
 npm run import:buildertrend   reads a job's Completion List from Buildertrend, read only, into local/ for loading
 npm run build:extension   parked: builds the Buildertrend extension
 npm run test:extension    parked: runs the extension in Chromium against the stand-in Buildertrend
@@ -45,6 +47,7 @@ npm run test:extension    parked: runs the extension in Chromium against the sta
 - The company's page is reached only through its link, a 64 character token after the #, so it never reaches the hosting's logs. The page talks only to the company-page function, which checks the link on every call and signs the photos for an hour; the database functions behind it are for the service role alone. A new link takes the old one back.
 - A company's confirmation is for the work as it was: changing what it is, where, who does it, when it is ready or how long it takes, or opening it again, takes it back. What the company says is done waits as To Check until someone at the builder completes it, or sends it back with Not Done Yet.
 - Anyone on a job adds its locations and companies as they walk; changing or removing them is for an admin. Only an admin closes or deletes a job.
+- A job's locations keep each level together, with the outside and whole house areas last, in the walk, the lists and Job Setup. What Claude reads from the plans is only added once someone has checked it, and the plans sent to Claude are taken out of storage once read.
 - Only someone switched on at the company marks an item complete.
 - Removing an item marks it Removed. Nothing is ever deleted, photos included, except when an admin deletes a job (it goes with everything on it, for everyone) or the last person at a company deletes their account (the whole company goes).
 - Marks are kept apart from the photo, as points on it, so the original photo is never changed.

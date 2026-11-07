@@ -11,9 +11,12 @@ import { useMemo, useSyncExternalStore } from 'react';
 import {
   companyNameProblem,
   contactProblem,
+  inWalkOrder,
   isAdmin,
   isEmail,
+  moveToLevel,
   parseRoomList,
+  readingOrder,
   releasedBy,
   renamedHoldups,
   seesJob,
@@ -29,6 +32,7 @@ import {
   type Comment,
   type Contact,
   type Item,
+  type Location,
   type Person,
   type Photo,
   type PlanSheet,
@@ -189,6 +193,16 @@ const commentDetail = (c: Comment): ActivityDetail => ({
 
 /** A new link's token: 64 random hex characters, never short enough to guess. */
 const newToken = () => `${randomUUID()}${randomUUID()}`.replace(/-/g, '').toLowerCase();
+
+/**
+ * The locations with one job's put in this order and numbered from 1 (the walk order); every other
+ * job's as they were. New ones go on the end of the list.
+ */
+function numbered(all: Location[], ordered: Location[]): Location[] {
+  const placed = new Map(ordered.map((l, i) => [l.id, l.sortOrder === i + 1 ? l : { ...l, sortOrder: i + 1 }]));
+  const had = new Set(all.map((l) => l.id));
+  return [...all.map((l) => placed.get(l.id) ?? l), ...ordered.filter((l) => !had.has(l.id)).map((l) => placed.get(l.id)!)];
+}
 
 export function makeApi(keeper: Keeper, extras: Extras): DataApi {
   const get = keeper.get;
@@ -470,7 +484,8 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       const added = parsed
         .filter((p) => !byLabel.has(p.label.toLowerCase()))
         .map((p) => ({ ...p, id: randomUUID(), jobId, active: true, sortOrder: ++order, walkedAt: null }));
-      await save({ locations: [...state.locations.map((l) => (back.has(l.id) ? { ...l, active: true } : l)), ...added] }, [
+      const job = [...existing.map((l) => (back.has(l.id) ? { ...l, active: true } : l)), ...added];
+      await save({ locations: numbered(state.locations, inWalkOrder(job)) }, [
         ...added.map((l): Happened => ({ jobId, kind: 'location_added', detail: { location_id: l.id, label: l.label } })),
         ...existing.filter((l) => back.has(l.id)).map((l): Happened => ({ jobId, kind: 'location_restored', detail: { location_id: l.id, label: l.label } })),
       ]);
@@ -490,7 +505,9 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       const id = randomUUID();
       const sortOrder = existing.reduce((m, l) => Math.max(m, l.sortOrder), 0) + 1;
       const location = { ...parsed, floor: parsed.floor ?? floor, id, jobId, active: true, sortOrder, walkedAt: null };
-      await save({ locations: [...state.locations, location] }, [{ jobId, kind: 'location_added', detail: { location_id: id, label: location.label } }]);
+      // Only an admin changes the other locations' places: for anyone else it goes on the end.
+      const locations = isAdmin(state.me) ? numbered(state.locations, inWalkOrder([...existing, location])) : [...state.locations, location];
+      await save({ locations }, [{ jobId, kind: 'location_added', detail: { location_id: id, label: location.label } }]);
       return id;
     },
     async setWalked(locationIds, walked) {
@@ -506,6 +523,67 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       const places = moving.map((l) => l.sortOrder).sort((a, b) => a - b);
       const next = new Map(moving.map((l, i) => [l.id, places[i]!]));
       await save({ locations: state.locations.map((l) => (next.has(l.id) ? { ...l, sortOrder: next.get(l.id)! } : l)) });
+    },
+    async moveLocation(id, to) {
+      const state = get();
+      adminOnly(state);
+      const was = state.locations.find((l) => l.id === id);
+      if (!was) return;
+      await save({ locations: numbered(state.locations, moveToLevel(state.locations.filter((l) => l.jobId === was.jobId), id, to)) });
+    },
+    async renameLevel(jobId, from, to) {
+      const state = get();
+      adminOnly(state);
+      const name = to.replace(/\s+/g, ' ').trim();
+      if (name === '') return;
+      const on = (l: Location) => l.jobId === jobId && l.kind === 'room' && (l.floor ?? null) === from;
+      await save({ locations: state.locations.map((l) => (on(l) ? { ...l, floor: name } : l)) });
+    },
+    async addPlanLocations(jobId, rows) {
+      const state = get();
+      adminOnly(state);
+      let job = state.locations.filter((l) => l.jobId === jobId);
+      const happened: Happened[] = [];
+      const read: string[] = [];
+      let added = 0;
+      let filledIn = 0;
+      const nameFree = (label: string, id: string) => !job.some((l) => l.id !== id && l.label.toLowerCase() === label.toLowerCase());
+      for (const row of rows) {
+        const floor = row.kind === 'shared' ? null : row.floor;
+        const place = { floor, kind: row.kind };
+        const target = row.existing ? job.find((l) => l.id === row.existing?.id && l.active) : undefined;
+        if (target) {
+          read.push(target.id);
+          // Its name only when nothing else on the job has that name.
+          const naming = target.label !== row.label && nameFree(row.label, target.id) ? { name: row.name, number: row.number, label: row.label } : null;
+          if (!naming && target.floor === floor && target.kind === row.kind) continue;
+          if (naming) happened.push({ jobId, kind: 'location_renamed', detail: { location_id: target.id, from: target.label, to: row.label } });
+          job = job.map((l) => (l.id === target.id ? { ...l, ...naming, ...place } : l));
+          filledIn += 1;
+          continue;
+        }
+        const same = job.find((l) => l.label.toLowerCase() === row.label.toLowerCase());
+        if (same?.active) {
+          read.push(same.id);
+          continue;
+        }
+        if (same) {
+          // Removed before: it comes back, where the plans put it.
+          job = job.map((l) => (l.id === same.id ? { ...l, ...place, active: true } : l));
+          happened.push({ jobId, kind: 'location_restored', detail: { location_id: same.id, label: same.label } });
+          read.push(same.id);
+          added += 1;
+          continue;
+        }
+        const id = randomUUID();
+        job.push({ id, jobId, name: row.name, number: row.number, label: row.label, ...place, sortOrder: job.length + 1, active: true, walkedAt: null });
+        happened.push({ jobId, kind: 'location_added', detail: { location_id: id, label: row.label } });
+        read.push(id);
+        added += 1;
+      }
+      const before = state.locations.filter((l) => l.jobId === jobId);
+      await save({ locations: numbered(state.locations, readingOrder(before, job, read)) }, happened);
+      return { added, filledIn };
     },
     async updateLocation(id, patch) {
       const state = get();

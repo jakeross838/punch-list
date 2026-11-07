@@ -3,6 +3,7 @@
 // and the fields added in Item Form setup. ItemEditor lays them out.
 
 import {
+  inWalkOrder,
   assigneeName,
   checkItem,
   floorOf,
@@ -176,10 +177,7 @@ export function useFormOptions(jobId: string, locationId: string) {
 
   const roomOptions = useMemo<Option[]>(
     () =>
-      [...locations]
-        .filter((l) => l.active || l.id === locationId)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((l) => ({ value: l.id, label: l.label, group: floorOf(l) })),
+      inWalkOrder(locations.filter((l) => l.active || l.id === locationId)).map((l) => ({ value: l.id, label: l.label, group: floorOf(l) })),
     [locations, locationId],
   );
   // The companies on this job first, then every other company, so any of them can be picked on a

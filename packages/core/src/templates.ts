@@ -10,7 +10,7 @@
 import { companyForTrade } from './titles';
 import { isPriced, tidyItem } from './rules';
 import { ROOM_KIND_LABELS, ROOM_KINDS, roomKind } from './roomTasks';
-import { SHARED_AREAS, type SharedArea } from './rooms';
+import { inWalkOrder, SHARED_AREAS, type SharedArea } from './rooms';
 import { firstThingsFirst, twinIn, type PlannedItem } from './copy';
 import type { ItemFields } from './rules';
 import type { Item, ItemKind, JobCompany, Location, RoomKind } from './types';
@@ -78,7 +78,7 @@ export function placeOf(location: Pick<Location, 'kind' | 'label'>): TemplatePla
 
 /** The job's locations a place fits: the area by its name, or every room of that kind. */
 export function locationsFor(place: TemplatePlace, locations: Location[]): Location[] {
-  const live = [...locations].filter((l) => l.active).sort((a, b) => a.sortOrder - b.sortOrder);
+  const live = inWalkOrder(locations.filter((l) => l.active));
   if (isRoomKind(place)) return live.filter((l) => l.kind === 'room' && roomKind(l.label) === place);
   return live.filter((l) => l.kind === 'shared' && l.label.toLowerCase() === place.toLowerCase());
 }
@@ -191,7 +191,7 @@ export function templatePlan(
     };
     return { ...tidyItem(fields), id, jobId: job.jobId, locationId, source: 'template' };
   });
-  const order = [...job.locations].sort((a, b) => a.sortOrder - b.sortOrder).map((l) => l.id);
+  const order = inWalkOrder(job.locations).map((l) => l.id);
   const counts = new Map<string, number>();
   for (const i of items) counts.set(i.locationId, (counts.get(i.locationId) ?? 0) + 1);
   const byLocation = order.filter((id) => counts.has(id)).map((locationId) => ({ locationId, count: counts.get(locationId)! }));

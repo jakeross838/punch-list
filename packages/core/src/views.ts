@@ -11,7 +11,7 @@
 import { daysBetween } from './dates';
 import { isPastDue, matchesFilters, NO_FILTERS, readFilters, sameFilters, type FilterContext, type ItemFilters } from './filters';
 import { holdLookups, holdNames, type HoldLookups } from './holds';
-import { floorOf, NO_FLOOR } from './rooms';
+import { floorOf, inWalkOrder, NO_FLOOR } from './rooms';
 import { isPriced } from './rules';
 import { NO_TIME, totalTime, type TimeTotal } from './time';
 import { assigneeKey, NOT_ASSIGNED, personOfKey } from './assignees';
@@ -231,22 +231,25 @@ function arrange(items: Item[], tradeRank?: (tradeId: string | null) => number):
   return [...sorted.filter((i) => i.status !== 'complete'), ...sorted.filter((i) => i.status === 'complete')];
 }
 
-/** Rows gathered under their floor, floors in the order they first appear. */
+/** Rows gathered under their floor, floors in the order they first appear and the outside and whole house areas last. */
 export function byFloor<T>(rows: T[], locationOf: (row: T) => Pick<Location, 'kind' | 'floor'> | undefined): { floor: string; rows: T[] }[] {
-  const out = new Map<string, T[]>();
+  const out = new Map<string, { floor: string; shared: boolean; rows: T[] }>();
   for (const row of rows) {
     const loc = locationOf(row);
     const floor = loc ? floorOf(loc) : NO_FLOOR;
-    const list = out.get(floor) ?? [];
-    list.push(row);
-    out.set(floor, list);
+    const shared = loc?.kind === 'shared';
+    const key = `${shared ? 's' : 'r'}:${floor}`;
+    const group = out.get(key) ?? { floor, shared, rows: [] };
+    group.rows.push(row);
+    out.set(key, group);
   }
-  return [...out].map(([floor, list]) => ({ floor, rows: list }));
+  const all = [...out.values()];
+  return [...all.filter((g) => !g.shared), ...all.filter((g) => g.shared)].map(({ floor, rows: list }) => ({ floor, rows: list }));
 }
 
 /** The locations around one, in floor order: for Previous and Next while walking. */
 export function neighborRooms(locations: Location[], id: string): { previous: Location | null; next: Location | null } {
-  const rooms = [...locations].filter((l) => l.active || l.id === id).sort((a, b) => a.sortOrder - b.sortOrder);
+  const rooms = inWalkOrder(locations.filter((l) => l.active || l.id === id));
   const i = rooms.findIndex((l) => l.id === id);
   if (i < 0) return { previous: null, next: null };
   return { previous: rooms[i - 1] ?? null, next: rooms[i + 1] ?? null };

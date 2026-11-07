@@ -11,7 +11,7 @@
 // Opened for one item (Add Photo on an item), the photo is marked up and goes on that item. Opened
 // from the New Item form for its photo, the photo is marked up and goes back to the form.
 
-import { floorOf } from "@punch/core";
+import { inWalkOrder, floorOf } from "@punch/core";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -68,9 +68,7 @@ export default function CaptureScreen() {
   // The locations in floor order, each saying when it is walked.
   const ordered = useMemo(
     () =>
-      [...locations]
-        .filter((l) => l.active)
-        .sort((a, b) => a.sortOrder - b.sortOrder),
+      inWalkOrder(locations.filter((l) => l.active)),
     [locations],
   );
   const roomOptions = useMemo<Option[]>(

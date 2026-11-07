@@ -1,6 +1,6 @@
 // New job, as a sheet: its name, address and Project Manager (you, unless you pick someone else).
-// Create opens the job, ready to walk: rooms are typed in on the walk, or pasted from the plans in
-// Job Setup. Only admins make jobs.
+// Create opens the job, ready to walk: rooms are typed in on the walk, or set up from the plans
+// (Claude reads them, or a room list is pasted) in Job Setup. Only admins make jobs.
 
 import { peopleInOrder } from '@punch/core';
 import { router } from 'expo-router';
@@ -45,7 +45,7 @@ export default function NewJobScreen() {
       right={[{ kind: 'button', label: 'Create', variant: 'prominent', onPress: create, testID: 'save' }]}
     >
       <ListSection
-        footer={missingName ? 'Give the job a name.' : 'Next, paste the locations from the plans and add the companies.'}
+        footer={missingName ? 'Give the job a name.' : 'Next, set up the locations from the plans and add the companies.'}
         footerTone={missingName ? 'danger' : 'default'}
       >
         <ListTextField

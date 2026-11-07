@@ -14,6 +14,8 @@
     "phase0": "tsx tools/phase0.ts",
     "test:db": "bash tools/db-test.sh",
     "test:live-writes": "tsx --tsconfig tools/live-writes.tsconfig.json tools/live-writes-db.ts",
+    "test:read-plans": "tsx tools/read-plans-check.ts",
+    "build:functions": "node tools/build-functions.mjs",
     "preview:build": "cd apps/mobile && EXPO_NO_DOTENV=1 npx expo export --platform web && cd ../.. && node tools/build-preview.mjs",
     "test:preview": "tsx tools/preview-e2e.ts",
     "import:buildertrend": "tsx tools/import-buildertrend.ts"
@@ -22,6 +24,7 @@
     "@types/chrome": "^0.3.7",
     "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
+    "pdfjs-dist": "^6.5.438",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "vitest": "^5.0.5"

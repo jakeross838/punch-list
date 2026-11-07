@@ -18,10 +18,12 @@ import type {
   JobCompany,
   ListSend,
   Location,
+  LocationKind,
   Mark,
   NewTemplateItem,
   Org,
   ParsedLocation,
+  PlanLocation,
   PlannedItem,
   Person,
   Photo,
@@ -238,6 +240,16 @@ export interface DataApi {
   setWalked(locationIds: string[], walked: boolean): Promise<void>;
   /** Admins only. The walk order: the locations given, in this order, take the places they had between them. */
   reorderLocations(jobId: string, orderedIds: string[]): Promise<void>;
+  /** Admins only. Moves a location to the end of another level, or to Outside and Whole House (kind shared). */
+  moveLocation(id: string, to: { floor: string | null; kind: LocationKind }): Promise<void>;
+  /** Admins only. Renames a level (null is the one for locations with no level): every location on it. */
+  renameLevel(jobId: string, from: string | null, to: string): Promise<void>;
+  /**
+   * Admins only. The locations read from the plans, as checked: new ones added (one removed before
+   * comes back), ones on the job filled in with their number and level, and the job put in the
+   * plans' walk order. Answers how many were added and how many filled in.
+   */
+  addPlanLocations(jobId: string, rows: PlanLocation[]): Promise<{ added: number; filledIn: number }>;
   createItem(item: NewItem): Promise<string>;
   updateItem(id: string, patch: ItemPatch): Promise<void>;
   /** Many new items at once, from Paste or a template, saved in the order given so each wait points at an item already saved. */

@@ -7,6 +7,7 @@
 // fit; copied items paste here into a location picked from the job.
 
 import {
+  inWalkOrder,
   assigneeKey,
   byFloor,
   commentCounts,
@@ -25,6 +26,7 @@ import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
+import { useCanReadPlans } from '@/ai/readPlans';
 import { useCanSuggest } from '@/ai/suggest';
 import { draftFill } from '@/components/draftFill';
 import { FilterBar } from '@/components/FilterBar';
@@ -110,6 +112,7 @@ export default function JobScreen() {
   const jobCompanies = data.useJobCompanies(jobId);
   const titles = data.useTitles();
   const canFill = useCanSuggest();
+  const canReadPlans = useCanReadPlans();
   const saved = data.useViewSettings();
   const context = useFilterContext(jobId);
   const [view, setView] = useJobView(jobId, saved);
@@ -251,7 +254,7 @@ export default function JobScreen() {
     router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
   };
   // The walk: how many locations are walked, and the next one not walked yet, in floor order.
-  const inOrder = [...locations].filter((l) => l.active).sort((a, b) => a.sortOrder - b.sortOrder);
+  const inOrder = inWalkOrder(locations.filter((l) => l.active));
   const walked = inOrder.filter((l) => l.walkedAt).length;
   const nextToWalk = inOrder.find((l) => !l.walkedAt);
   const newWalk = () => {
@@ -317,11 +320,18 @@ export default function JobScreen() {
       <EmptyState
         icon="camera"
         title="Start the Walk"
-        message="Take a photo of each thing left to do. Type the room as you go, or paste every location from the plans first."
+        message={
+          canReadPlans
+            ? 'Take a photo of each thing left to do. Type the room as you go, or have Claude read every location from the plans first.'
+            : 'Take a photo of each thing left to do. Type the room as you go, or set up every location from the plans first.'
+        }
       >
         <View style={{ marginTop: 14, gap: 10, alignSelf: 'stretch' }}>
           <Button label="Start the Walk" icon="camera" onPress={() => openCamera(null)} testID="empty-walk" />
-          <Button label="Paste the Locations From the Plans" variant="tinted" onPress={openSetup} testID="empty-setup" />
+          {canReadPlans && jobActions.admin ? (
+            <Button label="Read the Plans" icon="map" variant="tinted" onPress={() => router.push({ pathname: '/jobs/[jobId]/read-plans', params: { jobId } })} testID="empty-read-plans" />
+          ) : null}
+          <Button label={canReadPlans && jobActions.admin ? 'Set Up the Locations' : 'Set Up the Locations From the Plans'} variant="tinted" onPress={openSetup} testID="empty-setup" />
         </View>
       </EmptyState>
     ) : narrowed ? (
