@@ -20,11 +20,12 @@ export function pageUrlFor(mode: 'preview' | 'live', token: string): string {
  */
 export function stationUrlFor(mode: 'preview' | 'live', token: string, on: 'tablet' | 'tv' = 'tablet'): string {
   const site = BASE.replace(/[#/]+$/, '').replace(/\/[^/]*$/, '');
-  return `${site}/${on === 'tv' ? 'tv' : 's'}#${mode === 'preview' ? 'sample' : token}`;
+  // With the slash: the hosting answers /s itself with the company's page.
+  return `${site}/${on === 'tv' ? 'tv' : 's'}/#${mode === 'preview' ? 'sample' : token}`;
 }
 
 /** The owner's page, on the same hosting: /o. On the preview it is the sample owner's page. */
 export function ownerPageUrl(mode: 'preview' | 'live', token: string): string {
   const site = BASE.replace(/[#/]+$/, '').replace(/\/[^/]*$/, '');
-  return `${site}/o#${mode === 'preview' ? 'sample' : token}`;
+  return `${site}/o/#${mode === 'preview' ? 'sample' : token}`;
 }

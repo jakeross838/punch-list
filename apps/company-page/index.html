@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>
+  // The hosting answers /s, /tv and /o without the slash with the company's page: on to the page asked for, link and all.
+  (function () { var m = location.pathname.match(/^\/(s|tv|o)$/); if (m) location.replace('/' + m[1] + '/' + location.hash); })();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">

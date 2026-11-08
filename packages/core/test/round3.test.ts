@@ -42,6 +42,7 @@ describe("the owner's weekly update", () => {
     expect(words).toContain('Name trades, never companies');
     expect(words).toContain('Close by wishing them a good weekend');
     expect(words).toContain('Keep it positive, and single no one out');
+    expect(words).toContain('welcome to reply with anything that was missed');
     // A quiet week still says so, rather than leaving Claude to guess.
     const quiet = taskPrompt('owner-update', { ...week, done: [], waiting: [], coming: [], sent: [] });
     expect(quiet).toContain('Nothing on the list was finished this week.');

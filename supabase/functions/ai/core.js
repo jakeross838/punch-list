@@ -400,6 +400,7 @@ function ownerUpdatePrompt(input) {
     "Rules:",
     "- Write the way a builder talks to an owner: warm, plain and short. Open with their name when it is given, then what got done, what is coming, and what is needed from them, in a few short paragraphs. Close by wishing them a good weekend, then the name of who it is from.",
     "- Keep it positive, and single no one out: never blame a trade, a company or a person for anything.",
+    "- Make them feel welcome to reply with anything that was missed or does not look right.",
     "- Say what got done by room, in a sentence or two. Do not list every item, and leave out item numbers.",
     "- When something waits on the owner, ask for it plainly.",
     '- Name trades, never companies: "the painter", "the plumber".',
