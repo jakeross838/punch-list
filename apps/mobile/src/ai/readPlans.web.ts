@@ -3,13 +3,13 @@
 // with where it sits, and Claude reads that; pictures of the sheets go to Claude as pictures, whole
 // and in pieces. Hidden where the page cannot ask Claude.
 
-import { jsonIn, picturesNote, planPieces, planPrompt, plansAsText, readPlanAnswer, type PageText, type PlanReading } from '@punch/core';
+import { jsonIn, listAsText, listReadPrompt, picturesNote, planPieces, planPrompt, plansAsText, readPlanAnswer, readSayIt, type HeardItem, type ListReadInput, type PageText, type PlanReading } from '@punch/core';
 import { getDocumentAsync } from 'expo-document-picker';
 import { launchImageLibraryAsync } from 'expo-image-picker';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import * as pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 import { useSyncExternalStore } from 'react';
-import { MOST_PDF_BYTES, MOST_PICTURES, NOTHING_FOUND, PlanReadError, TOO_BIG, type PickedPlans, type PlanFile, type PlanWays } from './planFiles';
+import { MOST_PDF_BYTES, MOST_PICTURES, NOTHING_FOUND, NOTHING_ON_LIST, PlanReadError, TOO_BIG, type PickedPlans, type PlanFile, type PlanWays } from './planFiles';
 
 // The PDF is read on the page itself: the page may not start workers of its own.
 (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = pdfjsWorker;
@@ -184,4 +184,61 @@ export async function readPlans(_jobId: string, picked: PickedPlans, levels: str
   const reading = readPlanAnswer(typeof raw === 'string' ? jsonIn(raw) : raw);
   if (!reading || reading.levels.length === 0) throw new PlanReadError(NOTHING_FOUND);
   return reading;
+}
+
+/**
+ * Claude reads a punch list someone else wrote, on the viewer's account: a PDF, read here into its
+ * text, or pictures of its pages, whole. input: the job's names for Claude to match.
+ */
+export async function readList(_jobId: string, picked: PickedPlans, input: ListReadInput, onStage: (stage: 'sending' | 'reading') => void): Promise<HeardItem[]> {
+  const fn = await sample;
+  if (!fn) throw new PlanReadError('Claude is not available on this page.');
+  onStage('sending');
+  let raw: unknown;
+  try {
+    if (picked.kind === 'pdf') {
+      const f = picked.files[0];
+      if (!f?.blob) throw new PlanReadError('Pick the list first.');
+      if (f.blob.size > MOST_PDF_BYTES) throw new PlanReadError(TOO_BIG);
+      let pages: PageText[];
+      try {
+        pages = await pdfPages(await f.blob.arrayBuffer());
+      } catch (e) {
+        if (e instanceof PlanReadError) throw e;
+        throw new PlanReadError('That PDF could not be opened. Check it opens on its own, then try again.');
+      }
+      const text = listAsText(pages);
+      if (!/[A-Za-z]{3}/.test(text)) throw new PlanReadError('That PDF has no text in it to read: it is pictures of the pages. Choose pictures of the pages instead.');
+      onStage('reading');
+      raw = await fn.json(listReadPrompt(input, { text }), { modelTier: 'default' });
+    } else {
+      const images: Blob[] = [];
+      for (const f of picked.files) {
+        if (!f.blob || images.length >= mostImages) break;
+        const img = await picture(f.blob);
+        images.push(await jpeg(img, { x: 0, y: 0, width: img.naturalWidth, height: img.naturalHeight }, 1568));
+      }
+      onStage('reading');
+      raw = await fn.json(listReadPrompt(input, { pages: images.length }), { images, modelTier: 'default' });
+    }
+  } catch (e) {
+    if (e instanceof PlanReadError) throw e;
+    const code = (e as { code?: string } | null)?.code;
+    if (code === 'not_granted' || code === 'sampling_disabled') throw new PlanReadError('Claude was not allowed to read the list on this page.');
+    if (code === 'rate_limited') throw new PlanReadError('Claude is busy. Try again in a minute.');
+    if (code === 'prompt_too_large') throw new PlanReadError(TOO_BIG);
+    throw new PlanReadError('Claude did not answer. Try again.');
+  }
+  const heard = readSayIt(raw, input);
+  if (heard.length === 0) throw new PlanReadError(NOTHING_ON_LIST);
+  return heard;
+}
+
+/** A spreadsheet saved as CSV (or tab separated), its text; null when nothing was picked. */
+export async function pickTableFile(): Promise<string | null> {
+  const result = await getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/tab-separated-values', 'text/plain', '.csv', '.tsv', '.txt'], multiple: false });
+  const a = result.canceled ? null : result.assets[0];
+  if (!a) return null;
+  if ((a.size ?? 0) > 2_000_000) throw new PlanReadError('That spreadsheet is too big. Save just the rows of work as a CSV.');
+  return a.file ? a.file.text() : (await fetch(a.uri)).text();
 }

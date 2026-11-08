@@ -4,7 +4,7 @@
 // a link to each, takes the files away once Claude has read them, and sends the answer back here
 // to be checked. Read the Plans shows once the function says it is set up.
 
-import { jsonIn, planPieces, readPlanAnswer, type PlanReading } from '@punch/core';
+import { jsonIn, planPieces, readPlanAnswer, readSayIt, type HeardItem, type ListReadInput, type PlanReading } from '@punch/core';
 import { randomUUID } from 'expo-crypto';
 import { getDocumentAsync } from 'expo-document-picker';
 import { File } from 'expo-file-system';
@@ -13,7 +13,7 @@ import { launchCameraAsync, launchImageLibraryAsync, requestCameraPermissionsAsy
 import { useEffect, useSyncExternalStore } from 'react';
 import { config, isConfigured } from '@/data/config';
 import { supabase } from '@/data/powersync/supabase';
-import { MOST_PDF_BYTES, MOST_PICTURES, NOTHING_FOUND, PlanReadError, TOO_BIG, type PickedPlans, type PlanFile, type PlanWays } from './planFiles';
+import { MOST_PDF_BYTES, MOST_PICTURES, NOTHING_FOUND, NOTHING_ON_LIST, PlanReadError, TOO_BIG, type PickedPlans, type PlanFile, type PlanWays } from './planFiles';
 
 const BUCKET = 'photos';
 /** The whole sheet goes as big as Claude reads one picture. */
@@ -97,7 +97,7 @@ async function upload(token: string, uri: string, path: string, type: string): P
   });
   if (result.status < 200 || result.status >= 300) {
     console.warn('Sending the plans', result.status, result.body);
-    throw new PlanReadError(result.status === 413 ? TOO_BIG : 'The plans did not send. Check the signal and try again.');
+    throw new PlanReadError(result.status === 413 ? TOO_BIG : 'That did not send. Check the signal and try again.');
   }
 }
 
@@ -158,4 +158,61 @@ export async function readPlans(jobId: string, picked: PickedPlans, levels: stri
   const reading = readPlanAnswer(jsonIn(data.text));
   if (!reading || reading.levels.length === 0) throw new PlanReadError(NOTHING_FOUND);
   return reading;
+}
+
+/** A picture of a page of a list, whole, no longer than a whole sheet of the plans, as a JPEG. */
+async function wholePage(uri: string): Promise<string> {
+  const whole = await ImageManipulator.manipulate(uri).renderAsync();
+  const long = Math.max(whole.width, whole.height);
+  const small =
+    long > WHOLE_SIDE
+      ? await ImageManipulator.manipulate(uri)
+          .resize(whole.width >= whole.height ? { width: WHOLE_SIDE, height: null } : { width: null, height: WHOLE_SIDE })
+          .renderAsync()
+      : whole;
+  return (await small.saveAsync({ compress: 0.85, format: SaveFormat.JPEG })).uri;
+}
+
+/**
+ * Claude reads a punch list someone else wrote: a PDF, or pictures of its pages, through the same
+ * function as the plans. input: the job's names for Claude to match. Answers with what it found,
+ * to check before anything is added. Throws a PlanReadError that says what went wrong.
+ */
+export async function readList(jobId: string, picked: PickedPlans, input: ListReadInput, onStage: (stage: 'sending' | 'reading') => void): Promise<HeardItem[]> {
+  const { data: session } = await supabase.auth.getSession();
+  const token = session.session?.access_token;
+  if (!token) throw new PlanReadError('Sign in again to read the list.');
+  onStage('sending');
+  const batch = randomUUID();
+  const files: { path: string; type: 'pdf' | 'jpeg' }[] = [];
+  if (picked.kind === 'pdf') {
+    const f = picked.files[0];
+    if (!f) throw new PlanReadError('Pick the list first.');
+    if ((f.size ?? 0) > MOST_PDF_BYTES) throw new PlanReadError(TOO_BIG);
+    const path = `${jobId}/plans/read-${batch}.pdf`;
+    await upload(token, f.uri, path, 'application/pdf');
+    files.push({ path, type: 'pdf' });
+  } else {
+    for (const [i, f] of picked.files.entries()) {
+      const path = `${jobId}/plans/read-${batch}-${i + 1}-0.jpg`;
+      await upload(token, await wholePage(f.uri), path, 'image/jpeg');
+      files.push({ path, type: 'jpeg' });
+    }
+  }
+  onStage('reading');
+  const { data, error } = await supabase.functions.invoke<{ text?: string; error?: string }>('read-plans', { body: { kind: 'list', jobId, files, input } });
+  if (error || !data) throw new PlanReadError('Claude could not be reached. Check the signal and try again.');
+  if (data.error || !data.text) throw new PlanReadError(data.error ? `${data.error}.` : NOTHING_ON_LIST);
+  const heard = readSayIt(data.text, input);
+  if (heard.length === 0) throw new PlanReadError(NOTHING_ON_LIST);
+  return heard;
+}
+
+/** A spreadsheet saved as CSV (or tab separated), its text; null when nothing was picked. */
+export async function pickTableFile(): Promise<string | null> {
+  const result = await getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/tab-separated-values', 'text/plain', 'public.comma-separated-values-text'], copyToCacheDirectory: true, multiple: false });
+  const a = result.canceled ? null : result.assets[0];
+  if (!a) return null;
+  if ((a.size ?? 0) > 2_000_000) throw new PlanReadError('That spreadsheet is too big. Save just the rows of work as a CSV.');
+  return new File(a.uri).text();
 }

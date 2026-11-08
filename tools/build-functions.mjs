@@ -18,7 +18,7 @@ const functions = join(root, 'supabase', 'functions');
 /** Each function that asks Claude, and what it takes from the core. */
 const FUNCTIONS = {
   ai: { from: 'claude.ts', names: ['CLAUDE_MODELS', 'CLAUDE_TASKS', 'costCents', 'isClaudeTask', 'taskPrompt'] },
-  'read-plans': { from: 'planReading.ts', names: ['picturesNote', 'planPrompt'], also: { 'claude.ts': ['CLAUDE_MODELS', 'costCents'] } },
+  'read-plans': { from: 'planReading.ts', names: ['picturesNote', 'planPrompt'], also: { 'claude.ts': ['CLAUDE_MODELS', 'costCents', 'listReadInput', 'listReadPrompt'] } },
 };
 
 async function coreFile(spec) {

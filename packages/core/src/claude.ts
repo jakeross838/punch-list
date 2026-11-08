@@ -11,6 +11,7 @@ import { jsonIn } from './planReading';
 import { TITLE_MAX } from './rules';
 import { describeMarks, suggestPrompt, type SuggestContext } from './suggest';
 import { tidyTitle } from './titles';
+import type { ColumnMap } from './spreadsheet';
 import type { Mark } from './types';
 
 /** Haiku for quick text work; Sonnet for photos and anything that needs judgment. */
@@ -289,6 +290,194 @@ export function standardTitlePrompt(input: StandardTitleInput): string {
   ].join('\n');
 }
 
+// ---------- a punch list someone else wrote, read into items ----------
+
+/** What reading a punch list goes by: the job's locations, companies, team and standard titles. */
+export type ListReadInput = Omit<SayItInput, 'words' | 'here'>;
+
+export function listReadInput(v: unknown): ListReadInput {
+  const { words: _words, here: _here, ...rest } = sayItInput({ ...record(v), words: '' });
+  return rest;
+}
+
+/**
+ * The words for reading a punch list someone else wrote: a PDF or pictures of its pages, attached,
+ * or its text below. pages: how many pictures of pages go with it.
+ */
+export function listReadPrompt(input: ListReadInput, options: { text?: string; pages?: number } = {}): string {
+  const lines = [
+    "This is a punch list for a house being built: a list of work left to do, written by someone else, like a superintendent, the owner, the designer or an inspector. Turn each thing on it into an item on the job's running list of work.",
+    options.text
+      ? 'The list is below, as the text on each page.'
+      : options.pages
+        ? `The list is attached as ${options.pages === 1 ? 'a picture of one page' : `pictures of ${options.pages} pages, in order`}.`
+        : 'The list is attached.',
+    '',
+    'Rules:',
+    '- Each separate thing to do is its own item. Leave out headings, totals, page numbers, signatures and anything that is not work to do, and anything marked done or complete.',
+    '- title: a verb and the thing, as short as possible, like "Install toilet" or "Touch up paint". When one of the standard titles below fits, use it word for word. No room, no company.',
+    '- description: where exactly and what is involved, in one short sentence with proper capitalization, or an empty string. Keep sizes and spots the list gives.',
+    "- location: one of the job's locations below, written exactly as it is there, when the list says where (a room heading counts for everything under it). Otherwise null. Never make one up.",
+    '- assignedTo: a company or a person from the lists below, written exactly as it is there, when the list says who does it or the work plainly belongs to the trade one company does on this job. Otherwise null.',
+    '- waitingOn: when the list says it has to wait for something (other work, the owner, a part), a few words naming it; otherwise null.',
+    '',
+    'Locations on the job:',
+    ...input.locations.map((l) => `- ${l}`),
+    '',
+    'Companies on the job (company, trade):',
+    ...input.companies.map((c) => `- ${c.name} (${c.trade})`),
+    '',
+    `People on the team: ${input.people.join(', ') || 'none'}`,
+    '',
+    'Standard titles (title, trade):',
+    ...input.titles.map((t) => `- ${t.title}${t.trade ? ` (${t.trade})` : ''}`),
+    '',
+    'Reply with only JSON, like {"items": [{"title": "Adjust cabinet door", "description": "Upper left of the sink rubs the frame.", "location": "Kitchen 109", "assignedTo": "SMS Carpentry", "waitingOn": null}]}.',
+  ];
+  if (options.text) lines.push('', 'The list:', options.text);
+  return lines.join('\n');
+}
+
+// ---------- a company from a business card or an email signature ----------
+
+export interface CompanyCardInput {
+  /** An email signature, pasted; empty when only a card's photo goes. */
+  words: string;
+  /** Whether a photo of a business card goes with it. */
+  card: boolean;
+  trades: string[];
+}
+
+function companyCardInput(v: unknown): CompanyCardInput {
+  const r = record(v);
+  return { words: String(r.words ?? '').trim().slice(0, 2000), card: r.card === true, trades: textList(r.trades, 80, 40) };
+}
+
+export function companyCardPrompt(input: CompanyCardInput): string {
+  const from = input.card && input.words ? 'a photo of a business card and an email signature' : input.card ? 'a photo of a business card' : 'an email signature';
+  return [
+    `Read a company's details for a home builder's list of the companies it works with, from ${from}.`,
+    ...(input.words ? ['', 'The email signature, between the lines:', '---', input.words, '---'] : []),
+    '',
+    "- name: the company's name, with normal capitalization. Not a person's name.",
+    `- trade: the one of these trades the company does, written exactly as it is here, or null when unsure: ${input.trades.join(', ') || 'none'}.`,
+    "- phone: the company's main phone as written, or null. email: the company's main email, or null.",
+    '- people: each person named, with their name, and their own phone and email as written (null for any not given).',
+    '',
+    'Reply with only JSON, like {"name": "Gator Plumbing", "trade": "Plumbing", "phone": "941-555-0101", "email": "office@gatorplumbing.com", "people": [{"name": "Dave Smith", "phone": "941-555-0102", "email": "dave@gatorplumbing.com"}]}.',
+  ].join('\n');
+}
+
+/** What Claude read from a card or a signature. trade: one of the trades given, or null. */
+export interface CompanyCard {
+  name: string;
+  trade: string | null;
+  phone: string | null;
+  email: string | null;
+  people: { name: string; phone: string | null; email: string | null }[];
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const emailOf = (v: unknown) => {
+  const e = clip(v, 120).toLowerCase();
+  return EMAIL.test(e) ? e : null;
+};
+const phoneOf = (v: unknown) => {
+  const p = clip(v, 40);
+  return (p.match(/\d/g) ?? []).length >= 7 ? p : null;
+};
+
+export function readCompanyCard(raw: unknown, trades: string[]): CompanyCard | null {
+  const a = answer(raw);
+  const name = clip(a.name, 80);
+  if (!name) return null;
+  const said = clip(a.trade, 40).toLowerCase();
+  return {
+    name,
+    trade: trades.find((t) => t.toLowerCase() === said) ?? null,
+    phone: phoneOf(a.phone),
+    email: emailOf(a.email),
+    people: listOf(a.people, 10, (p) => {
+      const x = record(p);
+      const who = clip(x.name, 80);
+      return who ? { name: who, phone: phoneOf(x.phone), email: emailOf(x.email) } : null;
+    }),
+  };
+}
+
+// ---------- what a new item waits on ----------
+
+export interface WaitsOnInput {
+  item: { title: string; description: string; location: string; company: string };
+  /** The other open items in the location, numbered. */
+  candidates: (ItemBrief & { company: string })[];
+}
+
+function waitsOnInput(v: unknown): WaitsOnInput {
+  const r = record(v);
+  const it = record(r.item);
+  return {
+    item: { title: clip(it.title, TITLE_MAX), description: clip(it.description, 300), location: clip(it.location, 60), company: clip(it.company, 80) },
+    candidates: listOf(r.candidates, 30, (c) => {
+      const b = brief(c);
+      return b ? { ...b, company: clip(record(c).company, 80) } : null;
+    }),
+  };
+}
+
+export function waitsOnPrompt(input: WaitsOnInput): string {
+  return [
+    "Someone is adding an item to the running list of work left to do on a home builder's job. Does it have to wait for any of the other open items in the same location to be done first?",
+    '',
+    `The new item: ${input.item.title}${input.item.description ? `: ${input.item.description}` : ''}${input.item.location ? ` (in ${input.item.location})` : ''}${input.item.company ? `, by ${input.item.company}` : ''}`,
+    '',
+    'Open in the same location:',
+    ...input.candidates.map((c) => `- ${line(c)}${c.company ? `, by ${c.company}` : ''}`),
+    '',
+    'Only count work that plainly has to come first, the way a builder sequences a house: the tile floor before the toilet is set, the drywall before the paint, the countertop before the faucet. Not work that merely sits nearby.',
+    'Reply with only JSON: {"waits": [12]} with the numbers of the items it waits on, or {"waits": []}.',
+  ].join('\n');
+}
+
+/** Which of the given numbers Claude said the new item waits on. */
+export function readWaitsOn(raw: unknown, numbers: number[]): number[] {
+  const said = answer(raw).waits;
+  if (!Array.isArray(said)) return [];
+  return [...new Set(said.map((n) => Number(String(n).replace(/^#/, ''))).filter((n) => numbers.includes(n)))];
+}
+
+// ---------- which column is which, in someone else's spreadsheet ----------
+
+export interface ColumnsInput {
+  /** The first rows, as they came. */
+  rows: string[][];
+}
+
+function columnsInput(v: unknown): ColumnsInput {
+  const r = record(v);
+  return { rows: listOf(r.rows, 8, (row) => (Array.isArray(row) ? row.slice(0, 20).map((c) => clip(c, 80)) : null)) };
+}
+
+export function columnsPrompt(input: ColumnsInput): string {
+  return [
+    "These are the first rows of a spreadsheet of work left to do on a home builder's job, written by someone else. Say which column holds what, counting the columns from 0.",
+    '',
+    ...input.rows.map((r, i) => `Row ${i + 1}: ${r.map((c, j) => `[${j}] ${c}`).join(' | ')}`),
+    '',
+    '- title: the work to do. description: more about it or where exactly. location: the room or area. assignedTo: the company or person who does it. waitingOn: what it waits for. done: says when a row is finished.',
+    '- header: whether row 1 names the columns rather than being work.',
+    'Reply with only JSON, like {"title": 1, "description": 2, "location": 0, "assignedTo": 3, "waitingOn": null, "done": null, "header": true}, with null for any column the spreadsheet does not have.',
+  ].join('\n');
+}
+
+/** The columns Claude said, each a column the rows have, or null. */
+export function readColumns(raw: unknown, width: number): ColumnMap | null {
+  const a = answer(raw);
+  const col = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < width ? v : null);
+  const map: ColumnMap = { title: col(a.title), description: col(a.description), location: col(a.location), assignedTo: col(a.assignedTo), waitingOn: col(a.waitingOn), done: col(a.done), header: a.header === true };
+  return map.title === null ? null : map;
+}
+
 // ---------- the done check: the photo of the problem and the photo of the finished work ----------
 
 export interface DoneCheckInput {
@@ -322,7 +511,7 @@ export function doneCheckPrompt(input: DoneCheckInput): string {
 
 // ---------- the tasks ----------
 
-export type ClaudeTask = 'fill-in' | 'say-it' | 'same-item' | 'duplicates' | 'standard-title' | 'done-check';
+export type ClaudeTask = 'fill-in' | 'say-it' | 'same-item' | 'duplicates' | 'standard-title' | 'done-check' | 'company-card' | 'waits-on' | 'columns';
 
 export const CLAUDE_TASKS: Record<ClaudeTask, TaskSpec> = {
   'fill-in': { tier: 'sharp', maxTokens: 900, images: 1, minImages: 1, prompt: (v) => suggestPrompt(suggestInput(v)), enough: () => true },
@@ -351,6 +540,29 @@ export const CLAUDE_TASKS: Record<ClaudeTask, TaskSpec> = {
     },
   },
   'done-check': { tier: 'sharp', maxTokens: 300, images: 2, minImages: 2, prompt: (v) => doneCheckPrompt(doneCheckInput(v)), enough: (v) => doneCheckInput(v).title !== '' },
+  columns: { tier: 'quick', maxTokens: 200, images: 0, minImages: 0, prompt: (v) => columnsPrompt(columnsInput(v)), enough: (v) => columnsInput(v).rows.length > 0 },
+  'waits-on': {
+    tier: 'quick',
+    maxTokens: 100,
+    images: 0,
+    minImages: 0,
+    prompt: (v) => waitsOnPrompt(waitsOnInput(v)),
+    enough: (v) => {
+      const x = waitsOnInput(v);
+      return x.item.title !== '' && x.candidates.length > 0;
+    },
+  },
+  'company-card': {
+    tier: 'sharp',
+    maxTokens: 600,
+    images: 1,
+    minImages: 0,
+    prompt: (v) => companyCardPrompt(companyCardInput(v)),
+    enough: (v) => {
+      const x = companyCardInput(v);
+      return x.words !== '' || x.card;
+    },
+  },
 };
 
 export const isClaudeTask = (v: unknown): v is ClaudeTask => typeof v === 'string' && Object.hasOwn(CLAUDE_TASKS, v);

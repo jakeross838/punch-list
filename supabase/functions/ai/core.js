@@ -265,6 +265,63 @@ function standardTitlePrompt(input) {
     'Reply with only JSON: {"title": "Tighten towel bar"} with the standard title written exactly as it is above, or {"title": null}.'
   ].join("\n");
 }
+function companyCardInput(v) {
+  const r = record(v);
+  return { words: String(r.words ?? "").trim().slice(0, 2e3), card: r.card === true, trades: textList(r.trades, 80, 40) };
+}
+function companyCardPrompt(input) {
+  const from = input.card && input.words ? "a photo of a business card and an email signature" : input.card ? "a photo of a business card" : "an email signature";
+  return [
+    `Read a company's details for a home builder's list of the companies it works with, from ${from}.`,
+    ...input.words ? ["", "The email signature, between the lines:", "---", input.words, "---"] : [],
+    "",
+    "- name: the company's name, with normal capitalization. Not a person's name.",
+    `- trade: the one of these trades the company does, written exactly as it is here, or null when unsure: ${input.trades.join(", ") || "none"}.`,
+    "- phone: the company's main phone as written, or null. email: the company's main email, or null.",
+    "- people: each person named, with their name, and their own phone and email as written (null for any not given).",
+    "",
+    'Reply with only JSON, like {"name": "Gator Plumbing", "trade": "Plumbing", "phone": "941-555-0101", "email": "office@gatorplumbing.com", "people": [{"name": "Dave Smith", "phone": "941-555-0102", "email": "dave@gatorplumbing.com"}]}.'
+  ].join("\n");
+}
+function waitsOnInput(v) {
+  const r = record(v);
+  const it = record(r.item);
+  return {
+    item: { title: clip(it.title, TITLE_MAX), description: clip(it.description, 300), location: clip(it.location, 60), company: clip(it.company, 80) },
+    candidates: listOf(r.candidates, 30, (c) => {
+      const b = brief(c);
+      return b ? { ...b, company: clip(record(c).company, 80) } : null;
+    })
+  };
+}
+function waitsOnPrompt(input) {
+  return [
+    "Someone is adding an item to the running list of work left to do on a home builder's job. Does it have to wait for any of the other open items in the same location to be done first?",
+    "",
+    `The new item: ${input.item.title}${input.item.description ? `: ${input.item.description}` : ""}${input.item.location ? ` (in ${input.item.location})` : ""}${input.item.company ? `, by ${input.item.company}` : ""}`,
+    "",
+    "Open in the same location:",
+    ...input.candidates.map((c) => `- ${line(c)}${c.company ? `, by ${c.company}` : ""}`),
+    "",
+    "Only count work that plainly has to come first, the way a builder sequences a house: the tile floor before the toilet is set, the drywall before the paint, the countertop before the faucet. Not work that merely sits nearby.",
+    'Reply with only JSON: {"waits": [12]} with the numbers of the items it waits on, or {"waits": []}.'
+  ].join("\n");
+}
+function columnsInput(v) {
+  const r = record(v);
+  return { rows: listOf(r.rows, 8, (row) => Array.isArray(row) ? row.slice(0, 20).map((c) => clip(c, 80)) : null) };
+}
+function columnsPrompt(input) {
+  return [
+    "These are the first rows of a spreadsheet of work left to do on a home builder's job, written by someone else. Say which column holds what, counting the columns from 0.",
+    "",
+    ...input.rows.map((r, i) => `Row ${i + 1}: ${r.map((c, j) => `[${j}] ${c}`).join(" | ")}`),
+    "",
+    "- title: the work to do. description: more about it or where exactly. location: the room or area. assignedTo: the company or person who does it. waitingOn: what it waits for. done: says when a row is finished.",
+    "- header: whether row 1 names the columns rather than being work.",
+    'Reply with only JSON, like {"title": 1, "description": 2, "location": 0, "assignedTo": 3, "waitingOn": null, "done": null, "header": true}, with null for any column the spreadsheet does not have.'
+  ].join("\n");
+}
 function doneCheckInput(v) {
   const r = record(v);
   return { title: clip(r.title, TITLE_MAX), description: clip(r.description, 300), location: clip(r.location, 60), marks: listOf(r.marks, 30, cleanMark) };
@@ -310,7 +367,30 @@ var CLAUDE_TASKS = {
       return x.title !== "" && x.titles.length > 0;
     }
   },
-  "done-check": { tier: "sharp", maxTokens: 300, images: 2, minImages: 2, prompt: (v) => doneCheckPrompt(doneCheckInput(v)), enough: (v) => doneCheckInput(v).title !== "" }
+  "done-check": { tier: "sharp", maxTokens: 300, images: 2, minImages: 2, prompt: (v) => doneCheckPrompt(doneCheckInput(v)), enough: (v) => doneCheckInput(v).title !== "" },
+  columns: { tier: "quick", maxTokens: 200, images: 0, minImages: 0, prompt: (v) => columnsPrompt(columnsInput(v)), enough: (v) => columnsInput(v).rows.length > 0 },
+  "waits-on": {
+    tier: "quick",
+    maxTokens: 100,
+    images: 0,
+    minImages: 0,
+    prompt: (v) => waitsOnPrompt(waitsOnInput(v)),
+    enough: (v) => {
+      const x = waitsOnInput(v);
+      return x.item.title !== "" && x.candidates.length > 0;
+    }
+  },
+  "company-card": {
+    tier: "sharp",
+    maxTokens: 600,
+    images: 1,
+    minImages: 0,
+    prompt: (v) => companyCardPrompt(companyCardInput(v)),
+    enough: (v) => {
+      const x = companyCardInput(v);
+      return x.words !== "" || x.card;
+    }
+  }
 };
 var isClaudeTask = (v) => typeof v === "string" && Object.hasOwn(CLAUDE_TASKS, v);
 function taskPrompt(task, input) {

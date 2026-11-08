@@ -270,8 +270,11 @@ describe('Activity for many items at once', () => {
     expect(activityLines([entries[0]!], look, { forItem: true }).map((l) => l.action)).toEqual(['added it']);
   });
 
-  it('items said at once with Say It read as one line too', () => {
-    const made = [1, 2].map((k) => item({ id: `s${k}`, title: `Task ${k}`, source: 'said', locationId: 'kitchen' }));
+  it.each([
+    ['said', 'Jake Ross said 2 items. Kitchen 109.'],
+    ['import', 'Jake Ross added 2 items from a list. Kitchen 109.'],
+  ] as const)('items added at once with Say It or Read a List read as one line too (%s)', (source, line) => {
+    const made = [1, 2].map((k) => item({ id: `s${k}`, title: `Task ${k}`, source, locationId: 'kitchen' }));
     const entries: Activity[] = made.map((m, k) => ({
       id: `s${k}`,
       jobId: 'fish',
@@ -293,7 +296,7 @@ describe('Activity for many items at once', () => {
       customFields: [],
       today: new Date(2026, 10, 7),
     });
-    expect(activityLines(entries, look).map((l) => `${l.who} ${l.action}. ${l.detail}`)).toEqual(['Jake Ross said 2 items. Kitchen 109.']);
+    expect(activityLines(entries, look).map((l) => `${l.who} ${l.action}. ${l.detail}`)).toEqual([line]);
   });
 
   it('the same change to several items at once reads as one line: completed, assigned, moved', () => {

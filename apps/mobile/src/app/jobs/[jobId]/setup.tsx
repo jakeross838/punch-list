@@ -14,6 +14,7 @@ import {
   newLocation,
   parseRoomList,
   PART_LABELS,
+  readCompanyCard,
   SHARED_AREAS,
   SHARED_GROUP,
   TEAM_PARTS,
@@ -25,8 +26,11 @@ import {
 } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { launchCameraAsync, launchImageLibraryAsync, requestCameraPermissionsAsync } from 'expo-image-picker';
+import { ActivityIndicator, Platform, StyleSheet, TextInput, View } from 'react-native';
 import { colors, layout, type as typeScale } from '@/constants/theme';
+import { askClaude, useClaudeReady } from '@/ai/claude';
+import { troubleMessage } from '@/ai/claudeErrors';
 import { useCanReadPlans } from '@/ai/readPlans';
 import { DragList } from '@/components/DragList';
 import { CompanySheet, JobFields, LevelSheet, levelKey, LocationSheet, type LevelChoice, type Pairing } from '@/components/SetupSheets';
@@ -40,6 +44,7 @@ import {
   Icon,
   ListRow,
   ListSection,
+  ListSwitchRow,
   ListTextField,
   OptionPicker,
   Page,
@@ -743,6 +748,13 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
   const [newName, setNewName] = useState('');
   const [tradeId, setTradeId] = useState<string | null>(null);
   const [picker, setPicker] = useState<'company' | 'trade' | null>(null);
+  // Read from a business card or an email signature: the company, its trade and its people.
+  const canRead = useClaudeReady(true);
+  const contacts = data.useContacts();
+  const [signing, setSigning] = useState(false);
+  const [signature, setSignature] = useState('');
+  const [reading, setReading] = useState(false);
+  const [people, setPeople] = useState<{ name: string; email: string | null; phone: string | null; on: boolean }[]>([]);
 
   const onJob = new Set(jobCompanies.map((jc) => `${jc.companyId}-${jc.tradeId}`));
   const companyOptions: Option[] = [...companies]
@@ -757,15 +769,72 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
     setCompanyId(null);
     setNewName('');
     setTradeId(null);
+    setSigning(false);
+    setSignature('');
+    setPeople([]);
     onClose();
+  }
+
+  /** A photo of a business card, from the camera or the photos. */
+  async function cardPhoto(camera: boolean): Promise<string | null> {
+    if (camera) {
+      const allowed = await requestCameraPermissionsAsync();
+      if (!allowed.granted) {
+        feedback.toast({ message: 'The camera is off for Punch List. Turn it on in Settings.' });
+        return null;
+      }
+    }
+    const result = camera ? await launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 }) : await launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+    return result.canceled ? null : (result.assets[0]?.uri ?? null);
+  }
+
+  /** Claude reads the company from a card's photo or a pasted signature, and fills the sheet in. */
+  async function readCompany(words: string, photo: string | null) {
+    if (reading || (!words.trim() && !photo)) return;
+    setReading(true);
+    try {
+      const names = trades.map((t) => t.name);
+      const card = readCompanyCard(await askClaude('company-card', { words, card: !!photo, trades: names }, photo ? [photo] : []), names);
+      if (!card) {
+        haptic.warning();
+        feedback.toast({ message: 'Claude could not read a company from that. Try a clearer photo.' });
+        return;
+      }
+      const known = companies.find((c) => c.active && c.name.trim().toLowerCase() === card.name.toLowerCase());
+      const trade = trades.find((t) => t.name === card.trade)?.id ?? null;
+      if (known) {
+        setCompanyId(known.id);
+        setNewName('');
+        setTradeId(known.defaultTradeId ?? trade ?? tradeId);
+      } else {
+        setCompanyId(null);
+        setNewName(card.name);
+        setTradeId(trade ?? tradeId);
+      }
+      // Its people, and the office's own email or phone when no one has it, to get its lists.
+      const found = card.people.map((p) => ({ ...p, on: !!(p.email || p.phone) }));
+      const office = (card.email && !found.some((p) => p.email === card.email)) || (card.phone && !found.some((p) => p.phone === card.phone));
+      setPeople(office ? [...found, { name: 'Office', email: card.email, phone: card.phone, on: true }] : found);
+      setSigning(false);
+      haptic.success();
+    } catch (e) {
+      haptic.warning();
+      feedback.toast({ message: troubleMessage(e) });
+    } finally {
+      setReading(false);
+    }
   }
 
   async function add() {
     if (!canAdd || !tradeId) return;
     const id = companyId ?? (await data.addCompany({ name: newName.trim(), defaultTradeId: tradeId }));
     await data.addCompanyToJob(jobId, id, tradeId);
+    // The people read from the card, but not anyone the company has already.
+    const theirs = contacts.filter((c) => c.companyId === id);
+    const fresh = people.filter((p) => p.on && !theirs.some((c) => (p.email && c.email?.toLowerCase() === p.email) || (p.phone && c.phone === p.phone)));
+    for (const p of fresh) await data.addContact({ companyId: id, name: p.name, email: p.email, phone: p.phone, getsLists: true });
     haptic.success();
-    feedback.toast({ message: `${name} added to the job` });
+    feedback.toast({ message: `${name} added to the job${fresh.length > 0 ? `, with ${fresh.length === 1 ? 'one person' : `${fresh.length} people`} to get its lists` : ''}` });
     close();
   }
 
@@ -803,6 +872,51 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
             testID="field-new-company"
           />
         </ListSection>
+        {canRead ? (
+          <ListSection footer={reading ? undefined : 'Claude fills in the company, its trade and its people.'}>
+            {reading ? (
+              <View style={styles.reading} testID="company-reading">
+                <ActivityIndicator size="small" color={colors.secondary} />
+                <Text color={colors.secondary}>Claude is reading it.</Text>
+              </View>
+            ) : (
+              <>
+                {Platform.OS !== 'web' ? (
+                  <ListRow
+                    title="Photo of a Business Card"
+                    icon="camera"
+                    accessory="chevron"
+                    onPress={() => void cardPhoto(true).then((uri) => (uri ? readCompany('', uri) : undefined))}
+                    testID="company-card-camera"
+                  />
+                ) : null}
+                <ListRow
+                  title="Choose a Business Card Photo"
+                  icon="photo.on.rectangle"
+                  accessory="chevron"
+                  onPress={() => void cardPhoto(false).then((uri) => (uri ? readCompany('', uri) : undefined))}
+                  testID="company-card"
+                />
+                <ListRow title="Paste an Email Signature" icon="doc" accessory={signing ? 'none' : 'chevron'} onPress={() => setSigning(true)} testID="company-signature" />
+                {signing ? (
+                  <>
+                    <ListTextField
+                      multiline
+                      minLines={4}
+                      placeholder="Dave Smith, Gator Plumbing, 941-555-0102"
+                      value={signature}
+                      onChangeText={setSignature}
+                      autoFocus
+                      accessibilityLabel="Email signature"
+                      testID="field-signature"
+                    />
+                    <ListRow title="Read It" tone="tint" disabled={signature.trim() === ''} onPress={() => void readCompany(signature, null)} testID="company-signature-read" />
+                  </>
+                ) : null}
+              </>
+            )}
+          </ListSection>
+        ) : null}
         <ListSection
           footer={already ? 'That company is on this job for that trade already.' : 'The trade this company does on this job.'}
           footerTone={already ? 'danger' : 'default'}
@@ -816,6 +930,20 @@ function AddCompanySheet({ jobId, visible, onClose }: { jobId: string; visible: 
             testID="pick-company-trade"
           />
         </ListSection>
+        {people.length > 0 ? (
+          <ListSection header="People" footer="Those switched on get the company's lists.">
+            {people.map((p, i) => (
+              <ListSwitchRow
+                key={`${p.name}-${i}`}
+                title={p.name}
+                subtitle={[p.email, p.phone].filter(Boolean).join(' · ') || 'No email or phone'}
+                value={p.on && !!(p.email || p.phone)}
+                onValueChange={(on) => setPeople((ps) => ps.map((x, j) => (j === i ? { ...x, on: on && !!(x.email || x.phone) } : x)))}
+                testID={`company-person-${i}`}
+              />
+            ))}
+          </ListSection>
+        ) : null}
       </SheetScroll>
       <OptionPicker
         visible={picker === 'company'}
@@ -843,6 +971,7 @@ const styles = StyleSheet.create({
   problem: { paddingHorizontal: layout.rowPadding, paddingBottom: 10, backgroundColor: colors.cell },
   sheetContent: { paddingTop: 4, paddingBottom: 48 },
   closeJob: { marginTop: 36 },
+  reading: { minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
   addRow: {
     minHeight: layout.rowMinHeight,
     flexDirection: 'row',

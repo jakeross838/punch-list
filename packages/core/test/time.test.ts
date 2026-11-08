@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  usualHours,
   activityLines,
   activityLookups,
   checkItem,
@@ -218,5 +219,17 @@ describe('planning full days', () => {
     expect(plan.comingFree[0]?.time).toEqual({ hours: 1, timed: 1, untimed: 0 });
     const row = notBooked(items, [], lookups, '2026-10-30').find((r) => r.companyId === 'c-sms');
     expect(row?.readyTime.hours).toBe(11);
+  });
+});
+
+describe('the usual time for a title', () => {
+  const item = (title: string, hours: number | null, status: 'open' | 'complete' | 'removed' = 'complete') => ({ title, hours, status });
+  it('offers the standard title’s time first, then the middle of the times given before', () => {
+    const titles = [{ title: 'Install toilet', hours: 2 }, { title: 'Touch up paint', hours: null }];
+    expect(usualHours('install toilet ', [item('Install toilet', 5)], titles)).toEqual({ hours: 2, from: 'standard' });
+    expect(usualHours('Touch up paint', [item('Touch up paint', 1), item('touch up paint', 3), item('Touch up paint', 2), item('Touch up paint', 8, 'removed')], titles)).toEqual({ hours: 2, from: 'past' });
+    expect(usualHours('Touch up paint', [item('Touch up paint', 1), item('Touch up paint', 2)], [])).toEqual({ hours: 1.5, from: 'past' });
+    expect(usualHours('Hang mirror', [item('Hang mirror', null)], titles)).toBeNull();
+    expect(usualHours('  ', [], titles)).toBeNull();
   });
 });

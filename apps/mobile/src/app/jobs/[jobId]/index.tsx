@@ -117,6 +117,8 @@ export default function JobScreen() {
   const canFill = useClaudeReady(true);
   const canSay = useClaudeReady();
   const canReadPlans = useCanReadPlans();
+  // Read a List reads a PDF or photos of a punch list through the same function as the plans.
+  const canReadList = canReadPlans && canSay;
   const saved = data.useViewSettings();
   const context = useFilterContext(jobId);
   const [view, setView] = useJobView(jobId, saved);
@@ -274,6 +276,7 @@ export default function JobScreen() {
       {
         actions: [
           ...(canSay ? [{ label: 'Say It', icon: 'mic' as IconName, onPress: () => router.push({ pathname: '/jobs/[jobId]/say', params: { jobId } }), testID: 'say-it' }] : []),
+          ...(canReadList ? [{ label: 'Read a List', icon: 'doc' as IconName, onPress: () => router.push({ pathname: '/jobs/[jobId]/say', params: { jobId, read: '1' } }), testID: 'read-list' }] : []),
           { label: 'Activity', icon: 'clock', onPress: openActivity, testID: 'activity' },
           { label: 'Find Duplicates', icon: 'copy', onPress: () => router.push({ pathname: '/jobs/[jobId]/duplicates', params: { jobId } }), testID: 'find-duplicates' },
           { label: 'Make a List', icon: 'doc', onPress: () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId, start: 'list' } }), testID: 'make-list' },

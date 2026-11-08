@@ -367,6 +367,14 @@ function pageLines(page: PageText): Line[] {
  * 1000. The floor plan pages go first when there is not room for all of them; most is the size in
  * characters.
  */
+/** A punch list's PDF as plain text for Claude: each page's lines, top to bottom, at most most characters. */
+export function listAsText(pages: PageText[], most = 150_000): string {
+  return pages
+    .map((page, i) => [`Page ${i + 1} of ${pages.length}`, ...pageLines(page).map((l) => l.text)].join('\n'))
+    .join('\n\n')
+    .slice(0, most);
+}
+
 export function plansAsText(pages: PageText[], most = 200_000): string {
   const read = pages.map((page, i) => {
     const lines = pageLines(page);

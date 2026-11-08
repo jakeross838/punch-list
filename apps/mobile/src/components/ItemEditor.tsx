@@ -31,6 +31,7 @@ import {
   tidyTitle,
   TITLE_MAX,
   tradeForTitle,
+  usualHours,
   vagueTitle,
   writeOrder,
   type FormField,
@@ -50,6 +51,7 @@ import { ExtraFields, useFormOptions, type ItemDraft } from './ItemForm';
 import { ReadyRow } from './ReadyRow';
 import { useSameWork } from './useSameWork';
 import { useStandardTitle } from './useStandardTitle';
+import { useWaitsOn, waitsOnText } from './useWaitsOn';
 
 export interface EditorPhoto {
   key: string;
@@ -187,6 +189,16 @@ export function ItemEditor({
   const standard = useStandardTitle(value.title, titleFocused, askClaude);
   const vague = !titleFocused && vagueTitle(value.title);
   const blanks = !value.title.trim() || !isAssigned(value);
+  // What it waits on, said by Claude, while it is still ready; and how long the work usually takes.
+  const doneBy = companies.find((c) => c.id === value.companyId)?.name ?? '';
+  const waits = useWaitsOn({ jobId, itemId, title: value.title, description: value.description, locationId: value.locationId, doneBy, typing: titleFocused, ask: askClaude && value.ready });
+  const waitsOn = value.ready ? waits.filter((w) => !value.waitingOnItems.includes(w.id)) : [];
+  const usual = value.hours === null && !titleFocused ? usualHours(value.title, items, titles) : null;
+
+  function takeWaits() {
+    haptic.selection();
+    set({ ready: false, waitingOnItems: [...value.waitingOnItems, ...waitsOn.map((w) => w.id)] });
+  }
 
   function takeStandard(title: string) {
     haptic.selection();
@@ -299,6 +311,14 @@ export function ItemEditor({
       ) : vague ? (
         <Text variant="footnote" color={colors.secondary} style={styles.note} testID="vague-note">
           {`Say what it is, like "Fix the cabinet door": a company cannot act on "${value.title.trim()}" alone.`}
+        </Text>
+      ) : null}
+      {waitsOn.length > 0 ? (
+        <Text variant="footnote" color={colors.secondary} style={styles.note} testID="waits-on-note">
+          {`Claude says it waits on ${waitsOn.map((w) => waitsOnText(w, companies.find((c) => c.id === w.companyId)?.name)).join(' and ')}.`}
+          <Text variant="footnote" weight="600" color={colors.tint} onPress={takeWaits} accessibilityRole="button" testID="waits-on-use">
+            {' Use It'}
+          </Text>
         </Text>
       ) : null}
       {fillIn && blanks ? (
@@ -431,6 +451,14 @@ export function ItemEditor({
           </ListSection>
 
           <HoursField value={value.hours} onChange={(hours) => set({ hours })} note={hoursNote} />
+          {usual ? (
+            <Text variant="footnote" color={colors.secondary} style={styles.usual} testID="usual-hours">
+              {`${usual.from === 'standard' ? 'The standard time' : 'Usually'}: ${hoursText(usual.hours)}.`}
+              <Text variant="footnote" weight="600" color={colors.tint} onPress={() => set({ hours: usual.hours })} accessibilityRole="button" testID="usual-hours-use">
+                {' Use It'}
+              </Text>
+            </Text>
+          ) : null}
 
           {customFields.length > 0 ? (
             <ListSection header="More">
@@ -522,6 +550,7 @@ const styles = StyleSheet.create({
   rule: { height: 0, borderBottomWidth: layout.fine, borderBottomColor: colors.separator, marginTop: 10, marginBottom: 9 },
   description: { ...typeScale.callout, minHeight: 48, padding: 0, color: colors.label, textAlignVertical: 'top', outlineWidth: 0 },
   note: { marginHorizontal: layout.margin + 4, marginTop: 8 },
+  usual: { marginHorizontal: layout.margin + 4, marginTop: -8, marginBottom: 16 },
   suggestions: { marginHorizontal: layout.margin, marginTop: 8, borderWidth: layout.hairline, borderColor: colors.borderStrong, backgroundColor: colors.cell, overflow: 'hidden' },
   suggestion: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, backgroundColor: colors.cell },
   suggestionRule: { borderTopWidth: layout.fine, borderTopColor: colors.separator },

@@ -82,6 +82,17 @@ async function main(): Promise<void> {
     await p.close();
   }
 
+  // A punch list someone else wrote, as a PDF of text.
+  const listPath = join(root, 'local', 'test-list.pdf');
+  {
+    const p = await browser.newPage();
+    await p.setContent(
+      `<html><body style="font:12pt Arial;padding:40px"><h2>Owner Walkthrough Punch List</h2><h3>Kitchen 109</h3><p>1. Cabinet door left of the sink rubs.</p><h3>Laundry 119</h3><p>2. Touch up paint by the dryer.</p><p>3. Dryer vent cover is missing. DONE</p></body></html>`,
+    );
+    writeFileSync(listPath, await p.pdf({ format: 'Letter', printBackground: true }));
+    await p.close();
+  }
+
   const context = await browser.newContext({
     viewport: { width: 393, height: 852 },
     deviceScaleFactor: 3,
@@ -136,6 +147,24 @@ async function main(): Promise<void> {
           // Find Duplicates: the pairs about a cabinet door are the same work; the others are not.
           if (/pairs of items on the running list/.test(input)) {
             return { same: [...input.matchAll(/^Pair (\\d+): (.*)$/gm)].filter((m) => /cabinet door/i.test(m[2])).map((m) => Number(m[1])) };
+          }
+          // Read a List: the two things on the owner's list that are not done.
+          if (/This is a punch list for a house being built/.test(input)) {
+            return {
+              items: [
+                { title: 'Adjust cabinet door', description: 'Left of the sink, it rubs.', location: 'Kitchen 109', assignedTo: 'SMS Carpentry', waitingOn: null },
+                { title: 'Touch up paint', description: 'By the dryer.', location: 'Laundry 119', assignedTo: 'Triple H Painting', waitingOn: null },
+              ],
+            };
+          }
+          // A company from an email signature.
+          if (/Read a company's details/.test(input)) {
+            return { name: 'Island Paint Company', trade: 'Painting', phone: '941-555-0140', email: 'office@islandpaint.example', people: [{ name: 'Rosa Diaz', phone: '941-555-0141', email: 'rosa@islandpaint.example' }] };
+          }
+          // What a new item waits on: the first open item in the location.
+          if (/Does it have to wait for any of the other open items/.test(input)) {
+            const m = input.match(/^- #(\d+) /m);
+            return { waits: m ? [Number(m[1])] : [] };
           }
           // The done check: the hinge still looks loose.
           if (/Check the work from two photos/.test(input)) return { done: 'no', left: 'the left hinge still looks loose' };
@@ -1939,6 +1968,10 @@ async function main(): Promise<void> {
       await app.getByTestId('field-title').fill('switch cover missing');
       await app.getByTestId('field-description').click();
       await app.getByTestId('standard-note').getByText(/The standard title is Install switch plate\./).waitFor({ timeout: 15_000 });
+      // What it waits on: Claude picks from the open items in the location.
+      await app.getByTestId('waits-on-note').getByText(/^Claude says it waits on #\d+ /).waitFor({ timeout: 15_000 });
+      const waits = await lastAsked('Does it have to wait for any of the other open items');
+      if (!waits || !waits.input.includes('Open in the same location:') || waits.tier !== 'quick') throw new Error('Claude was not asked what it waits on');
       await settle(300);
       await shot('99w-standard-title');
       // Too vague to send a company.
@@ -2099,9 +2132,10 @@ async function main(): Promise<void> {
       await app.getByTestId('save').last().click();
       await app.getByText('Kitchen 109').first().waitFor();
       await app.getByText('Mudroom 120').first().waitFor();
-      // Its companies came too: SMS Carpentry is one to assign to in Job Setup.
+      // Its companies came too: SMS Carpentry is on it in Job Setup.
       await menu('job-setup');
-      await app.getByText('SMS Carpentry').first().waitFor();
+      await app.getByRole('tab', { name: 'Companies' }).click();
+      await app.getByTestId(/^setup-company-/).filter({ hasText: 'SMS Carpentry' }).first().waitFor();
       await settle(300);
       await shot('99zf2-copied-setup');
       await app.getByTestId('back').last().click();
@@ -2109,6 +2143,62 @@ async function main(): Promise<void> {
       await app.getByTestId('back').last().click();
       await app.getByTestId('job-job-preview').waitFor();
       await settle(300);
+    });
+    await step('New: Read a List: Claude reads a punch list someone else wrote, from its PDF, into items to check', async () => {
+      if (!(await app.getByTestId('job-job-preview').isVisible())) await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('job-job-preview').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
+      await menu('read-list');
+      await app.getByTestId('list-pdf').waitFor();
+      await settle(400);
+      await shot('99zf3-read-a-list');
+      const chooser = tab.waitForEvent('filechooser');
+      await app.getByTestId('list-pdf').click();
+      await (await chooser).setFiles(listPath);
+      await app.getByText('Touch up paint').first().waitFor({ timeout: 20_000 });
+      const read = await lastAsked('This is a punch list for a house being built');
+      if (!read || !read.input.includes('The list:') || !read.input.includes('Cabinet door left of the sink rubs.')) throw new Error('Read a List did not send the text of the PDF');
+      await settle(400);
+      await shot('99zf4-list-read');
+      await app.getByTestId('say-add').last().click();
+      await app.getByText(/^Added \d+ items?\./).waitFor();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(1500);
+      // Rows copied from a spreadsheet: each row an item, the columns known by their names.
+      await menu('read-list');
+      await app.getByTestId('say-words').fill('Location\tTask\tSub\nKitchen 109\tCaulk backsplash\tTriple H Painting\nMudroom\tInstall coat hooks\tSMS Carpentry');
+      await app.getByTestId('say-make').click();
+      await app.getByText('Install coat hooks').first().waitFor();
+      await settle(400);
+      await shot('99zf4b-spreadsheet-rows');
+      await app.getByTestId('say-add').last().click();
+      await app.getByText('Added 2 items.').waitFor();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
+    });
+    await step('New: a company from an email signature: Claude fills in the company, its trade and its people', async () => {
+      await menu('job-setup');
+      await app.getByRole('tab', { name: 'Companies' }).click();
+      await app.getByTestId('add-company').click();
+      await app.getByTestId('company-signature').waitFor();
+      await settle(500);
+      await app.getByTestId('company-signature').click();
+      await app.getByTestId('field-signature').fill('Rosa Diaz\nIsland Paint Company\n941-555-0141 | rosa@islandpaint.example');
+      await app.getByTestId('company-signature-read').click();
+      await app.getByTestId('company-person-0').waitFor({ timeout: 15_000 });
+      if ((await app.getByTestId('field-new-company').inputValue()) !== 'Island Paint Company') throw new Error('The company name was not filled in');
+      await app.getByText('Painting', { exact: true }).first().waitFor();
+      const asked = await lastAsked("Read a company's details");
+      if (!asked || !asked.input.includes('Rosa Diaz') || asked.images !== 0) throw new Error('The signature did not go to Claude');
+      await settle(400);
+      await shot('99zf5-company-from-signature');
+      await app.getByTestId('company-add').click();
+      await app.getByText('Island Paint Company added to the job, with 2 people to get its lists').waitFor();
+      await settle(400);
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
     });
     await step('New: the Sample Job: one tap adds a whole job to try everything on, with photos, marks and comments, and it deletes like any other job', async () => {
       // From the Jobs screen, which stays underneath the job, hidden. The preview job is named

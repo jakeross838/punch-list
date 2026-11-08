@@ -383,7 +383,7 @@ export function activityLines(entries: Activity[], look: ActivityLookups, option
     }
   }
   const groups: Group[] = [];
-  // Many items added at once, by Paste, a template or Say It, read as one line on the job.
+  // Many items added at once, by Paste, a template, Say It or Read a List, read as one line on the job.
   if (!options.forItem) {
     const sourceOf = (e: Activity) => (e.kind === 'item_created' && e.itemId ? look.items.get(e.itemId)?.source : undefined);
     let run: Activity[] = [];
@@ -396,7 +396,7 @@ export function activityLines(entries: Activity[], look: ActivityLookups, option
     };
     for (const e of sorted) {
       const source = sourceOf(e);
-      if (source !== 'copy' && source !== 'template' && source !== 'said') continue;
+      if (source !== 'copy' && source !== 'template' && source !== 'said' && source !== 'import') continue;
       const prev = run[run.length - 1];
       if (prev && (prev.personId !== e.personId || sourceOf(prev) !== source || Date.parse(e.at) - Date.parse(prev.at) > 5000)) flush();
       run.push(e);
@@ -480,7 +480,8 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     const places = [...new Set(items.map((i) => look.locations.get(i.locationId) ?? '').filter(Boolean))];
     const where = places.length <= 3 ? listWords(places) : `${places.slice(0, 2).join(', ')} and ${places.length - 2} more locations`;
     const n = g.entries.length;
-    const how = items[0]?.source === 'template' ? `added ${n} items from a template` : items[0]?.source === 'said' ? `said ${n} items` : `pasted ${n} items`;
+    const source = items[0]?.source;
+    const how = source === 'template' ? `added ${n} items from a template` : source === 'said' ? `said ${n} items` : source === 'import' ? `added ${n} items from a list` : `pasted ${n} items`;
     return done(how, [where]);
   }
 

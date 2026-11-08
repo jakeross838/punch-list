@@ -298,6 +298,19 @@ async function checkReadPlans() {
   expect('read-plans: reads pictures of a sheet, whole and in pieces', pictures.status === 200 && lastAsked()?.content?.filter((c) => c.type === 'image').length === 3, pictures.text.slice(0, 120));
   const note = lastAsked()?.content?.[3]?.text ?? '';
   expect('read-plans: tells Claude what the pictures are', note.startsWith('The plans are attached as pictures of one sheet, in this order. Sheet 1: the whole sheet, then 2 pieces of it'), note.slice(0, 160));
+
+  // A punch list someone else wrote: its pages, with the job's names to match.
+  counted = [];
+  removed = [];
+  const pages = [1, 2].map((n) => ({ path: `${JOB}/plans/read-e-${n}-0.jpg`, type: 'jpeg' }));
+  const list = await call({ kind: 'list', jobId: JOB, files: pages, input: { locations: ['Kitchen 109'], companies: [{ name: 'SMS Carpentry', trade: 'Carpentry' }], people: ['Sam Rivera'], titles: [] } });
+  const listWords = lastAsked()?.content?.[2]?.text ?? '';
+  expect(
+    'read-plans: reads a punch list, its pages in order, with the job’s locations and companies',
+    list.status === 200 && listWords.startsWith('This is a punch list for a house being built') && listWords.includes('pictures of 2 pages, in order') && listWords.includes('- Kitchen 109') && listWords.includes('- SMS Carpentry (Carpentry)'),
+    listWords.slice(0, 200),
+  );
+  expect('read-plans: counts reading a list as its own task, and takes the pages away', counted[0]?.task === 'read-list' && removed.length === 2, `${JSON.stringify(counted)} ${JSON.stringify(removed)}`);
 }
 
 async function checkCompanyPage() {

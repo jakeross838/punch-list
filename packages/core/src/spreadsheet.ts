@@ -100,3 +100,104 @@ export function sheetFileName(jobName: string, today: string): string {
   const clean = jobName.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Job';
   return `${clean} Items ${today}.csv`;
 }
+
+// ---------- items from someone else's spreadsheet ----------
+
+/**
+ * The rows of a table: copied from a spreadsheet (tab separated) or saved as CSV, quotes and all.
+ * Blank lines are left out.
+ */
+export function parseTable(text: string): string[][] {
+  const clean = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+  const tab = clean.includes('\t');
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < clean.length; i += 1) {
+    const ch = clean[i]!;
+    if (quoted) {
+      if (ch === '"' && clean[i + 1] === '"') {
+        cell += '"';
+        i += 1;
+      } else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"' && cell === '') quoted = true;
+    else if (ch === (tab ? '\t' : ',')) {
+      row.push(cell.trim());
+      cell = '';
+    } else if (ch === '\n') {
+      row.push(cell.trim());
+      if (row.some((c) => c !== '')) rows.push(row);
+      row = [];
+      cell = '';
+    } else cell += ch;
+  }
+  row.push(cell.trim());
+  if (row.some((c) => c !== '')) rows.push(row);
+  return rows;
+}
+
+/** Whether pasted text is a table: two rows or more, and most of them with two cells or more. */
+export function isTable(rows: string[][]): boolean {
+  return rows.length >= 2 && rows.filter((r) => r.filter((c) => c !== '').length >= 2).length >= Math.ceil(rows.length * 0.6);
+}
+
+/** Which column holds what, counted from 0; header: the first row names the columns. */
+export interface ColumnMap {
+  title: number | null;
+  description: number | null;
+  location: number | null;
+  assignedTo: number | null;
+  waitingOn: number | null;
+  /** Says when a row is done already: those are left out. */
+  done: number | null;
+  header: boolean;
+}
+
+const HEADS: [keyof Omit<ColumnMap, 'header'>, RegExp][] = [
+  ['title', /^(title|item|items|task|tasks|issue|deficiency|work|punch( list)? item|what)$/i],
+  ['description', /^(description|details?|notes?|comments?|where exactly)$/i],
+  ['location', /^(location|room|area|space|level and room|where)$/i],
+  ['assignedTo', /^(assigned to|assigned|company|sub|subcontractor|trade partner|vendor|responsible|who|trade)$/i],
+  ['waitingOn', /^(waiting on|waiting for|blocked by|depends on|holdup)$/i],
+  ['done', /^(status|done|complete|completed|closed)$/i],
+];
+
+/** The columns, from the names in the first row; null for any it does not know. */
+export function guessColumns(rows: string[][]): ColumnMap {
+  const map: ColumnMap = { title: null, description: null, location: null, assignedTo: null, waitingOn: null, done: null, header: false };
+  const first = rows[0] ?? [];
+  first.forEach((name, i) => {
+    const said = name.replace(/[#:*]/g, '').trim();
+    for (const [field, re] of HEADS) {
+      if (map[field] === null && re.test(said)) {
+        map[field] = i;
+        map.header = true;
+        return;
+      }
+    }
+  });
+  return map;
+}
+
+const DONE = /^(done|complete|completed|closed|yes|x|✓|✔)$/i;
+
+/**
+ * The rows as items to check, in the shape Claude gives what it heard: each row with a title, and
+ * not marked done.
+ */
+export function tableItems(rows: string[][], map: ColumnMap): { title: string; description: string; location: string | null; assignedTo: string | null; waitingOn: string | null }[] {
+  if (map.title === null) return [];
+  const cell = (r: string[], i: number | null) => (i === null ? '' : (r[i] ?? '').replace(/\s+/g, ' ').trim());
+  return rows
+    .slice(map.header ? 1 : 0)
+    .filter((r) => cell(r, map.title) !== '' && !DONE.test(cell(r, map.done)))
+    .map((r) => ({
+      title: cell(r, map.title).slice(0, 80),
+      description: cell(r, map.description).slice(0, 300),
+      location: cell(r, map.location) || null,
+      assignedTo: cell(r, map.assignedTo) || null,
+      waitingOn: cell(r, map.waitingOn) || null,
+    }));
+}

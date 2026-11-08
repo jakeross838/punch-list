@@ -123,3 +123,22 @@ export function workDays<T extends Pick<Item, 'id' | 'hours'>>(items: T[]): Work
   }
   return days;
 }
+
+/**
+ * How long a title's work usually takes, to offer on a new item: its standard title's time, or else
+ * the middle of the times given on items with the same title, on any job. null when nothing says.
+ */
+export function usualHours(title: string, items: Pick<Item, 'title' | 'hours' | 'status'>[], titles: { title: string; hours: number | null }[]): { hours: number; from: 'standard' | 'past' } | null {
+  const key = title.trim().toLowerCase();
+  if (!key) return null;
+  const standard = titles.find((t) => t.title.trim().toLowerCase() === key && t.hours !== null && t.hours > 0);
+  if (standard?.hours) return { hours: standard.hours, from: 'standard' };
+  const given = items
+    .filter((i) => i.status !== 'removed' && i.hours !== null && i.hours > 0 && i.title.trim().toLowerCase() === key)
+    .map((i) => i.hours!)
+    .sort((a, b) => a - b);
+  if (given.length === 0) return null;
+  const mid = given.length % 2 === 1 ? given[(given.length - 1) / 2]! : (given[given.length / 2 - 1]! + given[given.length / 2]!) / 2;
+  const hours = tidyHours(mid);
+  return hours ? { hours, from: 'past' } : null;
+}

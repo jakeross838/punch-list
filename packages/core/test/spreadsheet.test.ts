@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { csvCell, itemsCsv, itemsSheet, sheetFileName, sheetStatus, sortItems, SHEET_COLUMNS, type Item, type SheetLookups } from '../src/index';
+import {
+  csvCell,
+  guessColumns,
+  isTable,
+  itemsCsv,
+  itemsSheet,
+  parseTable,
+  readColumns,
+  sheetFileName,
+  sheetStatus,
+  sortItems,
+  tableItems,
+  taskPrompt,
+  SHEET_COLUMNS,
+  type Item,
+  type SheetLookups,
+} from '../src/index';
 
 let n = 0;
 function item(over: Partial<Item>): Item {
@@ -82,5 +98,30 @@ describe('priority', () => {
     const a = item({ number: 1 });
     const b = item({ number: 2, priority: true });
     expect(sortItems([a, b]).map((i) => i.id)).toEqual([b.id, a.id]);
+  });
+});
+
+describe("items from someone else's spreadsheet", () => {
+  it('reads rows copied from a spreadsheet, or saved as CSV with quotes', () => {
+    expect(parseTable('Room\tItem\nKitchen\tDoor rubs\n\n')).toEqual([['Room', 'Item'], ['Kitchen', 'Door rubs']]);
+    expect(parseTable('﻿Room,Item\r\n"Kitchen, east","Door ""rubs"""\r\n')).toEqual([['Room', 'Item'], ['Kitchen, east', 'Door "rubs"']]);
+    expect(isTable(parseTable('one thing\nanother thing'))).toBe(false);
+    expect(isTable(parseTable('Room\tItem\nKitchen\tDoor rubs'))).toBe(true);
+  });
+
+  it('knows the columns by their names, and leaves out rows done already', () => {
+    const rows = parseTable('Location\tTask\tSub\tStatus\tNotes\nKitchen 109\tAdjust cabinet door\tSMS Carpentry\tOpen\tLeft of the sink\nLaundry 119\tTouch up paint\t\tDone\t\n\t\t\t\t');
+    const map = guessColumns(rows);
+    expect(map).toEqual({ title: 1, description: 4, location: 0, assignedTo: 2, waitingOn: null, done: 3, header: true });
+    expect(tableItems(rows, map)).toEqual([{ title: 'Adjust cabinet door', description: 'Left of the sink', location: 'Kitchen 109', assignedTo: 'SMS Carpentry', waitingOn: null }]);
+    expect(guessColumns([['Kitchen', 'Door rubs']]).title).toBeNull();
+    expect(tableItems([['Kitchen', 'Door rubs']], { ...map, title: null })).toEqual([]);
+  });
+
+  it("asks Claude which column is which when the names do not say, and reads its answer", () => {
+    const words = taskPrompt('columns', { rows: [['Kitchen', 'Door rubs', 'SMS']] });
+    expect(words).toContain('Row 1: [0] Kitchen | [1] Door rubs | [2] SMS');
+    expect(readColumns('{"title": 1, "location": 0, "assignedTo": 2, "description": 9, "header": false}', 3)).toEqual({ title: 1, description: null, location: 0, assignedTo: 2, waitingOn: null, done: null, header: false });
+    expect(readColumns('{"title": null}', 3)).toBeNull();
   });
 });

@@ -6,6 +6,9 @@
 //
 // Opened from the camera, the location the camera is in is where they are standing: what they say
 // goes there unless they name another location.
+//
+// Read a List is the same sheet for a punch list someone else wrote: a PDF, or photos of its pages
+// (or pasted in), which Claude reads into the same items to check.
 
 import {
   assigneeFields,
@@ -13,7 +16,12 @@ import {
   duplicatesOf,
   itemNumberLabel,
   floorOf,
+  guessColumns,
   inWalkOrder,
+  isTable,
+  parseTable,
+  readColumns,
+  tableItems,
   personKey,
   readSayIt,
   teamInOrder,
@@ -21,6 +29,7 @@ import {
   tidyTitle,
   TITLE_MAX,
   type HeardItem,
+  type ListReadInput,
   type SayItInput,
 } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -29,6 +38,8 @@ import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
 import { askClaude, useClaudeReady } from '@/ai/claude';
 import { troubleMessage } from '@/ai/claudeErrors';
 import { useListening } from '@/ai/listen';
+import { PlanReadError, type PickedPlans } from '@/ai/planFiles';
+import { pickPlanPdf, pickPlanPictures, pickTableFile, readList, takePlanPicture, useCanReadPlans, usePlanWays } from '@/ai/readPlans';
 import { startDraft, useFormOptions } from '@/components/ItemForm';
 import { colors, fieldFont, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
@@ -51,7 +62,7 @@ import {
   useLeaveGuard,
 } from '@/ui';
 
-type Stage = { at: 'say' } | { at: 'working' } | { at: 'review' } | { at: 'problem'; message: string };
+type Stage = { at: 'say' } | { at: 'working'; reading?: 'sending' | 'reading' } | { at: 'review' } | { at: 'problem'; message: string };
 
 /** An item Claude heard, as it is checked: whether it goes on, and what it says. */
 interface Row {
@@ -71,7 +82,11 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export default function SayItScreen() {
-  const { jobId, roomId } = useLocalSearchParams<{ jobId: string; roomId?: string }>();
+  const { jobId, roomId, read } = useLocalSearchParams<{ jobId: string; roomId?: string; read?: string }>();
+  // Read a List: a punch list someone else wrote, from a PDF or photos of its pages.
+  const readingList = read === '1';
+  const canRead = useCanReadPlans();
+  const ways = usePlanWays();
   const data = useData();
   const feedback = useFeedback();
   const ready = useClaudeReady();
@@ -119,7 +134,9 @@ export default function SayItScreen() {
   /** Each heard item, matched to the job: its location by name (or where they are standing), and who does it. */
   function rowsOf(heard: HeardItem[]): Row[] {
     return heard.map((h, i) => {
-      const at = h.location ? active.find((l) => same(l.label, h.location!)) : null;
+      // A location by its label, or by its name alone when only one has it.
+      const named = h.location ? active.filter((l) => same(l.name, h.location!)) : [];
+      const at = h.location ? (active.find((l) => same(l.label, h.location!)) ?? (named.length === 1 ? named[0] : null)) : null;
       const company = h.assignedTo ? onJob.find((c) => same(c.name, h.assignedTo!)) : undefined;
       const person = !company && h.assignedTo ? crew.find((p) => same(p.name, h.assignedTo!)) : undefined;
       const waiting = h.waitingOn ? (options.waitingOptions.find((o) => same(o.label, h.waitingOn!))?.value ?? h.waitingOn) : null;
@@ -139,27 +156,107 @@ export default function SayItScreen() {
     });
   }
 
-  async function makeItems() {
-    const words = text.trim();
-    if (!words || !ready) return;
-    if (listening.on) listening.stop();
-    const mine = ++run.current;
-    setStage({ at: 'working' });
-    haptic.tap();
-    const input: SayItInput = {
-      words,
-      here: here?.label ?? null,
+  /** The job's names, for Claude to match what it reads or hears. */
+  function namesOnJob(): ListReadInput {
+    return {
       locations: active.map((l) => l.label),
       companies: onJob.map((c) => ({ name: c.name, trade: c.trade })),
       people: crew.map((p) => p.name),
       titles: titles.filter((t) => t.approved).map((t) => ({ title: t.title, trade: trades.find((x) => x.id === t.tradeId)?.name ?? null })),
     };
+  }
+
+  /** A punch list picked as a PDF or photos of its pages: Claude reads it into items to check. */
+  async function readPicked(pick: () => Promise<PickedPlans | null>) {
+    let picked: PickedPlans | null;
+    try {
+      picked = await pick();
+    } catch (e) {
+      feedback.toast({ message: e instanceof Error ? e.message : 'That did not open. Try again.' });
+      return;
+    }
+    if (!picked) return;
+    const mine = ++run.current;
+    setStage({ at: 'working', reading: 'sending' });
+    haptic.tap();
+    try {
+      const heard = await readList(jobId, picked, namesOnJob(), (reading) => {
+        if (run.current === mine) setStage({ at: 'working', reading });
+      });
+      if (run.current !== mine) return;
+      setRows(rowsOf(heard));
+      haptic.success();
+      setStage({ at: 'review' });
+    } catch (e) {
+      if (run.current !== mine) return;
+      haptic.warning();
+      setStage({ at: 'problem', message: e instanceof PlanReadError ? e.message : 'Claude did not answer. Try again.' });
+    }
+  }
+
+  /**
+   * Rows from someone else's spreadsheet, copied in or saved as CSV: each row an item to check. The
+   * columns are known by their names; Claude says which is which when the names do not.
+   */
+  async function readTable(rows: string[][]) {
+    const mine = ++run.current;
+    setStage({ at: 'working', reading: 'reading' });
+    haptic.tap();
+    let map = guessColumns(rows);
+    if (map.title === null && ready) {
+      try {
+        map = readColumns(await askClaude('columns', { rows: rows.slice(0, 8) }), Math.max(...rows.map((r) => r.length))) ?? map;
+      } catch {
+        // No signal, say: the names are all there is to go by.
+      }
+    }
+    if (run.current !== mine) return;
+    const heard = tableItems(rows, map);
+    if (heard.length === 0) {
+      haptic.warning();
+      setStage({ at: 'problem', message: 'There is no column of work to do in that spreadsheet. Name it Task or Item, then try again.' });
+      return;
+    }
+    setRows(rowsOf(heard));
+    haptic.success();
+    setStage({ at: 'review' });
+  }
+
+  async function chooseTable() {
+    try {
+      const got = await pickTableFile();
+      if (got === null) return;
+      const rows = parseTable(got);
+      if (rows.length === 0) {
+        feedback.toast({ message: 'That spreadsheet is empty.' });
+        return;
+      }
+      await readTable(rows);
+    } catch (e) {
+      feedback.toast({ message: e instanceof Error ? e.message : 'That spreadsheet did not open. Save it as a CSV, then try again.' });
+    }
+  }
+
+  async function makeItems() {
+    const words = text.trim();
+    // Rows copied from a spreadsheet go row by row.
+    const table = readingList ? parseTable(words) : [];
+    if (readingList && isTable(table)) {
+      await readTable(table);
+      return;
+    }
+    if (!words || !ready) return;
+    if (listening.on) listening.stop();
+    const mine = ++run.current;
+    setStage({ at: 'working' });
+    haptic.tap();
+    const input: SayItInput = { words, here: here?.label ?? null, ...namesOnJob() };
     try {
       const heard = readSayIt(await askClaude('say-it', input), input);
       if (run.current !== mine) return;
       if (heard.length === 0) {
         haptic.warning();
-        setStage({ at: 'problem', message: 'Claude did not hear anything to do in that. Say it again, one thing after another.' });
+        setStage({ at: 'problem', message: readingList ? 'Claude did not find anything to do in that. Paste the whole list, or choose its PDF.' : 'Claude did not hear anything to do in that. Say it again, one thing after another.' });
         return;
       }
       setRows(rowsOf(heard));
@@ -193,7 +290,7 @@ export default function SayItScreen() {
         const draft = checkItem(fields).length > 0;
         if (draft) drafts += 1;
         const { locationId, ...item } = draft ? tidyItem({ ...fields, unfinished: true }) : fields;
-        await data.createItem({ ...item, jobId, locationId, source: 'said' });
+        await data.createItem({ ...item, jobId, locationId, source: readingList ? 'import' : 'said' });
       }
       haptic.success();
       const made = plural(adding.length, 'item', 'items');
@@ -220,7 +317,7 @@ export default function SayItScreen() {
 
   return (
     <Page
-      title="Say It"
+      title={readingList ? 'Read a List' : 'Say It'}
       eyebrow={here?.label}
       sheet
       left={[{ kind: 'button', label: 'Cancel', onPress: cancel, testID: 'say-cancel' }]}
@@ -236,9 +333,32 @@ export default function SayItScreen() {
         <>
           <View style={styles.intro}>
             <Text color={colors.secondary}>
-              {`Say everything left to do${here ? ` in ${here.label}` : ''}, one thing after another: what it is, where, and who does it if you know. Claude writes each one down as an item for you to check.`}
+              {readingList
+                ? 'Choose the punch list: a PDF, photos of its pages, or a spreadsheet saved as CSV. Or paste it, rows copied from a spreadsheet too. Each thing on it becomes an item for you to check.'
+                : `Say everything left to do${here ? ` in ${here.label}` : ''}, one thing after another: what it is, where, and who does it if you know. Claude writes each one down as an item for you to check.`}
             </Text>
-            {!ready ? <Banner icon="info.circle">Claude is not set up yet for your company, so Say It cannot write the items down yet.</Banner> : null}
+            {!ready ? <Banner icon="info.circle">{`Claude is not set up yet for your company, so ${readingList ? 'Read a List' : 'Say It'} cannot write the items down yet.`}</Banner> : null}
+            {readingList && canRead ? (
+              <View style={styles.choose}>
+                {ways.pdf ? <Button label="Choose a PDF" icon="doc" variant="tinted" onPress={() => void readPicked(pickPlanPdf)} testID="list-pdf" /> : null}
+                {ways.pictures ? <Button label="Choose Photos" icon="photo.on.rectangle" variant="tinted" onPress={() => void readPicked(pickPlanPictures)} testID="list-photos" /> : null}
+                <Button label="Choose a Spreadsheet" icon="list.bullet" variant="tinted" onPress={() => void chooseTable()} testID="list-table" />
+                {ways.camera ? (
+                  <Button
+                    label="Take a Photo"
+                    icon="camera"
+                    variant="tinted"
+                    onPress={() =>
+                      void readPicked(async () => {
+                        const f = await takePlanPicture();
+                        return f ? { kind: 'pictures', files: [f] } : null;
+                      })
+                    }
+                    testID="list-camera"
+                  />
+                ) : null}
+              </View>
+            ) : null}
             {listening.problem ? (
               <Banner icon="exclamationmark.circle.fill" tone="warning">
                 {listening.problem}
@@ -249,18 +369,18 @@ export default function SayItScreen() {
             <TextInput
               value={text}
               onChangeText={setText}
-              placeholder="The cabinet door left of the sink rubs. Touch up the paint by the window. Tile is chipped by the tub, the tile company."
+              placeholder={readingList ? 'Paste the list here.' : 'The cabinet door left of the sink rubs. Touch up the paint by the window. Tile is chipped by the tub, the tile company.'}
               placeholderTextColor={colors.placeholder}
               selectionColor={colors.tint}
               multiline
-              autoFocus={!listening.available}
+              autoFocus={!listening.available && !readingList}
               autoCapitalize="sentences"
               accessibilityLabel="What is left to do"
               testID="say-words"
               style={styles.wordsInput}
             />
           </View>
-          {listening.available ? (
+          {listening.available && !readingList ? (
             <View style={styles.micArea}>
               <Touchable
                 feedback="scale"
@@ -283,7 +403,7 @@ export default function SayItScreen() {
         <View style={styles.working} accessibilityLiveRegion="polite">
           <ActivityIndicator size="large" color={colors.secondary} />
           <Text variant="headline" align="center" testID="say-working">
-            Claude Is Writing the Items
+            {stage.reading === 'sending' ? 'Sending the List' : stage.reading === 'reading' ? 'Claude Is Reading the List' : 'Claude Is Writing the Items'}
           </Text>
           <Text color={colors.secondary} align="center">
             This takes a few seconds.
@@ -301,7 +421,7 @@ export default function SayItScreen() {
           </Text>
           <View style={styles.buttons}>
             <Button label="Try Again" onPress={() => void makeItems()} testID="say-retry" />
-            <Button label="Change What Was Said" variant="tinted" onPress={() => setStage({ at: 'say' })} testID="say-change" />
+            <Button label={readingList ? 'Back to the List' : 'Change What Was Said'} variant="tinted" onPress={() => setStage({ at: 'say' })} testID="say-change" />
           </View>
         </View>
       ) : null}
@@ -349,7 +469,7 @@ export default function SayItScreen() {
             })}
           </ListSection>
           <ListSection variant="plain">
-            <ListRow title="Change What Was Said" icon="mic" tone="tint" onPress={() => setStage({ at: 'say' })} testID="say-again" />
+            <ListRow title={readingList ? 'Back to the List' : 'Change What Was Said'} icon={readingList ? 'doc' : 'mic'} tone="tint" onPress={() => setStage({ at: 'say' })} testID="say-again" />
           </ListSection>
         </>
       ) : null}
@@ -459,6 +579,7 @@ function FixSheet({
 const styles = StyleSheet.create({
   intro: { marginHorizontal: layout.inset, marginTop: 4, marginBottom: 14, gap: 12 },
   words: { marginHorizontal: layout.margin, padding: 14, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border },
+  choose: { gap: 8 },
   wordsInput: { ...fieldFont('body'), minHeight: 150, padding: 0, color: colors.label, textAlignVertical: 'top', outlineWidth: 0 },
   micArea: { alignItems: 'center', gap: 10, marginTop: 22 },
   mic: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },

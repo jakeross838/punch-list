@@ -8,12 +8,16 @@ import {
   closeMatches,
   closePairs,
   isClaudeTask,
+  listReadInput,
+  listReadPrompt,
   keeperOf,
   likeness,
   mergedWaits,
   pairKey,
+  readCompanyCard,
   readDoneCheck,
   readDuplicates,
+  readWaitsOn,
   readSameItem,
   readSayIt,
   readStandardTitle,
@@ -152,6 +156,48 @@ describe("Claude's tasks", () => {
     expect(readDuplicates('{"same": "1"}', [1])).toEqual([]);
     expect(readStandardTitle('{"title": "tighten towel bar"}', ['Tighten towel bar'])).toBe('Tighten towel bar');
     expect(readStandardTitle('{"title": "Something new"}', ['Tighten towel bar'])).toBeNull();
+  });
+
+  it('asks what a new item waits on, among the open items in its location, and reads the numbers', () => {
+    const words = taskPrompt('waits-on', {
+      item: { title: 'Set the toilet', location: 'Guest Bath 210', company: 'Gator Plumbing' },
+      candidates: [{ n: 14, title: 'Install tile floor', location: 'Guest Bath 210', company: 'Volcano Stone' }],
+    });
+    expect(words).toContain('The new item: Set the toilet (in Guest Bath 210), by Gator Plumbing');
+    expect(words).toContain('- #14 Install tile floor (in Guest Bath 210), by Volcano Stone');
+    expect(CLAUDE_TASKS['waits-on'].enough({ item: { title: 'Set the toilet' }, candidates: [] })).toBe(false);
+    expect(readWaitsOn('{"waits": [14, "#3", 99]}', [3, 14])).toEqual([14, 3]);
+    expect(readWaitsOn('{"waits": "14"}', [14])).toEqual([]);
+  });
+
+  it('reads a company from a business card or an email signature', () => {
+    const spec = CLAUDE_TASKS['company-card'];
+    expect([spec.images, spec.minImages]).toEqual([1, 0]);
+    expect(spec.enough({ words: '  ', card: false })).toBe(false);
+    expect(spec.enough({ words: '', card: true })).toBe(true);
+    const words = taskPrompt('company-card', { words: 'Dave Smith\nGator Plumbing\n941-555-0102', card: false, trades: ['Plumbing', 'Electrical'] });
+    expect(words).toContain("from an email signature.");
+    expect(words).toContain('Dave Smith\nGator Plumbing');
+    expect(words).toContain('written exactly as it is here, or null when unsure: Plumbing, Electrical.');
+    expect(taskPrompt('company-card', { card: true, trades: [] })).toContain('from a photo of a business card.');
+    const read = readCompanyCard(
+      'Here: {"name": "Gator Plumbing", "trade": "plumbing", "phone": "941-555-0101", "email": "Office@GatorPlumbing.com", "people": [{"name": "Dave Smith", "phone": "x", "email": "not an email"}, {"phone": "941"}]}',
+      ['Plumbing', 'Electrical'],
+    );
+    expect(read).toEqual({ name: 'Gator Plumbing', trade: 'Plumbing', phone: '941-555-0101', email: 'office@gatorplumbing.com', people: [{ name: 'Dave Smith', phone: null, email: null }] });
+    expect(readCompanyCard('{"name": "", "trade": "Plumbing"}', ['Plumbing'])).toBeNull();
+  });
+
+  it("reads a punch list someone else wrote, in the job's names", () => {
+    const input = listReadInput({ locations: ['Kitchen 109', 7], companies: [{ name: 'SMS Carpentry', trade: 'Carpentry' }, { trade: 'x' }], people: ['Sam Rivera'], titles: [{ title: 'Adjust cabinet door', trade: 'Carpentry' }], words: 'ignored' });
+    expect(input).toEqual({ locations: ['Kitchen 109', '7'], companies: [{ name: 'SMS Carpentry', trade: 'Carpentry' }], people: ['Sam Rivera'], titles: [{ title: 'Adjust cabinet door', trade: 'Carpentry' }] });
+    const pages = listReadPrompt(input, { pages: 2 });
+    expect(pages).toContain('The list is attached as pictures of 2 pages, in order.');
+    expect(pages).toContain('a room heading counts for everything under it');
+    expect(pages).toContain('- SMS Carpentry (Carpentry)');
+    const text = listReadPrompt(input, { text: 'Kitchen\n1. Door rubs' });
+    expect(text).toContain('The list is below, as the text on each page.');
+    expect(text.endsWith('The list:\nKitchen\n1. Door rubs')).toBe(true);
   });
 
   it('checks the done photo against the photo of the problem, and reads what it saw', () => {

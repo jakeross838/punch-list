@@ -35,3 +35,6 @@ export const MOST_PDF_BYTES = 30 * 1024 * 1024;
 
 export const TOO_BIG = 'That PDF is too big to read at once. Save the floor plan pages as a PDF of their own, or take pictures of them.';
 export const NOTHING_FOUND = 'Claude could not find the rooms on these plans. Try the floor plan pages, or clearer pictures of them.';
+
+/** When Claude finds no work to do on a list. */
+export const NOTHING_ON_LIST = 'Claude did not find anything to do on that list. Check it is the punch list, then try again.';
