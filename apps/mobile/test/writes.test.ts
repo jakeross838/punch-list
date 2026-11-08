@@ -173,7 +173,7 @@ describe('planWrites', () => {
     expect(writes.map((w) => `${w.table} ${w.op}`)).toEqual(['photos insert', 'photo_files insert']);
     expect(writes[0]!.values).not.toHaveProperty('storage_path');
     // A done photo says so as it goes up; it never changes after.
-    expect(writes[0]!.values).toMatchObject({ done: true });
+    expect(writes[0]!.values).toMatchObject({ done: 1 });
     expect(writes[1]).toEqual({ table: 'photo_files', op: 'insert', id: 'ph1', values: { uri: 'file:///photos/ph1.jpg', uploaded: 0 } });
   });
 
