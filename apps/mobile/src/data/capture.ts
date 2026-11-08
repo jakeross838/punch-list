@@ -129,8 +129,9 @@ export const capture = {
     set({ ...state, shots: [...state.shots, { ...shot, key }] });
     return key;
   },
-  setMarks(key: string, marks: Mark[]): void {
-    set({ ...state, shots: state.shots.map((s) => (s.key === key ? { ...s, marks } : s)) });
+  /** The shot's marks, and its new picture when it was cropped. */
+  setMarks(key: string, marks: Mark[], picture?: { uri: string; width: number; height: number }): void {
+    set({ ...state, shots: state.shots.map((s) => (s.key === key ? { ...s, ...(picture ? { uri: picture.uri, width: picture.width, height: picture.height } : {}), marks } : s)) });
   },
   removeShot(key: string): void {
     set({ ...state, shots: state.shots.filter((s) => s.key !== key) });

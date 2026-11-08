@@ -2,7 +2,9 @@
 // (about a minute). Then everything it found is shown to check before anything is added: the job's
 // name and address from the title block, and each level's locations in walk order. Tap one to
 // leave it out, or the pencil to fix its name. Add puts them on the job in the plans' order, and a
-// location typed in on a walk with no number gets its number and level from the plans.
+// location typed in on a walk with no number gets its number and level from the plans. Each level's
+// floor plan is kept in Plans, to pin items on (from pictures of the sheets, and from a PDF where
+// its pages can be drawn). Then the usual work from the templates is offered for the new locations.
 
 import {
   floorOf,
@@ -12,17 +14,21 @@ import {
   planLocations,
   renameLocation,
   SHARED_GROUP,
+  taskCount,
+  templatePlan,
   type PlanLocation,
   type PlanReading,
 } from '@punch/core';
+import { randomUUID } from 'expo-crypto';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
-import { pickPlanPdf, pickPlanPictures, readPlans, takePlanPicture, usePlanWays } from '@/ai/readPlans';
+import { pickPlanPdf, pickPlanPictures, planSheetPicture, readPlans, takePlanPicture, usePlanWays } from '@/ai/readPlans';
 import { MOST_PICTURES, PlanReadError, type PickedPlans, type PlanFile } from '@/ai/planFiles';
 import { useData } from '@/data/api';
+import { itemsWord } from '@/data/clipboard';
 import {
   Banner,
   Button,
@@ -45,13 +51,17 @@ type Stage =
   | { at: 'choose' }
   | { at: 'pictures'; files: PlanFile[] }
   | { at: 'working'; step: 'sending' | 'reading' }
-  | { at: 'review'; reading: PlanReading }
-  | { at: 'problem'; message: string; picked: PickedPlans };
+  | { at: 'review'; reading: PlanReading; picked: PickedPlans }
+  | { at: 'problem'; message: string; picked: PickedPlans }
+  /** The locations are on the job: the usual work for the new ones, from the templates. */
+  | { at: 'tasks'; locationIds: string[] };
 
 /** A read location as it is checked: whether it goes on, and its name as fixed. */
 type Row = PlanLocation & { key: string; on: boolean };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+/** Parts of a sentence: "a and b", or "a, b and c". */
+const andList = (parts: string[]) => (parts.length <= 2 ? parts.join(' and ') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`);
 
 export default function ReadPlansScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
@@ -60,6 +70,12 @@ export default function ReadPlansScreen() {
   const ways = usePlanWays();
   const job = data.useJobs().find((j) => j.id === jobId);
   const locations = data.useLocations(jobId);
+  const plans = data.usePlans(jobId);
+  const templates = data.useTemplates().filter((t) => t.active);
+  const templateTasks = data.useTemplateItems();
+  const items = data.useItems(jobId);
+  const jobCompanies = data.useJobCompanies(jobId);
+  const [leftOut, setLeftOut] = useState<string[]>([]);
   const [stage, setStage] = useState<Stage>({ at: 'choose' });
   const [rows, setRows] = useState<Row[]>([]);
   const [useName, setUseName] = useState(false);
@@ -93,7 +109,7 @@ export default function ReadPlansScreen() {
       setUseName(false);
       setUseAddress(!!title.address && (job?.address ?? '').trim() === '');
       haptic.success();
-      setStage({ at: 'review', reading });
+      setStage({ at: 'review', reading, picked });
     } catch (e) {
       if (run.current !== mine) return;
       haptic.warning();
@@ -139,23 +155,94 @@ export default function ReadPlansScreen() {
     router.back();
   }
 
+  /** Each level's floor plan, kept as the job's plan for the level when it has none yet. Answers the levels kept. */
+  async function keepSheets(reading: PlanReading, picked: PickedPlans, onJob: Row[]): Promise<string[]> {
+    const have = new Set(plans.map((p) => p.floor.toLowerCase()));
+    const kept: string[] = [];
+    for (const level of reading.levels) {
+      if (!level.sheet || have.has(level.name.toLowerCase()) || !onJob.some((r) => r.kind === 'room' && r.floor === level.name)) continue;
+      const picture = await planSheetPicture(picked, level.sheet).catch((e: unknown) => {
+        console.warn('Keeping a floor plan', e);
+        return null;
+      });
+      if (!picture) continue;
+      await data.addPlan({ jobId, floor: level.name, name: `${level.name} Floor Plan`, ...picture });
+      have.add(level.name.toLowerCase());
+      kept.push(level.name);
+    }
+    return kept;
+  }
+
   async function add() {
     if (stage.at !== 'review' || saving || count === 0) return;
     setSaving(true);
     try {
       // The ones there already go too: the new ones take their places around them.
       const chosen = rows.filter((r) => r.on || planChange(r) === 'same');
-      const result = adding.length > 0 ? await data.addPlanLocations(jobId, chosen) : { added: 0, filledIn: 0 };
+      const result = adding.length > 0 ? await data.addPlanLocations(jobId, chosen) : { added: 0, filledIn: 0, addedIds: [] };
       const patch = { ...(useName && fromTitle.name ? { name: fromTitle.name } : {}), ...(useAddress && fromTitle.address ? { address: fromTitle.address } : {}) };
       if (Object.keys(patch).length > 0) await data.updateJob(jobId, patch);
+      const sheets = await keepSheets(stage.reading, stage.picked, chosen);
       haptic.success();
-      const parts = [result.added > 0 ? `${plural(result.added, 'location', 'locations')} added` : null, result.filledIn > 0 ? `${result.filledIn} filled in` : null].filter(Boolean);
-      feedback.toast({ message: parts.length > 0 ? `${parts.join(' and ')} from the plans` : 'The job is updated from the plans' });
+      const parts = [result.added > 0 ? `${plural(result.added, 'location', 'locations')} added` : null, result.filledIn > 0 ? `${result.filledIn} filled in` : null].filter(
+        (p): p is string => p !== null,
+      );
+      // "Level 2 floor plan is in Plans."
+      const kept = sheets.length > 0 ? ` ${andList(sheets)} floor ${sheets.length === 1 ? 'plan is' : 'plans are'} in Plans.` : '';
+      feedback.toast({ message: `${parts.length > 0 ? `${andList(parts)} from the plans` : 'The job is updated from the plans'}${kept ? `.${kept}` : ''}` });
       allowLeave();
-      router.back();
+      // The usual work for the new locations, when there are templates to take it from.
+      if (result.addedIds.length > 0 && templateTasks.some((t) => t.active)) setStage({ at: 'tasks', locationIds: result.addedIds });
+      else router.back();
     } catch (e) {
       haptic.warning();
       feedback.toast({ message: e instanceof Error ? e.message : 'The locations did not save. Try again.' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // The usual work for the new locations: each template's tasks in every new location they fit.
+  const usual =
+    stage.at === 'tasks'
+      ? templates
+          .map((t) => ({
+            template: t,
+            plan: templatePlan(
+              templateTasks.filter((x) => x.templateId === t.id),
+              { jobId, locations, items, jobCompanies },
+              randomUUID,
+              { onlyLocationIds: stage.locationIds },
+            ),
+          }))
+          .filter((u) => u.plan.items.length > 0)
+      : [];
+  const usualPicked = usual.filter((u) => !leftOut.includes(u.template.id));
+  const usualPlan =
+    stage.at === 'tasks'
+      ? templatePlan(
+          templateTasks.filter((x) => usualPicked.some((u) => u.template.id === x.templateId)),
+          { jobId, locations, items, jobCompanies },
+          randomUUID,
+          { onlyLocationIds: stage.locationIds },
+        )
+      : null;
+  const usualCount = usualPlan?.items.length ?? 0;
+
+  async function addUsual() {
+    if (!usualPlan || usualCount === 0 || saving) return;
+    setSaving(true);
+    try {
+      const ids = await data.addItems(usualPlan.items);
+      haptic.success();
+      feedback.toast({
+        message: `Added ${itemsWord(ids.length)} from the templates`,
+        action: { label: 'Undo', onPress: () => void data.updateItems(ids.map((id) => ({ id, patch: { status: 'removed' } }))) },
+      });
+      router.back();
+    } catch (e) {
+      haptic.warning();
+      feedback.toast({ message: e instanceof Error ? e.message : 'That did not save. Try again.' });
     } finally {
       setSaving(false);
     }
@@ -168,11 +255,17 @@ export default function ReadPlansScreen() {
     <Page
       title="Read the Plans"
       sheet
-      left={[{ kind: 'button', label: 'Cancel', onPress: cancel, testID: 'plans-cancel' }]}
+      left={[
+        stage.at === 'tasks'
+          ? { kind: 'button', label: 'Not Now', onPress: () => router.back(), testID: 'plans-tasks-skip' }
+          : { kind: 'button', label: 'Cancel', onPress: cancel, testID: 'plans-cancel' },
+      ]}
       right={
         reviewing
           ? [{ kind: 'button', label: count > 0 ? `Add ${count}` : 'Add', variant: 'prominent', onPress: () => void add(), disabled: count === 0 || saving, testID: 'plans-add' }]
-          : []
+          : stage.at === 'tasks'
+            ? [{ kind: 'button', label: usualCount > 0 ? `Add ${usualCount}` : 'Add', variant: 'prominent', onPress: () => void addUsual(), disabled: usualCount === 0 || saving, testID: 'plans-tasks-add' }]
+            : []
       }
     >
       {stage.at === 'choose' ? (
@@ -262,6 +355,36 @@ export default function ReadPlansScreen() {
           <ListSection variant="plain">
             <ListRow title="Read Other Plans" icon="map" tone="tint" onPress={() => setStage({ at: 'choose' })} testID="plans-again" />
           </ListSection>
+        </>
+      ) : null}
+      {stage.at === 'tasks' ? (
+        <>
+          <View style={styles.summary}>
+            <Text variant="headline">The Usual Work</Text>
+            <Text variant="subheadline" color={colors.secondary} testID="plans-tasks-summary">
+              {usual.length > 0
+                ? "Each template's tasks go in every new location they fit. Tap one to leave it out."
+                : 'Nothing in the templates fits the new locations.'}
+            </Text>
+          </View>
+          {usual.length > 0 ? (
+            <ListSection
+              variant="plain"
+              header="From the Templates"
+              footer={usualPlan && usualPlan.needCompany > 0 ? `${usualPlan.needCompany === 1 ? '1 goes' : `${usualPlan.needCompany} go`} to Drafts until a company on the job does its trade.` : undefined}
+            >
+              {usual.map((u) => (
+                <PickRow
+                  key={u.template.id}
+                  title={u.template.name}
+                  detail={`${taskCount(u.plan.items.length)} in ${plural(u.plan.byLocation.length, 'location', 'locations')}`}
+                  on={!leftOut.includes(u.template.id)}
+                  onPress={() => setLeftOut((l) => (l.includes(u.template.id) ? l.filter((x) => x !== u.template.id) : [...l, u.template.id]))}
+                  testID={`plans-template-${u.template.id}`}
+                />
+              ))}
+            </ListSection>
+          ) : null}
         </>
       ) : null}
       <FixSheet

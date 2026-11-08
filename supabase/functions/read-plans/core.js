@@ -6,6 +6,7 @@ var EXAMPLE = {
   levels: [
     {
       name: "Level 1",
+      sheet: 3,
       rooms: [
         { name: "Garage", number: "101" },
         { name: "Foyer", number: "102" },
@@ -14,6 +15,7 @@ var EXAMPLE = {
     },
     {
       name: "Level 2",
+      sheet: 4,
       rooms: [
         { name: "Master Bedroom", number: "201" },
         { name: "Master Closet", number: null }
@@ -40,6 +42,7 @@ function planPrompt(options = {}) {
     `- Levels from the lowest up, named the way the plans name them and written out: Ground Level, Level 1, Second Floor, Roof Deck.${levels.length > 0 ? ` The job already has these levels: ${levels.join(", ")}. Use those names for the same levels.` : ""}`,
     "- outside: Pool and Driveway, unless a site plan shows the house has none, then anything else outside the house that the plans show, like Dock, Spa or Fence. The elevations, the roof, the site and the whole house are already on every job.",
     "- name: the job's name from the title block, like Smith Residence, or null. address: the house's street address from the title block, in one line, not the architect's, or null.",
+    "- sheet: for each level, the number of the page (or the picture) with its floor plan, counting from 1, or null when no floor plan shows the level.",
     "- notes: a short sentence on anything you could not read or are unsure of, or null.",
     "",
     "Reply with only JSON, like:",

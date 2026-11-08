@@ -98,6 +98,8 @@ export interface TemplatePlan {
 export interface TemplatePlanOptions {
   /** Just the tasks that fit this one location. */
   onlyLocationId?: string;
+  /** Just the tasks that fit these locations: the ones the plans just added. */
+  onlyLocationIds?: string[];
   /** Just the tasks for these places. */
   places?: TemplatePlace[];
   /** Just these tasks; the rest still count for what these wait on. */
@@ -124,8 +126,10 @@ export function templatePlan(
   const plannedKeys = new Set<string>();
   let skipped = 0;
   for (const task of wanted) {
-    const where = into ?? locationsFor(task.place, job.locations).filter((l) => !options.onlyLocationId || l.id === options.onlyLocationId);
-    if (where.length === 0 && !options.onlyLocationId && !into && !missing.includes(task.place)) missing.push(task.place);
+    const where =
+      into ??
+      locationsFor(task.place, job.locations).filter((l) => (!options.onlyLocationId || l.id === options.onlyLocationId) && (!options.onlyLocationIds || options.onlyLocationIds.includes(l.id)));
+    if (where.length === 0 && !options.onlyLocationId && !options.onlyLocationIds && !into && !missing.includes(task.place)) missing.push(task.place);
     const ids = new Map<string, string>();
     for (const l of where) {
       const twin = twinIn(task.title, l.id, existing, true);

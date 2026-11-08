@@ -210,6 +210,8 @@ async function main(): Promise<void> {
   let first = '';
   let second = '';
   let third = '';
+  let uncropped = '';
+  let cropped = '';
 
   await step("the company's name, changed by its admin", async () => {
     await api.renameOrg('  Ross   Built Custom Homes ');
@@ -266,6 +268,11 @@ async function main(): Promise<void> {
     await api.updatePhoto(b!.id, { removed: true });
     // The uploader, once a picture is up.
     send({ table: 'photos', op: 'update', id: a!.id, values: { storage_path: `${jobId}/${a!.id}.jpg` } });
+  });
+  await step('a photo cropped in markup: the new picture takes its place with the marks moved, and the one before is kept, removed', async () => {
+    const a = state.photos.find((p) => p.itemId === first && !p.removed);
+    uncropped = a!.id;
+    cropped = (await api.replacePhoto(uncropped, { uri: 'file:///tmp/a-cropped.jpg', width: 4032, height: 3024, marks: [{ tool: 'circle', color: 'red', from: [0.1, 0.3], to: [0.4, 0.6] }] })) ?? '';
   });
   await step('a plan for the level, an item pinned on it, a priority and a checklist', async () => {
     const plan = await api.addPlan({ jobId, floor: 'Level 1', name: 'Level 1 Plan', uri: 'file:///tmp/plan.jpg', width: 1600, height: 1100 });
@@ -380,12 +387,13 @@ async function main(): Promise<void> {
     const reading = {
       name: null,
       address: null,
-      levels: [{ name: 'Level 3', rooms: [{ name: 'Office', number: '301' }, { name: 'Bunk Room', number: '302' }] }],
+      levels: [{ name: 'Level 3', rooms: [{ name: 'Office', number: '301' }, { name: 'Bunk Room', number: '302' }], sheet: null }],
       outside: outsideAreas(['Dock']),
       notes: null,
     };
     const result = await api.addPlanLocations(jobId, planLocations(reading, state.locations.filter((l) => l.jobId === jobId)));
     if (result.added !== 8 || result.filledIn !== 1) failures.push(`the plans added ${result.added} and filled in ${result.filledIn}, not 8 and 1`);
+    if (result.addedIds.length !== 8 || result.addedIds.some((id) => !state.locations.some((l) => l.id === id && l.active))) failures.push('the plans did not say which locations they added');
   });
   await step('someone new under People, then changed', async () => {
     const id = await api.addPerson({ name: 'Taylor Brooks', email: 'Taylor@RossBuilt.com', phone: null, role: 'team', sees: 'all' });
@@ -485,6 +493,11 @@ async function main(): Promise<void> {
   check('Sam is on the team as Field', `select part from public.job_team where job_id = ${lit(jobId)} and person_id = ${lit(sam.id)}`, 'field');
   check('Sam completed the item himself', `select completed_by::text = ${lit(sam.id)} from public.items where id = ${lit(third)}`, 't');
   check('the photo knows where its picture is', `select count(*) from public.photos where job_id = ${lit(jobId)} and storage_path is not null`, '1');
+  check(
+    'the cropped photo in place of the one it was made from, which is kept, removed',
+    `select string_agg(id::text || ':' || removed::text || ':' || width || 'x' || height || ':' || sort_order || ':' || jsonb_array_length(marks), ',' order by removed) from public.photos where id in (${lit(uncropped)}, ${lit(cropped)})`,
+    `${cropped}:false:4032x3024:1:1,${uncropped}:true:3024x4032:1:1`,
+  );
   check(
     'the plan, its picture and the pin',
     `select s.name || ',' || (s.storage_path is not null)::text || ',' || i.pin_x || ',' || i.priority::text || ',' || jsonb_array_length(i.checklist) from public.items i join public.plan_sheets s on s.id = i.plan_id where i.id = ${lit(second)}`,

@@ -270,7 +270,7 @@ export interface DataApi {
    * comes back), ones on the job filled in with their number and level, and the job put in the
    * plans' walk order. Answers how many were added and how many filled in.
    */
-  addPlanLocations(jobId: string, rows: PlanLocation[]): Promise<{ added: number; filledIn: number }>;
+  addPlanLocations(jobId: string, rows: PlanLocation[]): Promise<{ added: number; filledIn: number; addedIds: string[] }>;
   createItem(item: NewItem): Promise<string>;
   updateItem(id: string, patch: ItemPatch): Promise<void>;
   /** Many new items at once, from Paste or a template, saved in the order given so each wait points at an item already saved. */
@@ -286,6 +286,12 @@ export interface DataApi {
   /** Keeps the pictures with the item, after the ones it has. */
   addPhotos(photos: NewPhoto[]): Promise<void>;
   updatePhoto(id: string, patch: PhotoPatch): Promise<void>;
+  /**
+   * A cropped or straightened photo takes the place of the one it was made from, with its marks
+   * moved: the new picture goes on the item where the old one was, and the old one is removed (kept,
+   * like everything removed). Answers the new photo's id.
+   */
+  replacePhoto(id: string, picture: { uri: string; width: number; height: number; marks: Mark[] }): Promise<string | null>;
   /** The job's plan sheets, not taken off, in order. */
   usePlans(jobId: string): PlanSheet[];
   addPlan(plan: NewPlan): Promise<string>;

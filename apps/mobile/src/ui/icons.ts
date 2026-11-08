@@ -67,6 +67,8 @@ export const ICON_PATHS = {
   circle: CIRCLE,
   square: 'M4.5 4.5h15v15h-15V4.5Z',
   ruler: 'M3.6 15.4 15.4 3.6l5 5L8.6 20.4l-5-5ZM7.2 11.8l1.8 1.8M9.7 9.3l1.8 1.8M12.2 6.8l1.8 1.8',
+  crop: 'M6.75 3v14.25H21M3 6.75h14.25V21',
+  'rotate.right': 'm15 15 6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3',
   clock: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   '1.circle': `M10.75 9.25 12.5 8v8.25${CIRCLE}`,
   textformat: 'M6 6.75h12M12 6.75V19.5',

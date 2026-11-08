@@ -118,8 +118,8 @@ describe("reading Claude's answer about the plans", () => {
         address: '  123 Gulf Drive,   Holmes Beach, Florida 34217 ',
         floors: [
           { level: 'Level 1', rooms: [{ name: 'GARAGE', number: '101' }, 'Kitchen 109', { name: 'ODK', number: 'abc 9' }, { name: '12', number: '7' }] },
-          { name: 'Level 2', locations: [{ name: 'master bedroom', number: '201' }] },
-          { name: 'level 1', rooms: [{ name: 'Pantry', number: '110' }] },
+          { name: 'Level 2', sheet: 4, locations: [{ name: 'master bedroom', number: '201' }] },
+          { name: 'level 1', page: '3', rooms: [{ name: 'Pantry', number: '110' }] },
           { name: 'Level 3', rooms: [] },
         ],
         outside: ['Driveway', 'dock', 'Pool', 'North Elevation', 'Outside and Whole House'],
@@ -139,8 +139,10 @@ describe("reading Claude's answer about the plans", () => {
             { name: 'ODK', number: null },
             { name: 'Pantry', number: '110' },
           ],
+          // The floor plan's page, from the level read again.
+          sheet: 3,
         },
-        { name: 'Level 2', rooms: [{ name: 'Master Bedroom', number: '201' }] },
+        { name: 'Level 2', rooms: [{ name: 'Master Bedroom', number: '201' }], sheet: 4 },
       ],
       outside: ['North Elevation', 'South Elevation', 'East Elevation', 'West Elevation', 'Roof', 'Pool', 'Driveway', 'Site', 'Whole House', 'Dock'],
       notes: null,
@@ -174,6 +176,7 @@ describe('what reading the plans adds to a job', () => {
           { name: 'Kitchen', number: '109' },
           { name: 'Closet', number: null },
         ],
+        sheet: 1,
       },
       {
         name: 'Level 2',
@@ -182,6 +185,7 @@ describe('what reading the plans adds to a job', () => {
           { name: 'Closet', number: null },
           { name: 'Pool', number: null },
         ],
+        sheet: null,
       },
     ],
     outside: ['North Elevation', 'Pool', 'Dock'],
@@ -215,7 +219,7 @@ describe('what reading the plans adds to a job', () => {
     n = 0;
     const onJob = [loc('Kitchen', null, { id: 'k' }), loc('Kitchen 109', 'Level 1', { id: 'old', active: false })];
     const rows = planLocations(
-      { ...reading, outside: [], levels: [{ name: 'Level 1', rooms: [{ name: 'Kitchen', number: '109' }, { name: 'Kitchen', number: null }] }] },
+      { ...reading, outside: [], levels: [{ name: 'Level 1', rooms: [{ name: 'Kitchen', number: '109' }, { name: 'Kitchen', number: null }], sheet: null }] },
       onJob,
     );
     expect(rows.map((r) => [r.label, r.existing?.id ?? null, planChange(r)])).toEqual([

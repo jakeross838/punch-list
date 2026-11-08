@@ -58,7 +58,9 @@ export type MarkupAction =
   | { type: 'add'; text?: string }
   | { type: 'cancel' }
   | { type: 'undo' }
-  | { type: 'redo' };
+  | { type: 'redo' }
+  /** The photo was cropped: its marks, moved with it, start a new history (Undo cannot reach past the crop). */
+  | { type: 'cropped'; marks: Mark[] };
 
 /** How many changes Undo goes back through. */
 const HISTORY = 60;
@@ -194,6 +196,8 @@ export function markupReducer(s: Markup, a: MarkupAction): Markup {
       if (!next || s.panel) return s;
       return { ...s, marks: next, past: [...s.past, s.marks], future: rest, live: null, picked: null, changing: null };
     }
+    case 'cropped':
+      return { ...s, marks: a.marks, past: [], future: [], live: null, picked: null, changing: null, panel: null };
   }
 }
 

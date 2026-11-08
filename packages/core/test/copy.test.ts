@@ -225,6 +225,11 @@ describe('templates', () => {
     const one = templatePlan(tasks, { jobId: 'fish', locations, items: [done], jobCompanies }, ids(), { onlyLocationId: 'bath1' });
     expect(one.items.map((i) => i.title)).toEqual(['Caulk shower corner', 'Install shower glass', 'Install mirror']);
     expect(one.missing).toEqual([]);
+     // The locations the plans just added: only what fits them, and the waits still find the work they wait on.
+    const added = templatePlan(tasks, { jobId: 'fish', locations, items: [done], jobCompanies }, ids(), { onlyLocationIds: ['bath2'] });
+    expect(added.items.map((i) => `${i.locationId}: ${i.title}`)).toEqual(['bath2: Install shower glass', 'bath2: Install mirror']);
+    expect(added.items[0]!.waitingOnItems).toEqual([done.id]);
+    expect(added.missing).toEqual([]);
   });
 
   it('saves a template from items: each title once for each place, with the waits between them', () => {

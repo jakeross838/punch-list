@@ -44,6 +44,7 @@ import { ItemEditor, type EditorSet } from '@/components/ItemEditor';
 import { itemStatus } from '@/components/ItemRow';
 import { EDITABLE, fieldsOf, sameValue, type ItemDraft } from '@/components/ItemForm';
 import { MarkupEditor } from '@/components/MarkupEditor';
+import type { Picture } from '@/components/cropPicture';
 import { useFillIn } from '@/components/useFillIn';
 import { useRelease } from '@/components/useItemActions';
 import { colors, layout } from '@/constants/theme';
@@ -190,6 +191,8 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   // Someone on the team it is assigned to, when it is not a company's.
   const person = !item.companyId && item.assignedTo ? people.find((p) => p.id === item.assignedTo) : undefined;
   const holds = useHolds(jobId);
+  // Pin on the Plan shows once the job has a plan.
+  const hasPlans = data.usePlans(jobId).length > 0;
   const history = useActivityLines(jobId, item.id);
   const thread = itemComments(data.useComments(jobId), item.id);
   const [allHistory, setAllHistory] = useState(false);
@@ -294,10 +297,12 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
     else router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
   }
 
-  function saveMarks(marks: Mark[]) {
+  function saveMarks(marks: Mark[], picture?: Picture) {
     if (!marking) return;
     haptic.success();
-    void data.updatePhoto(marking.id, { marks });
+    // A cropped photo takes the place of the one it was made from; the one before is kept, removed.
+    if (picture) void data.replacePhoto(marking.id, { ...picture, marks });
+    else void data.updatePhoto(marking.id, { marks });
     setMarking(null);
   }
 
@@ -386,6 +391,16 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
                       },
                     ]
                   : []),
+              ]
+            : []),
+          ...(item.status === 'open' && hasPlans
+            ? [
+                {
+                  label: item.planId ? 'Move the Pin on the Plan' : 'Pin on the Plan',
+                  icon: 'pin' as IconName,
+                  onPress: () => router.push({ pathname: '/jobs/[jobId]/plans', params: { jobId, pin: item.id } }),
+                  testID: 'pin-on-plan',
+                },
               ]
             : []),
           {

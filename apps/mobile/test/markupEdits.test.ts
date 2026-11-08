@@ -141,4 +141,13 @@ describe('Undo and Redo', () => {
     const s = run(startMarkup([]), { type: 'place', mark: circle }, { type: 'note', at: [0.5, 0.5], color: 'red' });
     expect(run(s, { type: 'undo' })).toBe(s);
   });
+
+  it('starts again after a crop: the marks as moved, and Undo cannot reach past it', () => {
+    const moved: Mark = { ...circle, from: [0.1, 0.1], to: [0.3, 0.3] };
+    const s = run(startMarkup([]), { type: 'place', mark: circle }, { type: 'pick', index: 0 }, { type: 'cropped', marks: [moved] });
+    expect(s.marks).toEqual([moved]);
+    expect(s.picked).toBeNull();
+    expect(s.past).toEqual([]);
+    expect(run(s, { type: 'undo' })).toBe(s);
+  });
 });

@@ -23,6 +23,15 @@ export interface PlanWays {
   pdf: boolean;
   pictures: boolean;
   camera: boolean;
+  /** Whether a page of a plan PDF can be kept as a picture, for the job's plans. */
+  pdfSheets: boolean;
+}
+
+/** A sheet of the plans kept as a picture, for the job's plans. */
+export interface SheetPicture {
+  uri: string;
+  width: number;
+  height: number;
 }
 
 /** Why the plans could not be read, said for the person. */

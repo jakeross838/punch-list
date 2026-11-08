@@ -119,7 +119,8 @@ async function main(): Promise<void> {
               address: '412 Bay Isles Road, Longboat Key, Florida 34228',
               levels: [
                 { name: 'Level 1', rooms: [{ name: 'Garage', number: '101' }, { name: 'Living', number: '107' }, { name: 'Kitchen', number: '109' }, { name: 'Pantry', number: '110' }, { name: 'Mudroom', number: '120' }] },
-                { name: 'Level 2', rooms: [{ name: 'Master Bedroom', number: '206' }, { name: 'Master Bathroom', number: '207' }, { name: 'Master Closet', number: null }] },
+                // Level 2's floor plan is the one page: it is kept in Plans (Level 1 has its plan already).
+                { name: 'Level 2', sheet: 1, rooms: [{ name: 'Master Bedroom', number: '206' }, { name: 'Master Bathroom', number: '207' }, { name: 'Master Closet', number: null }] },
                 { name: 'Level 3', rooms: [{ name: 'Bunk Room', number: '303' }] },
               ],
               outside: ['Pool', 'Driveway', 'Dock'],
@@ -1873,7 +1874,14 @@ async function main(): Promise<void> {
       await settle(400);
       await shot('99o-plans-checked');
       await app.getByTestId('plans-add').click();
-      await app.getByText('4 locations added and 1 filled in from the plans').waitFor();
+      await app.getByText('4 locations added and 1 filled in from the plans. Level 2 floor plan is in Plans.').waitFor();
+      // Then the usual work from the templates for the new locations: the bathroom's tasks and the bedroom's.
+      await app.getByTestId('plans-tasks-summary').waitFor();
+      await app.locator('[data-testid^="plans-template-"]').first().getByText(/^\d+ tasks in \d+ locations$/).waitFor();
+      await settle(400);
+      await shot('99o2-usual-work');
+      await app.getByTestId('plans-tasks-add').click();
+      await app.getByText(/^Added \d+ items from the templates$/).waitFor();
       await settle(400);
       if ((await app.getByTestId('field-job-address').inputValue()) !== '412 Bay Isles Road, Longboat Key, Florida 34228') throw new Error("The job's address did not come from the plans");
       // Among the job's own, in the plans' walk order: the garage just ahead of Living 107, its
@@ -1890,6 +1898,27 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle(400);
       await shot('99q-job-from-plans');
+    });
+    await step('New: the floor plan read from the plans is kept in Plans, and an item is pinned on it', async () => {
+      await menu('plans');
+      await app.getByTestId('plan-sheets').waitFor();
+      await app.getByTestId('plan-sheets').getByText('Level 2', { exact: true }).click();
+      await app.getByTestId('plan-image').waitFor();
+      await settle(600);
+      await shot('99q1-plans-level-2');
+      // An item on Level 2 that is not pinned yet: tap it, then the plan where it is.
+      await app.locator('[data-testid^="place-"]').first().click();
+      await app.getByTestId('placing').waitFor();
+      const plan = await app.getByTestId('plan-image').boundingBox();
+      if (!plan) throw new Error('No plan to pin on');
+      await tab.mouse.click(plan.x + plan.width * 0.4, plan.y + plan.height * 0.5);
+      await app.getByText(/^Pinned .+ on Level 2 Floor Plan$/).waitFor();
+      await app.getByTestId('pin-open').waitFor();
+      await settle(400);
+      await shot('99q2-pinned');
+      await seen('back').click();
+      await seen('group-room-1').waitFor();
+      await settle(400);
     });
     /** What Claude was asked last about a task, found by words in its question. */
     const lastAsked = async (words: string) => {
@@ -2119,6 +2148,64 @@ async function main(): Promise<void> {
       if (!asked || asked.images !== 2 || !asked.input.includes('The item: Install towel bar')) throw new Error('The done check did not send both photos with the item');
       await settle(400);
       await shot('99zf0-done-photo');
+      await app.getByTestId('back').last().click();
+      await settle(400);
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(300);
+    });
+    await step('New: crop and straighten in markup: turn the photo, level it, keep a box, and its marks move with it', async () => {
+      // The towel bar's photo, upright, with the circle drawn on it.
+      await app.getByTestId('group-room-5').click();
+      await app.getByTestId(/^item-/).filter({ hasText: 'Install towel bar' }).last().click();
+      await seen('mark-up').waitFor();
+      await settle(600);
+      await seen('mark-up').click();
+      await app.getByTestId('markup-canvas').waitFor();
+      await settle(500);
+      const upright = await app.getByTestId('markup-photo').boundingBox();
+      if (!upright || upright.width >= upright.height) throw new Error('The towel bar photo is not upright to start');
+      await app.getByTestId('tool-more').click();
+      await app.getByTestId('markup-crop').click();
+      await app.getByTestId('crop-touch').waitFor();
+      await settle(400);
+      // A quarter turn to the right, then leveled 3 degrees: a tap a little right of the middle of the line.
+      await app.getByTestId('crop-turn').click();
+      await settle(300);
+      const line = await app.getByTestId('crop-level').boundingBox();
+      if (!line) throw new Error('No line to level the photo');
+      await tab.mouse.click(line.x + line.width * 0.6, line.y + line.height / 2);
+      await app.getByTestId('crop-angle').getByText('3° right', { exact: true }).waitFor();
+      // The top left corner of the box dragged in.
+      const box = await app.getByTestId('crop-box').boundingBox();
+      if (!box || box.width <= box.height) throw new Error('The box did not turn with the photo');
+      await tab.mouse.move(box.x + 3, box.y + 3);
+      await tab.mouse.down();
+      await tab.mouse.move(box.x + 33, box.y + 24, { steps: 8 });
+      await tab.mouse.up();
+      await settle(300);
+      const smaller = await app.getByTestId('crop-box').boundingBox();
+      if (!smaller || smaller.width > box.width - 20 || smaller.height > box.height - 15) throw new Error('The corner did not move the box');
+      await shot('99zf0b-crop');
+      await app.getByTestId('crop-done').click();
+      await app.getByTestId('markup-canvas').waitFor();
+      await settle(500);
+      const turned = await app.getByTestId('markup-photo').boundingBox();
+      if (!turned || turned.width <= turned.height) throw new Error('The cropped photo did not turn');
+      await shot('99zf0c-cropped');
+      await app.getByTestId('markup-next').click();
+      await app.getByTestId('markup-canvas').waitFor({ state: 'detached' });
+      await settle(600);
+      // The cropped photo is on the item in place of the one it was made from, and opens in markup turned.
+      await seen('mark-up').click();
+      await app.getByTestId('markup-canvas').waitFor();
+      await settle(500);
+      const again = await app.getByTestId('markup-photo').boundingBox();
+      if (!again || again.width <= again.height) throw new Error('The item did not keep the cropped photo');
+      await app.getByTestId('markup-retake').click();
+      await app.getByTestId('markup-canvas').waitFor({ state: 'detached' });
+      await settle(500);
+      await shot('99zf0d-cropped-item');
       await app.getByTestId('back').last().click();
       await settle(400);
       await app.getByTestId('back').last().click();

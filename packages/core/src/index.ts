@@ -9,6 +9,7 @@ export * from './rules';
 export * from './waitingOn';
 export * from './views';
 export * from './marks';
+export * from './crop';
 export * from './titles';
 export * from './forms';
 export * from './lists';

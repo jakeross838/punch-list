@@ -24,6 +24,7 @@ import { CommonTasks } from "@/components/CommonTasks";
 import { draftFill } from "@/components/draftFill";
 import { startDraft } from "@/components/ItemForm";
 import { MarkupEditor, type MarkupShot } from "@/components/MarkupEditor";
+import type { Picture } from "@/components/cropPicture";
 import { Viewfinder, type ViewfinderHandle } from "@/components/Viewfinder";
 import { colors } from "@/constants/theme";
 import { useData } from "@/data/api";
@@ -244,22 +245,24 @@ export default function CaptureScreen() {
     });
   }
 
-  async function keep(marks: MarkupShot["marks"]) {
+  async function keep(marks: MarkupShot["marks"], picture?: Picture) {
     if (editing) {
-      capture.setMarks(editing.key, marks);
+      capture.setMarks(editing.key, marks, picture);
       capture.editShot(null);
       openForm();
       return;
     }
     if (!shot) return;
+    // Cropped in markup: the new picture goes in place of the one taken.
+    const taken = picture ?? shot;
     if (walk.itemId) {
       await data.addPhotos([
         {
           jobId,
           itemId: walk.itemId,
-          uri: shot.uri,
-          width: shot.width,
-          height: shot.height,
+          uri: taken.uri,
+          width: taken.width,
+          height: taken.height,
           marks,
           done: walk.done,
         },
@@ -276,7 +279,7 @@ export default function CaptureScreen() {
       if (!back) router.back();
       return;
     }
-    capture.addShot({ ...shot, marks });
+    capture.addShot({ uri: taken.uri, width: taken.width, height: taken.height, marks });
     setShot(null);
     openForm();
   }
@@ -343,7 +346,7 @@ export default function CaptureScreen() {
               openForm();
             } else setShot(null);
           }}
-          onDone={(marks) => void keep(marks)}
+          onDone={(marks, picture) => void keep(marks, picture)}
         />
       </>
     );

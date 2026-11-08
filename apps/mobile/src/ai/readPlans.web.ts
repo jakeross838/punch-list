@@ -9,7 +9,7 @@ import { launchImageLibraryAsync } from 'expo-image-picker';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import * as pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 import { useSyncExternalStore } from 'react';
-import { MOST_PDF_BYTES, MOST_PICTURES, NOTHING_FOUND, NOTHING_ON_LIST, PlanReadError, TOO_BIG, type PickedPlans, type PlanFile, type PlanWays } from './planFiles';
+import { MOST_PDF_BYTES, MOST_PICTURES, NOTHING_FOUND, NOTHING_ON_LIST, PlanReadError, TOO_BIG, type PickedPlans, type PlanFile, type PlanWays, type SheetPicture } from './planFiles';
 
 // The PDF is read on the page itself: the page may not start workers of its own.
 (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = pdfjsWorker;
@@ -25,7 +25,7 @@ interface ClaudeRuntime {
   use(name: 'sample'): Promise<SampleFn | null>;
 }
 
-let ways: PlanWays = { pdf: false, pictures: false, camera: false };
+let ways: PlanWays = { pdf: false, pictures: false, camera: false, pdfSheets: true };
 let mostImages = 0;
 const listeners = new Set<() => void>();
 
@@ -37,7 +37,7 @@ const sample: Promise<SampleFn | null> = (async () => {
     if (!fn) return null;
     const limits = await fn.limits().catch(() => null);
     mostImages = limits?.images?.maxCount ?? 0;
-    ways = { pdf: true, pictures: mostImages > 0, camera: false };
+    ways = { pdf: true, pictures: mostImages > 0, camera: false, pdfSheets: true };
     for (const l of listeners) l();
     return fn;
   } catch {
@@ -241,4 +241,41 @@ export async function pickTableFile(): Promise<string | null> {
   if (!a) return null;
   if ((a.size ?? 0) > 2_000_000) throw new PlanReadError('That spreadsheet is too big. Save just the rows of work as a CSV.');
   return a.file ? a.file.text() : (await fetch(a.uri)).text();
+}
+
+/** The longest side a plan's page is drawn at: enough to read the room names when zoomed in. */
+const SHEET_SIDE = 2400;
+
+/**
+ * The page or the picture with a level's floor plan, counting from 1, to keep as the job's plan for
+ * the level: a page of a PDF is drawn here, on white.
+ */
+export async function planSheetPicture(picked: PickedPlans, sheet: number): Promise<SheetPicture | null> {
+  if (picked.kind === 'pictures') {
+    const f = picked.files[sheet - 1];
+    if (!f) return null;
+    if (f.width && f.height) return { uri: f.uri, width: f.width, height: f.height };
+    if (!f.blob) return null;
+    const img = await picture(f.blob);
+    return { uri: f.uri, width: img.naturalWidth, height: img.naturalHeight };
+  }
+  const f = picked.files[0];
+  if (!f?.blob) return null;
+  const task = pdfjs.getDocument({ data: new Uint8Array(await f.blob.arrayBuffer()), disableFontFace: true, useSystemFonts: false });
+  try {
+    const doc = await task.promise;
+    if (sheet < 1 || sheet > doc.numPages) return null;
+    const page = await doc.getPage(sheet);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: Math.min(4, SHEET_SIDE / Math.max(base.width, base.height)) });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(viewport.width));
+    canvas.height = Math.max(1, Math.round(viewport.height));
+    await page.render({ canvas, viewport }).promise;
+    page.cleanup();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    return blob ? { uri: URL.createObjectURL(blob), width: canvas.width, height: canvas.height } : null;
+  } finally {
+    await task.destroy();
+  }
 }

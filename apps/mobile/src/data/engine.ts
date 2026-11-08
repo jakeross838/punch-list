@@ -577,6 +577,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       let job = state.locations.filter((l) => l.jobId === jobId);
       const happened: Happened[] = [];
       const read: string[] = [];
+      const addedIds: string[] = [];
       let added = 0;
       let filledIn = 0;
       const nameFree = (label: string, id: string) => !job.some((l) => l.id !== id && l.label.toLowerCase() === label.toLowerCase());
@@ -604,6 +605,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
           job = job.map((l) => (l.id === same.id ? { ...l, ...place, active: true } : l));
           happened.push({ jobId, kind: 'location_restored', detail: { location_id: same.id, label: same.label } });
           read.push(same.id);
+          addedIds.push(same.id);
           added += 1;
           continue;
         }
@@ -611,11 +613,12 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
         job.push({ id, jobId, name: row.name, number: row.number, label: row.label, ...place, sortOrder: job.length + 1, active: true, walkedAt: null });
         happened.push({ jobId, kind: 'location_added', detail: { location_id: id, label: row.label } });
         read.push(id);
+        addedIds.push(id);
         added += 1;
       }
       const before = state.locations.filter((l) => l.jobId === jobId);
       await save({ locations: numbered(state.locations, readingOrder(before, job, read)) }, happened);
-      return { added, filledIn };
+      return { added, filledIn, addedIds };
     },
     async updateLocation(id, patch) {
       const state = get();
@@ -912,8 +915,37 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       const state = get();
       await save(
         { photos: [...state.photos, ...added] },
-        added.map((p) => ({ jobId: p.jobId, itemId: p.itemId, kind: 'photo_added', detail: { photo_id: p.id } })),
+        added.map((p) => ({ jobId: p.jobId, itemId: p.itemId, kind: 'photo_added', detail: { photo_id: p.id, ...(p.done ? { done: true } : {}) } })),
       );
+    },
+    async replacePhoto(id, { uri, width, height, marks }) {
+      if (!get().photos.some((p) => p.id === id)) return null;
+      const newId = randomUUID();
+      const kept = await keeper.keepPhoto(uri, newId);
+      // Keeping the picture takes a moment: whatever changed meanwhile stays.
+      const state = get();
+      const was = state.photos.find((p) => p.id === id);
+      if (!was) return null;
+      const photo: Photo = {
+        id: newId,
+        jobId: was.jobId,
+        itemId: was.itemId,
+        uri: kept,
+        storagePath: null,
+        width,
+        height,
+        marks,
+        sortOrder: was.sortOrder,
+        removed: false,
+        done: was.done,
+        createdBy: state.me.id,
+        createdAt: now(),
+      };
+      await save({ photos: [...state.photos.map((p) => (p.id === id ? { ...p, removed: true } : p)), photo] }, [
+        { jobId: was.jobId, itemId: was.itemId, kind: 'photo_added', detail: { photo_id: newId, ...(was.done ? { done: true } : {}) } },
+        { jobId: was.jobId, itemId: was.itemId, kind: 'photo_removed', detail: { photo_id: id } },
+      ]);
+      return newId;
     },
     async updatePhoto(id, patch) {
       const state = get();

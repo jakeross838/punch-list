@@ -6,10 +6,14 @@
 // change its words or delete it. Undo and Redo sit at the top, the way Apple's Markup has them. The
 // tool and color picked last carry over to the next photo. Next keeps the photo as it is when
 // nothing was drawn. The marks are kept apart from the picture, so the original is never changed.
+// Crop, under More, turns the photo, levels it and keeps a box of it (CropView): a new picture is
+// made, the marks move with it, and the photo as it was stays with the item, removed.
 
 import {
   clampPoint,
+  croppedMarks,
   handleAt,
+  isNoCrop,
   markAt,
   markFrame,
   markHandles,
@@ -17,6 +21,7 @@ import {
   MARK_COLORS,
   moveHandle,
   moveMark,
+  NO_CROP,
   QUICK_NOTES,
   type Mark,
   type MarkColor,
@@ -24,10 +29,12 @@ import {
   type MarkPoint,
   type MarkTool,
   type MeasureUnit,
+  type PhotoCrop,
 } from '@punch/core';
 import { Image } from 'expo-image';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   PanResponder,
   Platform,
@@ -42,6 +49,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fieldFont } from '@/constants/theme';
 import { fitPhoto, haptic, Icon, leaveOrConfirm, MarkLayer, Text, TEXT_LARGEST, Touchable, useFeedback, type IconName } from '@/ui';
+import { CropControls, CropFrame } from './CropView';
+import { cropPicture, type Picture } from './cropPicture';
 import { markupReducer, newMark, pickedMark, sameMarks, shownMarks, startMarkup } from './markupEdits';
 
 interface ToolInfo {
@@ -135,7 +144,8 @@ export function MarkupEditor({
 }: {
   shot: MarkupShot;
   onRetake: () => void;
-  onDone: (marks: Mark[]) => void;
+  /** picture: the new picture when the photo was cropped, to take the place of the one it was made from. */
+  onDone: (marks: Mark[], picture?: Picture) => void;
   retakeLabel?: string;
   doneLabel?: string;
 }) {
@@ -149,10 +159,15 @@ export function MarkupEditor({
   const [since, setSince] = useState(shot.marks.length);
   const [more, setMore] = useState(false);
   const [box, setBox] = useState({ width: 0, height: 0 });
+  // The picture marked up: the photo as it came, or the one a crop made.
+  const [picture, setPicture] = useState<Picture>({ uri: shot.uri, width: shot.width, height: shot.height });
+  const [cropping, setCropping] = useState<PhotoCrop | null>(null);
+  const [working, setWorking] = useState(false);
+  const cropped = picture.uri !== shot.uri;
 
   const { marks, picked, panel } = state;
-  const shown = fitPhoto(shot, box, 'contain');
-  const aspect = shot.width / (shot.height || 1);
+  const shown = fitPhoto(picture, box, 'contain');
+  const aspect = picture.width / (picture.height || 1);
   const drawn = useMemo(() => shownMarks(state), [state]);
   const selected = pickedMark(state);
   const canUndo = state.past.length > 0 && !panel;
@@ -285,9 +300,75 @@ export function MarkupEditor({
   };
   const cancel = () => dispatch({ type: 'cancel' });
   // Words still open go on with the rest.
-  const finish = () => onDone(markupReducer(state, { type: 'add' }).marks);
-  const retake = () => leaveOrConfirm(!sameMarks(marks, shot.marks), feedback, onRetake, 'this photo');
+  const finish = () => onDone(markupReducer(state, { type: 'add' }).marks, cropped ? picture : undefined);
+  const retake = () => leaveOrConfirm(cropped || !sameMarks(marks, shot.marks), feedback, onRetake, 'this photo');
+  const startCrop = () => {
+    haptic.selection();
+    setMore(false);
+    if (picked !== null) dispatch({ type: 'pick', index: null });
+    setCropping(NO_CROP);
+  };
+  // The new picture is made, and the marks move with it.
+  const applyCrop = async () => {
+    const crop = cropping;
+    if (!crop || working) return;
+    if (isNoCrop(crop)) {
+      setCropping(null);
+      return;
+    }
+    setWorking(true);
+    try {
+      const next = await cropPicture(picture.uri, crop);
+      dispatch({ type: 'cropped', marks: croppedMarks(markupReducer(state, { type: 'add' }).marks, picture.width, picture.height, crop) });
+      setPicture(next);
+      setCropping(null);
+      haptic.success();
+    } catch (e) {
+      console.warn('Cropping the photo', e);
+      haptic.warning();
+      feedback.toast({ message: 'The photo could not be cropped. Try again.' });
+    } finally {
+      setWorking(false);
+    }
+  };
   const inkShown = selected?.color ?? color;
+
+  if (cropping) {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top }]} testID="markup-cropping">
+        <View style={styles.bar}>
+          <Touchable feedback="opacity" onPress={() => setCropping(null)} disabled={working} accessibilityRole="button" testID="crop-cancel" style={styles.barSide}>
+            <Text variant="button" color={colors.onDark}>
+              Cancel
+            </Text>
+          </Touchable>
+          <Text variant="button" color={colors.onDark}>
+            Crop
+          </Text>
+          <View style={[styles.barSide, styles.barRight]}>
+            <Touchable feedback="opacity" onPress={() => void applyCrop()} disabled={working} accessibilityRole="button" testID="crop-done" style={styles.next}>
+              {working ? (
+                <ActivityIndicator size="small" color={colors.bar} />
+              ) : (
+                <Text variant="button" weight="600" color={colors.bar}>
+                  Done
+                </Text>
+              )}
+            </Touchable>
+          </View>
+        </View>
+        <View style={styles.area} onLayout={(e) => setBox({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
+          {box.width > 0 ? <CropFrame picture={picture} marks={drawn} crop={cropping} onCrop={setCropping} area={box} /> : null}
+        </View>
+        <View style={styles.line}>
+          <Text variant="footnote" color={colors.onDarkQuiet} align="center" numberOfLines={1} style={styles.lineText} testID="crop-hint">
+            Drag a corner of the box, or its middle to move it.
+          </Text>
+        </View>
+        <CropControls crop={cropping} onCrop={setCropping} bottom={bottom} />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.screen, { paddingTop: insets.top }]} testID="markup">
@@ -339,7 +420,7 @@ export function MarkupEditor({
       <View style={styles.area} onLayout={(e) => setBox({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
         {box.width > 0 ? (
           <View style={{ position: 'absolute', left: shown.left, top: shown.top, width: shown.width, height: shown.height }}>
-            <Image source={{ uri: shot.uri }} style={{ width: shown.width, height: shown.height }} contentFit="fill" accessibilityIgnoresInvertColors />
+            <Image source={{ uri: picture.uri }} style={{ width: shown.width, height: shown.height }} contentFit="fill" accessibilityIgnoresInvertColors testID="markup-photo" />
             <MarkLayer marks={drawn} width={shown.width} height={shown.height} />
             {selected ? <Picked mark={selected} width={shown.width} height={shown.height} /> : null}
             <Canvas touch={touch} />
@@ -527,6 +608,13 @@ export function MarkupEditor({
                 <Icon name={t.icon} size={20} color={colors.onDark} />
               </Touchable>
             ))}
+            <Touchable feedback="opacity" onPress={startCrop} accessibilityRole="menuitem" testID="markup-crop" style={[styles.moreRow, styles.moreRule]}>
+              <View style={styles.moreCheck} />
+              <Text variant="body" color={colors.onDark} style={styles.moreLabel}>
+                Crop and Straighten
+              </Text>
+              <Icon name="crop" size={20} color={colors.onDark} />
+            </Touchable>
           </View>
         </>
       ) : null}

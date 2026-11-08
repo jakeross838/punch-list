@@ -18,6 +18,8 @@ export interface PlanLevel {
   name: string;
   /** In the order to walk them. */
   rooms: PlanRoom[];
+  /** The page of the PDF, or the picture, with this level's floor plan, counting from 1: kept as the job's plan for the level, to pin items on. */
+  sheet: number | null;
 }
 
 export interface PlanReading {
@@ -47,6 +49,7 @@ const EXAMPLE = {
   levels: [
     {
       name: 'Level 1',
+      sheet: 3,
       rooms: [
         { name: 'Garage', number: '101' },
         { name: 'Foyer', number: '102' },
@@ -55,6 +58,7 @@ const EXAMPLE = {
     },
     {
       name: 'Level 2',
+      sheet: 4,
       rooms: [
         { name: 'Master Bedroom', number: '201' },
         { name: 'Master Closet', number: null },
@@ -90,6 +94,7 @@ export function planPrompt(options: { levels?: string[]; text?: string } = {}): 
     }`,
     '- outside: Pool and Driveway, unless a site plan shows the house has none, then anything else outside the house that the plans show, like Dock, Spa or Fence. The elevations, the roof, the site and the whole house are already on every job.',
     "- name: the job's name from the title block, like Smith Residence, or null. address: the house's street address from the title block, in one line, not the architect's, or null.",
+    '- sheet: for each level, the number of the page (or the picture) with its floor plan, counting from 1, or null when no floor plan shows the level.',
     '- notes: a short sentence on anything you could not read or are unsure of, or null.',
     '',
     'Reply with only JSON, like:',
@@ -166,8 +171,12 @@ export function readPlanAnswer(raw: unknown): PlanReading | null {
     count += kept.length;
     // The same level twice is one level.
     const same = levels.find((x) => x.name.toLowerCase() === title.toLowerCase());
-    if (same) same.rooms.push(...kept);
-    else if (levels.length < MOST_LEVELS && kept.length > 0) levels.push({ name: title, rooms: kept });
+    const page = Number(l.sheet ?? l.page);
+    const sheet = Number.isInteger(page) && page > 0 && page <= 500 ? page : null;
+    if (same) {
+      same.rooms.push(...kept);
+      same.sheet = same.sheet ?? sheet;
+    } else if (levels.length < MOST_LEVELS && kept.length > 0) levels.push({ name: title, rooms: kept, sheet });
   }
   const name = line(o.name ?? o.job ?? o.project, 80);
   const address = line(o.address, 120);

@@ -66,6 +66,7 @@ const SCREENS = [
   'jobs/[jobId]/items/[itemId]/index',
   'jobs/[jobId]/activity',
   'jobs/[jobId]/duplicates',
+  'jobs/[jobId]/plans',
 ] as const;
 const SHEETS = ['jobs/new', 'jobs/[jobId]/items/new', 'jobs/[jobId]/read-plans', 'jobs/[jobId]/say', 'settings/item-form'] as const;
 const CAMERA = 'jobs/[jobId]/capture';

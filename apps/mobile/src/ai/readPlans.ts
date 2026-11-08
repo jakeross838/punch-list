@@ -13,7 +13,7 @@ import { launchCameraAsync, launchImageLibraryAsync, requestCameraPermissionsAsy
 import { useEffect, useSyncExternalStore } from 'react';
 import { config, isConfigured } from '@/data/config';
 import { supabase } from '@/data/powersync/supabase';
-import { MOST_PDF_BYTES, MOST_PICTURES, NOTHING_FOUND, NOTHING_ON_LIST, PlanReadError, TOO_BIG, type PickedPlans, type PlanFile, type PlanWays } from './planFiles';
+import { MOST_PDF_BYTES, MOST_PICTURES, NOTHING_FOUND, NOTHING_ON_LIST, PlanReadError, TOO_BIG, type PickedPlans, type PlanFile, type PlanWays, type SheetPicture } from './planFiles';
 
 const BUCKET = 'photos';
 /** The whole sheet goes as big as Claude reads one picture. */
@@ -56,7 +56,7 @@ export function useCanReadPlans(): boolean {
   );
 }
 
-const WAYS: PlanWays = { pdf: true, pictures: true, camera: true };
+const WAYS: PlanWays = { pdf: true, pictures: true, camera: true, pdfSheets: false };
 
 export function usePlanWays(): PlanWays {
   return WAYS;
@@ -215,4 +215,17 @@ export async function pickTableFile(): Promise<string | null> {
   if (!a) return null;
   if ((a.size ?? 0) > 2_000_000) throw new PlanReadError('That spreadsheet is too big. Save just the rows of work as a CSV.');
   return new File(a.uri).text();
+}
+
+/**
+ * The picture with a level's floor plan, counting from 1, to keep as the job's plan for the level.
+ * A page of a PDF cannot be drawn here: a screenshot of it is added in Plans instead.
+ */
+export async function planSheetPicture(picked: PickedPlans, sheet: number): Promise<SheetPicture | null> {
+  if (picked.kind !== 'pictures') return null;
+  const f = picked.files[sheet - 1];
+  if (!f) return null;
+  if (f.width && f.height) return { uri: f.uri, width: f.width, height: f.height };
+  const img = await ImageManipulator.manipulate(f.uri).renderAsync();
+  return { uri: f.uri, width: img.width, height: img.height };
 }
