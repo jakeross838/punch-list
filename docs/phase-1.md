@@ -282,3 +282,14 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 - **The Sample Job:** Add the Sample Job, on Jobs, adds a whole job to try everything on: two levels, sample companies with no email or phone, items in every state, drawn photos with marks, comments and a plan. It deletes like any job.
 - **Live on 7 November:** the migration (`claude_use_and_merging`, live as 20261108004916), the `ai` function (version 1) and the new `read-plans` (version 2), once Jake said to, then build 13 on TestFlight. Claude's buttons show once the Claude key is in Supabase.
 
+## Round 2: setting up and checking (7 November 2026)
+
+- **Done photos:** a photo of the finished work. A company sends one from its page or the Job Station as it marks the work done (Add a Done Photo); the team takes one with Done Photo on the item. It shows marked as a done photo, an item in To Check opens on it, and Activity says who sent it.
+- **Claude's done check:** with the photo of the problem and a done photo, Claude says on the item whether it looks done, or what still looks left. It never completes anything.
+- **Read a List,** in the job's menu: a punch list someone else wrote, as a PDF, photos of its pages, a spreadsheet saved as CSV, or pasted in (rows copied from a spreadsheet too). Claude reads it into items to check, as with Say It; a spreadsheet's columns are known by their names, or Claude says which is which.
+- **A new job from another job's setup:** Copy From on New Job takes its companies and Waiting On choices, its team, and its locations, as picked.
+- **Companies from a card:** Add Company reads a business card photo or a pasted email signature: the company, its trade and its people, who get its lists.
+- **What an item waits on, and its usual time:** a new item offers what it waits on, picked by Claude from the open items in its location, and How Long It Takes offers the standard or usual time.
+- **Not yet:** crop and straighten, keeping the plan sheets from Read the Plans, and Common Tasks right after the plans.
+- **Still to go live:** the migration `done_photos`, the `ai`, `read-plans` and `company-page` functions, then the companies' pages and a new build, each with Jake's OK.
+

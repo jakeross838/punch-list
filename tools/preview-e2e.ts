@@ -163,7 +163,7 @@ async function main(): Promise<void> {
           }
           // What a new item waits on: the first open item in the location.
           if (/Does it have to wait for any of the other open items/.test(input)) {
-            const m = input.match(/^- #(\d+) /m);
+            const m = input.match(/^- #(\\d+) /m);
             return { waits: m ? [Number(m[1])] : [] };
           }
           // The done check: the hinge still looks loose.
