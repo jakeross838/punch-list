@@ -296,7 +296,52 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 - **The usual work after the plans:** once the plans' locations are on the job, the templates' tasks for the new locations are offered, template by template (a bathroom's mirror, towel bar and toilet, a bedroom's door stop), to add at once or leave for later.
 - **Live on 7 November:** the migration `done_photos` (live as 20261108031902), the `ai` function (version 2), `read-plans` (version 3) and `company-page` (version 3), the companies' pages and the station with Add a Done Photo, then build 14 on TestFlight, once Jake said to.
 - **Build 15** (from commit 78b03db) is on TestFlight with crop and straighten, Plans, the floor plans kept from pictures, and the usual work after the plans. No database change: the plans and the pins were kept in the database all along.
-- **Still to go live:** `read-plans` version 4, which asks Claude for each level's floor plan sheet, with Jake's OK.
+- **Live on 8 November:** `read-plans` version 4, which asks Claude for each level's floor plan sheet, once Jake said to.
 - Checked: 304 unit tests, the type checks, lint, the database checks, the live writes check, 43 checks of the three functions against stand-ins, the companies' page and the station, and the full preview walk-through (70 steps; no console or page errors).
 - Then checked with crop and straighten, Plans and the usual work: 313 unit tests (turning, leveling and the box, the marks moving with them, the floor plan's sheet, templates in just the new locations), the type checks, lint, the database checks, 151 of the phone's writes through the database's rules (a cropped photo in place of the one it came from, which is kept, removed; the locations the plans added), 43 function checks, and the full preview walk-through (72 steps, with a photo turned, leveled and cropped, Level 2's floor plan kept from a plan PDF with an item pinned on it, and the usual work added; no console or page errors).
+
+## Rounds 3 to 5 (rebuilt on 8 November 2026)
+
+The item by item list for Rounds 3 to 5 was lost when the build session ran long, so it was rebuilt from the round names, and Jake said go. Each round is built and checked the same way as Rounds 1 and 2, and any database or server change goes live only once Jake says to.
+
+**Round 3: companies and owners**
+
+1. **Owner's page:** a private link for the homeowner, in the same look as the companies' pages: the job's progress by location, what is done with its done photos, what is left, and what is waiting on them.
+2. **The owner adds items** on their page with a photo and a few words; they come into the app as drafts marked from the owner, for the team to assign.
+3. **Owner sign off:** the owner signs off the job or a location on their page with their name; it shows in Activity.
+4. **Claude drafts the owner's weekly update** from what moved this week: positive, no one singled out, ending with a happy weekend, with photos of the work done, to copy or share.
+5. **A company's page in Spanish:** a company set to Spanish sees its list and the comments translated by Claude, with the original a tap away.
+6. **Send by Text:** a company's link and a short note by text message, next to email.
+7. **One link for all of a company's jobs:** a company's page lists the other jobs it has open work on with the builder.
+8. **Company report card:** on a company's screen, what is open, what it finished in the last 30 days, its average days to finish, what is past due, and when it last opened its list.
+9. **Claude sums up the companies' answers:** what they confirmed, marked done and asked this week, in a few lines on Activity.
+10. **Nudge:** one tap drafts a reminder to each company with items it has not confirmed, or a list it has not opened in a week.
+
+**Round 4: finding things and the day**
+
+1. **Search everything:** items, locations, companies, comments and people across all jobs.
+2. **Ask Claude to find:** "what is ready for Gator on Level 2" becomes the list's filters.
+3. **Search photos by what is in them:** Claude describes each photo in a few words once, so search finds a water stain or an outlet cover.
+4. **Today:** one screen across jobs with my items, To Check, the companies' new answers and the ready work.
+5. **The day's walk:** the day's items in walking order, location by location.
+6. **End of day note:** Claude writes what got done and what was found today, to copy into the daily log.
+7. **Recent and starred:** the items opened last, and a star to keep an item at the top.
+8. **Saved views:** a set of filters and grouping with a name (Ready for Paint), one tap away.
+9. **Updates:** what changed since I last looked, across jobs.
+10. **Notifications:** when a company marks work done, confirms or comments.
+
+**Round 5: ready for any builder**
+
+1. **The app's name and look,** once Jake picks the name.
+2. **Sign in with Apple and Google:** the app's side; Jake sets up the providers.
+3. **Email from the app:** invitations, sign in codes and lists from the app's own address; Jake sets up Resend.
+4. **Android:** the Android build; Jake sets up Google Play.
+5. **Plans and prices:** a free trial, then a plan per company; Jake sets the prices.
+6. **Get Started:** a short checklist on a new company's first day: the company, a first job, a walk, a list sent.
+7. **Help, and Ask Claude how:** answers to the common questions, and Claude answers how to do something from the app's own help.
+8. **The builder's logo** on printouts, the companies' and owners' pages, and emails.
+9. **Export everything:** every job, item, comment and photo in one download.
+10. **Roles:** Admin, Project Manager, Superintendent and View Only, and what each can do.
+11. **Big jobs stay fast:** a thousand items, three thousand photos and a week offline.
+12. **App Store ready:** the listing, screenshots, privacy details, and the terms and privacy pages.
 
