@@ -280,5 +280,5 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 - **Standard wording and recent assignees:** a typed title is offered its standard title, a vague one is pointed out, and Assigned To starts with who was picked lately.
 - **Photos left in storage:** deleting a job removes its photo files too.
 - **The Sample Job:** Add the Sample Job, on Jobs, adds a whole job to try everything on: two levels, sample companies with no email or phone, items in every state, drawn photos with marks, comments and a plan. It deletes like any job.
-- **Still to go live:** the migration `20261107230000_claude_use_and_merging.sql`, the `ai` function and the new `read-plans`, each with Jake's OK, then build 12 for TestFlight (Say It needs the new build).
+- **Live on 7 November:** the migration (`claude_use_and_merging`, live as 20261108004916), the `ai` function (version 1) and the new `read-plans` (version 2), once Jake said to, then build 13 on TestFlight. Claude's buttons show once the Claude key is in Supabase.
 
