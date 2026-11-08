@@ -52,6 +52,9 @@ const FONTS = {
 const SCREENS = [
   'index',
   'my',
+  'today',
+  'updates',
+  'recent',
   'settings/people/index',
   'settings/people/[personId]',
   'settings/companies/index',

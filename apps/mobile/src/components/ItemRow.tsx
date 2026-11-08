@@ -10,6 +10,7 @@ import { commentCountText, freesText, holdText, hoursText, kindText, missingDeta
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
+import { useStarred } from '@/data/stars';
 import { CompleteCircle, dayOf, Icon, PhotoView, Pill, shortDate, SwipeRow, Text, Touchable, type PillTone, type SwipeAction } from '@/ui';
 
 const PHOTO = 44;
@@ -111,6 +112,7 @@ export const ItemRow = memo(function ItemRow({
 }) {
   const done = item.status === 'complete' || checking;
   const open = item.status === 'open' && !checking;
+  const starred = useStarred().includes(item.id);
   const title = item.title || (item.source === 'owner' && item.description.trim() ? item.description.trim() : 'No title yet');
   const status = itemStatus(item, { holds, checking, note, completedBy });
   // The type, unless the pill already says it: To Be Quoted is the Additional work not priced yet.
@@ -170,6 +172,7 @@ export const ItemRow = memo(function ItemRow({
                 </Text>
               ) : null}
               {item.priority && open ? <View style={styles.priority} accessibilityLabel="Priority" /> : null}
+              {starred ? <Icon name="star" size={13} color={colors.label} weight="semibold" style={styles.star} /> : null}
               <Text numberOfLines={2} color={done || !item.title ? colors.secondary : colors.label} style={[styles.title, done ? styles.crossed : null]}>
                 {title}
               </Text>
@@ -237,6 +240,7 @@ const styles = StyleSheet.create({
   titleLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   title: { flex: 1 },
   priority: { width: 6, height: 6, marginTop: 7, backgroundColor: colors.destructive },
+  star: { marginTop: 3 },
   step: {
     minWidth: 22,
     height: 20,

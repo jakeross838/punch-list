@@ -12,6 +12,8 @@ import {
   companyNameProblem,
   contactProblem,
   inWalkOrder,
+  viewName,
+  withNamedView,
   isAdmin,
   isEmail,
   moveToLevel,
@@ -288,6 +290,12 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       return useMemo(() => s.items.filter((i) => i.jobId === jobId), [s.items, jobId]);
     },
     useAllItems: () => useStore().items,
+    useAllLocations: () => useStore().locations,
+    useAllComments: () => useStore().comments,
+    useAllVisits: () => {
+      const s = useStore();
+      return useMemo(() => s.visits.filter((v) => !v.removed), [s.visits]);
+    },
     usePhotos: (jobId) => {
       const s = useStore();
       return useMemo(
@@ -1169,7 +1177,19 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       await save({ formSettings });
     },
     async setViewSettings(viewSettings) {
-      await save({ viewSettings });
+      // The views saved with a name stay as they are: only how the job opens changes.
+      const named = get().viewSettings.named;
+      await save({ viewSettings: { groupBy: viewSettings.groupBy, showCompleted: viewSettings.showCompleted, filters: viewSettings.filters, ...(named && named.length > 0 ? { named } : {}) } });
+    },
+    async saveNamedView(name, view) {
+      if (!viewName(name)) throw new Error('Give the view a name.');
+      const settings = get().viewSettings;
+      await save({ viewSettings: { ...settings, named: withNamedView(settings.named, name, view) } });
+    },
+    async removeNamedView(name) {
+      const { named, ...rest } = get().viewSettings;
+      const left = (named ?? []).filter((v) => v.name !== name);
+      await save({ viewSettings: left.length > 0 ? { ...rest, named: left } : rest });
     },
     sendSignInCode: extras.sendSignInCode,
     verifySignInCode: extras.verifySignInCode,

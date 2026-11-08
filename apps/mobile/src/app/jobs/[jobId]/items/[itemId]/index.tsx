@@ -33,7 +33,7 @@ import {
 } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { ActivityRow, useActivityLines } from '@/components/ActivityRow';
 import { Checklist } from '@/components/Checklist';
@@ -51,6 +51,7 @@ import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { capture } from '@/data/capture';
 import { clipboard } from '@/data/clipboard';
+import { noteOpened, setStar, useStarred } from '@/data/stars';
 import { useHolds } from '@/data/view';
 import {
   useSaveOnLeave,
@@ -193,6 +194,11 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   const holds = useHolds(jobId);
   // Pin on the Plan shows once the job has a plan.
   const hasPlans = data.usePlans(jobId).length > 0;
+  const starredIds = useStarred();
+  // Opened: it goes to the top of Recent.
+  useEffect(() => {
+    noteOpened(item.id, jobId);
+  }, [item.id, jobId]);
   const history = useActivityLines(jobId, item.id);
   const thread = itemComments(data.useComments(jobId), item.id);
   const [allHistory, setAllHistory] = useState(false);
@@ -403,6 +409,18 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
                 },
               ]
             : []),
+          {
+            label: starredIds.includes(item.id) ? 'Remove the Star' : 'Star',
+            icon: 'star' as IconName,
+            checked: starredIds.includes(item.id),
+            onPress: () => {
+              haptic.selection();
+              const on = !starredIds.includes(item.id);
+              setStar(item.id, on);
+              feedback.toast({ message: on ? 'Starred: it stays at the top of the job' : 'Star taken off' });
+            },
+            testID: 'toggle-star',
+          },
           {
             label: 'Copy',
             icon: 'copy',

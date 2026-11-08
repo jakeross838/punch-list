@@ -10,6 +10,7 @@
 
 import {
   inWalkOrder,
+  isNamedView,
   assigneeKey,
   byFloor,
   commentCounts,
@@ -27,7 +28,7 @@ import {
 import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { SectionList, StyleSheet, View } from 'react-native';
+import { ScrollView, SectionList, StyleSheet, View } from 'react-native';
 import { useCanReadPlans } from '@/ai/readPlans';
 import { useClaudeReady } from '@/ai/claude';
 import { draftFill } from '@/components/draftFill';
@@ -36,6 +37,7 @@ import { ItemRow } from '@/components/ItemRow';
 import { backToJobs, useJobActions } from '@/components/JobActions';
 import { useFormOptions } from '@/components/ItemForm';
 import { OwnerSheet } from '@/components/OwnerSheet';
+import { useStarred } from '@/data/stars';
 import { StationSheet } from '@/components/StationSheet';
 import { AddTemplateSheet } from '@/components/TemplateSheets';
 import { useItemActions } from '@/components/useItemActions';
@@ -48,6 +50,7 @@ import { clipboard, itemsTitle, itemsWord, useClipboard } from '@/data/clipboard
 import { useFilterContext, useHolds, useJobView } from '@/data/view';
 import {
   Button,
+  Chip,
   EmptyState,
   Figures,
   haptic,
@@ -127,6 +130,7 @@ export default function JobScreen() {
   const [query, setQuery] = useState('');
   const [sheet, setSheet] = useState(false);
   const actions = useItemActions(jobId);
+  const starredIds = useStarred();
   const commentsOn = commentCounts(data.useComments(jobId));
   const holds = useHolds(jobId);
   // The bottom bar's Capture and Send work on the job you were in last.
@@ -395,11 +399,62 @@ export default function JobScreen() {
       testID="group-by"
     />
   );
+  // The views saved with a name, one tap away: tap the one on to go back to your default.
+  const namedChips =
+    saved.named && saved.named.length > 0 ? (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} scrollsToTop={false} contentContainerStyle={styles.namedRow} style={styles.named} testID="named-views">
+        {saved.named.map((n) => {
+          const on = isNamedView(view, n);
+          return (
+            <Chip
+              key={n.name}
+              label={n.name}
+              on={on}
+              onPress={() => {
+                haptic.selection();
+                setView(on ? { ...view, groupBy: saved.groupBy, showCompleted: saved.showCompleted, filters: saved.filters } : { ...view, groupBy: n.groupBy, showCompleted: n.showCompleted, filters: n.filters });
+              }}
+              testID={`named-chip-${n.name}`}
+            />
+          );
+        })}
+      </ScrollView>
+    ) : null;
   // The figures count what the list below shows: the whole job, or what the filters leave.
   const readyCount = allOpen.filter((i) => i.ready && !i.unfinished).length;
   const waitingCount = allOpen.filter((i) => !i.ready && !i.unfinished).length;
   const openState = (state: 'ready' | 'waiting') =>
     router.push({ pathname: '/jobs/[jobId]/list/[by]/[key]', params: { jobId, by: 'state', key: state } });
+  // Starred items on this job, at the top, newest star first.
+  const starredOpen = starredIds.flatMap((id) => {
+    const it = items.find((i) => i.id === id && i.status === 'open');
+    return it ? [it] : [];
+  });
+  const starredCard =
+    starredOpen.length > 0 ? (
+      <View testID="starred">
+        <SectionLabel label="Starred" right={String(starredOpen.length)} style={styles.sectionLabel} />
+        {starredOpen.map((item, index) => (
+          <ItemRow
+            key={item.id}
+            item={item}
+            photo={firstPhoto.get(item.id)}
+            comments={commentsOn.get(item.id)}
+            holds={holds}
+            location={locations.find((l) => l.id === item.locationId)?.label}
+            assignee={names(item.companyId) || names(item.assignedTo) || undefined}
+            first={index === 0}
+            last={index === starredOpen.length - 1}
+            checking={actions.checking.has(item.id)}
+            onOpen={actions.onOpen}
+            onCheck={actions.onCheck}
+            onReady={actions.onReady}
+            onRemove={actions.onRemove}
+            onAddPhoto={addPhoto}
+          />
+        ))}
+      </View>
+    ) : null;
   // The counts, once there is something to count.
   const hasItems = allOpen.length > 0 || items.some((i) => i.status !== 'removed');
   const top = hasItems ? (
@@ -482,9 +537,11 @@ export default function JobScreen() {
                 <View>
                   {scroll.header}
                   {hasItems ? groupChips : null}
+                  {hasItems ? namedChips : null}
                   {filterBar}
                   {pasteRow}
                   {inboxCard}
+                  {starredCard}
                 </View>
               }
               ListEmptyComponent={empty}
@@ -531,6 +588,9 @@ export default function JobScreen() {
         saved={saved}
         onSaveDefault={() => void data.setViewSettings(view)}
         matching={total}
+        named={saved.named}
+        onSaveNamed={(name) => data.saveNamedView(name, view)}
+        onRemoveNamed={(name) => void data.removeNamedView(name).then(() => feedback.toast({ message: `Removed the view ${name}` }))}
       />
       {jobActions.sheet}
     </>
@@ -584,6 +644,8 @@ function GroupRow({
 
 const styles = StyleSheet.create({
   groups: { marginHorizontal: layout.margin, marginTop: 4, marginBottom: 4 },
+  named: { flexGrow: 0, marginTop: 6, marginBottom: 2 },
+  namedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: layout.margin },
   filterBar: { marginTop: 8, marginBottom: 2 },
   card: { marginTop: 14 },
   sectionLabel: { marginTop: 18, marginBottom: 8 },

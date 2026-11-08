@@ -1,6 +1,7 @@
 // Jobs: the first screen, Site Office style. Mine, All and Closed at the top when there is more than
 // one to pick, My Items when anything is assigned to you, then the jobs, each with how much is open,
-// how much is ready and how much waits. Admins make jobs with the plus in the bar, and swipe a job to
+// how much is ready and how much waits. The search at the top finds jobs, and under them everything
+// else on every job: items, locations, companies, people and comments. Admins make jobs with the plus in the bar, and swipe a job to
 // close or delete it, or hold it down to change its name and address too. People, Companies,
 // Templates, Item Form and your account are under Me, the square button in the bar.
 
@@ -11,6 +12,10 @@ import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { useJobActions } from '@/components/JobActions';
+import { useUpdateLines } from '@/components/ActivityRow';
+import { SearchResults } from '@/components/SearchResults';
+import { useRecent, useStarred } from '@/data/stars';
+import { newLines, updatesSeen } from '@/data/updatesSeen';
 import { useSampleJob } from '@/components/useSampleJob';
 import { Button, ChipRow, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, SectionLabel, Stamp, SwipeRow, Text, type BarItem, type SwipeAction } from '@/ui';
 
@@ -49,13 +54,13 @@ export default function JobsScreen() {
       back={false}
       right={right}
       account
-      search={{ value: query, onChange: setQuery, placeholder: 'Search jobs' }}
+      search={{ value: query, onChange: setQuery, placeholder: 'Search everything' }}
       tab={{ active: 'jobs' }}
     >
       {choices.length > 1 ? (
         <ChipRow chips={choices.map(([key, label]) => ({ key, label, on: show === key, onPress: () => setShow(key), testID: `show-${key}` }))} style={styles.show} />
       ) : null}
-      {me && show !== 'closed' ? <MyItemsRow personId={me.id} /> : null}
+      {me && show !== 'closed' && !q && open.length > 0 ? <DayRows personId={me.id} /> : null}
       {open.length === 0 && show !== 'closed' ? (
         <EmptyState icon="house.fill" title="No Jobs Yet" message={admin ? 'Set up a job, or try everything on the Sample Job first.' : 'Your jobs show here once you are on one.'}>
           {admin ? (
@@ -66,17 +71,20 @@ export default function JobsScreen() {
           ) : null}
         </EmptyState>
       ) : found.length === 0 ? (
-        <Text variant="subheadline" color={colors.secondary} align="center" style={styles.none}>
-          {q ? `No job matches “${query.trim()}”.` : 'No jobs here.'}
-        </Text>
+        q ? null : (
+          <Text variant="subheadline" color={colors.secondary} align="center" style={styles.none}>
+            No jobs here.
+          </Text>
+        )
       ) : (
         <>
-          <SectionLabel label={q ? `${found.length} ${found.length === 1 ? 'result' : 'results'}` : `${found.length} ${found.length === 1 ? 'job' : 'jobs'}`} />
+          <SectionLabel label={q ? `Jobs ${found.length}` : `${found.length} ${found.length === 1 ? 'job' : 'jobs'}`} />
           <Panel style={styles.jobs}>
             <JobRows jobs={found} />
           </Panel>
         </>
       )}
+      {q ? <SearchResults query={query} jobsFound={found.length} /> : null}
       {admin && open.length > 0 && show !== 'closed' && !hasSample && !q ? (
         <View style={styles.sample}>
           <Button label={sample.adding ? 'Adding the Sample Job' : 'Add the Sample Job'} variant="plain" onPress={sample.ask} disabled={sample.adding} testID="add-sample-job" />
@@ -91,30 +99,58 @@ export default function JobsScreen() {
   );
 }
 
-/** What is assigned to you on every job, one tap away. Shows once something is. */
-function MyItemsRow({ personId }: { personId: string }) {
-  const mine = assignedTo(useData().useAssigned(personId), personId);
-  if (mine.length === 0) return null;
+/** Today, Updates (with what is new since you last looked) and My Items, one tap away. */
+function DayRows({ personId }: { personId: string }) {
+  const data = useData();
+  const mine = assignedTo(data.useAssigned(personId), personId);
+  const lines = useUpdateLines();
+  const seenAt = updatesSeen.use();
+  const kept = useStarred().length + useRecent().length;
+  const fresh = newLines(lines, seenAt, personId).length;
   const ready = mine.filter((i) => i.ready).length;
   const jobs = new Set(mine.map((i) => i.jobId)).size;
   return (
     <Panel style={styles.mine}>
-      <LedgerRow
-        last
-        lead={<IconTile name="person" />}
-        onPress={() => router.push('/my')}
-        accessibilityLabel={`My Items, ${mine.length} open, ${ready} ready`}
-        testID="my-items"
-      >
-        <Text weight="500">My Items</Text>
-        <MetaLine
-          facts={[
-            `${mine.length} open`,
-            ready > 0 ? { text: `${ready} ready`, color: colors.ok } : null,
-            jobs > 1 ? `${jobs} jobs` : null,
-          ]}
-        />
+      <LedgerRow lead={<IconTile name="calendar" />} onPress={() => router.push('/today')} chevron testID="today">
+        <Text weight="500">Today</Text>
+        <MetaLine facts={['To check, yours and who is on site, in walking order']} />
       </LedgerRow>
+      <LedgerRow
+        last={mine.length === 0 && kept === 0}
+        lead={<IconTile name="bell" />}
+        onPress={() => router.push('/updates')}
+        chevron
+        accessibilityLabel={fresh > 0 ? `Updates, ${fresh} new` : 'Updates'}
+        testID="updates"
+      >
+        <Text weight="500">Updates</Text>
+        <MetaLine facts={[fresh > 0 ? { text: `${fresh} new`, color: colors.label } : 'Nothing new since you last looked']} />
+      </LedgerRow>
+      {mine.length > 0 ? (
+        <LedgerRow
+          last={kept === 0}
+          lead={<IconTile name="person" />}
+          onPress={() => router.push('/my')}
+          chevron
+          accessibilityLabel={`My Items, ${mine.length} open, ${ready} ready`}
+          testID="my-items"
+        >
+          <Text weight="500">My Items</Text>
+          <MetaLine
+            facts={[
+              `${mine.length} open`,
+              ready > 0 ? { text: `${ready} ready`, color: colors.ok } : null,
+              jobs > 1 ? `${jobs} jobs` : null,
+            ]}
+          />
+        </LedgerRow>
+      ) : null}
+      {kept > 0 ? (
+        <LedgerRow last lead={<IconTile name="star" />} onPress={() => router.push('/recent')} chevron testID="starred-recent">
+          <Text weight="500">Starred and Recent</Text>
+          <MetaLine facts={['What you starred and opened lately']} />
+        </LedgerRow>
+      ) : null}
     </Panel>
   );
 }

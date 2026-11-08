@@ -30,6 +30,34 @@ export function useActivityLines(jobId: string, itemId?: string): ActivityLine[]
   }, [entries, people, items, locations, companies, trades, visits, customFields, comments, itemId]);
 }
 
+/** A line of Updates, with the job it is on. */
+export interface JobLine {
+  jobId: string;
+  line: ActivityLine;
+}
+
+/** What happened lately on every job you see, as lines, newest first: Updates, and Today's answers. */
+export function useUpdateLines(): JobLine[] {
+  const data = useData();
+  const entries = data.useUpdates();
+  const people = data.usePeople();
+  const items = data.useAllItems();
+  const locations = data.useAllLocations();
+  const companies = data.useCompanies();
+  const trades = data.useTrades();
+  const visits = data.useAllVisits();
+  const customFields = data.useCustomFields();
+  const comments = data.useAllComments();
+  return useMemo(() => {
+    const look = activityLookups({ people, items, locations, companies, trades, visits, customFields, comments });
+    const byJob = new Map<string, typeof entries>();
+    for (const e of entries) byJob.set(e.jobId, [...(byJob.get(e.jobId) ?? []), e]);
+    const out: JobLine[] = [];
+    for (const [jobId, list] of byJob) for (const line of activityLines(list, look)) out.push({ jobId, line });
+    return out.sort((a, b) => b.line.at.localeCompare(a.line.at) || b.line.key.localeCompare(a.line.key));
+  }, [entries, people, items, locations, companies, trades, visits, customFields, comments]);
+}
+
 export const ActivityRow = memo(function ActivityRow({
   line,
   time,

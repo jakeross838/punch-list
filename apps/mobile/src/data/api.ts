@@ -190,6 +190,12 @@ export interface DataApi {
   useItems(jobId: string): Item[];
   /** Every item on every job you see: for wording typed again and again. */
   useAllItems(): Item[];
+  /** Every location on every job you see: for Search and Today. */
+  useAllLocations(): Location[];
+  /** Every comment on every job you see: for Search. */
+  useAllComments(): Comment[];
+  /** Every visit on every job you see, removed ones left out: for Today. */
+  useAllVisits(): Visit[];
   /** The job's photos that are not removed, each item's in order. */
   usePhotos(jobId: string): Photo[];
   useTrades(): Trade[];
@@ -368,6 +374,9 @@ export interface DataApi {
   undoSend(id: string): Promise<void>;
   setFormSettings(settings: FormSettings): Promise<void>;
   setViewSettings(settings: ViewSettings): Promise<void>;
+  /** Saves a view with a name, one tap away on every job; one saved with the same name is replaced. */
+  saveNamedView(name: string, view: ViewSettings): Promise<void>;
+  removeNamedView(name: string): Promise<void>;
   /** Sends a six digit code to the email. Anyone may sign up; someone switched off at their company is told so. */
   sendSignInCode(email: string): Promise<void>;
   /** Signs in with the code from the email: into the app, or as someone new who starts a company next. */

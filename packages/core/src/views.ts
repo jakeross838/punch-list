@@ -24,7 +24,50 @@ export interface ViewSettings {
   groupBy: GroupBy;
   showCompleted: boolean;
   filters: ItemFilters;
+  /** Views saved with a name ("Ready for Paint"), one tap away on every job. */
+  named?: NamedView[];
 }
+
+/** A view saved with a name: how it is grouped and what it shows. */
+export interface NamedView {
+  name: string;
+  groupBy: GroupBy;
+  showCompleted: boolean;
+  filters: ItemFilters;
+}
+
+/** The most views kept with a name, and the longest name. */
+export const NAMED_VIEWS_KEPT = 12;
+export const VIEW_NAME_MAX = 40;
+
+/** A view's name, tidied: one line, spaces single, at most 40 characters, or empty. */
+export const viewName = (name: string) => name.replace(/\s+/g, ' ').trim().slice(0, VIEW_NAME_MAX);
+
+function readNamed(raw: unknown): NamedView[] {
+  if (!Array.isArray(raw)) return [];
+  const out: NamedView[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== 'object') continue;
+    const r = x as Record<string, unknown>;
+    const name = typeof r.name === 'string' ? viewName(r.name) : '';
+    if (!name || out.some((v) => v.name.toLowerCase() === name.toLowerCase())) continue;
+    out.push({ name, groupBy: GROUPS.includes(r.groupBy as GroupBy) ? (r.groupBy as GroupBy) : 'room', showCompleted: r.showCompleted === true, filters: readFilters(r.filters) });
+    if (out.length >= NAMED_VIEWS_KEPT) break;
+  }
+  return out;
+}
+
+/** The views saved with a name, with this one added (or saved again over one with its name), newest first. */
+export function withNamedView(list: NamedView[] | undefined, name: string, view: Pick<ViewSettings, 'groupBy' | 'showCompleted' | 'filters'>): NamedView[] {
+  const clean = viewName(name);
+  if (!clean) return list ?? [];
+  const rest = (list ?? []).filter((v) => v.name.toLowerCase() !== clean.toLowerCase());
+  return [{ name: clean, groupBy: view.groupBy, showCompleted: view.showCompleted, filters: view.filters }, ...rest].slice(0, NAMED_VIEWS_KEPT);
+}
+
+/** Whether a view is the one saved with this name. */
+export const isNamedView = (view: Pick<ViewSettings, 'groupBy' | 'showCompleted' | 'filters'>, named: NamedView) =>
+  view.groupBy === named.groupBy && view.showCompleted === named.showCompleted && sameFilters(view.filters, named.filters);
 
 export const DEFAULT_VIEW: ViewSettings = { groupBy: 'room', showCompleted: false, filters: NO_FILTERS };
 
@@ -48,7 +91,8 @@ export function readViewSettings(raw: unknown): ViewSettings {
     if (r.filter === 'added_scope') filters.kinds = ['added_scope'];
     if (typeof r.companyId === 'string') filters.companyIds = [r.companyId];
   }
-  return { groupBy, showCompleted: r.showCompleted === true, filters };
+  const named = readNamed(r.named);
+  return { groupBy, showCompleted: r.showCompleted === true, filters, ...(named.length > 0 ? { named } : {}) };
 }
 
 export function sameView(a: ViewSettings, b: ViewSettings): boolean {
