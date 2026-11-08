@@ -87,7 +87,7 @@ async function main(): Promise<void> {
   {
     const p = await browser.newPage();
     await p.setContent(
-      `<html><body style="font:12pt Arial;padding:40px"><h2>Owner Walkthrough Punch List</h2><h3>Kitchen 109</h3><p>1. Cabinet door left of the sink rubs.</p><h3>Laundry 119</h3><p>2. Touch up paint by the dryer.</p><p>3. Dryer vent cover is missing. DONE</p></body></html>`,
+      `<html><body style="font:12pt Arial;padding:40px"><h2>Owner Walkthrough Punch List</h2><h3>Kitchen 109</h3><p>1. Pantry door sticks at the top.</p><h3>Laundry 119</h3><p>2. Touch up paint by the dryer.</p><p>3. Dryer vent cover is missing. DONE</p></body></html>`,
     );
     writeFileSync(listPath, await p.pdf({ format: 'Letter', printBackground: true }));
     await p.close();
@@ -152,7 +152,7 @@ async function main(): Promise<void> {
           if (/This is a punch list for a house being built/.test(input)) {
             return {
               items: [
-                { title: 'Adjust cabinet door', description: 'Left of the sink, it rubs.', location: 'Kitchen 109', assignedTo: 'SMS Carpentry', waitingOn: null },
+                { title: 'Adjust pantry door', description: 'It sticks at the top.', location: 'Kitchen 109', assignedTo: 'SMS Carpentry', waitingOn: null },
                 { title: 'Touch up paint', description: 'By the dryer.', location: 'Laundry 119', assignedTo: 'Triple H Painting', waitingOn: null },
               ],
             };
@@ -206,8 +206,10 @@ async function main(): Promise<void> {
 
   // Lets a slide or a sheet finish before a screenshot.
   const settle = (ms = 650) => tab.waitForTimeout(ms);
+  /** The element with this test name that can be seen: late in the walk, screens behind keep theirs. */
+  const seen = (testId: string) => app.getByTestId(testId).filter({ visible: true }).last();
   const menu = async (testId: string) => {
-    await app.getByTestId('more').last().click();
+    await seen('more').click();
     await app.getByTestId(testId).waitFor();
     await settle(350);
     await app.getByTestId(testId).click();
@@ -370,7 +372,7 @@ async function main(): Promise<void> {
       await app.getByTestId('back').last().click();
       await app.getByTestId('job-job-preview').waitFor();
       await settle();
-      await app.getByTestId('camera').last().click();
+      await app.locator('[data-testid="camera"]:visible').last().click();
       await app.getByTestId('shutter').waitFor();
       await app.getByText('Choose Location').waitFor();
       const chooser = tab.waitForEvent('filechooser');
@@ -389,7 +391,7 @@ async function main(): Promise<void> {
       await settle();
     });
     await step('the camera opens on the location', async () => {
-      await app.getByTestId('camera').last().click();
+      await app.locator('[data-testid="camera"]:visible').last().click();
       await app.getByTestId('shutter').waitFor();
       await app.getByText('Kitchen 109').last().waitFor();
       await app.getByText('Each photo saves as an item. Claude fills it in.').waitFor();
@@ -585,7 +587,7 @@ async function main(): Promise<void> {
     await step('a walk saves each photo to check over later, and Claude fills each in', async () => {
       await app.getByTestId('group-room-4').click();
       await settle();
-      await app.getByTestId('camera').last().click();
+      await app.locator('[data-testid="camera"]:visible').last().click();
       await app.getByTestId('shutter').waitFor();
       await settle(400);
       for (let i = 0; i < 2; i += 1) {
@@ -720,7 +722,7 @@ async function main(): Promise<void> {
       await shot('27d-photo-added-later');
     });
     await step('photo first for an item typed earlier: the photo goes on that item, from the last photo', async () => {
-      await app.getByTestId('camera').last().click();
+      await app.locator('[data-testid="camera"]:visible').last().click();
       const chooser = tab.waitForEvent('filechooser');
       await app.getByTestId('shutter').click();
       await (await chooser).setFiles(photoPath);
@@ -2032,7 +2034,7 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').click();
       await app.getByTestId('item-item-16').waitFor();
       await settle();
-      await app.getByTestId('camera').last().click();
+      await app.locator('[data-testid="camera"]:visible').last().click();
       await app.getByTestId('shutter').waitFor();
       await app.getByTestId('camera-say').waitFor();
       await settle(400);
@@ -2058,7 +2060,10 @@ async function main(): Promise<void> {
     });
     await step('New: Fill In From Photo with the words: Claude sees one more thing marked on the photo, and it becomes a draft too', async () => {
       await app.getByTestId('group-room-5').click();
-      await app.getByTestId('camera').last().click();
+      // The location slides in: the camera is tapped once it is still.
+      await seen('new-item-row').waitFor();
+      await settle(700);
+      await seen('camera').click();
       await app.getByTestId('shutter').waitFor();
       await settle(400);
       await app.getByTestId('no-photo').click();
@@ -2098,56 +2103,64 @@ async function main(): Promise<void> {
       await settle(400);
     });
     await step('New: a done photo: taken on an item, it shows as one, and Claude compares it with the photo of the problem', async () => {
-      await app.getByTestId('search').last().fill('Set upper cabinets');
-      await app.getByText('Set upper cabinets').first().click();
-      await app.getByTestId('item-photo').first().waitFor();
+      // The towel bar just saved in Laundry 119, with its marked up photo.
+      await app.getByTestId('group-room-5').click();
+      await app.getByTestId(/^item-/).filter({ hasText: 'Install towel bar' }).last().click();
+      await app.locator('[data-testid="add-done-photo"]:visible').last().waitFor();
       await settle(500);
-      await app.getByTestId('add-done-photo').last().click();
-      await app.getByText('A photo of the finished work, for Set upper cabinets.').waitFor();
+      await app.locator('[data-testid="add-done-photo"]:visible').last().click();
+      await app.getByText('A photo of the finished work, for Install towel bar.').waitFor();
       await takePhoto();
       await app.getByTestId('markup-next').click();
       // Back on the item, the done photo shows, marked as one, and Claude says what it sees.
-      await app.getByTestId('item-photo-done').waitFor();
-      await app.getByTestId('done-check').getByText('Claude: The left hinge still looks loose.').waitFor({ timeout: 15_000 });
+      await app.locator('[data-testid="item-photo-done"]:visible').waitFor();
+      await app.locator('[data-testid="done-check"]:visible').getByText('Claude: The left hinge still looks loose.').waitFor({ timeout: 15_000 });
       const asked = await lastAsked('Check the work from two photos');
-      if (!asked || asked.images !== 2 || !asked.input.includes('The item: Set upper cabinets')) throw new Error('The done check did not send both photos with the item');
+      if (!asked || asked.images !== 2 || !asked.input.includes('The item: Install towel bar')) throw new Error('The done check did not send both photos with the item');
       await settle(400);
       await shot('99zf0-done-photo');
       await app.getByTestId('back').last().click();
-      await app.getByTestId('search-clear').last().click();
+      await settle(400);
+      await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
       await settle(300);
     });
     await step("New: a new job from another job's setup: its companies, its team and its locations", async () => {
-      if (!(await app.getByTestId('new-job').last().isVisible())) await app.getByTestId('tab-jobs').last().click();
+      // Back from the job to Jobs, then New Job once Jobs is still.
+      await app.getByTestId('back').last().click();
+      await settle(900);
       await app.getByTestId('new-job').last().click();
       await app.getByTestId('field-job-name').fill('Guest House');
       await app.getByTestId('field-copy-from').click();
-      await app.getByTestId('picker').getByText('Sample Job', { exact: true }).click();
+      // Sample Job North once the walk renamed it, Sample Job on fresh sample data.
+      await app.getByTestId('picker').getByText(/^Sample Job( North)?$/).first().click();
       await app.getByTestId('copy-companies').waitFor();
       // Companies and the team are on to start; the locations are picked here.
       await app.getByTestId('copy-locations').click();
       await settle(300);
       await shot('99zf1-copy-from');
-      await app.getByTestId('save').last().click();
-      await app.getByText('Kitchen 109').first().waitFor();
-      await app.getByText('Mudroom 120').first().waitFor();
+      await seen('save').click();
+      await app.getByText('Kitchen 109').filter({ visible: true }).first().waitFor();
+      await app.getByText('Mudroom 120').filter({ visible: true }).first().waitFor();
       // Its companies came too: SMS Carpentry is on it in Job Setup.
       await menu('job-setup');
-      await app.getByRole('tab', { name: 'Companies' }).click();
-      await app.getByTestId(/^setup-company-/).filter({ hasText: 'SMS Carpentry' }).first().waitFor();
+      await app.getByRole('tab', { name: 'Companies' }).filter({ visible: true }).click();
+      await app.getByTestId(/^setup-company-/).filter({ hasText: 'SMS Carpentry', visible: true }).first().waitFor();
       await settle(300);
       await shot('99zf2-copied-setup');
-      await app.getByTestId('back').last().click();
+      await seen('back').click();
       await settle(300);
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('job-job-preview').waitFor();
+      await seen('back').click();
+      await seen('job-job-preview').waitFor();
       await settle(300);
     });
     await step('New: Read a List: Claude reads a punch list someone else wrote, from its PDF, into items to check', async () => {
-      if (!(await app.getByTestId('job-job-preview').isVisible())) await app.getByTestId('tab-jobs').last().click();
-      await app.getByTestId('job-job-preview').click();
-      await app.getByTestId('group-room-1').waitFor();
+      if (!(await seen('job-job-preview').isVisible())) await seen('tab-jobs').click();
+      await seen('job-job-preview').waitFor();
+      await settle(800);
+      await seen('job-job-preview').click();
+      await seen('group-room-1').waitFor();
+      await settle(500);
       await settle(400);
       await menu('read-list');
       await app.getByTestId('list-pdf').waitFor();
@@ -2156,31 +2169,32 @@ async function main(): Promise<void> {
       const chooser = tab.waitForEvent('filechooser');
       await app.getByTestId('list-pdf').click();
       await (await chooser).setFiles(listPath);
-      await app.getByText('Touch up paint').first().waitFor({ timeout: 20_000 });
+      // The pantry door is new; the paint by the dryer is on the list already once the walk added it.
+      await app.getByText('Adjust pantry door').filter({ visible: true }).first().waitFor({ timeout: 20_000 });
       const read = await lastAsked('This is a punch list for a house being built');
-      if (!read || !read.input.includes('The list:') || !read.input.includes('Cabinet door left of the sink rubs.')) throw new Error('Read a List did not send the text of the PDF');
+      if (!read || !read.input.includes('The list:') || !read.input.includes('Pantry door sticks at the top.')) throw new Error('Read a List did not send the text of the PDF');
       await settle(400);
       await shot('99zf4-list-read');
       await app.getByTestId('say-add').last().click();
       await app.getByText(/^Added \d+ items?\./).waitFor();
-      await app.getByTestId('group-room-1').waitFor();
+      await seen('group-room-1').waitFor();
       await settle(1500);
       // Rows copied from a spreadsheet: each row an item, the columns known by their names.
       await menu('read-list');
       await app.getByTestId('say-words').fill('Location\tTask\tSub\nKitchen 109\tCaulk backsplash\tTriple H Painting\nMudroom\tInstall coat hooks\tSMS Carpentry');
       await app.getByTestId('say-make').click();
-      await app.getByText('Install coat hooks').first().waitFor();
+      await app.getByText('Install coat hooks').filter({ visible: true }).first().waitFor();
       await settle(400);
       await shot('99zf4b-spreadsheet-rows');
       await app.getByTestId('say-add').last().click();
       await app.getByText('Added 2 items.').waitFor();
-      await app.getByTestId('group-room-1').waitFor();
+      await seen('group-room-1').waitFor();
       await settle(400);
     });
     await step('New: a company from an email signature: Claude fills in the company, its trade and its people', async () => {
       await menu('job-setup');
-      await app.getByRole('tab', { name: 'Companies' }).click();
-      await app.getByTestId('add-company').click();
+      await app.getByRole('tab', { name: 'Companies' }).filter({ visible: true }).click();
+      await seen('add-company').click();
       await app.getByTestId('company-signature').waitFor();
       await settle(500);
       await app.getByTestId('company-signature').click();
@@ -2196,8 +2210,8 @@ async function main(): Promise<void> {
       await app.getByTestId('company-add').click();
       await app.getByText('Island Paint Company added to the job, with 2 people to get its lists').waitFor();
       await settle(400);
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('group-room-1').waitFor();
+      await seen('back').click();
+      await seen('group-room-1').waitFor();
       await settle(400);
     });
     await step('New: the Sample Job: one tap adds a whole job to try everything on, with photos, marks and comments, and it deletes like any other job', async () => {
@@ -2400,7 +2414,7 @@ async function main(): Promise<void> {
     });
   } catch (e) {
     await shot('zz-failure');
-    problems.push(`step failed after "${steps.at(-1) ?? 'start'}": ${e instanceof Error ? e.message.split('\n').slice(0, 4).join(' | ') : String(e)}`);
+    problems.push(`step failed after "${steps.at(-1) ?? 'start'}": ${e instanceof Error ? e.message.split('\n').slice(0, 40).join(' | ') : String(e)}`);
   } finally {
     await browser.close();
     server.close();

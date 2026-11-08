@@ -1,11 +1,11 @@
 // Reads a job's plans with Claude, to set up its locations, or a punch list someone else wrote, to
 // add its items (kind: list, with the job's locations, companies, team and standard titles as
 // input). The phone puts the files in the job's folder in storage (a PDF, or pictures of the sheets
-// or pages; a sheet whole and in pieces) and sends where they are; this checks the caller is switched on at a company with some of this month's allowance for
-// Claude left and can see the job, gives Claude a link to each file for a few minutes, and answers
-// with Claude's reply as text for the phone to check. The files are taken away once Claude has read
-// them, and what the reading cost is counted against the company. The Claude key stays here, as a
-// function secret.
+// or pages; a sheet whole and in pieces) and sends where they are; this checks the caller is
+// switched on at a company with some of this month's allowance for Claude left and can see the
+// job, gives Claude a link to each file for a few minutes, and answers with Claude's reply as text
+// for the phone to check. The files are taken away once Claude has read them, and what the reading
+// cost is counted against the company. The Claude key stays here, as a function secret.
 //
 //   supabase secrets set ANTHROPIC_API_KEY=...   (and optionally PLANS_MODEL)
 //   supabase functions deploy read-plans
