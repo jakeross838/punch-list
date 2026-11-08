@@ -2,6 +2,7 @@
 // large, and a place to keep a name on the device.
 
 import { marksSvg, type Mark } from '@punch/core';
+import { EN, type Words } from './words';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -27,24 +28,23 @@ export function remember(key: string, value: string): void {
 }
 
 /** "Friday, November 13", with the year when it is not this one. */
-export function dayText(ymd: string): string {
+export function dayText(ymd: string, w: Words = EN): string {
   const [y, m, d] = ymd.split('-').map(Number);
   if (!y || !m || !d) return ymd;
-  const weekday = WEEKDAYS[new Date(y, m - 1, d).getDay()];
-  return `${weekday}, ${MONTHS[m - 1]} ${d}${y === new Date().getFullYear() ? '' : `, ${y}`}`;
+  return w.day(new Date(y, m - 1, d).getDay(), m - 1, d, y === new Date().getFullYear() ? null : y);
 }
 
 /** "Today", "Yesterday" or "November 4", for when something was said or done. */
-export function whenText(iso: string): string {
+export function whenText(iso: string, w: Words = EN): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return '';
   const day = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
-  if (day(at) === day(today)) return 'Today';
-  if (day(at) === day(yesterday)) return 'Yesterday';
-  return `${MONTHS[at.getMonth()]} ${at.getDate()}${at.getFullYear() === today.getFullYear() ? '' : `, ${at.getFullYear()}`}`;
+  if (day(at) === day(today)) return w.today;
+  if (day(at) === day(yesterday)) return w.yesterday;
+  return w.date(at.getMonth(), at.getDate(), at.getFullYear() === today.getFullYear() ? null : at.getFullYear());
 }
 
 /** "Friday, November 7", today, for a screen that stays up all day. */

@@ -110,6 +110,9 @@ export const rowToLocation = (r: Row): Location => ({
   walkedAt: textOrNull(r.walked_at),
 });
 
+/** Where an item came from, as the database keeps it: Say It's and the owner's page's are their own. */
+const ITEM_SOURCES = ['walk', 'typed', 'import', 'copy', 'template', 'said', 'owner'] as const satisfies readonly Item['source'][];
+
 export const rowToTrade = (r: Row): Trade => ({ id: text(r.id), name: text(r.name), sortOrder: num(r.sort_order) });
 
 export const rowToCompany = (r: Row): Company => ({
@@ -119,6 +122,7 @@ export const rowToCompany = (r: Row): Company => ({
   phone: textOrNull(r.phone),
   email: textOrNull(r.email),
   active: bool(r.active),
+  language: r.language === 'es' ? 'es' : 'en',
 });
 
 export const rowToContact = (r: Row): Contact => ({
@@ -163,7 +167,7 @@ export const rowToItem = (r: Row): Item => ({
   status: r.status === 'complete' || r.status === 'removed' ? r.status : 'open',
   completedBy: textOrNull(r.completed_by),
   completedAt: textOrNull(r.completed_at),
-  source: r.source === 'walk' || r.source === 'import' || r.source === 'copy' || r.source === 'template' ? r.source : 'typed',
+  source: ITEM_SOURCES.find((x) => x === r.source) ?? 'typed',
   position: numOrNull(r.position),
   extra: json<Item['extra']>(r.extra, {}),
   unfinished: bool(r.unfinished),

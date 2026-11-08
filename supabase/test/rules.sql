@@ -948,6 +948,222 @@ begin
 end $$;
 reset role;
 
+-- ---------- the owner's page ----------
+-- One private link per job for the homeowner, made from the app; the page talks to the database only
+-- through the company-page function. The owner sees progress, adds what they want looked at, and
+-- signs off.
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+declare
+  j uuid := (select id from public.jobs where name = 'Fish');
+  a jsonb; b jsonb; c jsonb;
+begin
+  if public.owner_link(j, 'get') is not null then raise exception 'FAIL: a job had an owner link before one was made'; end if;
+  a := public.owner_link(j, 'make', '  Lisa   and Mark Fish ');
+  if (a ->> 'token') !~ '^[0-9a-f]{64}$' then raise exception 'FAIL: the owner link is too easy to guess'; end if;
+  if a ->> 'name' <> 'Lisa and Mark Fish' then raise exception 'FAIL: the owner link did not keep who it is for: %', a ->> 'name'; end if;
+  if public.owner_link(j, 'make') ->> 'token' <> a ->> 'token' or public.owner_link(j, 'get') ->> 'token' <> a ->> 'token' then
+    raise exception 'FAIL: making the owner link again made another one';
+  end if;
+  if public.owner_link(j, 'get', 'The Fish Family') ->> 'name' <> 'The Fish Family' then raise exception 'FAIL: who the link is for did not change'; end if;
+  b := public.owner_link(j, 'new');
+  if b ->> 'token' = a ->> 'token' or b ->> 'name' <> 'The Fish Family' then raise exception 'FAIL: a new owner link did not replace the old one, keeping its name'; end if;
+  if public.owner_link(j, 'off') is not null or public.owner_link(j, 'get') is not null then raise exception 'FAIL: the owner link did not turn off'; end if;
+  c := public.owner_link(j, 'make', 'Lisa Fish');
+  perform set_config('test.owner_old', a ->> 'token', false);
+  perform set_config('test.owner', c ->> 'token', false);
+  begin
+    perform 1 from public.owner_links;
+    raise exception 'FAIL: the app read the owner links directly';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.owner_link(j, 'open');
+    raise exception 'FAIL: the owner link took an action it does not have';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.owner_page(c ->> 'token');
+    raise exception 'FAIL: the app can open the owner''s page';
+  exception when insufficient_privilege then null;
+  end;
+  -- Something waiting on the owner.
+  update public.items set ready = false, waiting_on = '{Owner}' where id = current_setting('test.other_item')::uuid;
+end $$;
+reset role;
+
+set role anon;
+do $$
+begin
+  begin
+    perform public.owner_link((select gen_random_uuid()), 'make');
+    raise exception 'FAIL: anyone can make an owner link';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.owner_page(current_setting('test.owner'));
+    raise exception 'FAIL: the owner''s page opens for anyone';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.owner_sign_off(current_setting('test.owner'), null, 'Lisa Fish');
+    raise exception 'FAIL: anyone can sign off for the owner';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+set request.jwt.claims = '';
+set role service_role;
+do $$
+declare
+  owner text := current_setting('test.owner');
+  page jsonb := public.owner_page(current_setting('test.owner'));
+  j uuid := (select id from public.jobs where name = 'Fish');
+  kitchen uuid := (select l.id from public.locations l where l.job_id = (select id from public.jobs where name = 'Fish') and l.active order by l.sort_order limit 1);
+  elsewhere uuid := (select l.id from public.locations l join public.jobs jj on jj.id = l.job_id where jj.name = 'Biales' limit 1);
+  added uuid := gen_random_uuid();
+  plain uuid := gen_random_uuid();
+  d jsonb;
+begin
+  if page is null or page -> 'job' ->> 'name' <> 'Fish' or page ->> 'owner' <> 'Lisa Fish' or jsonb_array_length(page -> 'locations') = 0 then
+    raise exception 'FAIL: the owner''s page did not open';
+  end if;
+  if (select opened_at from public.owner_links where token = owner) is null then raise exception 'FAIL: opening the owner''s page was not noted'; end if;
+  -- Titles only: no companies, notes, prices or numbers.
+  if exists (select 1 from jsonb_array_elements(page -> 'locations') lo, jsonb_array_elements(lo -> 'open') x where x ? 'description' or x ? 'company' or x ? 'po_or_co' or x ? 'number') then
+    raise exception 'FAIL: the owner''s page shows more than titles';
+  end if;
+  if (select count(*) from jsonb_array_elements(page -> 'locations') lo, jsonb_array_elements(lo -> 'open') x)
+     <> (select count(*) from public.items i join public.locations l on l.id = i.location_id where i.job_id = j and i.status = 'open' and not i.unfinished and l.active) then
+    raise exception 'FAIL: the owner''s page left out open work, or showed drafts: % on the page, % open', (select count(*) from jsonb_array_elements(page -> 'locations') lo, jsonb_array_elements(lo -> 'open') x),
+      (select count(*) from public.items i join public.locations l on l.id = i.location_id where i.job_id = j and i.status = 'open' and not i.unfinished and l.active);
+  end if;
+  if not exists (select 1 from jsonb_array_elements(page -> 'locations') lo, jsonb_array_elements(lo -> 'open') x where x ->> 'id' = current_setting('test.other_item') and (x ->> 'waits_on_owner')::boolean) then
+    raise exception 'FAIL: the owner''s page does not say what waits on them';
+  end if;
+  -- Something to look at: the owner's words and photo, a draft from the owner.
+  if public.owner_photo_folder(owner) <> j::text then raise exception 'FAIL: the owner''s photo folder is not the job''s'; end if;
+  perform public.owner_add_item(owner, added, kitchen, '  The pantry door   sticks at the top ', ' Lisa ', j::text || '/' || added::text || '/owner-' || gen_random_uuid()::text || '.jpg', 1200, 900);
+  if not exists (
+    select 1 from public.items i
+    where i.id = added and i.source = 'owner' and i.unfinished and i.title = '' and i.description = 'The pantry door sticks at the top' and i.location_id = kitchen and i.status = 'open' and i.number > 0
+  ) then
+    raise exception 'FAIL: what the owner added is not a draft from the owner';
+  end if;
+  select a.detail into d from public.job_activity a where a.kind = 'owner_item_added' and a.item_id = added;
+  if d is null or d ->> 'author_name' <> 'Lisa' or d ->> 'from_owner' <> 'true' then raise exception 'FAIL: Activity does not say the owner added it: %', d; end if;
+  select a.detail into d from public.job_activity a where a.kind = 'photo_added' and a.item_id = added;
+  if d is null or d ->> 'from_owner' <> 'true' or d ->> 'author_name' <> 'Lisa' or d ? 'done' then raise exception 'FAIL: Activity does not say the owner sent the photo: %', d; end if;
+  -- Words alone, and no place: still a draft.
+  perform public.owner_add_item(owner, plain, null, 'Garage door remote', 'Lisa', null, null, null);
+  if not exists (select 1 from public.items i where i.id = plain and i.location_id is null and i.unfinished) then raise exception 'FAIL: words alone did not come in'; end if;
+  page := public.owner_page(owner);
+  if jsonb_array_length(page -> 'added') <> 2 or (page -> 'added' -> 0 ->> 'status') <> 'received' then raise exception 'FAIL: the owner does not see what they added'; end if;
+  begin
+    perform public.owner_add_item(owner, gen_random_uuid(), null, '   ', 'Lisa', null, null, null);
+    raise exception 'FAIL: the owner added nothing at all';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.owner_add_item(owner, added, null, 'Again', 'Lisa', 'elsewhere/owner-' || gen_random_uuid()::text || '.jpg', 1200, 900);
+    raise exception 'FAIL: a photo was taken from outside the job''s folder';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.owner_add_item(owner, gen_random_uuid(), elsewhere, 'Wrong house', 'Lisa', null, null, null);
+    raise exception 'FAIL: the owner put something on another job';
+  exception when insufficient_privilege then null;
+  end;
+  -- Signing off: the whole job, then a location, under the owner's name, with how much is still open.
+  perform public.owner_sign_off(owner, null, '  Lisa  Fish ');
+  perform public.owner_sign_off(owner, kitchen, 'Lisa Fish');
+  if (select count(*) from public.job_activity where kind = 'owner_signed_off' and detail ->> 'author_name' = 'Lisa Fish' and person_id is null) <> 2 then
+    raise exception 'FAIL: the owner''s sign offs are not in Activity';
+  end if;
+  if (select (detail ->> 'open')::integer from public.job_activity where kind = 'owner_signed_off' and detail ->> 'location_id' is null)
+     <> (select count(*) from public.items where job_id = j and status = 'open' and not unfinished) then
+    raise exception 'FAIL: the sign off did not count what is still open';
+  end if;
+  if jsonb_array_length(public.owner_page(owner) -> 'sign_offs') <> 2 then raise exception 'FAIL: the owner''s page does not show the sign offs'; end if;
+  begin
+    perform public.owner_sign_off(owner, null, 'L');
+    raise exception 'FAIL: a sign off took no name';
+  exception when check_violation then null;
+  end;
+  -- A link that was replaced opens nothing, and an owner's link opens no company's or station's page.
+  if public.owner_page(current_setting('test.owner_old')) is not null then raise exception 'FAIL: an owner link that was replaced still works'; end if;
+  begin
+    perform public.owner_add_item(current_setting('test.owner_old'), gen_random_uuid(), null, 'Old link', 'Lisa', null, null, null);
+    raise exception 'FAIL: an old owner link added something';
+  exception when insufficient_privilege then null;
+  end;
+  if public.trade_page(owner) is not null or public.station_page(owner) is not null then raise exception 'FAIL: an owner link opened another page'; end if;
+  perform set_config('test.owner_item', added::text, false);
+end $$;
+reset role;
+
+-- ---------- a company's page in Spanish, and its other jobs ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+declare
+  gator uuid := (select id from public.companies where name = 'Gator Plumbing');
+  biales uuid := (select id from public.jobs where name = 'Biales');
+  garage uuid := (select l.id from public.locations l where l.job_id = (select id from public.jobs where name = 'Biales') limit 1);
+begin
+  update public.companies set language = 'es' where id = gator;
+  begin
+    update public.companies set language = 'fr' where id = gator;
+    raise exception 'FAIL: a company took a language the pages do not have';
+  exception when check_violation then null;
+  end;
+  -- Gator has open work on Biales too, and a link there.
+  insert into public.items (job_id, location_id, title, company_id, ready) values (biales, garage, 'Install hose bib', gator, true);
+  insert into public.company_links (job_id, company_id) values (biales, gator);
+  begin
+    perform 1 from public.translations;
+    raise exception 'FAIL: the app read the translations directly';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.org_ai_allowance('ross_built');
+    raise exception 'FAIL: the app asked for a company''s allowance by name';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+set request.jwt.claims = '';
+set role service_role;
+do $$
+declare
+  page jsonb := public.trade_page(current_setting('test.link'));
+  a jsonb := public.org_ai_allowance((select org from public.company_links where token = current_setting('test.link')));
+begin
+  if page -> 'company' ->> 'language' <> 'es' then raise exception 'FAIL: the company''s page does not say its language'; end if;
+  if page ->> 'org' is null then raise exception 'FAIL: the company''s page does not say whose it is'; end if;
+  if jsonb_array_length(page -> 'other_jobs') <> 1 or page -> 'other_jobs' -> 0 ->> 'name' <> 'Biales'
+     or (page -> 'other_jobs' -> 0 ->> 'open')::integer <> (select count(*) from public.items i join public.jobs jj on jj.id = i.job_id
+       where jj.name = 'Biales' and i.company_id = (select id from public.companies where name = 'Gator Plumbing') and i.status = 'open' and not i.unfinished)
+     or (page -> 'other_jobs' -> 0 ->> 'token') !~ '^[0-9a-f]{64}$' then
+    raise exception 'FAIL: the company''s page does not list its other jobs: %', page -> 'other_jobs';
+  end if;
+  if a is null or (a ->> 'limit_cents')::numeric <= 0 then raise exception 'FAIL: the company''s allowance did not come back'; end if;
+  insert into public.translations (org, lang, source_hash, text) values (page ->> 'org', 'es', repeat('a', 64), 'Instalar llave de manguera');
+  if (select opened_at from public.company_links where token = current_setting('test.link')) is null then raise exception 'FAIL: opening the company''s page was not noted'; end if;
+  -- The page asks every minute it is open: noted at most every ten minutes.
+  update public.company_links set opened_at = now() - interval '5 minutes' where token = current_setting('test.link');
+  perform public.trade_page(current_setting('test.link'));
+  if (select opened_at from public.company_links where token = current_setting('test.link')) > now() - interval '4 minutes' then raise exception 'FAIL: opening the page again right away was noted again'; end if;
+  update public.company_links set opened_at = now() - interval '11 minutes' where token = current_setting('test.link');
+  perform public.trade_page(current_setting('test.link'));
+  if (select opened_at from public.company_links where token = current_setting('test.link')) < now() - interval '1 minute' then raise exception 'FAIL: opening the page later was not noted'; end if;
+  if (select text from public.translations where source_hash = repeat('a', 64)) <> 'Instalar llave de manguera' then raise exception 'FAIL: a translation was not kept'; end if;
+end $$;
+reset role;
+
 -- ---------- back in the app: the company's comments, and taking a link back ----------
 set role authenticated;
 set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
@@ -955,6 +1171,15 @@ do $$
 declare
   link text := current_setting('test.link');
 begin
+  -- When each company last opened its list, for the app; the app cannot say it opened it.
+  if (select count(*) from public.company_links_opened((select id from public.jobs where name = 'Fish')) o where o.opened_at is not null) <> 1 then
+    raise exception 'FAIL: the app cannot see when the company opened its list';
+  end if;
+  begin
+    update public.company_links set opened_at = '2020-01-01' where token = link;
+    raise exception 'FAIL: the app changed when the company opened its list';
+  exception when insufficient_privilege then null;
+  end;
   if (select count(*) from public.comments where from_company and author_name = 'Mike' and person_id is null) <> 1 then
     raise exception 'FAIL: the company''s comment is not in the app';
   end if;
@@ -1091,7 +1316,9 @@ set request.jwt.claims = '{"email":"andrew@rossbuilt.com"}';
 
 do $$
 begin
-  if (select count(*) from public.photos where not done) <> 2 or not exists (select 1 from public.photos where done) or (select count(*) from public.custom_fields) <> 1 then
+  -- The team's own photos, the done photo and the owner's photo.
+  if (select count(*) from public.photos p join public.items i on i.id = p.item_id where not p.done and i.source <> 'owner') <> 2 or not exists (select 1 from public.photos where done)
+     or not exists (select 1 from public.photos p join public.items i on i.id = p.item_id where i.source = 'owner') or (select count(*) from public.custom_fields) <> 1 then
     raise exception 'FAIL: photos and added fields are not shared with the team';
   end if;
   if (select count(*) from public.person_settings) <> 0 then

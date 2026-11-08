@@ -9,9 +9,19 @@
 // board of every company on the job; with a company, for that company's list, opened through the
 // company's own link, which never leaves here.
 //
+// The owner's page sends the owner's link as o, through the owner_* functions alone: the job as the
+// owner sees it, something the owner wants looked at (their words, where, and a photo, which this
+// puts in the job's folder), and their sign off.
+//
+// A company whose page is in Spanish gets its list's lines translated by Claude on the builder's
+// allowance, each line once: they are kept in translations and used again.
+//
 //   Deployed with verify_jwt off: the link is the only key, and nobody signs in.
+//   tools/build-functions.mjs writes core.js and claude.ts here.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { askClaude, claudeKey, usedUp, type Allowance } from './claude.ts';
+import { CLAUDE_MODELS, readTranslations, TRANSLATE_AT_ONCE, translatePrompt } from './core.js';
 
 function serviceKey(): string {
   const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -58,6 +68,10 @@ interface Page {
   items: PageItem[];
   [key: string]: unknown;
 }
+interface OwnerPage {
+  locations: { done: { photos: PagePhoto[] }[] }[];
+  [key: string]: unknown;
+}
 
 /** A name typed on the page: trimmed, one line, at most 80 characters, or none. */
 function nameOf(value: unknown): string | null {
@@ -68,24 +82,51 @@ function nameOf(value: unknown): string | null {
 
 class Refused extends Error {}
 
-async function page(token: string): Promise<Page | null> {
-  const { data, error } = await db.rpc('trade_page', { p_token: token });
-  if (error) throw error;
-  if (!data) return null;
-  const out = data as Page;
-  const paths = [...new Set(out.items.flatMap((i) => i.photos.map((p) => p.storage_path)))];
+/** Each photo's address for the next hour, by its path in storage. */
+async function signAll(list: PagePhoto[]): Promise<Map<string, string>> {
+  const paths = [...new Set(list.map((p) => p.storage_path))];
   const signed = new Map<string, string>();
   for (let k = 0; k < paths.length; k += 100) {
     const { data: urls, error: signError } = await db.storage.from('photos').createSignedUrls(paths.slice(k, k + 100), SIGNED_FOR);
     if (signError) throw signError;
     for (const u of urls ?? []) if (u.path && u.signedUrl) signed.set(u.path, u.signedUrl);
   }
-  for (const item of out.items) {
-    item.photos = item.photos
-      .map((p) => ({ width: p.width, height: p.height, marks: p.marks, done: p.done === true, url: signed.get(p.storage_path) ?? null }))
-      .filter((p) => p.url !== null) as unknown as PagePhoto[];
-  }
+  return signed;
+}
+
+/** The photos as the page shows them: no paths, only their addresses for the next hour. */
+const shownPhotos = (list: PagePhoto[], signed: Map<string, string>) =>
+  list
+    .map((p) => ({ width: p.width, height: p.height, marks: p.marks, done: p.done === true, url: signed.get(p.storage_path) ?? null }))
+    .filter((p) => p.url !== null) as unknown as PagePhoto[];
+
+async function page(token: string): Promise<Page | null> {
+  const { data, error } = await db.rpc('trade_page', { p_token: token });
+  if (error) throw error;
+  if (!data) return null;
+  const out = data as Page;
+  const signed = await signAll(out.items.flatMap((i) => i.photos));
+  for (const item of out.items) item.photos = shownPhotos(item.photos, signed);
   return out;
+}
+
+async function ownerPage(token: string): Promise<OwnerPage | null> {
+  const { data, error } = await db.rpc('owner_page', { p_token: token });
+  if (error) throw error;
+  if (!data) return null;
+  const out = data as OwnerPage;
+  const signed = await signAll(out.locations.flatMap((l) => l.done.flatMap((d) => d.photos)));
+  for (const l of out.locations) for (const d of l.done) d.photos = shownPhotos(d.photos, signed);
+  return out;
+}
+
+/** A photo sent from a page, as base64: checked before it goes anywhere. */
+function photoOf(body: Record<string, unknown>, field: string): { bytes: Uint8Array; width: number; height: number } {
+  const data = typeof body[field] === 'string' ? (body[field] as string) : '';
+  const width = typeof body.width === 'number' ? Math.round(body.width) : 0;
+  const height = typeof body.height === 'number' ? Math.round(body.height) : 0;
+  if (data === '' || data.length > MOST_PHOTO_CHARS || !BASE64.test(data) || width <= 0 || height <= 0) throw new Refused('Send the photo as a JPEG');
+  return { bytes: Uint8Array.from(atob(data), (c) => c.charCodeAt(0)), width, height };
 }
 
 /** One answer from the page, through its function, which checks the link and the item again. */
@@ -120,17 +161,13 @@ async function answer(token: string, body: Record<string, unknown>): Promise<voi
 
 /** A done photo: into the item's own folder in storage, then onto the item. */
 async function addPhoto(token: string, item: string, body: Record<string, unknown>, name: string | null, call: (fn: string, args: Record<string, unknown>) => Promise<void>): Promise<void> {
-  const data = typeof body.value === 'string' ? body.value : '';
-  const width = typeof body.width === 'number' ? Math.round(body.width) : 0;
-  const height = typeof body.height === 'number' ? Math.round(body.height) : 0;
-  if (data === '' || data.length > MOST_PHOTO_CHARS || !BASE64.test(data) || width <= 0 || height <= 0) throw new Refused('Send the photo as a JPEG');
+  const { bytes, width, height } = photoOf(body, 'value');
   const { data: folder, error } = await db.rpc('trade_photo_folder', { p_token: token, p_item: item });
   if (error) {
     if (error.code === '42501') throw new Refused(error.message);
     throw error;
   }
   const path = `${String(folder)}/done-${crypto.randomUUID()}.jpg`;
-  const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
   const { error: upError } = await db.storage.from('photos').upload(path, bytes, { contentType: 'image/jpeg', upsert: false });
   if (upError) throw upError;
   try {
@@ -140,6 +177,154 @@ async function addPhoto(token: string, item: string, body: Record<string, unknow
     await db.storage.from('photos').remove([path]);
     throw e;
   }
+}
+
+/**
+ * Something from the owner's page: what they want looked at (their words, where, and a photo, put
+ * in the job's folder under the new item's own id), or their sign off. The owner_* functions check
+ * the link and everything sent again, and say plainly what is wrong.
+ */
+async function ownerAnswer(token: string, body: Record<string, unknown>): Promise<void> {
+  const name = nameOf(body.name);
+  const location = typeof body.location === 'string' && UUID.test(body.location) ? body.location.toLowerCase() : null;
+  const call = async (fn: string, args: Record<string, unknown>) => {
+    const { data, error } = await db.rpc(fn, { p_token: token, ...args });
+    if (error) {
+      // A link that does not work, a place not on the job, too much at once: said as it is.
+      if (error.code === '42501' || error.code === '23514') throw new Refused(error.message);
+      throw error;
+    }
+    return data;
+  };
+  if (body.action === 'sign-off') {
+    await call('owner_sign_off', { p_location: location, p_name: name ?? '' });
+    return;
+  }
+  if (body.action !== 'add') throw new Refused('That is not something the page can do');
+  const words = typeof body.words === 'string' ? body.words.slice(0, 2000) : '';
+  const item = crypto.randomUUID();
+  let path: string | null = null;
+  let size = { width: 0, height: 0 };
+  if (typeof body.photo === 'string' && body.photo !== '') {
+    const shot = photoOf(body, 'photo');
+    const folder = await call('owner_photo_folder', {});
+    if (!folder) throw new Refused('This link no longer works. Ask for a new one.');
+    path = `${String(folder)}/${item}/owner-${crypto.randomUUID()}.jpg`;
+    const { error: upError } = await db.storage.from('photos').upload(path, shot.bytes, { contentType: 'image/jpeg', upsert: false });
+    if (upError) throw upError;
+    size = { width: shot.width, height: shot.height };
+  }
+  try {
+    await call('owner_add_item', { p_item: item, p_location: location, p_words: words, p_name: name, p_path: path, p_width: path ? size.width : null, p_height: path ? size.height : null });
+  } catch (e) {
+    // It did not come in: its photo goes too.
+    if (path) await db.storage.from('photos').remove([path]);
+    throw e;
+  }
+}
+
+// ---------- a company's page in Spanish ----------
+
+/** How long the page waits for new lines to be translated; the rest are ready next time it opens. */
+const TRANSLATE_WAIT_MS = 12_000;
+
+const lineOf = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+async function sha256(text: string): Promise<string> {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** The builder's lines on a company's list: titles, details, what each waits on, checklists and the team's comments. */
+function linesOf(p: Page): string[] {
+  const out = new Set<string>();
+  const add = (v: unknown) => {
+    if (typeof v !== 'string') return;
+    const t = lineOf(v);
+    if (t && t.length <= 1000 && /[a-z]/i.test(t)) out.add(t);
+  };
+  const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+  for (const i of p.items) {
+    add(i.title);
+    add(i.description);
+    for (const w of list(i.waiting_on)) add(w);
+    for (const w of list(i.waiting_for)) add(w?.title);
+    for (const c of list(i.checklist)) add(c?.text);
+    // Words written on a photo.
+    for (const ph of list(i.photos)) for (const m of list(ph?.marks)) if (m?.tool === 'text') add(m.text);
+  }
+  for (const c of list(p.completed)) add(c?.title);
+  // The company's own comments are in its own words already.
+  for (const m of list(p.comments)) if (m?.from_company !== true) add(m?.body);
+  return [...out];
+}
+
+/** The builder's company's allowance for Claude this month, for a page nobody signs in to. */
+async function orgAllowance(org: string): Promise<Allowance | null> {
+  const { data, error } = await db.rpc('org_ai_allowance', { p_org: org });
+  if (error || !data || typeof data !== 'object') return null;
+  const a = data as Record<string, unknown>;
+  return { org, personId: null, limitCents: Number(a.limit_cents) || 0, usedCents: Number(a.used_cents) || 0 };
+}
+
+/**
+ * Each line of the list in Spanish, by its English: what was translated before, and what is new,
+ * asked of Claude once and kept. When Claude is not set up, the allowance is used up or Claude takes
+ * too long, a line stays in English this time.
+ */
+async function spanish(p: Page): Promise<Record<string, string>> {
+  const org = typeof p.org === 'string' ? p.org : '';
+  const lines = linesOf(p);
+  if (!org || lines.length === 0) return {};
+  const hashes = await Promise.all(lines.map(sha256));
+  const kept = new Map<string, string>();
+  for (let k = 0; k < hashes.length; k += 200) {
+    const { data, error } = await db.from('translations').select('source_hash, text').eq('org', org).eq('lang', 'es').in('source_hash', hashes.slice(k, k + 200));
+    if (error) throw error;
+    for (const r of (data ?? []) as { source_hash: string; text: string }[]) kept.set(r.source_hash, r.text);
+  }
+  const missing = lines.map((text, i) => ({ text, hash: hashes[i]! })).filter((x) => !kept.has(x.hash)).slice(0, TRANSLATE_AT_ONCE);
+  if (missing.length > 0 && claudeKey() !== '') {
+    const work = (async () => {
+      const allowance = await orgAllowance(org);
+      if (!allowance || usedUp(allowance)) return;
+      const said = await askClaude(allowance, 'translate', {
+        model: Deno.env.get('QUICK_MODEL') || CLAUDE_MODELS.quick,
+        maxTokens: Math.min(8000, 300 + missing.length * 60),
+        content: [{ type: 'text', text: translatePrompt(missing.map((m) => m.text)) }],
+      });
+      if (said.text === undefined) return;
+      const got = readTranslations(said.text, missing.length);
+      const rows = missing.flatMap((m, i) => (got[i] ? [{ org, lang: 'es', source_hash: m.hash, text: got[i]! }] : []));
+      if (rows.length === 0) return;
+      const { error } = await db.from('translations').upsert(rows, { onConflict: 'org,lang,source_hash', ignoreDuplicates: true });
+      if (error) console.error('Keeping the translations', error.message);
+      for (const r of rows) kept.set(r.source_hash, r.text);
+    })().catch((e) => console.error('Translating the list', e instanceof Error ? e.message : e));
+    let waited = false;
+    await Promise.race([work.then(() => (waited = true)), new Promise((done) => setTimeout(done, TRANSLATE_WAIT_MS))]);
+    // Still working: it finishes after the answer, for the next time the page opens.
+    if (!waited) (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(work);
+  }
+  const out: Record<string, string> = {};
+  lines.forEach((text, i) => {
+    const es = kept.get(hashes[i]!);
+    if (es) out[text] = es;
+  });
+  return out;
+}
+
+/** The company's page as it now stands, in its language, without what the page has no use for. */
+async function shownPage(token: string): Promise<Page | null> {
+  const shown = await page(token);
+  if (!shown) return null;
+  const company = (shown.company ?? {}) as { language?: unknown };
+  if (company.language === 'es') shown.translations = await spanish(shown).catch((e) => {
+    console.error('Spanish', e instanceof Error ? e.message : e);
+    return {};
+  });
+  delete shown.org;
+  return shown;
 }
 
 Deno.serve(async (req: Request) => {
@@ -154,9 +339,17 @@ Deno.serve(async (req: Request) => {
     return reply({ error: 'Send the page what it asks for' }, 400);
   }
   // Only a photo is big.
-  if (body.action !== 'photo' && raw.length > 8000) return reply({ error: 'That is too much to send at once' }, 413);
+  if (body.action !== 'photo' && body.action !== 'add' && raw.length > 8000) return reply({ error: 'That is too much to send at once' }, 413);
   let token = typeof body.t === 'string' ? body.t.trim().toLowerCase() : '';
   try {
+    if (body.o !== undefined) {
+      const owner = typeof body.o === 'string' ? body.o.trim().toLowerCase() : '';
+      if (!TOKEN.test(owner)) return reply({ error: 'This link does not work. Ask your builder for a new one.' }, 404);
+      if (body.action && body.action !== 'page') await ownerAnswer(owner, body);
+      const shown = await ownerPage(owner);
+      if (!shown) return reply({ error: 'This link no longer works. Ask your builder for a new one.' }, 404);
+      return reply(shown);
+    }
     if (body.s !== undefined) {
       const station = typeof body.s === 'string' ? body.s.trim().toLowerCase() : '';
       if (!TOKEN.test(station)) return reply({ error: 'This station link does not work. Ask for a new one.' }, 404);
@@ -177,8 +370,10 @@ Deno.serve(async (req: Request) => {
     }
     if (!TOKEN.test(token)) return reply({ error: 'This link does not work. Ask for a new one.' }, 404);
     if (body.action && body.action !== 'page') await answer(token, body);
-    const shown = await page(token);
+    const shown = await shownPage(token);
     if (!shown) return reply({ error: 'This link no longer works. Ask for a new one.' }, 404);
+    // A station is in the house for anyone to tap: the company's links to its other jobs stay off it.
+    if (body.s !== undefined) delete shown.other_jobs;
     return reply(shown);
   } catch (e) {
     if (e instanceof Refused) return reply({ error: e.message }, 403);

@@ -366,6 +366,9 @@ async function main(): Promise<void> {
     await api.setJobCompanyTrade(jobId, sparks, electrical, carpentry);
     await api.updateCompany(sparks, { name: 'Sparks Electric LLC' });
   });
+  await step("a company's page put in Spanish", async () => {
+    await api.updateCompany(sms, { language: 'es' });
+  });
   await step("a location renamed, removed and brought back, the walk order, and Done Here", async () => {
     await api.updateLocation(kitchen, { label: '101 Kitchen and Pantry', name: 'Kitchen and Pantry' });
     await api.updateLocation(bath, { active: false });
@@ -477,6 +480,8 @@ async function main(): Promise<void> {
   };
 
   check("the company's name, tidied", `select name from public.orgs where id = ${lit(ORG)}`, 'Ross Built Custom Homes');
+  check("a company's page in Spanish, the others in English", `select string_agg(language, ',' order by language) from (select distinct language from public.companies where org = ${lit(ORG)}) x`, 'en,es');
+  check("the Spanish one is the one changed", `select language from public.companies where id = ${lit(sms)}`, 'es');
   check('every row on the job is the company\'s', `select count(*) from public.items where job_id = ${lit(jobId)} and org <> ${lit(ORG)}`, '0');
   check('every item numbered in the order it arrived', `select string_agg(number::text, ',' order by number) from public.items where job_id = ${lit(jobId)}`, '1,2,3,4,5,6,7,8,9');
   check(

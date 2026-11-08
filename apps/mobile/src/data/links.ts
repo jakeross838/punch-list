@@ -22,3 +22,9 @@ export function stationUrlFor(mode: 'preview' | 'live', token: string, on: 'tabl
   const site = BASE.replace(/[#/]+$/, '').replace(/\/[^/]*$/, '');
   return `${site}/${on === 'tv' ? 'tv' : 's'}#${mode === 'preview' ? 'sample' : token}`;
 }
+
+/** The owner's page, on the same hosting: /o. On the preview it is the sample owner's page. */
+export function ownerPageUrl(mode: 'preview' | 'live', token: string): string {
+  const site = BASE.replace(/[#/]+$/, '').replace(/\/[^/]*$/, '');
+  return `${site}/o#${mode === 'preview' ? 'sample' : token}`;
+}

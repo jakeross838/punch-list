@@ -1,6 +1,6 @@
-// Builds the company's page into one file (apps/company-page/dist/index.html, the script inside it)
-// and the job's station into another (dist/s and dist/tv), ready for Expo's hosting. Both talk to
-// the project's company-page function.
+// Builds the company's page into one file (apps/company-page/dist/index.html, the script inside it),
+// the job's station into another (dist/s and dist/tv) and the owner's page into a third (dist/o),
+// ready for Expo's hosting. All three talk to the project's company-page function.
 //
 //   node tools/build-company-page.mjs            (the live project)
 //   COMPANY_PAGE_FUNCTION=http://localhost:9999/fn node tools/build-company-page.mjs   (a test one)
@@ -46,4 +46,9 @@ put('c', page);
 const station = await pageFor('station.ts', 'Job Station');
 put('s', station);
 put('tv', station);
-console.log(`Company page: ${(page.length / 1024).toFixed(1)} KB, station: ${(station.length / 1024).toFixed(1)} KB, talking to ${functionUrl}`);
+// The owner's page: /o#token.
+const owner = await pageFor('owner.ts', 'Your House');
+put('o', owner);
+console.log(
+  `Company page: ${(page.length / 1024).toFixed(1)} KB, station: ${(station.length / 1024).toFixed(1)} KB, owner's page: ${(owner.length / 1024).toFixed(1)} KB, talking to ${functionUrl}`,
+);

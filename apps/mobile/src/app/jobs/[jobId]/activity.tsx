@@ -1,12 +1,14 @@
 // The job's Activity: who added, changed, completed, photographed, scheduled or sent what, newest
 // first, a day at a time. Tap a line about an item to open it. The database keeps the log, stamped
-// with whoever was signed in, so it is the same on every phone and nobody can change it.
+// with whoever was signed in, so it is the same on every phone and nobody can change it. At the top,
+// Claude sums up what the companies did on their pages this week.
 
 import type { ActivityLine } from '@punch/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
 import { ActivityRow, useActivityLines } from '@/components/ActivityRow';
+import { CompanySummaryCard } from '@/components/CompanySummary';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { dayHeading, EmptyState, Page, Text, timeOf } from '@/ui';
@@ -50,7 +52,12 @@ export default function ActivityScreen() {
           keyExtractor={(line) => line.key}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
-          ListHeaderComponent={<View>{scroll.header}</View>}
+          ListHeaderComponent={
+            <View>
+              {scroll.header}
+              <CompanySummaryCard lines={lines} />
+            </View>
+          }
           ListEmptyComponent={<EmptyState icon="clock" title="No Activity Yet" message="Everything added or changed on this job shows here, with who did it." />}
           renderSectionHeader={({ section }) => (
             <View style={styles.header}>

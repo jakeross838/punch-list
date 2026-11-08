@@ -203,10 +203,12 @@ function open(companyId: string): void {
     call: callCompany(companyId),
     nameKey: `punch-station-name-${companyId}`,
     bar: () => `<div class="bar"><button class="back" data-back aria-label="Back to every company">‹ All Companies</button><span class="sub">${esc(builder)} · Job Station</span></div>`,
-    footer: (p) =>
+    footer: (p, w) =>
       SAMPLE
         ? 'This is a sample: nothing here is real, and nothing you do on it is sent anywhere.'
-        : `${esc(p.company.name)}'s list on the job's station. The name above is kept here for the next time someone from ${esc(p.company.name)} answers.`,
+        : w.lang === 'es'
+          ? `La lista de ${esc(p.company.name)} en la estación de la obra. El nombre de arriba se guarda aquí para la próxima vez que alguien de ${esc(p.company.name)} responda.`
+          : `${esc(p.company.name)}'s list on the job's station. The name above is kept here for the next time someone from ${esc(p.company.name)} answers.`,
     onProblem: (message) => {
       app.innerHTML = `<div class="bar"><button class="back" data-back>‹ All Companies</button></div><main class="wrap"><div class="problem"><h1>This list did not open</h1><p>${esc(message)}</p></div></main>`;
     },

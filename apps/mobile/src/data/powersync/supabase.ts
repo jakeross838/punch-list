@@ -70,6 +70,28 @@ export async function jobStationOnServer(jobId: string, action: 'get' | 'make' |
   return typeof data === 'string' && data ? data : null;
 }
 
+/** The job's owner link, asked for, made, made again or turned off, with who it is for and when they last opened it. */
+export async function ownerLinkOnServer(jobId: string, action: 'get' | 'make' | 'new' | 'off', name?: string): Promise<{ token: string; name: string | null; openedAt: string | null } | null> {
+  const { data, error } = await supabase.rpc('owner_link', { p_job: jobId, p_action: action, p_name: name?.trim() ? name.trim() : null });
+  if (error) throw new Error(/fetch|network/i.test(error.message) ? "The owner's page needs a signal. Check it and try again." : sentence(error.message));
+  if (!data || typeof data !== 'object') return null;
+  const r = data as Record<string, unknown>;
+  return typeof r.token === 'string' && r.token
+    ? { token: r.token, name: typeof r.name === 'string' && r.name ? r.name : null, openedAt: typeof r.opened_at === 'string' ? r.opened_at : null }
+    : null;
+}
+
+/** When each company on a job last opened its page. */
+export async function companiesOpenedOnServer(jobId: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase.rpc('company_links_opened', { p_job: jobId });
+  if (error) throw new Error(/fetch|network/i.test(error.message) ? 'That needs a signal. Check it and try again.' : sentence(error.message));
+  const out = new Map<string, string>();
+  for (const r of (data ?? []) as { company_id?: unknown; opened_at?: unknown }[]) {
+    if (typeof r.company_id === 'string' && typeof r.opened_at === 'string') out.set(r.company_id, r.opened_at);
+  }
+  return out;
+}
+
 export async function deleteJobOnServer(jobId: string): Promise<void> {
   const { error } = await supabase.rpc('delete_job', { p_job: jobId });
   if (error) throw new Error(/fetch|network/i.test(error.message) ? 'That did not go. Check the signal and try again.' : sentence(error.message));

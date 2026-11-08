@@ -19,6 +19,8 @@ const functions = join(root, 'supabase', 'functions');
 const FUNCTIONS = {
   ai: { from: 'claude.ts', names: ['CLAUDE_MODELS', 'CLAUDE_TASKS', 'costCents', 'isClaudeTask', 'taskPrompt'] },
   'read-plans': { from: 'planReading.ts', names: ['picturesNote', 'planPrompt'], also: { 'claude.ts': ['CLAUDE_MODELS', 'costCents', 'listReadInput', 'listReadPrompt'] } },
+  // A company's page in Spanish: the page's own lines, translated on the builder's allowance.
+  'company-page': { from: 'claude.ts', names: ['CLAUDE_MODELS', 'costCents', 'readTranslations', 'TRANSLATE_AT_ONCE', 'translatePrompt'] },
 };
 
 async function coreFile(spec) {

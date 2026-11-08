@@ -31,7 +31,9 @@ export function itemStatus(
   }
   if (item.unfinished) {
     const needs = needsText(missingDetails(item).filter((m) => m !== 'title'));
-    return { tone: 'draft', text: 'Draft', note: note ?? (needs || undefined) };
+    // Something the owner sent from their page: their words stand in for the title until the team finishes it.
+    const from = item.source === 'owner' ? 'From the owner' : null;
+    return { tone: 'draft', text: 'Draft', note: note ?? ([from, needs].filter(Boolean).join(' · ') || undefined) };
   }
   if (!item.ready) {
     const on = holds ? holdText(item, holds) : waitingOnText(item.waitingOn);
@@ -109,7 +111,7 @@ export const ItemRow = memo(function ItemRow({
 }) {
   const done = item.status === 'complete' || checking;
   const open = item.status === 'open' && !checking;
-  const title = item.title || 'No title yet';
+  const title = item.title || (item.source === 'owner' && item.description.trim() ? item.description.trim() : 'No title yet');
   const status = itemStatus(item, { holds, checking, note, completedBy });
   // The type, unless the pill already says it: To Be Quoted is the Additional work not priced yet.
   const kind = item.kind === 'completion' || item.unfinished ? undefined : status.tone === 'quote' ? 'Additional' : kindText(item);

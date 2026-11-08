@@ -82,6 +82,20 @@ section>.comments{background:#fff;border:1px solid var(--line);padding:12px;marg
 .off{padding:4px 14px}
 .offrow{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;padding:9px 0;border-bottom:1px solid var(--line)}
 .offrow:last-child{border-bottom:0}
+.send-box textarea,.send-box select{display:block;width:100%;margin:6px 0 12px;padding:11px 12px;border:1px solid var(--edge);border-radius:0;background:#fff;font:inherit;color:inherit}
+.send-box textarea:focus,.send-box select:focus{outline:none;border-color:var(--gulf);box-shadow:0 0 0 2px rgba(67,106,122,.18)}
+.picked{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+.picked img{width:96px;height:96px;object-fit:cover;border:1px solid var(--line)}
+.place details{margin:8px 0 0}
+.place summary{cursor:pointer;color:var(--gulf);font-weight:600}
+.actions.one{grid-template-columns:1fr}
+.send-box label.act{display:flex;align-items:center;justify-content:center}
+.confirm-sign{width:100%;margin:14px 0 0}
+.confirm-sign p{margin:0 0 8px}
+.sent .pill{margin-right:6px}
+a.offrow{color:var(--tile);text-decoration:none}
+a.offrow span:first-child{font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.lang{margin:10px 0 0;min-height:36px;padding:6px 12px;border:1px solid var(--strong);background:#fff;color:var(--tile);font-weight:600;cursor:pointer}
 .where{font-size:13px;color:var(--quiet)}
 .empty h2,.problem h1{margin:0 0 6px;font:600 22px/1.2 "Space Grotesk",Inter,sans-serif}
 .problem{padding:30px 6px}

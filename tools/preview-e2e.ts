@@ -169,6 +169,16 @@ async function main(): Promise<void> {
           }
           // The done check: the hinge still looks loose.
           if (/Check the work from two photos/.test(input)) return { done: 'no', left: 'the left hinge still looks loose' };
+          // The owner's weekly update, from the week it was given.
+          if (/Write this week's update from a home builder to the owner/.test(input)) {
+            const to = (input.match(/It is from [^,.]+, to ([^.]+)\./) || [])[1];
+            return { subject: 'This week at the house', body: 'Hi ' + (to || 'there') + ',\\n\\nGood week at the house. The bath is nearly done and the painters are back Tuesday.\\n\\nWe need your pick on the vanity tops when you get a chance.\\n\\nJake' };
+          }
+          // The companies' answers this week: the first company named needs an answer.
+          if (/Sum it up for the superintendent, company by company/.test(input)) {
+            const names = [...new Set([...input.matchAll(/^- ([^:]+): /gm)].map((m) => m[1]))];
+            return { companies: names.map((name, k) => ({ name, summary: k === 0 ? 'Marked two items done from their page and asked about the hood trim.' : 'Confirmed its work.', needsAnswer: k === 0 })) };
+          }
           // Standard wording: a switch cover is the switch plate.
           if (/list of standard titles/.test(input)) {
             const typed = (input.match(/They typed: "(.*)"/) || [])[1] || '';
@@ -1533,6 +1543,13 @@ async function main(): Promise<void> {
       await app.getByText('rosa@volcanostone.example · (941) 555-0110', { exact: true }).waitFor();
       await settle(500);
       await shot('75-company-people');
+      // Its page in Spanish: Claude translates its list.
+      await app.getByTestId('company-language').click();
+      await app.getByRole('button', { name: /^Spanish/ }).last().click();
+      await app.getByText("Volcano Stone's page is in Spanish").waitFor();
+      await app.getByTestId('company-language').getByText('Spanish').waitFor();
+      await settle(400);
+      await shot('75b-company-spanish');
       await app.getByTestId('back').last().click();
       await app.getByTestId('company-company-5').getByText(/Rosa Sample/).waitFor();
       await settle(400);
@@ -1682,6 +1699,10 @@ async function main(): Promise<void> {
       }
       await settle(400);
       await shot('99c2-company-work-order');
+      // Its report card: what is open, done lately, how long it takes, what is past due, and when it last opened its page.
+      await app.getByTestId('report-card').waitFor();
+      if (!/^\d+$/.test(((await app.getByTestId('report-open').textContent()) ?? '').replace(/\D+$/, '').replace(/^\D+/, ''))) throw new Error('The report card does not count the open work');
+      await app.getByTestId('report-opened').getByText(/^Opened their page|^Has not opened their page/).waitFor();
       await app.getByTestId('back').last().click();
       await app.getByTestId('filter').click();
       await app.getByTestId('view-done').waitFor();
@@ -1738,7 +1759,10 @@ async function main(): Promise<void> {
       await app.getByText('Company Pages', { exact: true }).waitFor();
       await settle(400);
       await shot('99d-company-pages');
+      // Nudge: SMS Carpentry has not opened its page in more than a week.
+      await app.getByTestId('nudge-company-4').getByText(/^Has not opened their page in \d+ days$/).waitFor();
       await app.getByTestId('page-company-0').click();
+      await app.getByRole('dialog').getByRole('button', { name: 'Text the Link' }).waitFor();
       await app.getByRole('dialog').getByRole('button', { name: 'Copy the Link' }).click();
       await app.getByText(/^Link copied$|^The link did not copy/).first().waitFor();
       // The text that goes with its list carries the link: on the preview, the sample page.
@@ -1777,6 +1801,63 @@ async function main(): Promise<void> {
       await app.getByTestId('station-done').click();
       await app.getByTestId('station-sheet').waitFor({ state: 'detached' });
       await settle(500);
+    });
+    await step("New: the owner's page: made for the owner by name, its link copied, this week's update written by Claude, and turned off", async () => {
+      await menu('owner-page');
+      await app.getByTestId('owner-sheet').waitFor();
+      await app.getByTestId('owner-make').waitFor();
+      await settle(400);
+      await shot('99g2-owner-off');
+      await app.getByTestId('owner-name').last().fill('Karen');
+      await app.getByTestId('owner-make').click();
+      await app.getByTestId('owner-copy').waitFor();
+      await app.getByText('They have not opened it yet.').waitFor();
+      await settle(400);
+      await shot('99g3-owner-on');
+      await app.getByTestId('owner-copy').click();
+      await app.getByText(/^Link copied$|^The link did not copy/).first().waitFor();
+      // A new name is kept on the link.
+      await app.getByTestId('owner-name').last().fill('Karen Lee');
+      await app.getByTestId('owner-name').last().press('Enter');
+      await app.getByText('For Karen Lee').waitFor();
+      // This week's update: Claude writes it from the list, to read and change before it goes.
+      await app.getByTestId('owner-update').click();
+      await app.getByTestId('owner-sheet').waitFor({ state: 'detached' });
+      await app.getByTestId('owner-update-body').waitFor({ timeout: 20_000 });
+      if (!/^Hi Karen Lee,/.test(await app.getByTestId('owner-update-body').last().inputValue())) throw new Error("The update is not to the owner by name");
+      const asked = (await tab.mainFrame().childFrames()[0]?.evaluate(() => (window as unknown as { __asked?: { input: string }[] }).__asked)) ?? [];
+      const week = asked.filter((q) => /to the owner of the house/.test(q.input)).pop()?.input ?? '';
+      if (!/Name trades, never companies/.test(week) || /SMS Carpentry|Triple H/.test(week)) throw new Error('The update was asked with company names in it');
+      await settle(500);
+      await shot('99g4-owner-update');
+      await app.getByTestId('owner-update-copy').click();
+      await app.getByText(/^Update copied$|^It did not copy/).first().waitFor();
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
+      await menu('owner-page');
+      await app.getByTestId('owner-off').waitFor();
+      await settle(400);
+      await app.getByTestId('owner-off').click();
+      await app.getByRole('button', { name: "Turn Off the Owner's Page", exact: true }).last().click();
+      await app.getByText("The owner's page is off").waitFor();
+      await app.getByTestId('owner-make').waitFor();
+      await app.getByTestId('owner-done').click();
+      await app.getByTestId('owner-sheet').waitFor({ state: 'detached' });
+      await settle(500);
+    });
+    await step("New: Activity sums up what the companies did on their pages this week, the ones that need an answer first", async () => {
+      await menu('activity');
+      await app.getByTestId('company-summary').waitFor();
+      await settle(400);
+      await app.getByTestId('company-summary-ask').click();
+      await app.getByTestId('company-summary-0').waitFor({ timeout: 20_000 });
+      await app.getByTestId('company-summary-0').getByText('Needs an Answer').waitFor();
+      await settle(400);
+      await shot('99g5-company-summary');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(400);
     });
     await step('New: Job Setup: type locations in at the end of each level, add a level, rename it, move it, and move a location', async () => {
       await menu('job-setup');

@@ -3,7 +3,9 @@
 // the allowance (nothing is asked once it is used up), what each answer cost counted against the
 // company, the connection kept open while Claude works, and, for read-plans, the links Claude gets
 // and the files taken away once read. For company-page: a done photo from the company's page, into
-// the item's folder and onto the item, and what it turns away.
+// the item's folder and onto the item, and what it turns away; the owner's page, what the owner adds
+// with its photo, and their sign off; and a company's page in Spanish, each line translated once on
+// the builder's allowance and kept.
 //
 //   DENO=/path/to/deno npx tsx tools/functions-check.ts      (deno on the PATH works too)
 
@@ -55,6 +57,17 @@ let uploaded: { path: string; type: string; size: number }[] = [];
 let added: Record<string, unknown>[] = [];
 const pagePhotos: Record<string, unknown>[] = [];
 const unknown: string[] = [];
+/** The owner's link, and what the owner sent. */
+const OWNER = 'cd'.repeat(32);
+const KITCHEN = '33333333-3333-4333-8333-333333333333';
+let ownerAdded: Record<string, unknown>[] = [];
+let signedOff: Record<string, unknown>[] = [];
+/** A company whose page is in Spanish, and one whose builder has used this month's allowance. */
+const SPANISH = 'ef'.repeat(32);
+const SPANISH_SPENT = 'fe'.repeat(32);
+/** Lines translated before, as the stand-in database keeps them: org|hash to text. */
+const translations = new Map<string, string>();
+let translateAsked = 0;
 
 const stub = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${STUB}`);
@@ -69,9 +82,83 @@ const stub = createServer(async (req, res) => {
     if (who === SPENT) return json(200, { org: 'gulf_coast', person_id: null, limit_cents: 2500, used_cents: 2500.25 });
     return json(200, null);
   }
-  if (url.pathname.startsWith('/rest/v1/rpc/trade_') && who !== 'Bearer service-key') return json(403, { code: '42501', message: 'not the service role' });
+  if (/^\/rest\/v1\/rpc\/(trade_|owner_|org_ai_allowance)/.test(url.pathname) && who !== 'Bearer service-key') return json(403, { code: '42501', message: 'not the service role' });
+  if (url.pathname === '/rest/v1/rpc/org_ai_allowance') {
+    const a = JSON.parse(text) as { p_org: string };
+    return json(200, { org: a.p_org, limit_cents: 2500, used_cents: a.p_org === 'spent_org' ? 2600 : 40 });
+  }
+  if (url.pathname === '/rest/v1/rpc/owner_page') {
+    const a = JSON.parse(text) as { p_token: string };
+    if (a.p_token !== OWNER) return json(200, null);
+    return json(200, {
+      builder: 'Ross Built',
+      job: { name: 'Smith Residence', address: '1 Main Street', closed: false },
+      owner: 'Karen',
+      locations: [
+        {
+          id: KITCHEN,
+          label: 'Kitchen 109',
+          floor: 'Level 1',
+          open: [{ id: ITEM, title: 'Install vanity faucets', ready: true, waits_on_owner: false }],
+          done: [{ id: 'd1', title: 'Paint walls', completed_at: '2026-11-06T15:00:00Z', photos: [{ storage_path: `${JOB}/d1/done-1.jpg`, width: 1600, height: 1200, marks: [], done: true }] }],
+        },
+      ],
+      added: ownerAdded.map((x) => ({ id: x.p_item, words: x.p_words, title: null, location: 'Kitchen 109', status: 'received', created_at: '2026-11-08T12:00:00Z' })),
+      sign_offs: signedOff.map((x) => ({ name: x.p_name, location: x.p_location ? 'Kitchen 109' : null, open: 1, at: '2026-11-08T12:00:00Z' })),
+    });
+  }
+  if (url.pathname === '/rest/v1/rpc/owner_photo_folder') {
+    const a = JSON.parse(text) as { p_token: string };
+    if (a.p_token !== OWNER) return json(403, { code: '42501', message: 'This link no longer works' });
+    return json(200, JOB);
+  }
+  if (url.pathname === '/rest/v1/rpc/owner_add_item') {
+    const a = JSON.parse(text) as Record<string, unknown>;
+    if (a.p_token !== OWNER) return json(403, { code: '42501', message: 'This link no longer works' });
+    if (String(a.p_words).includes('TOO-MANY')) return json(403, { code: '42501', message: 'That is all that can be added today. Add the rest tomorrow, or call the builder' });
+    if (String(a.p_words).trim() === '' && !a.p_path) return json(400, { code: '23514', message: 'Say what to look at, or add a photo' });
+    ownerAdded.push(a);
+    return json(200, a.p_item);
+  }
+  if (url.pathname === '/rest/v1/rpc/owner_sign_off') {
+    const a = JSON.parse(text) as Record<string, unknown>;
+    if (String(a.p_name ?? '').trim().length < 2) return json(400, { code: '23514', message: 'Type your name to sign off' });
+    signedOff.push(a);
+    return json(204, null);
+  }
+  if (url.pathname === '/rest/v1/translations' && req.method === 'GET') {
+    const org = url.searchParams.get('org')?.replace(/^eq\./, '') ?? '';
+    const hashes = (url.searchParams.get('source_hash') ?? '').replace(/^in\.\(|\)$/g, '').split(',').map((h) => h.replace(/"/g, ''));
+    return json(200, hashes.flatMap((h) => (translations.has(`${org}|${h}`) ? [{ source_hash: h, text: translations.get(`${org}|${h}`) }] : [])));
+  }
+  if (url.pathname === '/rest/v1/translations' && req.method === 'POST') {
+    if (who !== 'Bearer service-key') return json(403, { message: 'not the service role' });
+    for (const r of JSON.parse(text) as { org: string; lang: string; source_hash: string; text: string }[]) {
+      if (r.lang === 'es' && /^[0-9a-f]{64}$/.test(r.source_hash) && !translations.has(`${r.org}|${r.source_hash}`)) translations.set(`${r.org}|${r.source_hash}`, r.text);
+    }
+    res.writeHead(201);
+    return res.end();
+  }
   if (url.pathname === '/rest/v1/rpc/trade_page') {
     const a = JSON.parse(text) as { p_token: string };
+    if (a.p_token === SPANISH || a.p_token === SPANISH_SPENT) {
+      return json(200, {
+        builder: 'Ross Built',
+        org: a.p_token === SPANISH ? 'ross_built' : 'spent_org',
+        company: { id: 'c2', name: 'Gulf Tile', language: 'es' },
+        items: [
+          {
+            id: ITEM, title: 'Regrout shower floor', description: 'Corner by the drain,\n2 tiles', waiting_on: ['Owner'], waiting_for: [], checklist: [{ id: 'k1', text: 'Seal the grout', done: false }],
+            photos: [{ storage_path: `${JOB}/${ITEM}/a.jpg`, width: 1200, height: 900, marks: [{ tool: 'text', color: 'red', at: [0.5, 0.5], text: 'Cracked here' }, { tool: 'measure', color: 'red', from: [0, 0], to: [1, 1], text: '36"' }] }],
+          },
+        ],
+        comments: [
+          { id: 'm1', item_id: ITEM, body: 'Use the gray grout', from_company: false },
+          { id: 'm2', item_id: ITEM, body: 'Lo hacemos el lunes', from_company: true },
+        ],
+        completed: [{ id: 'x1', title: 'Set shower pan', location: 'Bath 116', completed_at: '2026-11-06T15:00:00Z' }],
+      });
+    }
     if (a.p_token !== LINK) return json(200, null);
     return json(200, { builder: 'Ross Built', company: { id: 'c1', name: 'Gator Plumbing' }, items: [{ id: ITEM, title: 'Install vanity faucets', photos: pagePhotos }], comments: [], completed: [] });
   }
@@ -125,6 +212,11 @@ const stub = createServer(async (req, res) => {
     askedCount += 1;
     const words = (asked.content ?? []).map((c) => c.text ?? '').join(' ');
     if (words.includes('CLAUDE-FAILS')) return json(500, { error: { type: 'api_error' } });
+    if (words.includes("Translate these lines from a home builder's running list")) {
+      translateAsked += 1;
+      const lines = [...words.matchAll(/^\d+\. (.*)$/gm)].map((m) => `ES ${m[1]}`);
+      return json(200, { model: `${a.model}-20260928`, content: [{ type: 'text', text: JSON.stringify({ es: lines }) }], usage: { input_tokens: 400, output_tokens: 120 } });
+    }
     // Slower than the keep-open spaces: reading a real set of plans, or a long walk said at once.
     if (words.includes('The plans are attached') || words.includes('TAKES-A-WHILE')) await new Promise((done) => setTimeout(done, 11_500));
     const answer = words.includes('The plans are attached')
@@ -352,12 +444,100 @@ async function checkCompanyPage() {
   );
 }
 
+async function checkOwnerPage() {
+  const shown = await call({ o: OWNER, action: 'page' });
+  const page = parsed(shown.text) as { owner?: string; locations?: { done: { photos: { url: string; storage_path?: string }[] }[] }[] };
+  const photo = page.locations?.[0]?.done[0]?.photos[0];
+  expect("company-page: opens the owner's page, its finished work's photos signed", shown.status === 200 && page.owner === 'Karen' && !!photo?.url.includes('/sign/photos/') && photo.storage_path === undefined, shown.text.slice(0, 200));
+  const wrong = await call({ o: 'not-a-link', action: 'page' });
+  const gone = await call({ o: '12'.repeat(32), action: 'page' });
+  expect("company-page: turns away an owner's link that does not work", wrong.status === 404 && gone.status === 404 && /Ask your builder/.test(parsed(gone.text).error as string), `${wrong.status} ${gone.status}`);
+
+  uploaded = [];
+  ownerAdded = [];
+  const jpeg = Buffer.from('a jpeg of a scratch on the pantry door').toString('base64');
+  const sent = await call({ o: OWNER, action: 'add', words: 'Scratch on the pantry door', location: KITCHEN, photo: jpeg, width: 1200, height: 900, name: 'Karen' });
+  const up = uploaded[0];
+  const a = ownerAdded[0] ?? {};
+  expect(
+    "company-page: puts the owner's photo in the job's folder, under the new item's own id",
+    sent.status === 200 && uploaded.length === 1 && !!up && new RegExp(`^${JOB}/${String(a.p_item)}/owner-[0-9a-f-]{36}\\.jpg$`).test(up.path) && up.type === 'image/jpeg',
+    `${sent.status} ${JSON.stringify(uploaded)} ${JSON.stringify(a)}`,
+  );
+  expect(
+    'company-page: then adds what the owner sent, with their words, the place, the photo and their name',
+    a.p_words === 'Scratch on the pantry door' && a.p_location === KITCHEN && a.p_path === up?.path && a.p_width === 1200 && a.p_height === 900 && a.p_name === 'Karen' && a.p_token === OWNER,
+    JSON.stringify(a),
+  );
+  expect("company-page: answers with the owner's page, showing what they sent", ((parsed(sent.text).added as unknown[]) ?? []).length === 1, sent.text.slice(0, 200));
+
+  const words = await call({ o: OWNER, action: 'add', words: 'Garage remote', location: 'not-a-place', name: 'Karen' });
+  expect('company-page: takes words alone, and no place when the place is not one', words.status === 200 && ownerAdded[1]?.p_location === null && ownerAdded[1]?.p_path === null, JSON.stringify(ownerAdded[1]));
+
+  removed = [];
+  uploaded = [];
+  const tooMany = await call({ o: OWNER, action: 'add', words: 'TOO-MANY things', photo: jpeg, width: 1200, height: 900, name: 'Karen' });
+  expect(
+    'company-page: says why something did not come in, and takes its photo away again',
+    tooMany.status === 403 && /all that can be added today/.test(parsed(tooMany.text).error as string) && uploaded.length === 1 && removed[0] === uploaded[0]?.path,
+    `${tooMany.status} ${tooMany.text.slice(0, 160)} ${JSON.stringify(removed)}`,
+  );
+  const nothing = await call({ o: OWNER, action: 'add', words: '   ', name: 'Karen' });
+  expect('company-page: says plainly when nothing was sent', nothing.status === 403 && parsed(nothing.text).error === 'Say what to look at, or add a photo', nothing.text);
+
+  const signed = await call({ o: OWNER, action: 'sign-off', name: 'Karen Lee' });
+  const room = await call({ o: OWNER, action: 'sign-off', location: KITCHEN, name: 'Karen Lee' });
+  const unnamed = await call({ o: OWNER, action: 'sign-off', name: '' });
+  expect(
+    'company-page: signs off the job or one place under the name typed, and asks for a name',
+    signed.status === 200 && room.status === 200 && signedOff[0]?.p_location === null && signedOff[1]?.p_location === KITCHEN && signedOff[0]?.p_name === 'Karen Lee' && unnamed.status === 403 && parsed(unnamed.text).error === 'Type your name to sign off',
+    `${signed.status} ${room.status} ${unnamed.status} ${JSON.stringify(signedOff)}`,
+  );
+  const odd = await call({ o: OWNER, action: 'delete-everything' });
+  expect("company-page: does only what the owner's page does", odd.status === 403, `${odd.status}`);
+}
+
+async function checkSpanish() {
+  counted = [];
+  translateAsked = 0;
+  const first = await call({ t: SPANISH, action: 'page' });
+  const page = parsed(first.text) as { translations?: Record<string, string>; org?: string };
+  const es = page.translations ?? {};
+  const askedWith = lastAsked();
+  expect(
+    "company-page: translates the builder's lines into Spanish on the quick model, the company's own comments left as they are",
+    first.status === 200 &&
+      es['Regrout shower floor'] === 'ES Regrout shower floor' &&
+      es['Corner by the drain, 2 tiles'] === 'ES Corner by the drain, 2 tiles' &&
+      es['Use the gray grout'] === 'ES Use the gray grout' &&
+      es['Seal the grout'] === 'ES Seal the grout' &&
+      es['Owner'] === 'ES Owner' &&
+      es['Set shower pan'] === 'ES Set shower pan' &&
+      es['Cracked here'] === 'ES Cracked here' &&
+      es['36"'] === undefined &&
+      es['Lo hacemos el lunes'] === undefined &&
+      !!askedWith?.model?.includes('haiku'),
+    `${first.status} ${JSON.stringify(es)} ${askedWith?.model}`,
+  );
+  expect("company-page: counts the translating against the builder's allowance, and keeps the builder's id to itself", counted.length === 1 && counted[0]?.task === 'translate' && counted[0]?.org === 'ross_built' && counted[0]?.person_id === null && page.org === undefined, JSON.stringify(counted));
+  const again = await call({ t: SPANISH, action: 'page' });
+  expect('company-page: translates each line once, and uses it again', translateAsked === 1 && (parsed(again.text).translations as Record<string, string>)?.['Regrout shower floor'] === 'ES Regrout shower floor', `${translateAsked}`);
+  const spent = await call({ t: SPANISH_SPENT, action: 'page' });
+  expect('company-page: shows the list in English when the allowance is used up', spent.status === 200 && translateAsked === 1 && Object.keys((parsed(spent.text).translations as object) ?? { x: 1 }).length === 0, spent.text.slice(0, 200));
+  const english = await call({ t: LINK, action: 'page' });
+  expect('company-page: asks nothing for a company in English', parsed(english.text).translations === undefined && translateAsked === 1, english.text.slice(0, 120));
+}
+
 async function main() {
   await new Promise<void>((done) => stub.listen(STUB, done));
   try {
     await withFunction('ai', checkAi);
     await withFunction('read-plans', checkReadPlans);
-    await withFunction('company-page', checkCompanyPage);
+    await withFunction('company-page', async () => {
+      await checkCompanyPage();
+      await checkOwnerPage();
+      await checkSpanish();
+    });
   } finally {
     stub.close();
   }

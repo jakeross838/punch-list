@@ -37,3 +37,5 @@ export * from './emails';
 export * from './contacts';
 export * from './spreadsheet';
 export * from './assignees';
+export * from './owners';
+export * from './reportCard';

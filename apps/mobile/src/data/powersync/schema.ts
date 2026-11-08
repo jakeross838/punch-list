@@ -63,6 +63,8 @@ const companies = new Table({
   phone: column.text,
   email: column.text,
   active: column.integer,
+  /** Its page in Spanish: es; English otherwise. */
+  language: column.text,
 });
 
 /** The people at each company: who gets its lists and the Schedule Email, on every job. */

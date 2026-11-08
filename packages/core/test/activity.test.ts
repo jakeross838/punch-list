@@ -233,3 +233,48 @@ describe('done photos', () => {
     expect(activityLines([entry({ kind: 'photo_added', at: at(4), detail: { photo_id: 'p4', done: true } })], look, { forItem: true })[0]).toMatchObject({ action: 'added a done photo to it' });
   });
 });
+
+describe("the owner's page", () => {
+  const owners = activityLookups({
+    people: [],
+    items: [item({ id: 'o1', title: '', description: 'Scratch on the pantry door', source: 'owner', unfinished: true, companyId: null, tradeId: null, locationId: 'kitchen' })],
+    locations: [{ id: 'kitchen', jobId: 'j', name: 'Kitchen', number: '109', label: 'Kitchen 109', floor: 'Level 1', kind: 'room', sortOrder: 2, active: true, walkedAt: null }],
+    companies: [],
+    trades: [],
+    visits: [],
+    customFields: [],
+    today: new Date(2026, 9, 31),
+  });
+
+  it('says what the owner added, in their words, with their photo, as one line', () => {
+    const lines = activityLines(
+      [
+        entry({ kind: 'item_created', itemId: 'o1', personId: null, at: at(1) }),
+        entry({ kind: 'owner_item_added', itemId: 'o1', personId: null, at: at(1), detail: { from_owner: true, author_name: 'Karen' } }),
+        entry({ kind: 'photo_added', itemId: 'o1', personId: null, at: at(1), detail: { photo_id: 'p1', from_owner: true, author_name: 'Karen' } }),
+      ],
+      owners,
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ who: 'Karen, the owner', action: 'added something to look at', detail: 'Kitchen 109. Scratch on the pantry door. With a photo.' });
+    // No name typed: still the owner, never "Someone".
+    const unnamed = activityLines([entry({ kind: 'owner_item_added', itemId: 'o1', personId: null, at: at(2), detail: { from_owner: true } })], owners);
+    expect(unnamed[0]).toMatchObject({ who: 'The owner', detail: 'Kitchen 109. Scratch on the pantry door.' });
+    // In the item's own History.
+    const history = activityLines([entry({ kind: 'owner_item_added', itemId: 'o1', personId: null, at: at(3), detail: { author_name: 'Karen' } })], owners, { forItem: true });
+    expect(history[0]).toMatchObject({ who: 'Karen, the owner', action: 'added it from their page', detail: '' });
+  });
+
+  it('says what the owner signed off, and what was still open then', () => {
+    const lines = activityLines(
+      [
+        entry({ kind: 'owner_signed_off', itemId: null, personId: null, at: at(5), detail: { author_name: 'Karen Lee', location_id: 'kitchen', label: 'Kitchen 109', open: 2 } }),
+        entry({ kind: 'owner_signed_off', itemId: null, personId: null, at: at(6), detail: { author_name: 'Karen Lee', location_id: null, label: null, open: 0 } }),
+      ],
+      owners,
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toMatchObject({ who: 'Karen Lee, the owner', action: 'signed off Kitchen 109', detail: '2 items still open then.' });
+    expect(lines[0]).toMatchObject({ who: 'Karen Lee, the owner', action: 'signed off the job', detail: 'Nothing was open.' });
+  });
+});

@@ -43,10 +43,15 @@ export interface PageComment {
 export interface Page {
   builder: string;
   job: { name: string; address: string; closed: boolean };
-  company: { id: string; name: string };
+  /** language: the page in Spanish. An older answer leaves it out. */
+  company: { id: string; name: string; language?: 'en' | 'es' };
   items: PageItem[];
   completed: { id: string; number: number | null; title: string; location: string; completed_at: string }[];
   comments: PageComment[];
+  /** The list's lines in Spanish, by their English, for a page in Spanish. */
+  translations?: Record<string, string>;
+  /** The company's other jobs with the builder that have open work, each with its own link. Never on a station. */
+  other_jobs?: { name: string; address: string; token: string; open: number }[];
 }
 
 /** One item on the station's board, in short: enough to count it and to put it in order. */
@@ -77,4 +82,23 @@ export interface StationBoard {
   builder: string;
   job: { name: string; address: string; closed: boolean };
   companies: StationCompany[];
+}
+
+/** What the company-page function answers the owner's page with: the job as the owner sees it. */
+export interface OwnerPage {
+  builder: string;
+  job: { name: string; address: string; closed: boolean };
+  /** Who the link is for, as the builder named them. */
+  owner: string | null;
+  locations: {
+    id: string;
+    label: string;
+    floor: string | null;
+    open: { id: string; title: string; ready: boolean; waits_on_owner: boolean }[];
+    /** Finished in the last 30 days, newest first, with their photos (done photos first). */
+    done: { id: string; title: string; completed_at: string; photos: PagePhoto[] }[];
+  }[];
+  /** What the owner sent, newest first, and where each stands. */
+  added: { id: string; words: string; title: string | null; location: string | null; status: 'received' | 'on_list' | 'done' | 'removed'; created_at: string }[];
+  sign_offs: { name: string; location: string | null; open: number; at: string }[];
 }

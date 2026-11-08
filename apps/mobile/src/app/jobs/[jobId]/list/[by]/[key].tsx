@@ -39,6 +39,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { SectionList, StyleSheet, View } from "react-native";
 import { CommonTasks } from "@/components/CommonTasks";
+import { CompanyReportCard } from "@/components/CompanyReportCard";
 import { DragList } from "@/components/DragList";
 import { fieldsOf, useFormOptions } from "@/components/ItemForm";
 import { SelectionBar } from "@/components/SelectionBar";
@@ -555,6 +556,7 @@ export default function GroupScreen() {
             ListHeaderComponent={
               <View>
                 {scroll.header}
+                {by === "company" && !drafts && !stateList && !selecting && key !== "none" && !personOfKey(key) ? <CompanyReportCard jobId={jobId} companyId={key} /> : null}
                 {stateList ? (
                   <Segmented
                     options={STATES.map(([v, label]) => [v, `${label} ${stateCounts[v]}`] as const)}

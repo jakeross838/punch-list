@@ -35,6 +35,7 @@ import { FilterBar } from '@/components/FilterBar';
 import { ItemRow } from '@/components/ItemRow';
 import { backToJobs, useJobActions } from '@/components/JobActions';
 import { useFormOptions } from '@/components/ItemForm';
+import { OwnerSheet } from '@/components/OwnerSheet';
 import { StationSheet } from '@/components/StationSheet';
 import { AddTemplateSheet } from '@/components/TemplateSheets';
 import { useItemActions } from '@/components/useItemActions';
@@ -105,6 +106,7 @@ export default function JobScreen() {
   // Opened from a template's Add to a Job: its sheet comes up straight away.
   const [templateSheet, setTemplateSheet] = useState(!!templateParam);
   const [station, setStation] = useState(false);
+  const [ownerPage, setOwnerPage] = useState(false);
   const [pasting, setPasting] = useState(false);
   const items = data.useItems(jobId);
   const photos = data.usePhotos(jobId);
@@ -282,6 +284,7 @@ export default function JobScreen() {
           { label: 'Find Duplicates', icon: 'copy', onPress: () => router.push({ pathname: '/jobs/[jobId]/duplicates', params: { jobId } }), testID: 'find-duplicates' },
           { label: 'Make a List', icon: 'doc', onPress: () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId, start: 'list' } }), testID: 'make-list' },
           { label: 'Job Station', icon: 'tv', onPress: () => setStation(true), testID: 'job-station' },
+          { label: "Owner's Page", icon: 'house.fill', onPress: () => setOwnerPage(true), testID: 'owner-page' },
           ...(walked > 0 ? [{ label: 'Start a New Walk', icon: 'rooms' as IconName, onPress: newWalk, testID: 'new-walk' }] : []),
           { label: 'Add From a Template', icon: 'templates', onPress: () => setTemplateSheet(true), testID: 'add-template' },
           { label: 'Job Setup', icon: 'slider', onPress: openSetup, testID: 'job-setup' },
@@ -510,6 +513,7 @@ export default function JobScreen() {
       />
       <AddTemplateSheet jobId={jobId} templateId={templateParam ?? null} visible={templateSheet} onClose={() => setTemplateSheet(false)} />
       <StationSheet jobId={jobId} visible={station} onClose={() => setStation(false)} />
+      <OwnerSheet jobId={jobId} visible={ownerPage} onClose={() => setOwnerPage(false)} />
       <OptionPicker
         visible={pasting}
         title={copied ? `Paste ${itemsTitle(copied.items.length)} In` : 'Paste In'}

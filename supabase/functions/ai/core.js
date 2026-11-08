@@ -341,6 +341,100 @@ function doneCheckPrompt(input) {
     'Reply with only JSON: {"done": "yes"} when it looks done; {"done": "no", "left": "The left hinge still looks loose."} with one short sentence on what still looks left; or {"done": "unsure", "left": "The photo does not show the hinge."} with one short sentence on why.'
   ].join("\n");
 }
+var SENT_STATUS = ["received", "on_list", "done"];
+var titled = (v) => {
+  const x = record(v);
+  const title = clip(x.title, TITLE_MAX);
+  return title ? { title, location: clip(x.location, 60) } : null;
+};
+function ownerUpdateInput(v) {
+  const r = record(v);
+  return {
+    job: clip(r.job, 80),
+    builder: clip(r.builder, 80),
+    from: clip(r.from, 80),
+    owner: clip(r.owner, 80),
+    done: listOf(r.done, 80, titled),
+    open: Math.max(0, Math.min(1e5, Math.floor(Number(r.open) || 0))),
+    openBy: listOf(r.openBy, 8, (x) => {
+      const o = record(x);
+      const location = clip(o.location, 60);
+      const open = Math.floor(Number(o.open) || 0);
+      return location && open > 0 ? { location, open } : null;
+    }),
+    waiting: listOf(r.waiting, 20, titled),
+    sent: listOf(r.sent, 20, (x) => {
+      const o = record(x);
+      const words = clip(o.words, 200);
+      const status = SENT_STATUS.find((st) => st === o.status);
+      return words && status ? { words, status } : null;
+    }),
+    coming: listOf(r.coming, 20, (x) => {
+      const o = record(x);
+      const day = clip(o.day, 40);
+      const trade = clip(o.trade, 40);
+      return day && trade ? { day, trade } : null;
+    })
+  };
+}
+var placed = (t) => `- ${t.title}${t.location ? ` (${t.location})` : ""}`;
+function ownerUpdatePrompt(input) {
+  const sentWords = { received: "the team has it", on_list: "on the list", done: "done" };
+  return [
+    "Write this week's update from a home builder to the owner of the house it is building, from the job's running list of work.",
+    "",
+    `The house: ${input.job || "the job"}. The builder: ${input.builder || "the builder"}. It is from ${input.from || "the builder"}${input.owner ? `, to ${input.owner}` : ""}.`,
+    "",
+    input.done.length > 0 ? `Finished this week (${input.done.length}):` : "Nothing on the list was finished this week.",
+    ...input.done.map(placed),
+    "",
+    `Still open: ${input.open === 1 ? "1 item" : `${input.open} items`}${input.openBy.length > 0 ? `, most in ${input.openBy.map((o) => `${o.location} (${o.open})`).join(", ")}` : ""}.`,
+    "",
+    input.waiting.length > 0 ? "Waiting on the owner:" : "Nothing is waiting on the owner.",
+    ...input.waiting.map(placed),
+    ...input.sent.length > 0 ? ["", "What the owner sent from their page, and where it stands:", ...input.sent.map((x) => `- "${x.words}": ${sentWords[x.status]}`)] : [],
+    "",
+    input.coming.length > 0 ? "Coming in the next week:" : "No one is scheduled for the next week yet.",
+    ...input.coming.map((c) => `- ${c.day}: ${c.trade}`),
+    "",
+    "Rules:",
+    "- Write the way a builder talks to an owner: warm, plain and short. Open with their name when it is given, then what got done, what is coming, and what is needed from them, in a few short paragraphs. Close by wishing them a good weekend, then the name of who it is from.",
+    "- Keep it positive, and single no one out: never blame a trade, a company or a person for anything.",
+    "- Say what got done by room, in a sentence or two. Do not list every item, and leave out item numbers.",
+    "- When something waits on the owner, ask for it plainly.",
+    '- Name trades, never companies: "the painter", "the plumber".',
+    "- Use only what is here. No prices, and no dates or promises beyond the days given.",
+    "- Do not use dashes or hyphens. Spell out days and months.",
+    "",
+    `Reply with only JSON: {"subject": "This week at the house", "body": "..."} with a short subject, and the body's paragraphs separated by a blank line.`
+  ].join("\n");
+}
+function companySummaryInput(v) {
+  const r = record(v);
+  return {
+    days: Math.max(1, Math.min(31, Math.floor(Number(r.days) || 7))),
+    lines: listOf(r.lines, 200, (x) => {
+      const o = record(x);
+      const company = clip(o.company, 80);
+      const text = clip(o.text, 300);
+      return company && text ? { company, text } : null;
+    })
+  };
+}
+function companySummaryPrompt(input) {
+  return [
+    `This is what the companies working on a home builder's job did on their own pages in the last ${input.days === 1 ? "day" : `${input.days} days`}: the work they confirmed or finished, the time they gave, and what they wrote. Sum it up for the superintendent, company by company.`,
+    "",
+    ...input.lines.map((l) => `- ${l.company}: ${l.text}`),
+    "",
+    "Rules:",
+    "- One or two short sentences a company: what they finished or confirmed, and anything they wrote that needs an answer or holds up other work.",
+    "- needsAnswer: true when they asked something, or said something the superintendent has to act on.",
+    "- Use only what is here, and name rooms as they are written. Do not use dashes.",
+    "",
+    'Reply with only JSON, like {"companies": [{"name": "Triple H Painting", "summary": "Finished six items in the kitchen and laundry. Asked whether the dining room trim gets one coat or two.", "needsAnswer": true}]}, with each name written exactly as it is above, the companies that need an answer first.'
+  ].join("\n");
+}
 var CLAUDE_TASKS = {
   "fill-in": { tier: "sharp", maxTokens: 900, images: 1, minImages: 1, prompt: (v) => suggestPrompt(suggestInput(v)), enough: () => true },
   "say-it": { tier: "sharp", maxTokens: 3e3, images: 0, minImages: 0, prompt: (v) => sayItPrompt(sayItInput(v)), enough: (v) => sayItInput(v).words !== "" },
@@ -390,6 +484,25 @@ var CLAUDE_TASKS = {
       const x = companyCardInput(v);
       return x.words !== "" || x.card;
     }
+  },
+  "owner-update": {
+    tier: "sharp",
+    maxTokens: 1200,
+    images: 0,
+    minImages: 0,
+    prompt: (v) => ownerUpdatePrompt(ownerUpdateInput(v)),
+    enough: (v) => {
+      const x = ownerUpdateInput(v);
+      return x.done.length > 0 || x.waiting.length > 0 || x.coming.length > 0 || x.sent.length > 0 || x.open > 0;
+    }
+  },
+  "company-summary": {
+    tier: "quick",
+    maxTokens: 1500,
+    images: 0,
+    minImages: 0,
+    prompt: (v) => companySummaryPrompt(companySummaryInput(v)),
+    enough: (v) => companySummaryInput(v).lines.length > 0
   }
 };
 var isClaudeTask = (v) => typeof v === "string" && Object.hasOwn(CLAUDE_TASKS, v);

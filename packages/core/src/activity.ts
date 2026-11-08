@@ -45,7 +45,9 @@ export type ActivityKind =
   | 'plan_removed'
   | 'item_confirmed'
   | 'item_hours_given'
-  | 'items_merged';
+  | 'items_merged'
+  | 'owner_item_added'
+  | 'owner_signed_off';
 
 export type ActivityDetail = Record<string, string | number | boolean | null>;
 
@@ -150,6 +152,10 @@ export interface ActivityLine {
   action: string;
   /** More about it, as short sentences, or empty: "Laundry 119. With a photo." */
   detail: string;
+  /** The company, by id, when it did this on its own page: what Claude sums up on Activity. */
+  fromCompany?: string;
+  /** When the owner did this on their page. */
+  fromOwner?: true;
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -316,7 +322,8 @@ const QUIET = new Set(['bought_out', 'number', 'source', 'bt_external_id', 'org'
 type Kind = 'create' | 'status' | 'change' | 'photo' | 'locations' | 'bulk' | 'bulkChange' | 'other';
 
 function classOf(e: Activity): Kind {
-  if (e.kind === 'item_created') return 'create';
+  // Something the owner added on their page is the item's start, with its photo.
+  if (e.kind === 'item_created' || e.kind === 'owner_item_added') return 'create';
   if (e.kind === 'item_changed') return e.field === 'status' || e.field === 'completed_by' || e.field === 'completed_at' ? 'status' : 'change';
   if (e.kind === 'photo_added' || e.kind === 'photo_marked' || e.kind === 'photo_removed') return 'photo';
   if (e.kind === 'location_added') return 'locations';
@@ -382,6 +389,9 @@ export function activityLines(entries: Activity[], look: ActivityLookups, option
       onVisit.set(v.id, put);
     }
   }
+  // Something the owner added reads as theirs: the database's own note of the new draft says nothing more.
+  const fromOwner = new Set(sorted.filter((e) => e.kind === 'owner_item_added' && e.itemId).map((e) => e.itemId!));
+  for (const e of sorted) if (e.kind === 'item_created' && e.itemId && fromOwner.has(e.itemId)) folded.add(e.id);
   const groups: Group[] = [];
   // Many items added at once, by Paste, a template, Say It or Read a List, read as one line on the job.
   if (!options.forItem) {
@@ -494,6 +504,7 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     return {
       ...base,
       who: named ? `${named} at ${companyName}` : companyName,
+      fromCompany: String(d.company_id ?? ''),
       action: `marked ${title} done`,
       detail: [forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? ''), 'For your team to check'].filter(Boolean).map(sentence).join(' '),
     };
@@ -515,6 +526,7 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     return {
       ...base,
       who: named ? `${named} at ${companyName}` : companyName,
+      fromCompany: String(d.company_id ?? ''),
       action,
       detail: [forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? ''), 'From their page'].filter(Boolean).map(sentence).join(' '),
     };
@@ -543,7 +555,13 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     if (d.from_company === true) {
       const companyName = look.companies.get(String(d.company_id ?? '')) ?? 'The company';
       const named = typeof d.author_name === 'string' && d.author_name.trim() !== '' ? d.author_name.trim() : '';
-      return { ...base, who: named ? `${named} at ${companyName}` : companyName, action, detail: [where, 'From their page'].filter(Boolean).map(sentence).join(' ') };
+      return {
+        ...base,
+        who: named ? `${named} at ${companyName}` : companyName,
+        fromCompany: String(d.company_id ?? ''),
+        action,
+        detail: [where, 'From their page'].filter(Boolean).map(sentence).join(' '),
+      };
     }
     return done(action, [where]);
   }
@@ -567,8 +585,31 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     return {
       ...base,
       who,
+      ...(d.from_company === true ? { fromCompany: String(d.company_id ?? '') } : {}),
       action: d.internal === true ? `added an internal note on ${on}` : `commented on ${on}`,
       detail: [where, clip(String(d.body ?? ''), 140)].filter(Boolean).map(sentence).join(' '),
+    };
+  }
+
+  if (first.kind === 'owner_item_added') {
+    // From the owner's page: what they want looked at, in their words, with their photo.
+    const d = first.detail ?? {};
+    const named = typeof d.author_name === 'string' && d.author_name.trim() !== '' ? d.author_name.trim() : '';
+    const item = g.itemId ? look.items.get(g.itemId) : undefined;
+    const photos = g.entries.filter((e) => e.kind === 'photo_added').length;
+    return {
+      ...base,
+      who: named ? `${named}, the owner` : 'The owner',
+      fromOwner: true,
+      action: forItem ? 'added it from their page' : 'added something to look at',
+      detail: [
+        forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? ''),
+        forItem ? '' : clip(item?.description ?? '', 140),
+        photos > 0 ? (photos === 1 ? 'With a photo' : `With ${plural(photos, 'photo')}`) : '',
+      ]
+        .filter(Boolean)
+        .map(sentence)
+        .join(' '),
     };
   }
 
@@ -673,6 +714,17 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
   const person = (id: unknown) => look.people.get(String(id ?? '')) ?? 'someone';
   const part = (p: unknown) => PART_LABELS[String(p ?? '') as TeamPart] ?? 'Field';
   switch (first.kind) {
+    case 'owner_signed_off': {
+      const named = typeof d.author_name === 'string' && d.author_name.trim() !== '' ? d.author_name.trim() : '';
+      const open = Number(d.open ?? 0);
+      return {
+        ...base,
+        who: named ? `${named}, the owner` : 'The owner',
+        fromOwner: true,
+        action: typeof d.label === 'string' && d.label.trim() ? `signed off ${d.label.trim()}` : 'signed off the job',
+        detail: sentence(open > 0 ? `${plural(open, 'item')} still open then` : 'Nothing was open'),
+      };
+    }
     case 'location_added': {
       const labels = g.entries.map((e) => String(e.detail?.label ?? '')).filter(Boolean);
       if (labels.length === 1) return done(`added the location ${labels[0]}`);

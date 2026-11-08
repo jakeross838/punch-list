@@ -43,9 +43,17 @@ if (!SAMPLE && !/^[0-9a-f]{64}$/.test(token)) {
     root: app,
     call,
     nameKey: 'punch-name',
+    langKey: 'punch-language',
+    otherJobsAt: '/c',
     bar: (p) => `<div class="bar"><span class="brand">${esc(p.builder)}</span><span class="sub">Punch List</span></div>`,
-    footer: (p) =>
-      SAMPLE ? 'This is a sample: nothing here is real, and nothing you do on it is sent anywhere.' : `This page is just for ${esc(p.company.name)}: anyone with its link can see it, so keep the link to your team.`,
+    footer: (p, w) =>
+      SAMPLE
+        ? w.lang === 'es'
+          ? 'Esta es una muestra: nada aquí es real, y nada de lo que haga se envía.'
+          : 'This is a sample: nothing here is real, and nothing you do on it is sent anywhere.'
+        : w.lang === 'es'
+          ? `Esta página es solo para ${esc(p.company.name)}: cualquiera con el enlace la puede ver, así que compártalo solo con su equipo.`
+          : `This page is just for ${esc(p.company.name)}: anyone with its link can see it, so keep the link to your team.`,
     onProblem: (message) => {
       app.innerHTML = problemHtml('This list did not open', message);
     },

@@ -509,9 +509,225 @@ export function doneCheckPrompt(input: DoneCheckInput): string {
   ].join('\n');
 }
 
+// ---------- the owner's weekly update ----------
+
+/** What the week's update to the owner is written from: the job's list, as the owner sees it. */
+export interface OwnerUpdateInput {
+  job: string;
+  builder: string;
+  /** Who it is from: the person writing it. */
+  from: string;
+  /** Who it is for, as the owner's link names them, or empty. */
+  owner: string;
+  /** What was finished in the last seven days. */
+  done: { title: string; location: string }[];
+  /** How many items are still open, and where most of them are. */
+  open: number;
+  openBy: { location: string; open: number }[];
+  /** What waits on the owner. */
+  waiting: { title: string; location: string }[];
+  /** What the owner sent from their page, and where each stands. */
+  sent: { words: string; status: 'received' | 'on_list' | 'done' }[];
+  /** Which trades are coming in the next seven days, by day: "Tuesday, November 10". */
+  coming: { day: string; trade: string }[];
+}
+
+const SENT_STATUS = ['received', 'on_list', 'done'] as const;
+const titled = (v: unknown) => {
+  const x = record(v);
+  const title = clip(x.title, TITLE_MAX);
+  return title ? { title, location: clip(x.location, 60) } : null;
+};
+
+export function ownerUpdateInput(v: unknown): OwnerUpdateInput {
+  const r = record(v);
+  return {
+    job: clip(r.job, 80),
+    builder: clip(r.builder, 80),
+    from: clip(r.from, 80),
+    owner: clip(r.owner, 80),
+    done: listOf(r.done, 80, titled),
+    open: Math.max(0, Math.min(100_000, Math.floor(Number(r.open) || 0))),
+    openBy: listOf(r.openBy, 8, (x) => {
+      const o = record(x);
+      const location = clip(o.location, 60);
+      const open = Math.floor(Number(o.open) || 0);
+      return location && open > 0 ? { location, open } : null;
+    }),
+    waiting: listOf(r.waiting, 20, titled),
+    sent: listOf(r.sent, 20, (x) => {
+      const o = record(x);
+      const words = clip(o.words, 200);
+      const status = SENT_STATUS.find((st) => st === o.status);
+      return words && status ? { words, status } : null;
+    }),
+    coming: listOf(r.coming, 20, (x) => {
+      const o = record(x);
+      const day = clip(o.day, 40);
+      const trade = clip(o.trade, 40);
+      return day && trade ? { day, trade } : null;
+    }),
+  };
+}
+
+const placed = (t: { title: string; location: string }) => `- ${t.title}${t.location ? ` (${t.location})` : ''}`;
+
+export function ownerUpdatePrompt(input: OwnerUpdateInput): string {
+  const sentWords = { received: 'the team has it', on_list: 'on the list', done: 'done' } as const;
+  return [
+    'Write this week\'s update from a home builder to the owner of the house it is building, from the job\'s running list of work.',
+    '',
+    `The house: ${input.job || 'the job'}. The builder: ${input.builder || 'the builder'}. It is from ${input.from || 'the builder'}${input.owner ? `, to ${input.owner}` : ''}.`,
+    '',
+    input.done.length > 0 ? `Finished this week (${input.done.length}):` : 'Nothing on the list was finished this week.',
+    ...input.done.map(placed),
+    '',
+    `Still open: ${input.open === 1 ? '1 item' : `${input.open} items`}${input.openBy.length > 0 ? `, most in ${input.openBy.map((o) => `${o.location} (${o.open})`).join(', ')}` : ''}.`,
+    '',
+    input.waiting.length > 0 ? 'Waiting on the owner:' : 'Nothing is waiting on the owner.',
+    ...input.waiting.map(placed),
+    ...(input.sent.length > 0 ? ['', 'What the owner sent from their page, and where it stands:', ...input.sent.map((x) => `- "${x.words}": ${sentWords[x.status]}`)] : []),
+    '',
+    input.coming.length > 0 ? 'Coming in the next week:' : 'No one is scheduled for the next week yet.',
+    ...input.coming.map((c) => `- ${c.day}: ${c.trade}`),
+    '',
+    'Rules:',
+    '- Write the way a builder talks to an owner: warm, plain and short. Open with their name when it is given, then what got done, what is coming, and what is needed from them, in a few short paragraphs. Close by wishing them a good weekend, then the name of who it is from.',
+    '- Keep it positive, and single no one out: never blame a trade, a company or a person for anything.',
+    '- Say what got done by room, in a sentence or two. Do not list every item, and leave out item numbers.',
+    '- When something waits on the owner, ask for it plainly.',
+    '- Name trades, never companies: "the painter", "the plumber".',
+    '- Use only what is here. No prices, and no dates or promises beyond the days given.',
+    '- Do not use dashes or hyphens. Spell out days and months.',
+    '',
+    'Reply with only JSON: {"subject": "This week at the house", "body": "..."} with a short subject, and the body\'s paragraphs separated by a blank line.',
+  ].join('\n');
+}
+
+/** The update Claude wrote, for the person to read and change before they send it. */
+export interface OwnerUpdate {
+  subject: string;
+  body: string;
+}
+
+const noDashes = (text: string) => text.replace(/\s+[–—]\s+/g, ', ').replace(/[–—]/g, ', ');
+
+export function readOwnerUpdate(raw: unknown): OwnerUpdate | null {
+  const a = answer(raw);
+  const body = typeof a.body === 'string' ? noDashes(a.body.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim()).slice(0, 4000) : '';
+  if (!body) return null;
+  return { subject: noDashes(clip(a.subject, 120)) || 'This week at the house', body };
+}
+
+// ---------- the companies' answers, summed up on Activity ----------
+
+export interface CompanySummaryInput {
+  /** How many days the lines cover. */
+  days: number;
+  /** What each company did on its page, oldest first: "Mike at Triple H Painting confirmed Patch drywall. Laundry 119." */
+  lines: { company: string; text: string }[];
+}
+
+export function companySummaryInput(v: unknown): CompanySummaryInput {
+  const r = record(v);
+  return {
+    days: Math.max(1, Math.min(31, Math.floor(Number(r.days) || 7))),
+    lines: listOf(r.lines, 200, (x) => {
+      const o = record(x);
+      const company = clip(o.company, 80);
+      const text = clip(o.text, 300);
+      return company && text ? { company, text } : null;
+    }),
+  };
+}
+
+export function companySummaryPrompt(input: CompanySummaryInput): string {
+  return [
+    `This is what the companies working on a home builder's job did on their own pages in the last ${input.days === 1 ? 'day' : `${input.days} days`}: the work they confirmed or finished, the time they gave, and what they wrote. Sum it up for the superintendent, company by company.`,
+    '',
+    ...input.lines.map((l) => `- ${l.company}: ${l.text}`),
+    '',
+    'Rules:',
+    '- One or two short sentences a company: what they finished or confirmed, and anything they wrote that needs an answer or holds up other work.',
+    '- needsAnswer: true when they asked something, or said something the superintendent has to act on.',
+    '- Use only what is here, and name rooms as they are written. Do not use dashes.',
+    '',
+    'Reply with only JSON, like {"companies": [{"name": "Triple H Painting", "summary": "Finished six items in the kitchen and laundry. Asked whether the dining room trim gets one coat or two.", "needsAnswer": true}]}, with each name written exactly as it is above, the companies that need an answer first.',
+  ].join('\n');
+}
+
+export interface CompanySummary {
+  name: string;
+  summary: string;
+  needsAnswer: boolean;
+}
+
+/** Claude's summary of each company, only for the companies given, each once. */
+export function readCompanySummary(raw: unknown, names: string[]): CompanySummary[] {
+  const list = answer(raw).companies;
+  if (!Array.isArray(list)) return [];
+  const seen = new Set<string>();
+  return list.flatMap((x) => {
+    const o = record(x);
+    const said = clip(o.name, 80).toLowerCase();
+    const name = names.find((n) => n.toLowerCase() === said);
+    const summary = noDashes(clip(o.summary, 400));
+    if (!name || !summary || seen.has(name)) return [];
+    seen.add(name);
+    return [{ name, summary: /[.!?]$/.test(summary) ? summary : `${summary}.`, needsAnswer: o.needsAnswer === true }];
+  });
+}
+
+// ---------- a company's page in Spanish ----------
+
+/** The most lines asked at once: a long list is translated over its next few openings. */
+export const TRANSLATE_AT_ONCE = 150;
+
+/**
+ * The words for translating a company's list into Spanish: each line is a title, a note or what
+ * an item waits on, written by a builder in English, numbered.
+ */
+export function translatePrompt(texts: string[]): string {
+  return [
+    "Translate these lines from a home builder's running list of work into Spanish, for a construction crew. Each is the title of the work to do, more about it, or a note from the builder.",
+    '',
+    ...texts.map((t, i) => `${i + 1}. ${t.replace(/\s+/g, ' ').trim()}`),
+    '',
+    'Rules:',
+    '- Use the plain Spanish a crew on a job site uses. Keep each line about as short as it is.',
+    '- Keep names, room names and numbers, sizes, item numbers and brand names as they are.',
+    '- Translate every line, in order, and nothing else.',
+    '',
+    'Reply with only JSON: {"es": ["...", "..."]} with one translation for each line, in the same order.',
+  ].join('\n');
+}
+
+/** The translations Claude gave, by line, or null for a line it did not give. */
+export function readTranslations(raw: unknown, count: number): (string | null)[] {
+  const list = answer(raw).es;
+  const out: (string | null)[] = Array.from({ length: count }, () => null);
+  if (!Array.isArray(list) || list.length !== count) return out;
+  for (let i = 0; i < count; i++) {
+    const t = typeof list[i] === 'string' ? (list[i] as string).replace(/\s+/g, ' ').trim().slice(0, 4000) : '';
+    out[i] = t || null;
+  }
+  return out;
+}
+
 // ---------- the tasks ----------
 
-export type ClaudeTask = 'fill-in' | 'say-it' | 'same-item' | 'duplicates' | 'standard-title' | 'done-check' | 'company-card' | 'waits-on' | 'columns';
+export type ClaudeTask =
+  | 'fill-in'
+  | 'say-it'
+  | 'same-item'
+  | 'duplicates'
+  | 'standard-title'
+  | 'done-check'
+  | 'company-card'
+  | 'waits-on'
+  | 'columns'
+  | 'owner-update'
+  | 'company-summary';
 
 export const CLAUDE_TASKS: Record<ClaudeTask, TaskSpec> = {
   'fill-in': { tier: 'sharp', maxTokens: 900, images: 1, minImages: 1, prompt: (v) => suggestPrompt(suggestInput(v)), enough: () => true },
@@ -562,6 +778,25 @@ export const CLAUDE_TASKS: Record<ClaudeTask, TaskSpec> = {
       const x = companyCardInput(v);
       return x.words !== '' || x.card;
     },
+  },
+  'owner-update': {
+    tier: 'sharp',
+    maxTokens: 1200,
+    images: 0,
+    minImages: 0,
+    prompt: (v) => ownerUpdatePrompt(ownerUpdateInput(v)),
+    enough: (v) => {
+      const x = ownerUpdateInput(v);
+      return x.done.length > 0 || x.waiting.length > 0 || x.coming.length > 0 || x.sent.length > 0 || x.open > 0;
+    },
+  },
+  'company-summary': {
+    tier: 'quick',
+    maxTokens: 1500,
+    images: 0,
+    minImages: 0,
+    prompt: (v) => companySummaryPrompt(companySummaryInput(v)),
+    enough: (v) => companySummaryInput(v).lines.length > 0,
   },
 };
 

@@ -1,6 +1,6 @@
-// One company: its name, its usual trade, and its people: who gets its lists on every job, by email
-// or by text. Admins add and change them and switch them off or back on;
-// everyone else can look.
+// One company: its name, its usual trade, the language of its page, and its people: who gets its
+// lists on every job, by email or by text. Admins add and change them and switch them off or back
+// on; everyone else can look. A page in Spanish has its list's lines translated by Claude.
 
 import { isAdmin, type Contact } from '@punch/core';
 import { useLocalSearchParams } from 'expo-router';
@@ -38,6 +38,7 @@ function CompanyDetail({ companyId }: { companyId: string }) {
   const off = all.filter((c) => !c.active);
   const [name, setName] = useState(company.name);
   const [picking, setPicking] = useState(false);
+  const [pickingLanguage, setPickingLanguage] = useState(false);
   const [open, setOpen] = useState<{ contact: Contact | null } | null>(null);
 
   async function rename() {
@@ -63,7 +64,16 @@ function CompanyDetail({ companyId }: { companyId: string }) {
 
   return (
     <Page title={company.name} backLabel="Companies" tab={{}}>
-      <ListSection header="Company" footer={admin ? 'A new name changes it on every job.' : undefined}>
+      <ListSection
+        header="Company"
+        footer={
+          company.language === 'es'
+            ? 'Their page is in Spanish: Claude translates their list, and names and room numbers stay as they are. They can switch it to English on the page.'
+            : admin
+              ? 'A new name changes it on every job.'
+              : undefined
+        }
+      >
         <ListLabeledField
           label="Name"
           value={name}
@@ -80,6 +90,13 @@ function CompanyDetail({ companyId }: { companyId: string }) {
           accessory={admin ? 'chevron' : 'none'}
           onPress={admin ? () => setPicking(true) : undefined}
           testID="company-trade"
+        />
+        <ListRow
+          title="Their Page In"
+          value={company.language === 'es' ? 'Spanish' : 'English'}
+          accessory={admin ? 'chevron' : 'none'}
+          onPress={admin ? () => setPickingLanguage(true) : undefined}
+          testID="company-language"
         />
       </ListSection>
       <ListSection
@@ -137,6 +154,21 @@ function CompanyDetail({ companyId }: { companyId: string }) {
           void data.updateCompany(company.id, { defaultTradeId: tradeId });
         }}
         onClose={() => setPicking(false)}
+      />
+      <OptionPicker
+        visible={pickingLanguage}
+        title="Their Page In"
+        options={[
+          { value: 'en', label: 'English' },
+          { value: 'es', label: 'Spanish', hint: 'Claude translates their list' },
+        ]}
+        value={company.language ?? 'en'}
+        onSelect={(language) => {
+          setPickingLanguage(false);
+          if (language !== 'en' && language !== 'es') return;
+          void data.updateCompany(company.id, { language }).then(() => feedback.toast({ message: language === 'es' ? `${company.name}'s page is in Spanish` : `${company.name}'s page is in English` }));
+        }}
+        onClose={() => setPickingLanguage(false)}
       />
     </Page>
   );

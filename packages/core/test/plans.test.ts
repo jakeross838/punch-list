@@ -333,7 +333,8 @@ describe('the functions that ask Claude', () => {
     // @ts-expect-error: a plain script, without types
     const { functionFiles } = (await import('../../../tools/build-functions.mjs')) as { functionFiles: () => Promise<Record<string, string>> };
     const files = await functionFiles();
-    expect(Object.keys(files).length).toBe(4);
+    // ai, read-plans and company-page, each with its core.js and claude.ts.
+    expect(Object.keys(files).length).toBe(6);
     for (const [path, fresh] of Object.entries(files)) {
       expect(readFileSync(path, 'utf8'), `${path} is out of date: run node tools/build-functions.mjs`).toBe(fresh);
     }

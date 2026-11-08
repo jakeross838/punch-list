@@ -156,6 +156,13 @@ export type VisitPatch = Partial<Pick<Visit, 'start' | 'days' | 'confirmed' | 'n
 /** What the job's station link is asked for. */
 export type StationAction = 'get' | 'make' | 'new' | 'off';
 
+/** The owner's page link for a job: who it is for, and when they last opened it. */
+export interface OwnerLinkInfo {
+  token: string;
+  name: string | null;
+  openedAt: string | null;
+}
+
 export interface DataApi {
   /** preview: sample data, nothing saved beyond this browser tab. live: the real database. */
   mode: 'preview' | 'live';
@@ -232,6 +239,14 @@ export interface DataApi {
    * the old one stops working. off: none works. Needs a signal.
    */
   jobStation(jobId: string, action: StationAction): Promise<string | null>;
+  /**
+   * The owner's page: one link for the owner of the house. get: the link that works, or null.
+   * make: that one, or a new one. new: a new one, and the old one stops working. off: none works.
+   * name: who it is for, kept on the link. Needs a signal.
+   */
+  ownerLink(jobId: string, action: StationAction, name?: string): Promise<OwnerLinkInfo | null>;
+  /** When each company on a job last opened its page, by company. Needs a signal. */
+  companiesOpened(jobId: string): Promise<Map<string, string>>;
   /** Admins only. */
   addPerson(person: NewPerson): Promise<string>;
   /** Admins only. There is always at least one admin. */
@@ -302,7 +317,7 @@ export interface DataApi {
   addCompany(input: { name: string; defaultTradeId: string | null }): Promise<string>;
   addCompanyToJob(jobId: string, companyId: string, tradeId: string): Promise<void>;
   /** Renames a company on every job (items waiting on it by the old name keep waiting on it), or changes its usual trade. */
-  updateCompany(id: string, patch: Partial<Pick<Company, 'name' | 'defaultTradeId'>>): Promise<void>;
+  updateCompany(id: string, patch: Partial<Pick<Company, 'name' | 'defaultTradeId' | 'language'>>): Promise<void>;
   /** Admins only. */
   addContact(contact: NewContact): Promise<string>;
   /** Admins only. Switched off with active false; nobody is deleted. */

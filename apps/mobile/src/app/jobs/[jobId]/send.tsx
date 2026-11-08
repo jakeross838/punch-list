@@ -58,6 +58,7 @@ import { ExportSheet, type ListDraft } from '@/components/ExportSheet';
 import { SpreadsheetSheet } from '@/components/SpreadsheetSheet';
 import { useFilterNames } from '@/components/FilterBar';
 import { MessagePreview, namesText, type Message } from '@/components/MessagePreview';
+import { NudgeSection } from '@/components/NudgeSection';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { pageUrlFor } from '@/data/links';
@@ -435,6 +436,23 @@ export default function SendScreen() {
               .catch(() => feedback.toast({ message: 'The link was not made. Check the signal and try again.' })),
         },
         {
+          // Their link by text, to everyone there with a phone: the quickest way onto a job site.
+          label: 'Text the Link',
+          onPress: () =>
+            void link()
+              .then(async (url) => {
+                const people = listRecipients(contacts, companyId).people.filter((p) => p.phone);
+                const went = await composeText({
+                  phones: people.map((p) => p.phone!),
+                  body: companyListText({ job: jobOf(), contacts: people, from: me, company: builder, link: url }),
+                  files: [],
+                });
+                if (went === 'unavailable') feedback.toast({ message: 'This phone cannot text. Copy the link instead.' });
+                else if (went === 'sent') haptic.success();
+              })
+              .catch(() => feedback.toast({ message: 'The link was not made. Check the signal and try again.' })),
+        },
+        {
           label: 'Open Their Page',
           onPress: () =>
             void link()
@@ -549,6 +567,8 @@ export default function SendScreen() {
               </Text>
             </View>
           ) : null}
+
+          <NudgeSection jobId={jobId} companies={rows} onPhone={ON_THE_PHONE} />
 
           {parties.length > 0 ? (
             <ListSection header="Owner, Design Team and Others" footer="What the work is waiting on from them.">

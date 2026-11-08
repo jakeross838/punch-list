@@ -15,6 +15,8 @@ import {
   deleteAccountOnServer,
   deleteJobOnServer,
   jobStationOnServer,
+  ownerLinkOnServer,
+  companiesOpenedOnServer,
   deletePhotosOnServer,
   jobFilesOnServer,
   mergeItemsOnServer,
@@ -222,6 +224,8 @@ const liveApi: DataApi = makeApi(keeper, {
     await clearPhone();
   },
   jobStation: (jobId, action) => jobStationOnServer(jobId, action),
+  ownerLink: (jobId, action, name) => ownerLinkOnServer(jobId, action, name),
+  companiesOpened: (jobId) => companiesOpenedOnServer(jobId),
   async deleteJob(id) {
     if (!isAdmin(store.get().me)) throw new Error('Only an admin can delete a job.');
     const changes = (await db.getUploadQueueStats()).count + (await photosWaiting());

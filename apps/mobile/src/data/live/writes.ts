@@ -140,7 +140,7 @@ const trades: Spec<Trade> = {
 const companies: Spec<Company> = {
   table: 'companies',
   key: byId,
-  row: (c) => ({ name: c.name, default_trade_id: c.defaultTradeId, phone: c.phone, email: c.email, active: c.active }),
+  row: (c) => ({ name: c.name, default_trade_id: c.defaultTradeId, phone: c.phone, email: c.email, active: c.active, language: c.language ?? 'en' }),
 };
 
 const contacts: Spec<Contact> = {

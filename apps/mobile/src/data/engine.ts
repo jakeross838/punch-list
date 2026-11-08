@@ -77,7 +77,26 @@ export interface Keeper {
 
 /** What differs between the backends besides where the changes are kept. */
 export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signOut' | 'startCompany' | 'deleteAccount'> &
-  Partial<Pick<DataApi, 'useMe' | 'useActivity' | 'useUpdates' | 'useSync' | 'clearRefused' | 'addCompanyComment' | 'companyConfirmVisit' | 'companyAskVisit' | 'companyMarkDone' | 'previewAs' | 'deleteJob' | 'jobStation' | 'mergeItems'>>;
+  Partial<
+    Pick<
+      DataApi,
+      | 'useMe'
+      | 'useActivity'
+      | 'useUpdates'
+      | 'useSync'
+      | 'clearRefused'
+      | 'addCompanyComment'
+      | 'companyConfirmVisit'
+      | 'companyAskVisit'
+      | 'companyMarkDone'
+      | 'previewAs'
+      | 'deleteJob'
+      | 'jobStation'
+      | 'ownerLink'
+      | 'companiesOpened'
+      | 'mergeItems'
+    >
+  >;
 
 const now = () => new Date().toISOString();
 
@@ -210,6 +229,8 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
   const get = keeper.get;
   /** The preview's station links, by job. */
   const stations = new Map<string, string>();
+  /** The preview's owner links, by job: their page is the sample owner's page. */
+  const owners = new Map<string, { token: string; name: string | null; openedAt: string | null }>();
   const save = (next: Partial<State>, happened: Happened[] = []) => keeper.save(next, happened);
   const useStore = (): State => useSyncExternalStore(keeper.subscribe, get, get);
 
@@ -380,6 +401,23 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
         if (!stations.has(jobId) && (action === 'make' || action === 'new')) stations.set(jobId, newToken());
         return stations.get(jobId) ?? null;
       }),
+    ownerLink:
+      extras.ownerLink ??
+      (async (jobId, action, name) => {
+        if (!get().jobs.some((j) => j.id === jobId)) throw new Error('That job is not here.');
+        const said = name?.replace(/\s+/g, ' ').trim().slice(0, 80) || null;
+        const was = owners.get(jobId);
+        if (action === 'new' || action === 'off') owners.delete(jobId);
+        if (action === 'off') return null;
+        if (!owners.has(jobId) && (action === 'make' || action === 'new')) owners.set(jobId, { token: newToken(), name: said ?? was?.name ?? null, openedAt: null });
+        const link = owners.get(jobId);
+        if (link && said && said !== link.name) owners.set(jobId, { ...link, name: said });
+        return owners.get(jobId) ?? null;
+      }),
+    // On the preview, each company with a link opened its page the day the link was made.
+    companiesOpened:
+      extras.companiesOpened ??
+      (async (jobId) => new Map(get().links.filter((l) => l.jobId === jobId && !l.revoked).map((l) => [l.companyId, l.createdAt] as const))),
     deleteJob:
       extras.deleteJob ??
       (async (id) => {

@@ -6,7 +6,7 @@ export type LocationKind = 'room' | 'shared';
 export type ItemKind = 'deficiency' | 'completion' | 'added_scope';
 export type ItemStatus = 'open' | 'complete' | 'removed';
 /** How an item came onto the list: a photo on a walk, typed in, imported, pasted, or from a template. */
-export type ItemSource = 'walk' | 'typed' | 'import' | 'copy' | 'template' | 'said';
+export type ItemSource = 'walk' | 'typed' | 'import' | 'copy' | 'template' | 'said' | 'owner';
 
 /** admin: adds people, makes and closes jobs, changes the setup. team: walks jobs, adds items, checks them off. */
 export type Role = 'admin' | 'team';
@@ -72,6 +72,9 @@ export interface Trade {
   sortOrder: number;
 }
 
+/** The languages a company's page is shown in. */
+export type PageLanguage = 'en' | 'es';
+
 export interface Company {
   id: string;
   name: string;
@@ -79,6 +82,8 @@ export interface Company {
   phone: string | null;
   email: string | null;
   active: boolean;
+  /** Its page in Spanish, translated by Claude; English when not set. */
+  language?: PageLanguage;
 }
 
 export interface JobCompany {
