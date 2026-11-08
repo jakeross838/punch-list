@@ -1,66 +1,51 @@
-// The pieces the screens are built from, drawn the way the iPhone's own apps draw them: a short
-// section header, a white card with rounded corners, rows with thin lines that start where the
-// words do, a line of counts, a rounded status tag, the count tiles at the top of a job (as
-// Reminders has its lists), a thin progress bar and a row of chips.
+// The Site Office pieces the screens are built from: a section label with a rule under it, a white
+// panel, a ledger row, a line of counts, a status pill with its square stamp, the counts grid on a
+// job, a thin progress bar and a row of chips.
 
 import { Fragment, type ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { Chip } from './Chip';
 import { Icon } from './Icon';
-import type { IconName } from './icons';
 import { Text } from './Text';
 import { Touchable } from './Touchable';
 
-/** A small round dot: a state's color beside its name. */
-export function Stamp({ color, size = 8, style }: { color: string; size?: number; style?: StyleProp<ViewStyle> }) {
-  return <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }, style]} />;
+/** A small solid square: the stamp before an eyebrow, a pill's marker, a ticker line's mark. */
+export function Stamp({ color, size = 6, style }: { color: string; size?: number; style?: StyleProp<ViewStyle> }) {
+  return <View style={[{ width: size, height: size, backgroundColor: color }, style]} />;
 }
 
-/**
- * A section's header above a card, maybe with a count or a link on the right. Plain: the short
- * gray words of the iPhone's Settings. Prominent: the bold header of Notes and Reminders, for the
- * floors of a job.
- */
+/** A section's label, with a rule under it and maybe a link on the right: "Level 1 ... 25 open". */
 export function SectionLabel({
   label,
   right,
   onPress,
   rightColor = colors.secondary,
-  prominent,
   style,
   testID,
 }: {
   label: string;
   right?: string;
-  /** Makes the right side a link, in blue. */
+  /** Makes the right side a link, in gulf blue with a chevron. */
   onPress?: () => void;
   rightColor?: string;
-  prominent?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }) {
-  const variant = prominent ? 'title3' : 'footnote';
   return (
-    <View style={[styles.section, prominent ? styles.sectionProminent : null, style]}>
-      <Text
-        variant={variant}
-        weight={prominent ? '700' : undefined}
-        color={prominent ? colors.label : colors.secondary}
-        style={styles.sectionText}
-        numberOfLines={1}
-        accessibilityRole="header"
-      >
+    <View style={[styles.section, style]}>
+      <Text variant="label" color={colors.secondary} style={styles.sectionText} numberOfLines={1} accessibilityRole="header">
         {label}
       </Text>
       {right && onPress ? (
-        <Touchable feedback="opacity" onPress={onPress} hitSlop={10} accessibilityRole="link" accessibilityLabel={`${label}: ${right}`} testID={testID}>
-          <Text variant={prominent ? 'body' : 'footnote'} color={colors.tint}>
+        <Touchable feedback="opacity" onPress={onPress} hitSlop={10} accessibilityRole="link" accessibilityLabel={`${label}: ${right}`} testID={testID} style={styles.sectionLink}>
+          <Text variant="label" color={colors.tint}>
             {right}
           </Text>
+          <Icon name="chevron.right" size={11} color={colors.tint} weight="semibold" />
         </Touchable>
       ) : right ? (
-        <Text variant={prominent ? 'subheadline' : 'footnote'} color={rightColor} tabular testID={testID}>
+        <Text variant="label" color={rightColor}>
           {right}
         </Text>
       ) : null}
@@ -68,7 +53,7 @@ export function SectionLabel({
   );
 }
 
-/** A white card with rounded corners. Rows inside get thin lines between them. */
+/** A white square panel with a thin slate border. Rows inside get rules between them. */
 export function Panel({ children, style, testID }: { children?: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
   return (
     <View style={[styles.panel, style]} testID={testID}>
@@ -78,10 +63,8 @@ export function Panel({ children, style, testID }: { children?: ReactNode; style
 }
 
 /**
- * A row in a card: something at the start, the words, something at the end and a chevron when it
- * opens something. The thin line under it starts where the words do and runs to the edge, as on
- * the iPhone; the last row has none. In a long list each row is its own piece of the card: card
- * says which piece, and the first and last get the rounded corners.
+ * A row in a panel, with a rule under all but the last. In a long list each row is its own piece of
+ * the panel: card says which piece, and the first and last close the panel's edges.
  */
 export function LedgerRow({
   children,
@@ -104,7 +87,7 @@ export function LedgerRow({
   /** Holding the row down: what else can be done to it. */
   onLongPress?: () => void;
   last?: boolean;
-  /** The row is a piece of a card in a long list, not in a Panel. */
+  /** The row is a piece of a panel in a long list, not in a Panel. */
   card?: { first: boolean; last: boolean };
   /** Defaults to on when the row opens something. */
   chevron?: boolean;
@@ -114,22 +97,26 @@ export function LedgerRow({
   testID?: string;
 }) {
   const showChevron = chevron ?? !!onPress;
-  const last = card ? card.last : lastRow;
-  const rowStyle = card ? [styles.row, styles.cardRow, card.first ? styles.cardFirst : null, card.last ? styles.cardLast : null] : styles.row;
   const body = (
     <>
-      {lead ? <View style={[styles.lead, align === 'center' ? styles.leadCenter : styles.leadTop]}>{lead}</View> : null}
-      <View style={[styles.body, { alignItems: align }, last ? null : styles.rule, style]}>
-        <View style={styles.main}>{children}</View>
-        {trail || showChevron ? (
-          <View style={styles.trail}>
-            {trail}
-            {showChevron ? <Icon name="chevron.right" size={14} color={colors.chevron} weight="semibold" /> : null}
-          </View>
-        ) : null}
-      </View>
+      {lead ? <View style={styles.lead}>{lead}</View> : null}
+      <View style={styles.main}>{children}</View>
+      {trail || showChevron ? (
+        <View style={styles.trail}>
+          {trail}
+          {showChevron ? <Icon name="chevron.right" size={14} color={colors.quiet} weight="medium" /> : null}
+        </View>
+      ) : null}
     </>
   );
+  const last = card ? card.last : lastRow;
+  const rowStyle = [
+    styles.row,
+    { alignItems: align },
+    card ? [styles.cardRow, card.first ? styles.cardFirst : null, card.last ? styles.cardLast : null] : null,
+    last ? null : styles.rule,
+    style,
+  ];
   if (!onPress) {
     return (
       <View style={rowStyle} testID={testID} accessibilityLabel={accessibilityLabel}>
@@ -161,7 +148,7 @@ export interface Fact {
   color?: string;
 }
 
-/** A line of counts with dots between: 214 open · 38 ready · 3 late. */
+/** A line of counts in mono capitals with dots between: 214 open · 38 ready · 3 late. */
 export function MetaLine({ facts, style, testID }: { facts: (Fact | string | null | false | undefined)[]; style?: StyleProp<ViewStyle>; testID?: string }) {
   const shown = facts.filter((f): f is Fact | string => !!f).map((f) => (typeof f === 'string' ? { text: f } : f));
   return (
@@ -169,11 +156,11 @@ export function MetaLine({ facts, style, testID }: { facts: (Fact | string | nul
       {shown.map((f, i) => (
         <Fragment key={`${i}-${f.text}`}>
           {i > 0 ? (
-            <Text variant="subheadline" color={colors.quiet}>
+            <Text variant="label" weight="400" color={colors.quiet} style={styles.dot}>
               ·
             </Text>
           ) : null}
-          <Text variant="subheadline" color={f.color ?? colors.secondary}>
+          <Text variant="label" color={f.color ?? colors.secondary} style={styles.fact}>
             {f.text}
           </Text>
         </Fragment>
@@ -184,22 +171,23 @@ export function MetaLine({ facts, style, testID }: { facts: (Fact | string | nul
 
 export type PillTone = 'ok' | 'wait' | 'late' | 'check' | 'quote' | 'draft' | 'guess' | 'done';
 
-const PILL: Record<PillTone, { color: string; fill: string }> = {
-  ok: { color: colors.ok, fill: 'rgba(52, 199, 89, 0.15)' },
-  wait: { color: colors.secondary, fill: colors.chip },
-  late: { color: colors.destructive, fill: 'rgba(255, 59, 48, 0.12)' },
-  check: { color: colors.tint, fill: 'rgba(0, 122, 255, 0.12)' },
-  quote: { color: colors.label, fill: colors.chip },
-  draft: { color: colors.secondary, fill: colors.chip },
-  guess: { color: colors.tint, fill: 'rgba(0, 122, 255, 0.12)' },
-  done: { color: colors.secondary, fill: colors.chip },
+const PILL: Record<PillTone, { color: string; dashed?: boolean }> = {
+  ok: { color: colors.ok },
+  wait: { color: colors.secondary },
+  late: { color: colors.destructive },
+  check: { color: colors.tint },
+  quote: { color: colors.label, dashed: true },
+  draft: { color: colors.secondary, dashed: true },
+  guess: { color: colors.tint },
+  done: { color: colors.secondary },
 };
 
-/** A status tag: a few words on a rounded tint of their color. */
-export function Pill({ text, tone }: { text: string; tone: PillTone }) {
-  const { color, fill } = PILL[tone];
+/** A status pill: an outlined stamp in mono capitals with a square marker. */
+export function Pill({ text, tone, marker = true }: { text: string; tone: PillTone; marker?: boolean }) {
+  const { color, dashed } = PILL[tone];
   return (
-    <View style={[styles.pill, { backgroundColor: fill }]}>
+    <View style={[styles.pill, { borderColor: color, borderStyle: dashed ? 'dashed' : 'solid' }]}>
+      {marker ? <Stamp color={color} size={5} /> : null}
       <Text variant="stamp" color={color} numberOfLines={1}>
         {text}
       </Text>
@@ -210,47 +198,37 @@ export function Pill({ text, tone }: { text: string; tone: PillTone }) {
 export interface Figure {
   label: string;
   value: string;
-  /** The round icon at the top of the tile, in this color. */
-  icon?: IconName;
   color?: string;
   onPress?: () => void;
   testID?: string;
 }
 
-/** The counts at the top of a job, as Reminders has its lists: white rounded tiles, an icon in a circle, the number big on the right and the name under it. */
+/** The counts grid on a job: a mono label over a big number, in square cells. */
 export function Figures({ cells, columns = 2, style }: { cells: Figure[]; columns?: number; style?: StyleProp<ViewStyle> }) {
   const rows: Figure[][] = [];
   for (let i = 0; i < cells.length; i += columns) rows.push(cells.slice(i, i + columns));
   return (
     <View style={[styles.figures, style]}>
       {rows.map((row, ri) => (
-        <View key={ri} style={styles.figureRow}>
-          {row.map((c) => {
+        <View key={ri} style={[styles.figureRow, ri > 0 ? styles.figureRule : null]}>
+          {row.map((c, ci) => {
             const body = (
               <>
-                <View style={styles.figureTop}>
-                  {c.icon ? (
-                    <View style={[styles.figureIcon, { backgroundColor: c.color ?? colors.stone }]}>
-                      <Icon name={c.icon} size={16} color={colors.white} weight="semibold" />
-                    </View>
-                  ) : (
-                    <View />
-                  )}
-                  <Text variant={c.value.length > 6 ? 'title3' : 'title1'} tabular numberOfLines={1}>
-                    {c.value}
-                  </Text>
-                </View>
-                <Text variant="subheadline" weight="600" color={colors.secondary} numberOfLines={1}>
+                <Text variant="label" color={colors.secondary} numberOfLines={1}>
                   {c.label}
+                </Text>
+                <Text variant={c.value.length > 6 ? 'title2' : 'figure'} color={c.color ?? colors.label} tabular numberOfLines={1} style={c.value.length > 6 ? styles.figureLong : null}>
+                  {c.value}
                 </Text>
               </>
             );
+            const cellStyle = [styles.figure, ci > 0 ? styles.figureDivide : null];
             return c.onPress ? (
               <Touchable
                 key={c.label}
                 feedback="highlight"
                 onPress={c.onPress}
-                style={styles.figure}
+                style={cellStyle}
                 accessibilityRole="button"
                 accessibilityLabel={`${c.label}: ${c.value}`}
                 testID={c.testID}
@@ -258,26 +236,24 @@ export function Figures({ cells, columns = 2, style }: { cells: Figure[]; column
                 {body}
               </Touchable>
             ) : (
-              <View key={c.label} style={styles.figure} accessible accessibilityLabel={`${c.label}: ${c.value}`} testID={c.testID}>
+              <View key={c.label} style={cellStyle} accessible accessibilityLabel={`${c.label}: ${c.value}`} testID={c.testID}>
                 {body}
               </View>
             );
           })}
-          {Array.from({ length: columns - row.length }, (_, i) => (
-            <View key={`gap-${i}`} style={styles.figureGap} />
-          ))}
+          {row.length < columns ? <View style={[styles.figure, styles.figureDivide]} /> : null}
         </View>
       ))}
     </View>
   );
 }
 
-/** A thin progress bar: blue on a pale track, green once it is all done. */
+/** A thin progress bar: stone blue on a pale track, green once it is all done. */
 export function ProgressBar({ value, color }: { value: number; color?: string }) {
   const pct = Math.max(0, Math.min(1, value));
   return (
     <View style={styles.track} accessible={false} importantForAccessibility="no-hide-descendants">
-      <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: color ?? (pct >= 1 ? colors.okFill : colors.tint) }]} />
+      <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: color ?? (pct >= 1 ? colors.okFill : colors.stone) }]} />
     </View>
   );
 }
@@ -290,7 +266,7 @@ export interface ChipChoice {
   testID?: string;
 }
 
-/** A row of chips, wrapping onto a second line when it runs out of room. */
+/** A row of chips that scrolls sideways when it runs out of room. */
 export function ChipRow({ chips, wrap, style }: { chips: ChipChoice[]; wrap?: boolean; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[styles.chips, wrap ? styles.chipsWrap : null, style]}>
@@ -302,40 +278,42 @@ export function ChipRow({ chips, wrap, style }: { chips: ChipChoice[]; wrap?: bo
 }
 
 const styles = StyleSheet.create({
-  // The words line up with the words in the card's rows below.
   section: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
-    marginHorizontal: layout.margin + layout.rowPadding,
-    marginTop: 22,
-    marginBottom: 6,
+    marginHorizontal: layout.inset,
+    marginTop: 20,
+    paddingBottom: 8,
+    borderBottomWidth: layout.hairline,
+    borderBottomColor: colors.border,
   },
-  sectionProminent: { marginHorizontal: layout.inset, marginTop: 24, marginBottom: 8 },
-  sectionText: { flexShrink: 1 },
-  panel: { marginHorizontal: layout.margin, backgroundColor: colors.cell, borderRadius: layout.radius, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'stretch', paddingLeft: layout.rowPadding, minHeight: layout.rowMinHeight, backgroundColor: colors.cell },
-  cardRow: { marginHorizontal: layout.margin, overflow: 'hidden' },
-  cardFirst: { borderTopLeftRadius: layout.radius, borderTopRightRadius: layout.radius },
-  cardLast: { borderBottomLeftRadius: layout.radius, borderBottomRightRadius: layout.radius },
-  lead: { flexShrink: 0, marginRight: 12 },
-  leadCenter: { justifyContent: 'center' },
-  leadTop: { paddingTop: 11 },
-  body: { flex: 1, minWidth: 0, flexDirection: 'row', gap: 12, paddingVertical: 11, paddingRight: layout.rowPadding },
+  sectionText: { flexShrink: 1, fontSize: 11 },
+  sectionLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  panel: { marginHorizontal: layout.margin, marginTop: 8, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border },
+  row: { flexDirection: 'row', gap: 12, paddingHorizontal: layout.rowPadding, paddingVertical: 11, minHeight: 48, backgroundColor: colors.cell },
+  // A piece of a panel in a long list: its sides, and the top or bottom edge at the ends.
+  cardRow: { marginHorizontal: layout.margin, borderLeftWidth: layout.hairline, borderRightWidth: layout.hairline, borderColor: colors.border },
+  cardFirst: { borderTopWidth: layout.hairline },
+  cardLast: { borderBottomWidth: layout.hairline },
   rule: { borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
-  main: { flex: 1, minWidth: 0, gap: 2 },
-  trail: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
-  meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 5, rowGap: 0 },
-  pill: { height: 22, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, borderRadius: 6, alignSelf: 'flex-start', flexShrink: 0 },
-  figures: { marginHorizontal: layout.margin, gap: 10 },
-  figureRow: { flexDirection: 'row', gap: 10 },
-  figure: { flex: 1, minHeight: 78, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 9, justifyContent: 'space-between', gap: 6, borderRadius: 12, backgroundColor: colors.cell },
-  figureGap: { flex: 1 },
-  figureTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 },
-  figureIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  track: { height: 4, borderRadius: 2, backgroundColor: colors.progressTrack, overflow: 'hidden' },
-  fill: { height: 4, borderRadius: 2 },
-  chips: { flexDirection: 'row', gap: 8, marginHorizontal: layout.margin, overflow: 'hidden' },
+  lead: { flexShrink: 0 },
+  main: { flex: 1, minWidth: 0, gap: 3 },
+  trail: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 },
+  meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 7, rowGap: 2 },
+  dot: { letterSpacing: 0 },
+  fact: { letterSpacing: 1.2 },
+  pill: { height: 18, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6, borderWidth: 1, alignSelf: 'flex-start', flexShrink: 0 },
+  figures: { marginHorizontal: layout.margin, borderWidth: layout.hairline, borderColor: colors.border, backgroundColor: colors.cell },
+  figureRow: { flexDirection: 'row' },
+  figureRule: { borderTopWidth: layout.hairline, borderTopColor: colors.border },
+  figure: { flex: 1, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 12, gap: 6, backgroundColor: colors.cell },
+  figureDivide: { borderLeftWidth: layout.hairline, borderLeftColor: colors.border },
+  // A date in a count's place: smaller, on the same line as the numbers beside it.
+  figureLong: { lineHeight: 29 },
+  track: { height: 3, backgroundColor: colors.progressTrack, overflow: 'hidden' },
+  fill: { height: 3 },
+  chips: { flexDirection: 'row', gap: 6, marginHorizontal: layout.margin, overflow: 'hidden' },
   chipsWrap: { flexWrap: 'wrap' },
 });

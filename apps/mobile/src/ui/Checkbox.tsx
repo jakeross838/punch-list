@@ -1,13 +1,13 @@
-// The round check the iPhone uses for picking things in a list, as in Mail when you select
-// messages: an empty circle, filled blue with a white check once picked. Also for yes-or-no fields
-// like Ready. Without onPress it only shows the state, for rows where the whole row is the tap.
+// A square checkbox, for yes-or-no fields like Ready and for picking things from a list. Checked
+// is filled slate deep with a sand check. Without onPress it only shows the state, for rows where
+// the whole row is the tap.
 
 import { Pressable, StyleSheet, View } from 'react-native';
 import { colors } from '@/constants/theme';
 import { Icon } from './Icon';
 
 export function Checkbox({ checked, onPress, label, testID }: { checked: boolean; onPress?: () => void; label: string; testID?: string }) {
-  const box = <View style={[styles.box, checked ? styles.on : null]}>{checked ? <Icon name="checkmark" size={13} color={colors.white} weight="bold" /> : null}</View>;
+  const box = <View style={[styles.box, checked ? styles.on : null]}>{checked ? <Icon name="checkmark" size={15} color={colors.onBar} weight="bold" /> : null}</View>;
   if (!onPress) {
     return (
       <View accessible={false} importantForAccessibility="no-hide-descendants" pointerEvents="none">
@@ -23,6 +23,6 @@ export function Checkbox({ checked, onPress, label, testID }: { checked: boolean
 }
 
 const styles = StyleSheet.create({
-  box: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.circle, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cell },
+  box: { width: 22, height: 22, borderWidth: 1.5, borderColor: colors.quiet, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cell },
   on: { borderColor: colors.action, backgroundColor: colors.action },
 });

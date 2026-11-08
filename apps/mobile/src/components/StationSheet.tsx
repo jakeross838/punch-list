@@ -165,5 +165,5 @@ const styles = StyleSheet.create({
   waiting: { paddingVertical: 40, alignItems: 'center' },
   start: { marginHorizontal: layout.margin, marginTop: 12 },
   code: { alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 4, paddingHorizontal: layout.inset },
-  codeBox: { padding: 12, borderRadius: layout.radius, backgroundColor: colors.cell },
+  codeBox: { padding: 10, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border },
 });

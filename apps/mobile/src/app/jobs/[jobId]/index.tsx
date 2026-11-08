@@ -1,9 +1,9 @@
-// A job, with only what helps act on it, laid out like Reminders: the search with Filter beside it,
-// the count tiles (Open, Ready and Waiting, the last two a tap into their list) and a segmented
-// control for how the list is grouped (by location, by company or by what items wait on), all once
-// there are items. What to check, the drafts and copied items show as rows in a card above the
-// list, as Mail lists its mailboxes. The levels follow, each location with how much is open and
-// ready and a thin bar for how much is done. Tap a location for its items. Capture in the bottom bar
+// A job, with only what helps act on it, Site Office style: the search with Filter beside it, the
+// counts in a square grid (Open, Ready and Waiting, the last two a tap into their list) and a
+// segmented control for how the list is grouped (by location, by company or by what items wait on),
+// all once there are items. What to check, the drafts and copied items show as rows in a panel
+// above the list. The levels follow, each location with how much is open and ready and a thin bar
+// for how much is done. Tap a location for its items. Capture in the bottom bar
 // carries on the walk at the next location not walked, and Send sends the lists. Add From a
 // Template puts a template's tasks in every location they fit; copied items paste here into a
 // location picked from the job.
@@ -360,12 +360,12 @@ export default function JobScreen() {
           trail={
             <>
               <Touchable feedback="opacity" onPress={() => setPasting(true)} accessibilityRole="button" testID="job-paste" hitSlop={8}>
-                <Text weight="600" color={colors.tint}>
+                <Text variant="label" weight="600" color={colors.tint}>
                   Paste
                 </Text>
               </Touchable>
               <Touchable feedback="opacity" onPress={() => clipboard.clear()} accessibilityRole="button" accessibilityLabel="Forget what was copied" hitSlop={10}>
-                <Icon name="xmark.circle.fill" size={20} color={colors.circle} />
+                <Icon name="xmark" size={15} color={colors.quiet} />
               </Touchable>
             </>
           }
@@ -399,9 +399,9 @@ export default function JobScreen() {
     <Figures
       columns={3}
       cells={[
-        { label: 'Open', value: String(total), icon: 'list.bullet', color: colors.tint, testID: 'count-open' },
-        { label: 'Ready', value: String(readyCount), icon: 'checkmark', color: colors.okFill, onPress: () => openState('ready'), testID: 'count-ready' },
-        { label: 'Waiting', value: String(waitingCount), icon: 'hourglass', color: colors.waiting, onPress: () => openState('waiting'), testID: 'count-waiting' },
+        { label: 'Open', value: String(total), testID: 'count-open' },
+        { label: 'Ready', value: String(readyCount), color: colors.ok, onPress: () => openState('ready'), testID: 'count-ready' },
+        { label: 'Waiting', value: String(waitingCount), onPress: () => openState('waiting'), testID: 'count-waiting' },
       ]}
     />
   ) : undefined;
@@ -444,7 +444,7 @@ export default function JobScreen() {
                 </View>
               }
               ListEmptyComponent={<EmptyState icon="magnifyingglass" title="No Results" message={`No items${narrowed ? ' that fit the filters' : ''} match “${q}”.`} />}
-              renderSectionHeader={({ section }) => <SectionLabel label={section.title} right={String(section.data.length)} />}
+              renderSectionHeader={({ section }) => <SectionLabel label={section.title} right={String(section.data.length)} style={styles.sectionLabel} />}
               renderItem={({ item, index, section }) => (
                 <ItemRow
                   item={item}
@@ -483,7 +483,7 @@ export default function JobScreen() {
               ListEmptyComponent={empty}
               renderSectionHeader={({ section }) =>
                 section.title ? (
-                  <SectionLabel prominent label={section.title} right={section.totals || undefined} testID={`floor-totals-${section.key}`} />
+                  <SectionLabel label={section.title} right={section.totals || undefined} style={styles.sectionLabel} testID={`floor-totals-${section.key}`} />
                 ) : (
                   <View style={{ height: 16 }} />
                 )
@@ -575,8 +575,9 @@ function GroupRow({
 }
 
 const styles = StyleSheet.create({
-  groups: { marginHorizontal: layout.margin, marginTop: 6, marginBottom: 4 },
+  groups: { marginHorizontal: layout.margin, marginTop: 4, marginBottom: 4 },
   filterBar: { marginTop: 8, marginBottom: 2 },
-  card: { marginTop: 16 },
+  card: { marginTop: 14 },
+  sectionLabel: { marginTop: 18, marginBottom: 8 },
   bar: { marginTop: 6, marginBottom: 1 },
 });

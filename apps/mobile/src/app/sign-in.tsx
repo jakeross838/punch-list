@@ -1,6 +1,6 @@
 // Sign in: your email, then the six digit code it gets, the way most apps sign in by email. There
 // is no password. Someone an admin has added under People goes straight in; someone new names their
-// company next and is its admin, then adds their people. The code goes in six rounded boxes that
+// company next and is its admin, then adds their people. The code goes in six square boxes that
 // never move while you type; on the iPhone it fills in from Mail. On the preview page no email is sent and any six digits sign in. On
 // the iPhone, the first sign in waits here while the jobs come down to the phone.
 
@@ -230,7 +230,9 @@ export default function SignInScreen() {
                   accessibilityRole="button"
                   testID="sign-in-other"
                 >
-                  <Text color={colors.tint}>Change</Text>
+                  <Text variant="label" color={colors.tint}>
+                    Change
+                  </Text>
                 </Touchable>
               </View>
               <Touchable feedback="none" onPress={() => codeField.current?.focus()} accessibilityRole="none" style={styles.boxes}>
@@ -238,7 +240,7 @@ export default function SignInScreen() {
                   const on = focused && i === Math.min(code.length, BOXES - 1);
                   return (
                     <View key={i} style={[styles.box, on ? styles.boxOn : null, problem ? styles.boxProblem : null]} accessible={false}>
-                      <Text variant="title2" weight="600" tabular style={styles.digit}>
+                      <Text variant="mono" style={styles.digit}>
                         {code[i] ?? ''}
                       </Text>
                     </View>
@@ -283,9 +285,9 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  head: { paddingHorizontal: layout.inset, paddingTop: 28, paddingBottom: 24 },
-  title: { marginTop: 4 },
-  lead: { marginTop: 6 },
+  head: { paddingHorizontal: 24, paddingTop: 28, paddingBottom: 24 },
+  title: { marginTop: 8, fontSize: 34, lineHeight: 38 },
+  lead: { marginTop: 8 },
   button: { marginHorizontal: layout.margin, marginTop: 4 },
   resend: { marginHorizontal: layout.margin, marginTop: 6, alignItems: 'center' },
   emailCard: {
@@ -293,18 +295,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     marginHorizontal: layout.margin,
-    paddingHorizontal: layout.rowPadding,
+    paddingHorizontal: 14,
     minHeight: layout.rowMinHeight,
-    borderRadius: layout.radius,
     backgroundColor: colors.cell,
+    borderWidth: layout.hairline,
+    borderColor: colors.border,
   },
-  boxes: { flexDirection: 'row', gap: 8, marginHorizontal: layout.margin, marginTop: 20 },
-  box: { flex: 1, height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: colors.cell, borderWidth: 2, borderColor: 'transparent' },
-  boxOn: { borderColor: colors.action },
+  boxes: { flexDirection: 'row', gap: 6, marginHorizontal: layout.margin, marginTop: 20 },
+  box: { flex: 1, height: 54, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cell, borderWidth: 1, borderColor: colors.borderStrong },
+  boxOn: { borderWidth: 2, borderColor: colors.action },
   boxProblem: { borderColor: colors.destructive },
-  digit: { textAlign: 'center' },
+  digit: { fontSize: 22, lineHeight: 26, textAlign: 'center' },
   // The real field, over the boxes and out of sight: it takes the typing and the code from Mail.
   hiddenField: { ...fieldFont('mono'), position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.02, color: 'transparent', outlineWidth: 0 },
-  codeNote: { marginHorizontal: layout.inset + 12, marginTop: 10, marginBottom: 18 },
-  joinNote: { marginHorizontal: layout.inset + 12, marginTop: 18 },
+  codeNote: { marginHorizontal: 24, marginTop: 10, marginBottom: 18 },
+  joinNote: { marginHorizontal: 24, marginTop: 18 },
 });

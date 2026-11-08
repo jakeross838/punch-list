@@ -493,7 +493,7 @@ export default function CaptureScreen() {
               style={styles.stripButton}
             >
               <Icon name="textformat" size={16} color={colors.onDark} />
-              <Text variant="subheadline" weight="600" color={colors.onDark}>
+              <Text variant="label" weight="600" color={colors.onDark}>
                 Type an Item
               </Text>
             </Touchable>
@@ -506,7 +506,7 @@ export default function CaptureScreen() {
                 style={styles.stripButton}
               >
                 <Icon name="mic" size={16} color={colors.onDark} />
-                <Text variant="subheadline" weight="600" color={colors.onDark}>
+                <Text variant="label" weight="600" color={colors.onDark}>
                   Say It
                 </Text>
               </Touchable>
@@ -519,7 +519,7 @@ export default function CaptureScreen() {
               style={styles.stripButton}
             >
               <Icon name="checklist" size={16} color={colors.onDark} />
-              <Text variant="subheadline" weight="600" color={colors.onDark}>
+              <Text variant="label" weight="600" color={colors.onDark}>
                 Common Tasks
               </Text>
             </Touchable>
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  square: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.darkChip },
+  square: { width: 40, height: 40, backgroundColor: colors.darkChip },
   room: {
     height: 40,
     maxWidth: 200,
@@ -654,9 +654,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingLeft: 14,
-    paddingRight: 12,
-    borderRadius: 20,
+    paddingLeft: 12,
+    paddingRight: 10,
     backgroundColor: colors.darkChip,
   },
   next: {
@@ -664,10 +663,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingLeft: 14,
-    paddingRight: 12,
+    paddingLeft: 12,
+    paddingRight: 10,
     marginLeft: 6,
-    borderRadius: 20,
     backgroundColor: colors.darkChip,
   },
   finder: { width: "100%", aspectRatio: 3 / 4, overflow: "hidden" },
@@ -682,15 +680,14 @@ const styles = StyleSheet.create({
   library: {
     width: 52,
     height: 52,
-    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.darkChip,
+    borderWidth: 1,
+    borderColor: "rgba(247, 245, 236, 0.35)",
   },
   last: {
     width: 54,
     height: 54,
-    borderRadius: 10,
     borderWidth: 2,
     borderColor: colors.onDark,
     alignItems: "center",
@@ -726,9 +723,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: colors.darkChip,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(247, 245, 236, 0.22)",
   },
   hint: { paddingHorizontal: 32, marginTop: 2 },
   saved: {
@@ -741,7 +738,8 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(28, 28, 30, 0.86)",
+    backgroundColor: "rgba(19, 32, 40, 0.86)",
+    borderWidth: 1,
+    borderColor: "rgba(247, 245, 236, 0.16)",
   },
 });

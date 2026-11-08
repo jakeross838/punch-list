@@ -1,5 +1,5 @@
-// The parts of the top bar that know about you: the Me button (your initials in a circle) and the
-// job's name with its menu to switch jobs. Page.tsx puts them in the bar.
+// The parts of the slate bar that know about you: the Me button and the job's name with its menu
+// to switch jobs. Page.tsx puts them in the bar.
 
 import { router } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
@@ -24,7 +24,7 @@ export function AccountButton() {
       testID="account"
       style={styles.avatar}
     >
-      <Text variant="footnote" weight="600" color={colors.white} style={styles.avatarText}>
+      <Text variant="mono" weight="600" color={colors.bar} style={styles.avatarText}>
         {me ? initials(me.name) || '?' : '?'}
       </Text>
     </Touchable>
@@ -49,10 +49,10 @@ export function JobSwitch({ jobId, onChange }: { jobId: string; onChange: (jobId
         testID="job-switch"
         style={styles.switch}
       >
-        <Text variant="headline" color={colors.label} numberOfLines={1} style={styles.switchText}>
+        <Text variant="button" weight="600" color={colors.onBar} numberOfLines={1} style={styles.switchText}>
           {job?.name ?? 'Pick a job'}
         </Text>
-        <Icon name="chevron.down" size={14} color={colors.tint} weight="semibold" />
+        <Icon name="chevron.down" size={13} color={colors.onBar} weight="semibold" />
       </Touchable>
       <MenuPanel
         anchor={anchor}
@@ -79,8 +79,8 @@ export function JobSwitch({ jobId, onChange }: { jobId: string; onChange: (jobId
 }
 
 const styles = StyleSheet.create({
-  avatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.stone },
-  avatarText: { letterSpacing: 0.2 },
-  switch: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 240, paddingHorizontal: 8 },
-  switchText: { flexShrink: 1 },
+  avatar: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.stone },
+  avatarText: { fontSize: 12, letterSpacing: 0.7 },
+  switch: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 220 },
+  switchText: { fontSize: 12, letterSpacing: 1.4, flexShrink: 1 },
 });

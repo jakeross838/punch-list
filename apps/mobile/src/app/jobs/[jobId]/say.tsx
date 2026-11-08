@@ -458,7 +458,7 @@ function FixSheet({
 
 const styles = StyleSheet.create({
   intro: { marginHorizontal: layout.inset, marginTop: 4, marginBottom: 14, gap: 12 },
-  words: { marginHorizontal: layout.margin, padding: 14, borderRadius: layout.radius, backgroundColor: colors.cell },
+  words: { marginHorizontal: layout.margin, padding: 14, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border },
   wordsInput: { ...fieldFont('body'), minHeight: 150, padding: 0, color: colors.label, textAlignVertical: 'top', outlineWidth: 0 },
   micArea: { alignItems: 'center', gap: 10, marginTop: 22 },
   mic: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.tint, alignItems: 'center', justifyContent: 'center' },

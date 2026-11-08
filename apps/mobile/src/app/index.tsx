@@ -1,8 +1,8 @@
-// Jobs: the first screen, laid out like Mail. Mine, All and Closed at the top when there is more
-// than one to pick, My Items when anything is assigned to you, then the jobs, each with how much is
-// open, how much is ready and how much waits. Admins make jobs with the plus in the bar, and swipe a
-// job to close or delete it, or hold it down to change its name and address too. People, Companies,
-// Templates, Item Form and your account are under Me, the round button in the bar.
+// Jobs: the first screen, Site Office style. Mine, All and Closed at the top when there is more than
+// one to pick, My Items when anything is assigned to you, then the jobs, each with how much is open,
+// how much is ready and how much waits. Admins make jobs with the plus in the bar, and swipe a job to
+// close or delete it, or hold it down to change its name and address too. People, Companies,
+// Templates, Item Form and your account are under Me, the square button in the bar.
 
 import { assignedTo, isAdmin, SAMPLE_JOB, type Job } from '@punch/core';
 import { router } from 'expo-router';
@@ -12,7 +12,7 @@ import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { useJobActions } from '@/components/JobActions';
 import { useSampleJob } from '@/components/useSampleJob';
-import { Button, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, Segmented, SwipeRow, Text, type BarItem, type SwipeAction } from '@/ui';
+import { Button, ChipRow, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, SectionLabel, Stamp, SwipeRow, Text, type BarItem, type SwipeAction } from '@/ui';
 
 const newJob = () => router.push('/jobs/new');
 
@@ -52,7 +52,9 @@ export default function JobsScreen() {
       search={{ value: query, onChange: setQuery, placeholder: 'Search jobs' }}
       tab={{ active: 'jobs' }}
     >
-      {choices.length > 1 ? <Segmented<Show> options={choices} value={show} onChange={setShow} style={styles.show} testID="show" /> : null}
+      {choices.length > 1 ? (
+        <ChipRow chips={choices.map(([key, label]) => ({ key, label, on: show === key, onPress: () => setShow(key), testID: `show-${key}` }))} style={styles.show} />
+      ) : null}
       {me && show !== 'closed' ? <MyItemsRow personId={me.id} /> : null}
       {open.length === 0 && show !== 'closed' ? (
         <EmptyState icon="house.fill" title="No Jobs Yet" message={admin ? 'Set up a job, or try everything on the Sample Job first.' : 'Your jobs show here once you are on one.'}>
@@ -68,9 +70,12 @@ export default function JobsScreen() {
           {q ? `No job matches “${query.trim()}”.` : 'No jobs here.'}
         </Text>
       ) : (
-        <Panel style={styles.jobs}>
-          <JobRows jobs={found} />
-        </Panel>
+        <>
+          <SectionLabel label={q ? `${found.length} ${found.length === 1 ? 'result' : 'results'}` : `${found.length} ${found.length === 1 ? 'job' : 'jobs'}`} />
+          <Panel style={styles.jobs}>
+            <JobRows jobs={found} />
+          </Panel>
+        </>
       )}
       {admin && open.length > 0 && show !== 'closed' && !hasSample && !q ? (
         <View style={styles.sample}>
@@ -101,7 +106,7 @@ function MyItemsRow({ personId }: { personId: string }) {
         accessibilityLabel={`My Items, ${mine.length} open, ${ready} ready`}
         testID="my-items"
       >
-        <Text weight="600">My Items</Text>
+        <Text weight="500">My Items</Text>
         <MetaLine
           facts={[
             `${mine.length} open`,
@@ -154,33 +159,45 @@ function JobRow({ job, last, actions }: { job: Job; last: boolean; actions: Retu
         onLongPress={actions.admin ? () => actions.menu(job, counts) : undefined}
         accessibilityLabel={said}
         testID={`job-${job.id}`}
+        style={styles.jobRow}
       >
-        <Text variant="headline" numberOfLines={1}>
-          {job.name}
-        </Text>
-        {job.address ? (
-          <Text variant="subheadline" color={colors.secondary} numberOfLines={1}>
-            {job.address}
+        <View style={styles.jobName}>
+          <Stamp color={!job.closed && started ? colors.okFill : colors.quiet} size={7} />
+          <Text weight="500" numberOfLines={1} style={styles.jobTitle}>
+            {job.name}
           </Text>
-        ) : null}
-        <MetaLine
-          facts={
-            job.closed
-              ? [`${items.filter((i) => i.status === 'complete').length} complete`]
-              : started
-                ? [`${open.length} open`, ready > 0 ? { text: `${ready} ready`, color: colors.ok } : null, waiting > 0 ? `${waiting} waiting` : null]
-                : ['Nothing on the list yet']
-          }
-        />
+        </View>
+        <View style={styles.jobBody}>
+          {job.address ? (
+            <Text variant="subheadline" color={colors.secondary} numberOfLines={1}>
+              {job.address}
+            </Text>
+          ) : null}
+          <MetaLine
+            style={styles.jobMeta}
+            facts={
+              job.closed
+                ? [`${items.filter((i) => i.status === 'complete').length} complete`]
+                : started
+                  ? [{ text: `${open.length} open`, color: colors.label }, ready > 0 ? { text: `${ready} ready`, color: colors.ok } : null, waiting > 0 ? `${waiting} waiting` : null]
+                  : [{ text: 'Nothing on the list yet', color: colors.tint }]
+            }
+          />
+        </View>
       </LedgerRow>
     </SwipeRow>
   );
 }
 
 const styles = StyleSheet.create({
-  show: { marginHorizontal: layout.margin, marginBottom: 16 },
-  mine: { marginBottom: 16 },
+  show: { marginBottom: 8 },
+  mine: { marginBottom: 4 },
   jobs: { marginBottom: 8 },
+  jobRow: { paddingVertical: 13 },
+  jobName: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  jobTitle: { flex: 1, fontSize: 16, lineHeight: 21 },
+  jobBody: { paddingLeft: 15, gap: 3 },
+  jobMeta: { marginTop: 3 },
   emptyAction: { marginTop: 14, gap: 10, alignSelf: 'stretch' },
   none: { marginHorizontal: layout.inset, marginTop: 24 },
   sample: { marginHorizontal: layout.margin, marginTop: 8 },

@@ -1,6 +1,6 @@
-// One location's items (or one company's or person's, or what they wait on), laid out like a list
-// in Reminders: the location's counts under its title, then its items in white rounded cards by who
-// they are assigned to, each with a status tag and a short note. Completed items wait under Completed at the end, which opens and closes with a tap
+// One location's items (or one company's or person's, or what they wait on), Site Office style: the
+// location's counts under its title, then its items in white panels by who they are assigned to, each
+// with a status pill and a short note. Completed items wait under Completed at the end, which opens and closes with a tap
 // (open from the start when View has Show Completed on). In a location the end of the list has New
 // Item, Common Tasks and the next location of the walk; Capture in the bottom bar takes the photo
 // here. Ready and Waiting list the job's items by state, by company. Drafts lists what was saved to
@@ -572,12 +572,12 @@ export default function GroupScreen() {
                       trail={
                         <>
                           <Touchable feedback="opacity" onPress={() => void pasteHere()} accessibilityRole="button" testID="paste-here" hitSlop={8}>
-                            <Text weight="600" color={colors.tint}>
+                            <Text variant="label" weight="600" color={colors.tint}>
                               Paste Here
                             </Text>
                           </Touchable>
                           <Touchable feedback="opacity" onPress={() => clipboard.clear()} accessibilityRole="button" accessibilityLabel="Forget what was copied" testID="paste-clear" hitSlop={10}>
-                            <Icon name="xmark.circle.fill" size={20} color={colors.circle} />
+                            <Icon name="xmark" size={15} color={colors.quiet} />
                           </Touchable>
                         </>
                       }
@@ -591,7 +591,9 @@ export default function GroupScreen() {
                 {selecting ? (
                   <View style={styles.picking}>
                     <Touchable feedback="opacity" onPress={pickAll} accessibilityRole="button" testID="pick-all" hitSlop={8}>
-                      <Text color={colors.tint}>{allPicked ? "Deselect All" : "Select All"}</Text>
+                      <Text variant="label" weight="600" color={colors.tint}>
+                        {allPicked ? "Deselect All" : "Select All"}
+                      </Text>
                     </Touchable>
                     {canDrag ? (
                       <Text variant="footnote" color={colors.secondary} style={{ flex: 1, textAlign: "right" }} numberOfLines={2}>
@@ -675,16 +677,16 @@ export default function GroupScreen() {
                   testID="completed-toggle"
                   style={styles.doneHeader}
                 >
-                  <Text variant="footnote" color={colors.secondary} style={styles.doneLabel}>
+                  <Text variant="label" color={colors.secondary} style={styles.doneLabel}>
                     Completed
                   </Text>
-                  <Text variant="footnote" color={colors.secondary} tabular testID="completed-count">
+                  <Text variant="label" color={colors.secondary} tabular testID="completed-count">
                     {done.length}
                   </Text>
                   <Icon name={doneShown ? "chevron.down" : "chevron.right"} size={12} weight="semibold" color={colors.secondary} />
                 </Touchable>
               ) : section.title ? (
-                <SectionLabel label={section.title} testID={`section-${section.key}`} />
+                <SectionLabel label={section.title} style={styles.sectionLabel} testID={`section-${section.key}`} />
               ) : (
                 <View style={{ height: 8 }} />
               )
@@ -694,17 +696,21 @@ export default function GroupScreen() {
               inLocation && !selecting ? (
                 <Panel style={styles.tail}>
                   <LedgerRow onPress={newItem} chevron={false} lead={<IconTile name="plus" />} testID="new-item-row">
-                    <Text color={colors.tint}>New Item</Text>
+                    <Text variant="label" color={colors.tint}>
+                      New Item
+                    </Text>
                   </LedgerRow>
                   <LedgerRow onPress={() => setCommon(true)} chevron={false} lead={<IconTile name="checklist" />} testID="common-tasks-row" last={!next && !previous}>
-                    <Text color={colors.tint}>Common Tasks</Text>
+                    <Text variant="label" color={colors.tint}>
+                      Common Tasks
+                    </Text>
                   </LedgerRow>
                   {next ? (
                     <LedgerRow
                       onPress={() => goRoom(next.id)}
                       lead={<IconTile name="arrow" color={colors.secondary} />}
                       trail={
-                        <Text color={colors.secondary} numberOfLines={1}>
+                        <Text variant="callout" numberOfLines={1}>
                           {next.label}
                         </Text>
                       }
@@ -712,7 +718,9 @@ export default function GroupScreen() {
                       last={!previous}
                       accessibilityLabel={`Next location, ${next.label}`}
                     >
-                      <Text>Next</Text>
+                      <Text variant="label" color={colors.secondary}>
+                        Next
+                      </Text>
                     </LedgerRow>
                   ) : null}
                   {previous ? (
@@ -720,7 +728,7 @@ export default function GroupScreen() {
                       onPress={() => goRoom(previous.id)}
                       lead={<IconTile name="arrow.left" color={colors.secondary} />}
                       trail={
-                        <Text color={colors.secondary} numberOfLines={1}>
+                        <Text variant="callout" numberOfLines={1}>
                           {previous.label}
                         </Text>
                       }
@@ -728,7 +736,9 @@ export default function GroupScreen() {
                       last
                       accessibilityLabel={`Previous location, ${previous.label}`}
                     >
-                      <Text>Previous</Text>
+                      <Text variant="label" color={colors.secondary}>
+                        Previous
+                      </Text>
                     </LedgerRow>
                   ) : null}
                 </Panel>
@@ -772,16 +782,19 @@ const styles = StyleSheet.create({
   states: { marginHorizontal: layout.margin, marginTop: 2, marginBottom: 4 },
   card: { marginTop: 16 },
   picking: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: layout.inset, paddingTop: 4, paddingBottom: 8 },
+  sectionLabel: { marginTop: 16, marginBottom: 8 },
   doneHeader: {
     minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginHorizontal: layout.margin + layout.rowPadding,
+    marginHorizontal: layout.inset,
     marginTop: 18,
-    marginBottom: 4,
+    marginBottom: 8,
+    borderBottomWidth: layout.hairline,
+    borderBottomColor: colors.border,
   },
-  doneLabel: { flex: 1 },
-  tail: { marginTop: 24 },
+  doneLabel: { flex: 1, fontSize: 11 },
+  tail: { marginTop: 18 },
   dragRow: { paddingBottom: 8 },
 });

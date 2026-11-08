@@ -39,7 +39,7 @@ export function SpreadsheetSheet({
       testID="spreadsheet-sheet"
     >
       <ScrollView contentContainerStyle={styles.page}>
-        <Text variant="footnote" weight="600" color={colors.secondary} style={styles.file}>
+        <Text variant="stamp" color={colors.secondary} style={styles.file}>
           {fileName}
         </Text>
         <Text variant="subheadline" color={colors.secondary} style={styles.about}>
@@ -49,7 +49,7 @@ export function SpreadsheetSheet({
           <View>
             <View style={[styles.row, styles.head]}>
               {SHEET_COLUMNS.map((c) => (
-                <Text key={c} variant="footnote" weight="600" color={colors.label} numberOfLines={1} style={[styles.cell, { width: width(c) }]}>
+                <Text key={c} variant="stamp" weight="600" color={colors.label} numberOfLines={1} style={[styles.cell, { width: width(c) }]}>
                   {c}
                 </Text>
               ))}
@@ -73,10 +73,10 @@ export function SpreadsheetSheet({
 
 const styles = StyleSheet.create({
   page: { paddingBottom: 40 },
-  file: { marginHorizontal: layout.margin + 4, marginTop: 16 },
-  about: { marginHorizontal: layout.margin + 4, marginTop: 4, marginBottom: 12 },
-  table: { marginHorizontal: layout.margin, marginBottom: 14, borderRadius: layout.radius, backgroundColor: colors.cell },
+  file: { marginHorizontal: layout.margin, marginTop: 16 },
+  about: { marginHorizontal: layout.margin, marginTop: 6, marginBottom: 12 },
+  table: { marginHorizontal: layout.margin, marginBottom: 14, borderWidth: layout.hairline, borderColor: colors.border, backgroundColor: colors.cell },
   row: { flexDirection: 'row', borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
-  head: { backgroundColor: colors.background },
+  head: { backgroundColor: colors.stripe },
   cell: { paddingHorizontal: 10, paddingVertical: 8 },
 });

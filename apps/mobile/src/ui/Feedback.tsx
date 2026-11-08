@@ -80,6 +80,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
             accessibilityLiveRegion="polite"
             role="status"
           >
+            <View style={styles.mark} />
             <Text variant="subheadline" weight="500" color={colors.onBar} style={{ flexShrink: 1 }}>
               {toast.message}
             </Text>
@@ -94,7 +95,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
                   setToast(null);
                 }}
               >
-                <Text variant="subheadline" weight="600" color={colors.oceanside}>
+                <Text variant="label" weight="600" color={colors.oceanside}>
                   {toast.action.label}
                 </Text>
               </Touchable>
@@ -109,18 +110,19 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   toastLayer: { justifyContent: 'flex-end', alignItems: 'center', zIndex: 900 },
-  // A rounded dark bar, like the iPhone's own notices: Undo in blue at its end.
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     maxWidth: 360,
     minHeight: 48,
     marginHorizontal: 16,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: 'rgba(28, 28, 30, 0.94)',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
+    backgroundColor: colors.bar,
+    borderWidth: 1,
+    borderColor: 'rgba(247, 245, 236, 0.14)',
+    boxShadow: '0 8px 24px rgba(19, 32, 40, 0.24)',
   },
+  mark: { width: 6, height: 6, backgroundColor: colors.oceanside },
 });

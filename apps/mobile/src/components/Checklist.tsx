@@ -46,7 +46,7 @@ export function Checklist({ value, onChange, editable = true }: { value: Checkli
       <SectionLabel label="Checklist" right={value.length > 0 ? checklistText(value) : undefined} rightColor={value.length > 0 && value.every((e) => e.done) ? colors.ok : colors.secondary} />
       <View style={styles.panel}>
         {value.map((e, i) => (
-          <View key={e.id} style={styles.row}>
+          <View key={e.id} style={[styles.row, i < value.length - 1 || (editable && value.length < CHECKLIST_MAX) ? styles.ruled : null]}>
             <Touchable
               feedback="highlight"
               onPress={() => toggle(e.id)}
@@ -64,15 +64,14 @@ export function Checklist({ value, onChange, editable = true }: { value: Checkli
             </Touchable>
             {editable ? (
               <Touchable feedback="opacity" onPress={() => drop(e.id)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Take off ${e.text}`} testID={`step-remove-${i}`} style={styles.remove}>
-                <Icon name="xmark.circle.fill" size={18} color={colors.circle} />
+                <Icon name="xmark" size={14} color={colors.quiet} />
               </Touchable>
             ) : null}
-            {i < value.length - 1 || (editable && value.length < CHECKLIST_MAX) ? <View style={styles.rule} /> : null}
           </View>
         ))}
         {editable && value.length < CHECKLIST_MAX ? (
           <View style={[styles.row, styles.addRow]}>
-            <Icon name="plus.circle.fill" size={22} color={colors.tint} />
+            <Icon name="plus" size={16} color={colors.tint} weight="medium" />
             <TextInput
               value={typing}
               onChangeText={type}
@@ -96,14 +95,13 @@ export function Checklist({ value, onChange, editable = true }: { value: Checkli
 }
 
 const styles = StyleSheet.create({
-  panel: { marginHorizontal: layout.margin, borderRadius: layout.radius, overflow: 'hidden', backgroundColor: colors.cell },
+  panel: { marginHorizontal: layout.margin, marginTop: 8, backgroundColor: colors.cell, borderWidth: layout.hairline, borderColor: colors.border },
   row: { flexDirection: 'row', alignItems: 'center', minHeight: 48, backgroundColor: colors.cell },
-  // The line under a step starts where the words do, past the circle.
-  rule: { position: 'absolute', left: layout.rowPadding + 22 + 12, right: 0, bottom: 0, height: 0, borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
+  ruled: { borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
   step: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: layout.rowPadding, paddingVertical: 11 },
   text: { flex: 1 },
   crossed: { textDecorationLine: 'line-through', textDecorationColor: colors.secondary },
   remove: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  addRow: { gap: 12, paddingLeft: layout.rowPadding },
+  addRow: { gap: 12, paddingLeft: layout.rowPadding + 3 },
   input: { ...fieldFont('body'), flex: 1, minHeight: 48, paddingVertical: 0, color: colors.label, outlineWidth: 0 },
 });

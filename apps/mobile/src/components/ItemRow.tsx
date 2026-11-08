@@ -1,10 +1,10 @@
-// One item in a list, as Reminders draws its reminders: the circle to check it off, the title, then
-// a status tag (Ready, Waiting, To Be Quoted, Draft, Complete) with a short note beside it: what it
+// One item in a list, Site Office style: the square box to check it off, the title, then a status
+// pill (Ready, Waiting, To Be Quoted, Draft, Complete) with a short mono note beside it: what it
 // waits on, or what a draft still needs. Where it is and who does it go under that in lists that are
-// not one location's or one company's. Its photo sits at the end as a rounded thumbnail; an open item
-// with no photo yet has an empty dashed slot: tap it to take the photo. How many comments it has
-// shows too. Swipe left for Ready and Remove. Each row is a piece of a white rounded card: the first
-// and last get the corners, and the thin lines between rows start where the words do.
+// not one location's or one company's. Its photo sits at the end; an open item with no photo yet has
+// an empty dashed slot: tap it to take the photo. How many comments it has shows too. Swipe left for
+// Ready and Remove. Rows sit in a white panel, every other one striped; the first and last close the
+// panel's edges.
 
 import { commentCountText, freesText, holdText, hoursText, kindText, missingDetails, needsText, waitingOnText, type Freed, type HoldLookups, type Item, type Photo } from '@punch/core';
 import { memo, type ReactNode } from 'react';
@@ -53,6 +53,7 @@ export const ItemRow = memo(function ItemRow({
   holds,
   first = false,
   last,
+  stripe = false,
   checking,
   onOpen,
   onCheck,
@@ -79,10 +80,12 @@ export const ItemRow = memo(function ItemRow({
   comments?: number;
   /** The job's items and visits: to name the tasks it waits on and when they are scheduled. */
   holds?: HoldLookups;
-  /** The first row of its card: gets the top corners. */
+  /** The first row of its panel: draws the panel's top edge. */
   first?: boolean;
-  /** The last row of its card: gets the bottom corners and no line under it. */
+  /** The last row of its panel: draws the panel's bottom edge. */
   last: boolean;
+  /** Every other row is striped. */
+  stripe?: boolean;
   /** Just checked: shows complete for a moment before it leaves the list. */
   checking: boolean;
   onOpen: (item: Item) => void;
@@ -108,7 +111,7 @@ export const ItemRow = memo(function ItemRow({
   const open = item.status === 'open' && !checking;
   const title = item.title || 'No title yet';
   const status = itemStatus(item, { holds, checking, note, completedBy });
-  // The type, unless the tag already says it: To Be Quoted is the Additional work not priced yet.
+  // The type, unless the pill already says it: To Be Quoted is the Additional work not priced yet.
   const kind = item.kind === 'completion' || item.unfinished ? undefined : status.tone === 'quote' ? 'Additional' : kindText(item);
   const time = item.hours !== null && item.hours > 0 && open ? hoursText(item.hours) : undefined;
   const frees = open && freed ? freesText(freed) || undefined : undefined;
@@ -130,7 +133,7 @@ export const ItemRow = memo(function ItemRow({
     .join(', ');
 
   return (
-    <SwipeRow actions={actions} style={[styles.swipe, first ? styles.first : null, last ? styles.last : null]}>
+    <SwipeRow actions={actions} style={[styles.swipe, first ? styles.first : null, last ? styles.last : styles.ruled]}>
       <View testID={`item-${item.id}`}>
         <Touchable
           feedback="highlight"
@@ -138,7 +141,7 @@ export const ItemRow = memo(function ItemRow({
           onPress={() => (select ? select.onToggle(item) : onOpen(item))}
           onLongPress={onLongPress && !select ? () => onLongPress(item) : undefined}
           delayLongPress={450}
-          style={styles.row}
+          style={[styles.row, stripe ? styles.stripe : null]}
           accessibilityRole={select ? 'checkbox' : 'button'}
           aria-checked={select ? select.picked : undefined}
           accessibilityLabel={said}
@@ -147,7 +150,7 @@ export const ItemRow = memo(function ItemRow({
           <View style={styles.lead}>
             {select ? (
               <View style={[styles.pick, select.picked ? styles.picked : null]} testID={`pick-${item.id}`}>
-                {select.picked ? <Icon name="checkmark" size={13} color={colors.white} weight="bold" /> : null}
+                {select.picked ? <Icon name="checkmark" size={14} color={colors.onBar} weight="bold" /> : null}
               </View>
             ) : item.unfinished ? (
               <View style={styles.draft}>
@@ -160,18 +163,12 @@ export const ItemRow = memo(function ItemRow({
           <View style={styles.text}>
             <View style={styles.titleLine}>
               {numbered ? (
-                <View style={styles.step}>
-                  <Text variant="footnote" weight="700" tabular testID={`step-${item.id}`}>
-                    {step}
-                  </Text>
-                </View>
+                <Text variant="stamp" weight="700" color={colors.label} tabular style={styles.step} testID={`step-${item.id}`}>
+                  {step}
+                </Text>
               ) : null}
+              {item.priority && open ? <View style={styles.priority} accessibilityLabel="Priority" /> : null}
               <Text numberOfLines={2} color={done || !item.title ? colors.secondary : colors.label} style={[styles.title, done ? styles.crossed : null]}>
-                {item.priority && open ? (
-                  <Text color={colors.destructive} weight="700" accessibilityLabel="Priority">
-                    {'! '}
-                  </Text>
-                ) : null}
                 {title}
               </Text>
             </View>
@@ -179,13 +176,13 @@ export const ItemRow = memo(function ItemRow({
               <Pill text={status.text} tone={status.tone} />
               {confirmed ? <Pill text="Confirmed" tone="ok" /> : null}
               {status.note ? (
-                <Text variant="subheadline" color={colors.secondary} numberOfLines={2} style={styles.note} testID={done ? `done-${item.id}` : undefined}>
+                <Text variant="stamp" color={colors.secondary} numberOfLines={2} style={styles.note} testID={done ? `done-${item.id}` : undefined}>
                   {status.note}
                 </Text>
               ) : null}
             </View>
             {where ? (
-              <Text variant="subheadline" color={colors.secondary} numberOfLines={2}>
+              <Text variant="stamp" color={colors.secondary} numberOfLines={2} style={styles.where}>
                 {where}
               </Text>
             ) : null}
@@ -193,15 +190,14 @@ export const ItemRow = memo(function ItemRow({
           {talk ? (
             <View style={styles.talk} accessible={false}>
               <Icon name="message" size={14} color={colors.secondary} />
-              <Text variant="subheadline" color={colors.secondary} tabular>
+              <Text variant="label" color={colors.secondary} tabular>
                 {comments}
               </Text>
             </View>
           ) : null}
-          {photo ? <PhotoView photo={photo} width={PHOTO} height={PHOTO} radius={8} /> : slot ? <View style={styles.photoSpace} /> : null}
+          {photo ? <PhotoView photo={photo} width={PHOTO} height={PHOTO} /> : slot ? <View style={styles.photoSpace} /> : null}
           {trailing}
         </Touchable>
-        {last ? null : <View style={styles.rule} />}
         {slot ? (
           // Beside the row rather than in it: a button inside a button is not allowed on the web.
           <Touchable
@@ -221,37 +217,51 @@ export const ItemRow = memo(function ItemRow({
   );
 });
 
-// The line under a row starts where the words do: past the circle.
-const TEXT_START = layout.rowPadding + 22 + 12;
-
 const styles = StyleSheet.create({
-  swipe: { marginHorizontal: layout.margin, backgroundColor: colors.cell, overflow: 'hidden' },
-  first: { borderTopLeftRadius: layout.radius, borderTopRightRadius: layout.radius },
-  last: { borderBottomLeftRadius: layout.radius, borderBottomRightRadius: layout.radius },
-  rule: { position: 'absolute', left: TEXT_START, right: 0, bottom: 0, height: 0, borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
+  swipe: {
+    marginHorizontal: layout.margin,
+    backgroundColor: colors.cell,
+    borderLeftWidth: layout.hairline,
+    borderRightWidth: layout.hairline,
+    borderColor: colors.border,
+  },
+  first: { borderTopWidth: layout.hairline },
+  last: { borderBottomWidth: layout.hairline },
+  ruled: { borderBottomWidth: layout.fine, borderBottomColor: colors.separator },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: layout.rowPadding, paddingVertical: 11, backgroundColor: colors.cell, minHeight: 60 },
+  stripe: { backgroundColor: '#F7F9F9' },
   lead: { paddingTop: 0 },
-  text: { flex: 1, minWidth: 0, gap: 4 },
+  text: { flex: 1, minWidth: 0, gap: 5 },
   titleLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   title: { flex: 1 },
-  // Done is crossed off, as in most to do lists.
+  priority: { width: 6, height: 6, marginTop: 7, backgroundColor: colors.destructive },
+  step: {
+    minWidth: 22,
+    height: 20,
+    marginTop: 1,
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    textAlign: 'center',
+    lineHeight: 18,
+    overflow: 'hidden',
+  },
   crossed: { textDecorationLine: 'line-through', textDecorationColor: colors.secondary },
-  step: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.chip },
-  statusLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 4, minWidth: 0 },
-  note: { flexShrink: 1 },
+  statusLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 5, minWidth: 0 },
+  note: { flexShrink: 1, letterSpacing: 1 },
+  where: { letterSpacing: 1.1 },
   talk: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingTop: 2 },
-  pick: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.circle, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cell },
+  pick: { width: 22, height: 22, borderWidth: 1.5, borderColor: colors.quiet, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cell },
   picked: { borderColor: colors.action, backgroundColor: colors.action },
-  draft: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.circle, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  draft: { width: 22, height: 22, borderWidth: 1.5, borderColor: colors.quiet, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   photoSpace: { width: PHOTO, height: PHOTO },
   photoSlot: {
     position: 'absolute',
     top: 11,
     width: PHOTO,
     height: PHOTO,
-    borderRadius: 8,
     borderWidth: 1.25,
-    borderColor: colors.circle,
+    borderColor: colors.quiet,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',

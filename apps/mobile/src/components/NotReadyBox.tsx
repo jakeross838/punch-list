@@ -140,9 +140,8 @@ export function NotReadyBox({
         aria-checked={on}
         accessibilityLabel={[t.title, company, where].filter(Boolean).join(', ')}
         testID={`waiting-task-${t.id}`}
-        style={styles.row}
+        style={[styles.row, i > 0 ? styles.rule : null]}
       >
-        {i > 0 ? <View style={styles.ruleLine} /> : null}
         <Checkbox checked={on} label={t.title} />
         <View style={styles.rowText}>
           <Text numberOfLines={1}>{t.title}</Text>
@@ -239,10 +238,9 @@ export function NotReadyBox({
                   onPress={() => setNewTask({ title: '', assignee: null })}
                   accessibilityRole="button"
                   testID="waiting-add-task"
-                  style={styles.row}
+                  style={[styles.row, here.length > 0 ? styles.rule : null]}
                 >
-                  {here.length > 0 ? <View style={styles.ruleLine} /> : null}
-                  <Icon name="plus.circle.fill" size={22} color={colors.tint} />
+                  <Icon name="plus" size={15} color={colors.tint} weight="semibold" />
                   <Text color={colors.tint}>Add a Task</Text>
                 </Touchable>
               )}
@@ -268,9 +266,8 @@ export function NotReadyBox({
                 aria-checked={on}
                 accessibilityLabel={w}
                 testID={`waiting-${w}`}
-                style={styles.row}
+                style={[styles.row, i > 0 ? styles.rule : null]}
               >
-                {i > 0 ? <View style={styles.ruleLine} /> : null}
                 <Checkbox checked={on} label={w} />
                 <Text numberOfLines={1} style={styles.rowText}>
                   {w}
@@ -279,8 +276,7 @@ export function NotReadyBox({
             );
           })}
           {addingWho ? (
-            <View style={styles.row}>
-              <View style={styles.ruleLine} />
+            <View style={[styles.row, styles.rule]}>
               <TextInput
                 value={newWho}
                 onChangeText={setNewWho}
@@ -302,9 +298,8 @@ export function NotReadyBox({
               </Touchable>
             </View>
           ) : (
-            <Touchable feedback="highlight" onPress={() => setAddingWho(true)} accessibilityRole="button" testID="waiting-other" style={styles.row}>
-              <View style={styles.ruleLine} />
-              <Icon name="plus.circle.fill" size={22} color={colors.tint} />
+            <Touchable feedback="highlight" onPress={() => setAddingWho(true)} accessibilityRole="button" testID="waiting-other" style={[styles.row, styles.rule]}>
+              <Icon name="plus" size={15} color={colors.tint} weight="semibold" />
               <Text color={colors.tint}>Someone Else</Text>
             </Touchable>
           )}
@@ -336,8 +331,6 @@ const styles = StyleSheet.create({
   search: { marginHorizontal: layout.margin, marginBottom: 14 },
   row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: layout.rowPadding, backgroundColor: colors.cell },
   rule: { borderTopWidth: layout.hairline, borderTopColor: colors.separator },
-  // The line between two rows starts where the words do, past the circle.
-  ruleLine: { position: 'absolute', top: 0, left: layout.rowPadding + 22 + 12, right: 0, height: 0, borderTopWidth: layout.hairline, borderTopColor: colors.separator },
   rowText: { flex: 1, gap: 1 },
   input: { ...fieldFont('body'), flex: 1, height: 46, color: colors.label, outlineWidth: 0 },
   buttons: { justifyContent: 'flex-end', gap: 22 },

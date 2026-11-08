@@ -1,5 +1,5 @@
-// The top of a sheet, as the iPhone draws it: a grabber, then Cancel (or the other choice) on the
-// left, the title in the middle and the main button (Done, Save) on the right in bold blue.
+// The top of a sheet, Site Office style: a grabber, the title on the left in Space Grotesk, and
+// the buttons on the right: the other choice outlined, the main one filled.
 
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -11,29 +11,29 @@ export function SheetHeader({ title, left, right, eyebrow }: { title: string; le
     <View style={styles.head}>
       <View style={styles.grabber} />
       <View style={styles.row}>
-        <View style={[styles.side, styles.left]}>{left ? <BarButtonView {...left} variant={left.variant ?? 'plain'} /> : null}</View>
-        <View style={styles.title}>
-          <Text variant="sheetTitle" numberOfLines={1} align="center" accessibilityRole="header">
-            {title}
-          </Text>
+        <View style={styles.titleBlock}>
           {eyebrow ? (
-            <Text variant="footnote" color={colors.secondary} numberOfLines={1} align="center">
+            <Text variant="eyebrow" color={colors.secondary} numberOfLines={1}>
               {eyebrow}
             </Text>
           ) : null}
+          <Text variant="sheetTitle" numberOfLines={2} accessibilityRole="header">
+            {title}
+          </Text>
         </View>
-        <View style={[styles.side, styles.right]}>{right ? <BarButtonView {...right} variant={right.variant ?? 'prominent'} /> : null}</View>
+        <View style={styles.buttons}>
+          {left ? <BarButtonView {...left} variant={left.variant ?? 'plain'} /> : null}
+          {right ? <BarButtonView {...right} /> : null}
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  head: { backgroundColor: colors.background, borderBottomWidth: layout.hairline, borderBottomColor: colors.separator },
-  grabber: { alignSelf: 'center', width: 36, height: 5, borderRadius: 2.5, marginTop: 6, backgroundColor: colors.quiet, opacity: 0.6 },
-  row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: layout.margin, paddingVertical: 4 },
-  side: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  left: { justifyContent: 'flex-start' },
-  right: { justifyContent: 'flex-end' },
-  title: { flexShrink: 1, maxWidth: '56%', alignItems: 'center' },
+  head: { backgroundColor: colors.background, borderBottomWidth: layout.hairline, borderBottomColor: colors.border },
+  grabber: { alignSelf: 'center', width: 36, height: 4, marginTop: 8, backgroundColor: colors.quiet, opacity: 0.6 },
+  row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingTop: 10, paddingBottom: 12, paddingLeft: layout.inset, paddingRight: layout.margin },
+  titleBlock: { flex: 1, minWidth: 0, gap: 5, paddingTop: 2 },
+  buttons: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 2 },
 });

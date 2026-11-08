@@ -1,5 +1,5 @@
-// One item, everything about it in one calm place, laid out like the iPhone's own detail screens,
-// and every part of it changes right where it is: retype the title, tick Ready, pick another location, mark up a photo. Each
+// One item, everything about it in one calm place, Site Office style, and every part of it changes
+// right where it is: retype the title, tick Ready, pick another location, mark up a photo. Each
 // change saves as it is made. Up front: the photo, the status and who it is assigned to, then the
 // title, the location, Assigned To and Ready; the type, the order, Priority and the added fields wait under
 // Details. The checklist, the comments and the history follow. Complete is the big button along the
@@ -412,7 +412,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
       <View style={styles.head} testID="item-summary">
         <View style={styles.headText}>
           <Eyebrow text={[label, item.unfinished ? 'Draft' : kindText(item)].join(' · ')} marker={item.priority && item.status === 'open' ? colors.destructive : undefined} />
-          <Text variant="footnote" color={colors.secondary} numberOfLines={1}>
+          <Text variant="stamp" color={colors.secondary} numberOfLines={1}>
             {added}
           </Text>
         </View>
@@ -421,11 +421,11 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
       {photo ? (
         <View style={styles.photoBlock}>
           <Touchable feedback="opacity" onPress={() => setViewing(photo)} accessibilityRole="button" accessibilityLabel="Show the whole photo">
-            <PhotoView photo={photo} width={photoWidth} height={photoHeight} radius={12} testID="item-photo" />
+            <PhotoView photo={photo} width={photoWidth} height={photoHeight} testID="item-photo" />
           </Touchable>
           {photos.length > 1 ? (
             <View style={styles.count} pointerEvents="none">
-              <Text variant="footnote" weight="600" color={colors.white}>
+              <Text variant="stamp" color={colors.onBar}>
                 {Math.min(shown, photos.length - 1) + 1} of {photos.length}
               </Text>
             </View>
@@ -433,8 +433,10 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
         </View>
       ) : (
         <Touchable feedback="opacity" onPress={addPhoto} accessibilityRole="button" testID="add-photo" style={styles.noPhoto}>
-          <Icon name="camera" size={24} color={colors.tint} />
-          <Text color={colors.tint}>Add a Photo</Text>
+          <Icon name="camera" size={22} color={colors.secondary} />
+          <Text variant="label" color={colors.tint}>
+            Add a Photo
+          </Text>
         </Touchable>
       )}
       {photos.length > 1 ? (
@@ -448,7 +450,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
               accessibilityLabel={`Photo ${i + 1}`}
               style={[styles.thumb, i === shown ? styles.thumbOn : null]}
             >
-              <PhotoView photo={p} width={44} height={44} radius={6} />
+              <PhotoView photo={p} width={44} height={44} />
             </Touchable>
           ))}
         </View>
@@ -456,14 +458,14 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
       {photo ? (
         <View style={styles.photoActions}>
           <Touchable feedback="opacity" onPress={() => setMarking(photo)} accessibilityRole="button" accessibilityLabel="Mark Up" testID="mark-up" style={styles.photoAction}>
-            <Icon name="pencil.tip" size={15} color={colors.tint} weight="medium" />
-            <Text variant="subheadline" weight="600" color={colors.tint}>
+            <Icon name="pencil.tip" size={14} color={colors.label} />
+            <Text variant="button" color={colors.label}>
               Mark Up
             </Text>
           </Touchable>
           <Touchable feedback="opacity" onPress={addPhoto} accessibilityRole="button" accessibilityLabel="Add Photo" testID="add-photo" style={styles.photoAction}>
-            <Icon name="plus" size={15} color={colors.tint} weight="semibold" />
-            <Text variant="subheadline" weight="600" color={colors.tint}>
+            <Icon name="plus" size={14} color={colors.label} weight="medium" />
+            <Text variant="button" color={colors.label}>
               Add Photo
             </Text>
           </Touchable>
@@ -507,7 +509,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
                 subtitle={latest ? `${commentAuthor(latest, look)}: ${latest.body}` : undefined}
                 value={thread.length > 0 ? String(thread.length) : undefined}
                 onPress={() => setShowComments((v) => !v)}
-                right={<Icon name={showComments ? 'chevron.down' : 'chevron.right'} size={15} color={colors.chevron} weight="semibold" />}
+                right={<Icon name={showComments ? 'chevron.down' : 'chevron.right'} size={14} color={colors.quiet} weight="medium" />}
                 testID="item-comments-row"
               />
             </ListSection>
@@ -530,7 +532,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
                 subtitle={`${newest.who} ${newest.action}, ${whenOf(newest.at)}`}
                 value={history.length > 1 ? `${history.length}` : undefined}
                 onPress={() => setShowHistory((v) => !v)}
-                right={<Icon name={showHistory ? 'chevron.down' : 'chevron.right'} size={15} color={colors.chevron} weight="semibold" />}
+                right={<Icon name={showHistory ? 'chevron.down' : 'chevron.right'} size={14} color={colors.quiet} weight="medium" />}
                 testID="item-history-row"
               />
             </ListSection>
@@ -574,27 +576,26 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: layout.inset, paddingTop: 8, paddingBottom: 12 },
-  headText: { flex: 1, minWidth: 0, gap: 2 },
+  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: layout.inset, paddingTop: 16, paddingBottom: 12 },
+  headText: { flex: 1, minWidth: 0, gap: 6 },
   photoBlock: { marginHorizontal: layout.margin },
-  count: { position: 'absolute', left: 10, bottom: 10, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 11, backgroundColor: 'rgba(0, 0, 0, 0.55)' },
+  count: { position: 'absolute', left: 8, bottom: 8, paddingHorizontal: 7, paddingVertical: 3, backgroundColor: 'rgba(19, 32, 40, 0.78)' },
   // Under the photo, so they never cover its marks.
   photoActions: { flexDirection: 'row', gap: 8, marginTop: 10, marginHorizontal: layout.margin },
-  photoAction: { height: 34, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 17, backgroundColor: colors.chip },
+  photoAction: { height: 36, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, backgroundColor: colors.cell, borderWidth: 1, borderColor: colors.borderStrong },
   noPhoto: {
     marginHorizontal: layout.margin,
     height: 96,
-    borderRadius: 12,
-    borderWidth: 1.5,
+    borderWidth: 1.25,
     borderStyle: 'dashed',
-    borderColor: colors.circle,
+    borderColor: colors.quiet,
     backgroundColor: colors.cell,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   thumbs: { flexDirection: 'row', gap: 6, marginHorizontal: layout.margin, marginTop: 8 },
-  thumb: { padding: 2, borderRadius: 8, borderWidth: 2, borderColor: 'transparent' },
+  thumb: { padding: 2, borderWidth: 1, borderColor: 'transparent' },
   thumbOn: { borderColor: colors.action },
   editor: { marginTop: 14 },
   checklist: { marginTop: -6, marginBottom: 20 },

@@ -162,7 +162,7 @@ export function Facet({ title, wrap = true, children }: { title: string; wrap?: 
 }
 
 const styles = StyleSheet.create({
-  facet: { marginHorizontal: layout.margin, marginBottom: 10, padding: 14, paddingTop: 12, borderRadius: layout.radius, backgroundColor: colors.cell, gap: 10 },
+  facet: { marginHorizontal: layout.margin, marginBottom: 8, padding: 12, paddingTop: 10, borderWidth: layout.hairline, borderColor: colors.border, backgroundColor: colors.cell, gap: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   levels: { gap: 10 },
   level: { gap: 6 },

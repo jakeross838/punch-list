@@ -70,7 +70,6 @@ export const PhotoView = memo(function PhotoView({
   width,
   height,
   fit = 'cover',
-  radius = 0,
   edge = fit === 'cover',
   sharp = false,
   style,
@@ -80,9 +79,9 @@ export const PhotoView = memo(function PhotoView({
   width: number;
   height: number;
   fit?: 'cover' | 'contain';
-  /** Rounded corners, as the iPhone's thumbnails have. */
+  /** Kept for the screens that pass it: photos are square. */
   radius?: number;
-  /** A thin edge, so a pale photo still reads as a photo. */
+  /** A thin slate edge, so a pale photo still reads as a photo. */
   edge?: boolean;
   /** Kept at its full size, for zooming in: the full screen viewer's photo in view. */
   sharp?: boolean;
@@ -91,7 +90,7 @@ export const PhotoView = memo(function PhotoView({
 }) {
   const shown = fitPhoto(photo, { width, height }, fit, fit === 'cover' ? markBounds(photo.marks) : null);
   return (
-    <View style={[{ width, height, borderRadius: radius, overflow: 'hidden', backgroundColor: colors.surface }, style]} testID={testID}>
+    <View style={[{ width, height, overflow: 'hidden', backgroundColor: '#D6D1C9' }, style]} testID={testID}>
       <View style={{ position: 'absolute', left: shown.left, top: shown.top, width: shown.width, height: shown.height }}>
         <Image
           source={{ uri: photo.uri }}
@@ -103,11 +102,11 @@ export const PhotoView = memo(function PhotoView({
         />
         <MarkLayer marks={photo.marks} width={shown.width} height={shown.height} />
       </View>
-      {edge ? <View pointerEvents="none" style={[styles.edge, { borderRadius: radius }]} /> : null}
+      {edge ? <View pointerEvents="none" style={styles.edge} /> : null}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  edge: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  edge: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderWidth: 1, borderColor: colors.border },
 });

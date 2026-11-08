@@ -40,12 +40,13 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pill: {
     position: 'relative',
-    height: 34,
+    height: 36,
     justifyContent: 'center',
-    paddingHorizontal: 11,
-    borderRadius: 8,
-    backgroundColor: colors.chip,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.cell,
     overflow: 'hidden',
   },
-  pillEmpty: { backgroundColor: colors.chip },
+  pillEmpty: { backgroundColor: colors.cell },
 });
