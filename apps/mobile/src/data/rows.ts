@@ -259,6 +259,7 @@ export const rowToPhoto = (r: Row, uri: string): Photo => ({
   marks: json<Mark[]>(r.marks, []),
   sortOrder: num(r.sort_order),
   removed: bool(r.removed),
+  done: bool(r.done),
   createdBy: text(r.created_by),
   createdAt: text(r.created_at),
 });

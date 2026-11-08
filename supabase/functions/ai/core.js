@@ -265,6 +265,25 @@ function standardTitlePrompt(input) {
     'Reply with only JSON: {"title": "Tighten towel bar"} with the standard title written exactly as it is above, or {"title": null}.'
   ].join("\n");
 }
+function doneCheckInput(v) {
+  const r = record(v);
+  return { title: clip(r.title, TITLE_MAX), description: clip(r.description, 300), location: clip(r.location, 60), marks: listOf(r.marks, 30, cleanMark) };
+}
+function doneCheckPrompt(input) {
+  const marks = describeMarks(input.marks);
+  return [
+    "Someone says one item on the running list of work left to do on a home builder's job is finished. Check the work from two photos.",
+    "",
+    `The item: ${input.title}${input.description ? `: ${input.description}` : ""}${input.location ? ` (in ${input.location})` : ""}`,
+    `The first picture is the photo of the problem, taken before the work.${marks.length > 0 ? " It was marked to show the problem:" : ""}`,
+    ...marks.map((m) => `- ${m}`),
+    "The second picture is the photo of the finished work.",
+    "",
+    "Does the second photo show this item done? Look only at what the item is about, in the same spot. When the second photo does not show that spot, or it is too dark or blurry to tell, say you cannot tell.",
+    "",
+    'Reply with only JSON: {"done": "yes"} when it looks done; {"done": "no", "left": "The left hinge still looks loose."} with one short sentence on what still looks left; or {"done": "unsure", "left": "The photo does not show the hinge."} with one short sentence on why.'
+  ].join("\n");
+}
 var CLAUDE_TASKS = {
   "fill-in": { tier: "sharp", maxTokens: 900, images: 1, minImages: 1, prompt: (v) => suggestPrompt(suggestInput(v)), enough: () => true },
   "say-it": { tier: "sharp", maxTokens: 3e3, images: 0, minImages: 0, prompt: (v) => sayItPrompt(sayItInput(v)), enough: (v) => sayItInput(v).words !== "" },
@@ -290,7 +309,8 @@ var CLAUDE_TASKS = {
       const x = standardTitleInput(v);
       return x.title !== "" && x.titles.length > 0;
     }
-  }
+  },
+  "done-check": { tier: "sharp", maxTokens: 300, images: 2, minImages: 2, prompt: (v) => doneCheckPrompt(doneCheckInput(v)), enough: (v) => doneCheckInput(v).title !== "" }
 };
 var isClaudeTask = (v) => typeof v === "string" && Object.hasOwn(CLAUDE_TASKS, v);
 function taskPrompt(task, input) {

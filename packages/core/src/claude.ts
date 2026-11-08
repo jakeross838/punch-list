@@ -9,7 +9,7 @@
 
 import { jsonIn } from './planReading';
 import { TITLE_MAX } from './rules';
-import { suggestPrompt, type SuggestContext } from './suggest';
+import { describeMarks, suggestPrompt, type SuggestContext } from './suggest';
 import { tidyTitle } from './titles';
 import type { Mark } from './types';
 
@@ -289,9 +289,40 @@ export function standardTitlePrompt(input: StandardTitleInput): string {
   ].join('\n');
 }
 
+// ---------- the done check: the photo of the problem and the photo of the finished work ----------
+
+export interface DoneCheckInput {
+  title: string;
+  description: string;
+  location: string;
+  /** The marks on the photo of the problem. */
+  marks: Mark[];
+}
+
+function doneCheckInput(v: unknown): DoneCheckInput {
+  const r = record(v);
+  return { title: clip(r.title, TITLE_MAX), description: clip(r.description, 300), location: clip(r.location, 60), marks: listOf(r.marks, 30, cleanMark) };
+}
+
+export function doneCheckPrompt(input: DoneCheckInput): string {
+  const marks = describeMarks(input.marks);
+  return [
+    "Someone says one item on the running list of work left to do on a home builder's job is finished. Check the work from two photos.",
+    '',
+    `The item: ${input.title}${input.description ? `: ${input.description}` : ''}${input.location ? ` (in ${input.location})` : ''}`,
+    `The first picture is the photo of the problem, taken before the work.${marks.length > 0 ? ' It was marked to show the problem:' : ''}`,
+    ...marks.map((m) => `- ${m}`),
+    'The second picture is the photo of the finished work.',
+    '',
+    'Does the second photo show this item done? Look only at what the item is about, in the same spot. When the second photo does not show that spot, or it is too dark or blurry to tell, say you cannot tell.',
+    '',
+    'Reply with only JSON: {"done": "yes"} when it looks done; {"done": "no", "left": "The left hinge still looks loose."} with one short sentence on what still looks left; or {"done": "unsure", "left": "The photo does not show the hinge."} with one short sentence on why.',
+  ].join('\n');
+}
+
 // ---------- the tasks ----------
 
-export type ClaudeTask = 'fill-in' | 'say-it' | 'same-item' | 'duplicates' | 'standard-title';
+export type ClaudeTask = 'fill-in' | 'say-it' | 'same-item' | 'duplicates' | 'standard-title' | 'done-check';
 
 export const CLAUDE_TASKS: Record<ClaudeTask, TaskSpec> = {
   'fill-in': { tier: 'sharp', maxTokens: 900, images: 1, minImages: 1, prompt: (v) => suggestPrompt(suggestInput(v)), enough: () => true },
@@ -319,6 +350,7 @@ export const CLAUDE_TASKS: Record<ClaudeTask, TaskSpec> = {
       return x.title !== '' && x.titles.length > 0;
     },
   },
+  'done-check': { tier: 'sharp', maxTokens: 300, images: 2, minImages: 2, prompt: (v) => doneCheckPrompt(doneCheckInput(v)), enough: (v) => doneCheckInput(v).title !== '' },
 };
 
 export const isClaudeTask = (v: unknown): v is ClaudeTask => typeof v === 'string' && Object.hasOwn(CLAUDE_TASKS, v);
@@ -365,6 +397,23 @@ export function costCents(model: string, usage: ClaudeUsage): number {
 // ---------- reading the answers ----------
 
 const answer = (raw: unknown) => record(typeof raw === 'string' ? jsonIn(raw) : raw);
+
+/** What Claude saw in the done photo: done, something left, or it cannot tell; with a sentence on what. */
+export interface DoneCheck {
+  verdict: 'done' | 'left' | 'unsure';
+  /** What still looks left, or why it cannot tell: one sentence, or null. */
+  note: string | null;
+}
+
+export function readDoneCheck(raw: unknown): DoneCheck | null {
+  const a = answer(raw);
+  const said = typeof a.done === 'string' ? a.done.trim().toLowerCase() : a.done === true ? 'yes' : a.done === false ? 'no' : '';
+  const verdict = said === 'yes' ? 'done' : said === 'no' ? 'left' : said === 'unsure' ? 'unsure' : null;
+  if (!verdict) return null;
+  const left = clip(a.left, 200);
+  const note = verdict === 'done' || left === '' ? null : /[.!?]$/.test(left) ? left : `${left}.`;
+  return { verdict, note: note ? note.charAt(0).toUpperCase() + note.slice(1) : null };
+}
 
 /** Which of the given numbers Claude said the new item is, or null. */
 export function readSameItem(raw: unknown, numbers: number[]): number | null {

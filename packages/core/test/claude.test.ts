@@ -12,6 +12,7 @@ import {
   likeness,
   mergedWaits,
   pairKey,
+  readDoneCheck,
   readDuplicates,
   readSameItem,
   readSayIt,
@@ -151,6 +152,26 @@ describe("Claude's tasks", () => {
     expect(readDuplicates('{"same": "1"}', [1])).toEqual([]);
     expect(readStandardTitle('{"title": "tighten towel bar"}', ['Tighten towel bar'])).toBe('Tighten towel bar');
     expect(readStandardTitle('{"title": "Something new"}', ['Tighten towel bar'])).toBeNull();
+  });
+
+  it('checks the done photo against the photo of the problem, and reads what it saw', () => {
+    const spec = CLAUDE_TASKS['done-check'];
+    expect([spec.tier, spec.images, spec.minImages]).toEqual(['sharp', 2, 2]);
+    expect(spec.enough({ title: '' })).toBe(false);
+    const words = taskPrompt('done-check', {
+      title: 'Adjust cabinet door',
+      description: 'Left of the sink, it rubs.',
+      location: 'Kitchen 109',
+      marks: [{ tool: 'circle', color: 'red', from: [0.1, 0.2], to: [0.4, 0.6] }, { tool: 'nonsense' }],
+    });
+    expect(words).toContain('The item: Adjust cabinet door: Left of the sink, it rubs. (in Kitchen 109)');
+    expect(words).toContain('A red circle around the area from 10% to 40% across and 20% to 60% down.');
+    expect(words).toContain('The second picture is the photo of the finished work.');
+    expect(readDoneCheck('{"done": "yes"}')).toEqual({ verdict: 'done', note: null });
+    expect(readDoneCheck('Here you go: {"done": "no", "left": "the left hinge still looks loose"}')).toEqual({ verdict: 'left', note: 'The left hinge still looks loose.' });
+    expect(readDoneCheck('{"done": "unsure", "left": "The photo does not show the hinge."}')).toEqual({ verdict: 'unsure', note: 'The photo does not show the hinge.' });
+    expect(readDoneCheck('{"done": "maybe"}')).toBeNull();
+    expect(readDoneCheck('nothing')).toBeNull();
   });
 });
 

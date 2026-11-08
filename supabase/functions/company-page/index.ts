@@ -2,7 +2,8 @@
 // and what the company answers there. Every call says the link's token in its body (never in the
 // address, so it stays out of logs); this checks it, talks to the database as the service role
 // through the trade_* functions alone, and signs the photos for an hour. It answers with the page as
-// it now stands.
+// it now stands. A photo of the finished work comes as a JPEG in base64: this puts it in the item's
+// folder in storage, then on the item as a done photo.
 //
 // The job's station (a tablet or a TV in the house) sends its own link as s instead: alone, for its
 // board of every company on the job; with a company, for that company's list, opened through the
@@ -38,12 +39,16 @@ const TOKEN = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The photos' addresses last this long, in seconds; the page asks again when it opens later. */
 const SIGNED_FOR = 3600;
+/** A done photo as the page sends it, in base64: made smaller on the phone first, well under this. */
+const MOST_PHOTO_CHARS = 3_000_000;
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 interface PagePhoto {
   storage_path: string;
   width: number;
   height: number;
   marks: unknown;
+  done?: boolean;
 }
 interface PageItem {
   photos: PagePhoto[];
@@ -77,7 +82,7 @@ async function page(token: string): Promise<Page | null> {
   }
   for (const item of out.items) {
     item.photos = item.photos
-      .map((p) => ({ width: p.width, height: p.height, marks: p.marks, url: signed.get(p.storage_path) ?? null }))
+      .map((p) => ({ width: p.width, height: p.height, marks: p.marks, done: p.done === true, url: signed.get(p.storage_path) ?? null }))
       .filter((p) => p.url !== null) as unknown as PagePhoto[];
   }
   return out;
@@ -109,20 +114,47 @@ async function answer(token: string, body: Record<string, unknown>): Promise<voi
     const hours = typeof body.value === 'number' && Number.isFinite(body.value) && body.value > 0 ? body.value : null;
     return call('trade_set_hours', { p_item: item, p_hours: hours, p_name: name });
   }
+  if (action === 'photo') return addPhoto(token, item, body, name, call);
   throw new Refused('That is not something the page can do');
+}
+
+/** A done photo: into the item's own folder in storage, then onto the item. */
+async function addPhoto(token: string, item: string, body: Record<string, unknown>, name: string | null, call: (fn: string, args: Record<string, unknown>) => Promise<void>): Promise<void> {
+  const data = typeof body.value === 'string' ? body.value : '';
+  const width = typeof body.width === 'number' ? Math.round(body.width) : 0;
+  const height = typeof body.height === 'number' ? Math.round(body.height) : 0;
+  if (data === '' || data.length > MOST_PHOTO_CHARS || !BASE64.test(data) || width <= 0 || height <= 0) throw new Refused('Send the photo as a JPEG');
+  const { data: folder, error } = await db.rpc('trade_photo_folder', { p_token: token, p_item: item });
+  if (error) {
+    if (error.code === '42501') throw new Refused(error.message);
+    throw error;
+  }
+  const path = `${String(folder)}/done-${crypto.randomUUID()}.jpg`;
+  const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+  const { error: upError } = await db.storage.from('photos').upload(path, bytes, { contentType: 'image/jpeg', upsert: false });
+  if (upError) throw upError;
+  try {
+    await call('trade_add_photo', { p_item: item, p_path: path, p_width: width, p_height: height, p_name: name });
+  } catch (e) {
+    // The photo did not go on the item: its file goes too.
+    await db.storage.from('photos').remove([path]);
+    throw e;
+  }
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return reply({ error: 'Use POST' }, 405);
   const raw = await req.text();
-  if (raw.length > 8000) return reply({ error: 'That is too much to send at once' }, 413);
+  if (raw.length > MOST_PHOTO_CHARS + 8000) return reply({ error: 'That is too much to send at once' }, 413);
   let body: Record<string, unknown>;
   try {
     body = JSON.parse(raw) as Record<string, unknown>;
   } catch {
     return reply({ error: 'Send the page what it asks for' }, 400);
   }
+  // Only a photo is big.
+  if (body.action !== 'photo' && raw.length > 8000) return reply({ error: 'That is too much to send at once' }, 413);
   let token = typeof body.t === 'string' ? body.t.trim().toLowerCase() : '';
   try {
     if (body.s !== undefined) {

@@ -56,6 +56,7 @@ const state = {
   comments: [{ id: 'm1', item_id: '22222222-2222-4222-8222-222222222222', body: 'Tile goes in next week.', from_company: false, author: 'Jake Ross', created_at: now }] as Json[],
 };
 const said: Json[] = [];
+const photosSent: { size: number; width: number; height: number }[] = [];
 
 function act(body: Json): { status: number; body: unknown } {
   if (body.t !== TOKEN) return { status: 404, body: { error: 'This link no longer works. Ask for a new one.' } };
@@ -76,6 +77,13 @@ function act(body: Json): { status: number; body: unknown } {
       if (!item) return { status: 403, body: { error: 'That item is not on this list' } };
       item.marked_done_at = body.value === false ? null : new Date().toISOString();
       break;
+    case 'photo': {
+      if (!item) return { status: 403, body: { error: 'That item is not on this list' } };
+      if (typeof body.value !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.value) || !(Number(body.width) > 0)) return { status: 403, body: { error: 'Send the photo as a JPEG' } };
+      photosSent.push({ size: body.value.length, width: Number(body.width), height: Number(body.height) });
+      (item.photos as Json[]).push({ url: '/photo.jpg', width: body.width, height: body.height, marks: [], done: true });
+      break;
+    }
     case 'comment':
       state.comments.push({ id: `m${state.comments.length + 1}`, item_id: body.item ?? null, body: body.value, from_company: true, author: body.name ?? null, created_at: new Date().toISOString() });
       break;
@@ -86,6 +94,8 @@ function act(body: Json): { status: number; body: unknown } {
 }
 
 let photoJpeg: Buffer | null = null;
+/** A phone-sized photo, bigger than the page sends. */
+let photoBig: Buffer | null = null;
 const server = createServer((req, res) => {
   if (req.url === '/fn' && req.method === 'OPTIONS') {
     res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'POST, OPTIONS' });
@@ -128,6 +138,9 @@ async function main(): Promise<void> {
     const p = await browser.newPage({ viewport: { width: 1200, height: 900 } });
     await p.setContent(`<html><body style="margin:0">${PHOTO_SVG}</body></html>`);
     photoJpeg = await p.screenshot({ type: 'jpeg', quality: 85 });
+    await p.setViewportSize({ width: 2400, height: 1800 });
+    await p.setContent(`<html><body style="margin:0">${PHOTO_SVG.replace('width="1200" height="900"', 'width="2400" height="1800" viewBox="0 0 1200 900"')}</body></html>`);
+    photoBig = await p.screenshot({ type: 'jpeg', quality: 85 });
     await p.close();
   }
   const page = await browser.newPage({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
@@ -175,6 +188,14 @@ async function main(): Promise<void> {
   await page.getByText('Marked done. Ross Built will check it.').waitFor();
   check((await page.locator('.section h2').allTextContents()).includes('Marked Done'), 'marked done moves it to Marked Done');
   await shot('03-marked-done');
+  // A photo of the finished work: picked on the phone, made smaller, sent, and shown as a done photo.
+  await page.locator(`input[data-photo="${state.items[0]!.id}"]`).setInputFiles({ name: 'faucets.jpg', mimeType: 'image/jpeg', buffer: photoBig! });
+  await page.getByText('Photo sent. Ross Built sees it on the item.').waitFor();
+  const sentPhoto = photosSent[0];
+  check(!!sentPhoto && Math.max(sentPhoto.width, sentPhoto.height) === 1600 && sentPhoto.size < 1_500_000, 'a done photo goes smaller, as a JPEG');
+  check((await page.locator(`#item-${state.items[0]!.id} .ph .tag`).allTextContents()).join() === 'Done', 'the done photo shows as one on the item');
+  check((await page.getByText('Add Another Done Photo').count()) === 1, 'the next photo is another done photo');
+  await shot('03b-done-photo');
   await page.getByRole('button', { name: 'Not Done After All' }).click();
   await page.getByRole('button', { name: 'Mark Done' }).first().waitFor();
   check(state.items[0]!.marked_done_at === null, 'Not Done After All puts it back');

@@ -215,3 +215,21 @@ describe('activity', () => {
     expect(lines[0]?.detail).toBe('');
   });
 });
+
+describe('done photos', () => {
+  it('says a done photo, from the team or from the company page', () => {
+    const fromPage = activityLines(
+      [entry({ kind: 'photo_added', personId: null, at: at(1), detail: { photo_id: 'p1', done: true, from_company: true, company_id: 'triple-h', author_name: 'Mike' } })],
+      look,
+    );
+    expect(fromPage).toHaveLength(1);
+    expect(fromPage[0]).toMatchObject({ who: 'Mike at Triple H Painting', action: 'added a done photo to Patch drywall', detail: 'Laundry 119. From their page.' });
+    const ours = activityLines(
+      [entry({ kind: 'photo_added', at: at(2), detail: { photo_id: 'p2', done: true } }), entry({ kind: 'photo_added', at: at(3), detail: { photo_id: 'p3', done: true } })],
+      look,
+    );
+    expect(ours[0]).toMatchObject({ who: 'Jake Ross', action: 'added 2 done photos to Patch drywall' });
+    // In the item's own History it is "it".
+    expect(activityLines([entry({ kind: 'photo_added', at: at(4), detail: { photo_id: 'p4', done: true } })], look, { forItem: true })[0]).toMatchObject({ action: 'added a done photo to it' });
+  });
+});

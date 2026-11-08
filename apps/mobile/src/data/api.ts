@@ -57,6 +57,16 @@ export interface ItemPatch extends Partial<ItemFields> {
 /** A template's task as it is added or changed. */
 export type TemplateItemInput = Pick<TemplateItem, 'title' | 'description' | 'kind' | 'tradeId' | 'hours' | 'place' | 'waitsOn'>;
 
+/** What a new job takes from another job's setup. */
+export interface JobCopy {
+  jobId: string;
+  /** Its companies and their trades, and its Waiting On choices. */
+  companies: boolean;
+  team: boolean;
+  /** Its levels and locations, in walk order, none walked yet. */
+  locations: boolean;
+}
+
 export interface NewPhoto {
   jobId: string;
   itemId: string;
@@ -65,6 +75,8 @@ export interface NewPhoto {
   width: number;
   height: number;
   marks: Mark[];
+  /** A photo of the finished work. */
+  done?: boolean;
 }
 
 export type PhotoPatch = Partial<Pick<Photo, 'marks' | 'removed' | 'sortOrder'>>;
@@ -200,7 +212,8 @@ export interface DataApi {
   /** The job's comments, internal notes and ones taken back included. */
   useComments(jobId: string): Comment[];
   /** Admins only. The Project Manager, when given, goes on the team. */
-  createJob(input: { name: string; address: string; projectManagerId?: string | null }): Promise<string>;
+  /** A new job; from: another job whose setup it starts with (its companies, team and locations, as picked). */
+  createJob(input: { name: string; address: string; projectManagerId?: string | null; from?: JobCopy | null }): Promise<string>;
   /**
    * Admins only. Adds the Sample Job, a whole job to try everything on, with the app's drawn photos
    * and plan. Answers its id.

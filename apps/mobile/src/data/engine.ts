@@ -316,18 +316,46 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       }),
 
     addSampleJob: (photos) => addSampleJob(api, get, photos),
-    async createJob({ name, address, projectManagerId }) {
+    async createJob({ name, address, projectManagerId, from }) {
       const state = get();
       adminOnly(state);
       const id = randomUUID();
       const pm = projectManagerId ? state.people.find((p) => p.id === projectManagerId && p.active) : undefined;
+      // Another job's setup to start with: its companies and Waiting On choices, its team (anyone
+      // still switched on, and not the Project Manager twice), and its locations, none walked yet.
+      const source = from ? state.jobs.find((j) => j.id === from.jobId) : undefined;
+      // Each a new row: the database gives it its own id.
+      const companies = source && from?.companies ? state.jobCompanies.filter((jc) => jc.jobId === source.id).map((jc) => ({ jobId: id, companyId: jc.companyId, tradeId: jc.tradeId })) : [];
+      const waiting = source && from?.companies ? (state.waitingOn[source.id] ?? []) : [];
+      const team: TeamMember[] = [
+        ...(pm ? [{ id: randomUUID(), jobId: id, personId: pm.id, part: 'project_manager' as const }] : []),
+        ...(source && from?.team
+          ? state.team
+              .filter((t) => t.jobId === source.id && t.personId !== pm?.id && state.people.some((p) => p.id === t.personId && p.active))
+              .map((t) => ({ ...t, id: randomUUID(), jobId: id }))
+          : []),
+      ];
+      const locations =
+        source && from?.locations
+          ? state.locations
+              .filter((l) => l.jobId === source.id && l.active)
+              .sort((a, b) => a.sortOrder - b.sortOrder)
+              .map((l) => ({ ...l, id: randomUUID(), jobId: id, walkedAt: null }))
+          : [];
       await save(
         {
           jobs: [...state.jobs, { id, name, address, closed: false }],
-          team: pm ? [...state.team, { id: randomUUID(), jobId: id, personId: pm.id, part: 'project_manager' }] : state.team,
+          team: [...state.team, ...team],
+          jobCompanies: companies.length > 0 ? [...state.jobCompanies, ...companies] : state.jobCompanies,
+          locations: locations.length > 0 ? numbered(state.locations, locations) : state.locations,
+          waitingOn: waiting.length > 0 ? { ...state.waitingOn, [id]: [...waiting] } : state.waitingOn,
           ...(keeper.server ? {} : { counters: { ...state.counters, [id]: 0 } }),
         },
-        pm ? [{ jobId: id, kind: 'team_added', detail: { person_id: pm.id, part: 'project_manager' } }] : [],
+        [
+          ...team.map((t): Happened => ({ jobId: id, kind: 'team_added', detail: { person_id: t.personId, part: t.part } })),
+          ...companies.map((jc): Happened => ({ jobId: id, kind: 'company_added', detail: { company_id: jc.companyId, trade_id: jc.tradeId } })),
+          ...locations.map((l): Happened => ({ jobId: id, kind: 'location_added', detail: { location_id: l.id, label: l.label } })),
+        ],
       );
       return id;
     },
@@ -875,6 +903,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
           marks: p.marks,
           sortOrder: order + 1,
           removed: false,
+          done: p.done ?? false,
           createdBy: before.me.id,
           createdAt: now(),
         });

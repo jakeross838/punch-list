@@ -39,6 +39,7 @@ import { ActivityRow, useActivityLines } from '@/components/ActivityRow';
 import { Checklist } from '@/components/Checklist';
 import { CommentThread } from '@/components/Comments';
 import { draftFill, isFilling, useDraftFill } from '@/components/draftFill';
+import { DoneCheckLine } from '@/components/DoneCheck';
 import { ItemEditor, type EditorSet } from '@/components/ItemEditor';
 import { itemStatus } from '@/components/ItemRow';
 import { EDITABLE, fieldsOf, sameValue, type ItemDraft } from '@/components/ItemForm';
@@ -194,7 +195,18 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   const [allHistory, setAllHistory] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [shown, setShown] = useState(0);
+  // An item the company says is done opens on its newest done photo.
+  const [shown, setShown] = useState(() => {
+    if (!item.markedDoneAt) return 0;
+    const last = photos.map((p) => p.done).lastIndexOf(true);
+    return last < 0 ? 0 : last;
+  });
+  // A photo just added shows at once.
+  const [photoCount, setPhotoCount] = useState(photos.length);
+  if (photos.length !== photoCount) {
+    setPhotoCount(photos.length);
+    if (photos.length > photoCount) setShown(photos.length - 1);
+  }
   const [viewing, setViewing] = useState<Photo | null>(null);
   const [marking, setMarking] = useState<Photo | null>(null);
   const [moving, setMoving] = useState(false);
@@ -273,9 +285,10 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
     feedback.toast({ message });
   }
 
-  function addPhoto() {
+  /** Add Photo, or Done Photo: a photo of the finished work. */
+  function addPhoto(done = false) {
     live.flush();
-    capture.start({ jobId, roomId: item.locationId, itemId: item.id });
+    capture.start({ jobId, roomId: item.locationId, itemId: item.id, done });
     // From the walk, the camera is right behind this screen: back to it for the photo.
     if (fromCamera) router.back();
     else router.push({ pathname: '/jobs/[jobId]/capture', params: { jobId } });
@@ -430,9 +443,16 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
               </Text>
             </View>
           ) : null}
+          {photo.done ? (
+            <View style={styles.doneTag} pointerEvents="none" testID="item-photo-done">
+              <Text variant="stamp" color={colors.onBar}>
+                Done Photo
+              </Text>
+            </View>
+          ) : null}
         </View>
       ) : (
-        <Touchable feedback="opacity" onPress={addPhoto} accessibilityRole="button" testID="add-photo" style={styles.noPhoto}>
+        <Touchable feedback="opacity" onPress={() => addPhoto()} accessibilityRole="button" testID="add-photo" style={styles.noPhoto}>
           <Icon name="camera" size={22} color={colors.secondary} />
           <Text variant="label" color={colors.tint}>
             Add a Photo
@@ -447,10 +467,15 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
               feedback="opacity"
               onPress={() => setShown(i)}
               accessibilityRole="button"
-              accessibilityLabel={`Photo ${i + 1}`}
+              accessibilityLabel={`Photo ${i + 1}${p.done ? ', a done photo' : ''}`}
               style={[styles.thumb, i === shown ? styles.thumbOn : null]}
             >
               <PhotoView photo={p} width={44} height={44} />
+              {p.done ? (
+                <View style={styles.thumbDone} pointerEvents="none">
+                  <Icon name="checkmark" size={9} color={colors.onBar} weight="bold" />
+                </View>
+              ) : null}
             </Touchable>
           ))}
         </View>
@@ -463,12 +488,20 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
               Mark Up
             </Text>
           </Touchable>
-          <Touchable feedback="opacity" onPress={addPhoto} accessibilityRole="button" accessibilityLabel="Add Photo" testID="add-photo" style={styles.photoAction}>
+          <Touchable feedback="opacity" onPress={() => addPhoto()} accessibilityRole="button" accessibilityLabel="Add Photo" testID="add-photo" style={styles.photoAction}>
             <Icon name="plus" size={14} color={colors.label} weight="medium" />
             <Text variant="button" color={colors.label}>
               Add Photo
             </Text>
           </Touchable>
+          {item.status === 'open' && !item.unfinished ? (
+            <Touchable feedback="opacity" onPress={() => addPhoto(true)} accessibilityRole="button" accessibilityLabel="Done Photo" testID="add-done-photo" style={styles.photoAction}>
+              <Icon name="checkmark" size={14} color={colors.label} weight="medium" />
+              <Text variant="button" color={colors.label}>
+                Done Photo
+              </Text>
+            </Touchable>
+          ) : null}
         </View>
       ) : null}
 
@@ -477,6 +510,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
           <Banner>{status.detail ? `${status.line}. ${status.detail}` : status.line}</Banner>
         </View>
       ) : null}
+      <DoneCheckLine item={item} photos={photos} location={room?.label ?? ''} />
 
       <View style={styles.editor}>
         <ItemEditor
@@ -596,6 +630,8 @@ const styles = StyleSheet.create({
   },
   thumbs: { flexDirection: 'row', gap: 6, marginHorizontal: layout.margin, marginTop: 8 },
   thumb: { padding: 2, borderWidth: 1, borderColor: 'transparent' },
+  thumbDone: { position: 'absolute', right: 3, bottom: 3, width: 14, height: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.okFill },
+  doneTag: { position: 'absolute', left: 8, top: 8, paddingHorizontal: 7, paddingVertical: 3, backgroundColor: colors.okFill },
   thumbOn: { borderColor: colors.action },
   editor: { marginTop: 14 },
   checklist: { marginTop: -6, marginBottom: 20 },

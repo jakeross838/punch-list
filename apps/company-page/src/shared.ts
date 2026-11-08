@@ -121,3 +121,32 @@ export function typing(): boolean {
   const el = document.activeElement;
   return el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement || el instanceof HTMLSelectElement;
 }
+
+/**
+ * A photo picked on the page, made no longer than side on its long edge and turned into a JPEG, in
+ * base64, ready to send: a phone's photo is several megabytes, the page sends a few hundred kilobytes.
+ */
+export async function photoForUpload(file: File, side = 1600): Promise<{ data: string; width: number; height: number }> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((done, fail) => {
+      const i = new Image();
+      i.onload = () => done(i);
+      i.onerror = () => fail(new Error('That photo did not open. Try another one.'));
+      i.src = url;
+    });
+    const scale = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight, 1));
+    const width = Math.max(1, Math.round(img.naturalWidth * scale));
+    const height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const pen = canvas.getContext('2d');
+    if (!pen) throw new Error('That photo did not open. Try another one.');
+    pen.drawImage(img, 0, 0, width, height);
+    const jpeg = canvas.toDataURL('image/jpeg', 0.82);
+    return { data: jpeg.slice(jpeg.indexOf(',') + 1), width, height };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

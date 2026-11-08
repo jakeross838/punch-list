@@ -155,6 +155,20 @@ begin
   select item_id, width, marks, storage_path into rec from public.photos where id = p;
   if rec.item_id <> a or rec.width <> 3024 then raise exception 'FAIL: a photo moved items or changed size'; end if;
   if rec.marks <> '[]'::jsonb or rec.storage_path <> 'fish/a.jpg' then raise exception 'FAIL: marks or the upload path did not save'; end if;
+  -- A done photo, taken by the team, stays one; and a photo of the problem never becomes one.
+  declare
+    dp uuid;
+  begin
+    insert into public.photos (job_id, item_id, width, height, done) values (j, a, 3024, 4032, true) returning id into dp;
+    update public.photos set done = false where id = dp;
+    update public.photos set done = true where id = p;
+    if not (select done from public.photos where id = dp) or (select done from public.photos where id = p) then
+      raise exception 'FAIL: a photo stopped or started being a done photo';
+    end if;
+    if (select detail ->> 'done' from public.job_activity where kind = 'photo_added' and detail ->> 'photo_id' = dp::text) <> 'true' then
+      raise exception 'FAIL: Activity does not say it was a done photo';
+    end if;
+  end;
 
   -- Photos are never deleted.
   begin
@@ -653,6 +667,51 @@ begin
     raise exception 'FAIL: a company marked another company''s item done';
   exception when insufficient_privilege then null;
   end;
+  -- A photo of the finished work, put in the item's folder by the company-page function: a done
+  -- photo, after the others, said in Activity as from the company.
+  declare
+    folder text := (select i.job_id::text || '/' || i.id::text from public.items i where i.id = current_setting('test.item')::uuid);
+    shot uuid;
+    d jsonb;
+  begin
+    if public.trade_photo_folder(link, current_setting('test.item')::uuid) <> folder then
+      raise exception 'FAIL: the company''s photo folder is not the item''s';
+    end if;
+    shot := public.trade_add_photo(link, current_setting('test.item')::uuid, folder || '/done-' || gen_random_uuid()::text || '.jpg', 1600, 1200, ' Mike ');
+    if not (select p.done and p.width = 1600 and p.storage_path like folder || '/done-%' from public.photos p where p.id = shot) then
+      raise exception 'FAIL: the company''s photo is not a done photo';
+    end if;
+    if (select p.sort_order from public.photos p where p.id = shot) <= coalesce((select max(p.sort_order) from public.photos p where p.item_id = current_setting('test.item')::uuid and p.id <> shot), 0) then
+      raise exception 'FAIL: the done photo is not after the others';
+    end if;
+    select a.detail into d from public.job_activity a where a.kind = 'photo_added' and a.detail ->> 'photo_id' = shot::text;
+    if d is null or d ->> 'done' <> 'true' or d ->> 'from_company' <> 'true' or d ->> 'author_name' <> 'Mike'
+       or d ->> 'company_id' <> (select i.company_id::text from public.items i where i.id = current_setting('test.item')::uuid) then
+      raise exception 'FAIL: Activity does not say the company sent a done photo: %', d;
+    end if;
+    page := public.trade_page(link);
+    if not exists (
+      select 1 from jsonb_array_elements(page -> 'items') x, jsonb_array_elements(x -> 'photos') ph
+      where x ->> 'id' = current_setting('test.item') and ph ->> 'done' = 'true'
+    ) then
+      raise exception 'FAIL: the page does not show the done photo as one';
+    end if;
+    -- Only into the item's own folder, and only on the company's own items.
+    begin
+      perform public.trade_add_photo(link, current_setting('test.item')::uuid, 'elsewhere/done-' || gen_random_uuid()::text || '.jpg', 1600, 1200, 'Mike');
+      raise exception 'FAIL: a done photo was taken from outside the item''s folder';
+    exception when check_violation then null;
+    end;
+    begin
+      perform public.trade_add_photo(link, current_setting('test.other_item')::uuid, folder || '/done-' || gen_random_uuid()::text || '.jpg', 1600, 1200, 'Mike');
+      raise exception 'FAIL: a company put a photo on another company''s item';
+    exception when insufficient_privilege then null;
+    end;
+    -- Nothing after the next write says it came from the company.
+    if coalesce(current_setting('punch.from_company', true), '') <> '' then
+      raise exception 'FAIL: the company''s mark stayed on after its photo';
+    end if;
+  end;
   -- Confirming an item: it is theirs and right as it is. Saying it twice changes nothing.
   perform public.trade_confirm(link, current_setting('test.item')::uuid, true, ' Mike ');
   perform public.trade_confirm(link, current_setting('test.item')::uuid, true, 'Mike');
@@ -1032,7 +1091,7 @@ set request.jwt.claims = '{"email":"andrew@rossbuilt.com"}';
 
 do $$
 begin
-  if (select count(*) from public.photos) <> 2 or (select count(*) from public.custom_fields) <> 1 then
+  if (select count(*) from public.photos where not done) <> 2 or not exists (select 1 from public.photos where done) or (select count(*) from public.custom_fields) <> 1 then
     raise exception 'FAIL: photos and added fields are not shared with the team';
   end if;
   if (select count(*) from public.person_settings) <> 0 then

@@ -1,8 +1,9 @@
-// Checks the two functions that ask Claude, ai and read-plans, on this computer, against stand-ins
-// for Supabase and for Claude: who they turn away, what they ask Claude and on which model, the
-// allowance (nothing is asked once it is used up), what each answer cost counted against the
+// Checks the functions on this computer, against stand-ins for Supabase and for Claude. For the two
+// that ask Claude, ai and read-plans: who they turn away, what they ask Claude and on which model,
+// the allowance (nothing is asked once it is used up), what each answer cost counted against the
 // company, the connection kept open while Claude works, and, for read-plans, the links Claude gets
-// and the files taken away once read.
+// and the files taken away once read. For company-page: a done photo from the company's page, into
+// the item's folder and onto the item, and what it turns away.
 //
 //   DENO=/path/to/deno npx tsx tools/functions-check.ts      (deno on the PATH works too)
 
@@ -47,6 +48,12 @@ let askedCount = 0;
 const lastAsked = (): Asked | null => asked;
 let removed: string[] = [];
 let counted: Record<string, unknown>[] = [];
+/** The company's page, as the stand-in database has it. */
+const LINK = 'ab'.repeat(32);
+const ITEM = '11111111-1111-4111-8111-111111111111';
+let uploaded: { path: string; type: string; size: number }[] = [];
+let added: Record<string, unknown>[] = [];
+const pagePhotos: Record<string, unknown>[] = [];
 const unknown: string[] = [];
 
 const stub = createServer(async (req, res) => {
@@ -61,6 +68,30 @@ const stub = createServer(async (req, res) => {
     if (who === GOOD) return json(200, { org: 'ross_built', person_id: JAKE, limit_cents: 20000, used_cents: 12.5 });
     if (who === SPENT) return json(200, { org: 'gulf_coast', person_id: null, limit_cents: 2500, used_cents: 2500.25 });
     return json(200, null);
+  }
+  if (url.pathname.startsWith('/rest/v1/rpc/trade_') && who !== 'Bearer service-key') return json(403, { code: '42501', message: 'not the service role' });
+  if (url.pathname === '/rest/v1/rpc/trade_page') {
+    const a = JSON.parse(text) as { p_token: string };
+    if (a.p_token !== LINK) return json(200, null);
+    return json(200, { builder: 'Ross Built', company: { id: 'c1', name: 'Gator Plumbing' }, items: [{ id: ITEM, title: 'Install vanity faucets', photos: pagePhotos }], comments: [], completed: [] });
+  }
+  if (url.pathname === '/rest/v1/rpc/trade_photo_folder') {
+    const a = JSON.parse(text) as { p_token: string; p_item: string };
+    if (a.p_token !== LINK || a.p_item !== ITEM) return json(403, { code: '42501', message: 'That item is not on this list' });
+    return json(200, `${JOB}/${ITEM}`);
+  }
+  if (url.pathname === '/rest/v1/rpc/trade_add_photo') {
+    const a = JSON.parse(text) as Record<string, unknown>;
+    if (a.p_name === 'Full Up') return json(403, { code: '42501', message: 'That item has all the photos it can take' });
+    added.push(a);
+    pagePhotos.push({ storage_path: a.p_path, width: a.p_width, height: a.p_height, marks: [], done: true });
+    return json(200, 'p-new');
+  }
+  if (url.pathname.startsWith('/storage/v1/object/photos/') && req.method === 'POST') {
+    if (who !== 'Bearer service-key') return json(403, { message: 'not the service role' });
+    const path = decodeURIComponent(url.pathname.slice('/storage/v1/object/photos/'.length));
+    uploaded.push({ path, type: String(req.headers['content-type'] ?? ''), size: text.length });
+    return json(200, { Key: `photos/${path}` });
   }
   if (url.pathname === '/rest/v1/jobs') {
     const id = url.searchParams.get('id')?.replace(/^eq\./, '');
@@ -186,6 +217,8 @@ async function checkAi() {
   expect('ai: turns away a photo that is not one', notPhoto.status === 400, `${notPhoto.status}`);
   const tooMany = await call({ task: 'same-item', input: { item: { title: 'Install towel bar' }, candidates: [{ n: 4, title: 'Towel bar' }] }, images: Array(7).fill(PHOTO) });
   expect('ai: turns away more photos than the task takes', tooMany.status === 400, `${tooMany.status}`);
+  const onePhoto = await call({ task: 'done-check', input: { title: 'Adjust cabinet door' }, images: [PHOTO] });
+  expect('ai: the done check needs both photos', onePhoto.status === 400, `${onePhoto.status}`);
   const nothing = await call({ task: 'say-it', input: { words: '   ' } });
   expect('ai: does not ask about nothing', nothing.status === 400, `${nothing.status}`);
   const spent = await call({ task: 'fill-in', input: { room: 'Kitchen 109' }, images: [PHOTO] }, SPENT);
@@ -212,6 +245,14 @@ async function checkAi() {
   const same = await call({ task: 'same-item', input: { item: { title: 'Towel bar loose', location: 'Hall Bath' }, candidates: [{ n: 4, title: 'Tighten towel bar', location: 'Hall Bath' }], photos: true }, images: [PHOTO, PHOTO] });
   expect('ai: asks the quick questions of Haiku', same.status === 200 && lastAsked()?.model === 'claude-haiku-5-5' && lastAsked()?.max_tokens === 100, `${lastAsked()?.model}`);
   expect('ai: counts Haiku at Haiku’s price', counted.length === 1 && counted[0]?.cost_cents === 0.027, JSON.stringify(counted));
+
+  const checked = await call({ task: 'done-check', input: { title: 'Adjust cabinet door', location: 'Kitchen 109', marks: [] }, images: [PHOTO, PHOTO] });
+  const both = lastAsked()?.content ?? [];
+  expect(
+    'ai: the done check sends the photo of the problem, then the done photo, to Sonnet',
+    checked.status === 200 && both.length === 3 && both[0]?.type === 'image' && both[1]?.type === 'image' && lastAsked()?.model === 'claude-sonnet-5-5' && (both[2]?.text ?? '').includes('photo of the finished work'),
+    `${checked.status} ${both.length} ${lastAsked()?.model}`,
+  );
 
   const slow = await call({ task: 'say-it', input: { words: 'TAKES-A-WHILE touch up the paint in the hall and the cabinet door rubs', locations: ['Hall'], companies: [], people: [], titles: [] } });
   expect('ai: keeps the connection open while Claude works', slow.firstByteMs >= 0 && slow.firstByteMs < 11_000 && slow.totalMs > 11_000 && typeof parsed(slow.text).text === 'string', `first byte ${slow.firstByteMs} ms, done ${slow.totalMs} ms`);
@@ -259,11 +300,51 @@ async function checkReadPlans() {
   expect('read-plans: tells Claude what the pictures are', note.startsWith('The plans are attached as pictures of one sheet, in this order. Sheet 1: the whole sheet, then 2 pieces of it'), note.slice(0, 160));
 }
 
+async function checkCompanyPage() {
+  const jpeg = Buffer.from('a jpeg of the finished faucets').toString('base64');
+  const page = await call({ t: LINK, action: 'page' });
+  expect('company-page: opens the page for its link', page.status === 200 && Array.isArray(parsed(page.text).items), page.text.slice(0, 120));
+  const big = await call({ t: LINK, action: 'comment', item: ITEM, value: 'x'.repeat(9000) });
+  expect('company-page: turns away anything big but a photo', big.status === 413, `${big.status}`);
+  const notJpeg = await call({ t: LINK, action: 'photo', item: ITEM, value: '<b>not a photo</b>', width: 1600, height: 1200 });
+  const noSize = await call({ t: LINK, action: 'photo', item: ITEM, value: jpeg, width: 0, height: 1200 });
+  const notTheirs = await call({ t: LINK, action: 'photo', item: '22222222-2222-4222-8222-222222222222', value: jpeg, width: 1600, height: 1200 });
+  expect(
+    'company-page: turns away a photo that is not a JPEG, has no size, or is for an item not on the list',
+    notJpeg.status === 403 && noSize.status === 403 && notTheirs.status === 403 && parsed(notTheirs.text).error === 'That item is not on this list' && uploaded.length === 0,
+    `${notJpeg.status} ${noSize.status} ${notTheirs.status} ${uploaded.length}`,
+  );
+
+  uploaded = [];
+  added = [];
+  const sent = await call({ t: LINK, action: 'photo', item: ITEM, value: jpeg, width: 1600, height: 1200, name: 'Mike' });
+  const up = uploaded[0];
+  expect(
+    "company-page: puts a done photo in the item's own folder, as a JPEG",
+    sent.status === 200 && uploaded.length === 1 && !!up && new RegExp(`^${JOB}/${ITEM}/done-[0-9a-f-]{36}\\.jpg$`).test(up.path) && up.type === 'image/jpeg',
+    JSON.stringify(uploaded),
+  );
+  const onItem = added[0] ?? {};
+  expect('company-page: then puts it on the item, with its size and who sent it', onItem.p_path === up?.path && onItem.p_width === 1600 && onItem.p_height === 1200 && onItem.p_name === 'Mike' && onItem.p_token === LINK, JSON.stringify(added));
+  const shown = (parsed(sent.text).items as { photos: { done: boolean; url: string }[] }[] | undefined)?.[0]?.photos ?? [];
+  expect('company-page: answers with the page, the done photo signed and marked done', shown.length === 1 && shown[0]?.done === true && shown[0].url.includes('/sign/photos/'), JSON.stringify(shown));
+
+  removed = [];
+  uploaded = [];
+  const full = await call({ t: LINK, action: 'photo', item: ITEM, value: jpeg, width: 1600, height: 1200, name: 'Full Up' });
+  expect(
+    'company-page: takes the file away again when the photo cannot go on the item',
+    full.status === 403 && parsed(full.text).error === 'That item has all the photos it can take' && uploaded.length === 1 && removed[0] === uploaded[0]?.path,
+    `${full.status} ${JSON.stringify(removed)}`,
+  );
+}
+
 async function main() {
   await new Promise<void>((done) => stub.listen(STUB, done));
   try {
     await withFunction('ai', checkAi);
     await withFunction('read-plans', checkReadPlans);
+    await withFunction('company-page', checkCompanyPage);
   } finally {
     stub.close();
   }
@@ -273,7 +354,7 @@ async function main() {
     console.error(`\n${failures.length} checks failed:\n${failures.map((f) => `- ${f}`).join('\n')}\n\nThe functions said:\n${log.slice(-2000)}`);
     process.exit(1);
   }
-  console.log(`\nAll ${steps.length} checks of the ai and read-plans functions passed.`);
+  console.log(`\nAll ${steps.length} checks of the ai, read-plans and company-page functions passed.`);
 }
 
 void main();

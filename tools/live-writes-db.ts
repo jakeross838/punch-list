@@ -200,6 +200,7 @@ async function main(): Promise<void> {
   // ---------- as Jake, an admin ----------
 
   let jobId = '';
+  let copied = '';
   let kitchen = '';
   let bath = '';
   let carpentry = '';
@@ -398,6 +399,9 @@ async function main(): Promise<void> {
   await step('a company taken off the job', async () => {
     await api.removeCompanyFromJob(jobId, sparks, carpentry);
   });
+  await step("a new job from the Fish setup: its companies, Waiting On choices, team and locations", async () => {
+    copied = await api.createJob({ name: 'Fish Guest House', address: '717 North Shore Drive', projectManagerId: jake.id, from: { jobId, companies: true, team: true, locations: true } });
+  });
 
   // ---------- as Sam, on the team ----------
 
@@ -500,6 +504,19 @@ async function main(): Promise<void> {
     'true:company:false,true:room:true',
   );
   check('the template name tidied', `select name from public.templates`, 'End of House');
+  // As Fish was when the new job was made: Sam's room and the company he added came after.
+  check(
+    "the new job took Fish's companies, Waiting On choices and team",
+    `select (select string_agg(company_id::text || ':' || trade_id::text, ',' order by company_id, trade_id) from public.job_companies where job_id = ${lit(copied)}) = (select string_agg(company_id::text || ':' || trade_id::text, ',' order by company_id, trade_id) from public.job_companies where job_id = ${lit(jobId)} and company_id <> ${lit(tile)})
+       and (select string_agg(label, ',' order by sort_order) from public.job_waiting_on where job_id = ${lit(copied)}) = (select string_agg(label, ',' order by sort_order) from public.job_waiting_on where job_id = ${lit(jobId)})
+       and (select string_agg(person_id::text || ':' || part, ',' order by person_id) from public.job_team where job_id = ${lit(copied)}) = (select string_agg(person_id::text || ':' || part, ',' order by person_id) from public.job_team where job_id = ${lit(jobId)})`,
+    't',
+  );
+  check(
+    "the new job took Fish's locations in walk order, none walked",
+    `select ((select string_agg(label || '|' || coalesce(floor, ''), ',' order by sort_order) from public.locations where job_id = ${lit(copied)}) = (select string_agg(label || '|' || coalesce(floor, ''), ',' order by sort_order) from public.locations where job_id = ${lit(jobId)} and active and id <> ${lit(laundry)}))::text || ',' || (select count(*) from public.locations where job_id = ${lit(copied)} and walked_at is not null)`,
+    'true,0',
+  );
   check('the room Sam typed in, on its floor', `select label || ',' || coalesce(floor, '') from public.locations where id = ${lit(laundry)}`, 'Laundry 112,First Floor');
   check(
     // Sam's room goes on the end: only an admin moves the others to make room.

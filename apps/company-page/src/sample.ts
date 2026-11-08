@@ -64,6 +64,9 @@ export function answerSample(page: Page, body: Record<string, unknown>): Page {
   if (body.action === 'confirm' && item) item.confirmed_at = body.value === false ? null : now;
   if (body.action === 'done' && item) item.marked_done_at = body.value === false ? null : now;
   if (body.action === 'hours' && item) item.hours = typeof body.value === 'number' ? body.value : null;
+  if (body.action === 'photo' && item && typeof body.value === 'string') {
+    item.photos.push({ url: `data:image/jpeg;base64,${body.value}`, width: Number(body.width) || 1600, height: Number(body.height) || 1200, marks: [], done: true });
+  }
   if (body.action === 'comment' && typeof body.value === 'string' && body.value.trim()) {
     page.comments.push({
       id: `m${page.comments.length + 1}`,

@@ -318,6 +318,8 @@ export interface Photo {
   marks: Mark[];
   sortOrder: number;
   removed: boolean;
+  /** A photo of the finished work, taken by the team or sent by the company as it marks the work done. */
+  done: boolean;
   createdBy: string;
   createdAt: string;
 }

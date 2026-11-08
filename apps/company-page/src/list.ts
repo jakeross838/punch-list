@@ -3,10 +3,10 @@
 // when it should be ready, numbered in the order to do them (the same order as its printed list:
 // Priority first, then whatever holds up the most other work), then what was checked off lately. On
 // each item it confirms the item, says how long it takes, marks it done for the builder to check,
-// and comments, under the name typed at the top.
+// sends a photo of the finished work, and comments, under the name typed at the top.
 
 import { doFirst, FREES_NOTHING, freesText, hoursText, KIND_LABELS, marksSvg, PICK_HOURS, QUICK_HOURS } from '@punch/core';
-import { andList, dayText, esc, isQuoted, plural, remember, remembered, toast, typing, viewPhoto, whenText } from './shared';
+import { andList, dayText, esc, isQuoted, photoForUpload, plural, remember, remembered, toast, typing, viewPhoto, whenText } from './shared';
 import type { Page, PageComment, PageItem, PagePhoto } from './types';
 
 export interface ListOptions {
@@ -83,7 +83,7 @@ export function mountList(o: ListOptions): ListView {
 
   function photoHtml(item: PageItem, photo: PagePhoto, i: number, big: boolean): string {
     return `<button class="ph${big ? ' big' : ''}" data-view="${esc(item.id)}" data-i="${i}" aria-label="Open the photo">
-    <img src="${esc(photo.url)}" alt="" loading="lazy" decoding="async">${marksSvg(photo.marks ?? [], photo.width, photo.height)}</button>`;
+    <img src="${esc(photo.url)}" alt="" loading="lazy" decoding="async">${marksSvg(photo.marks ?? [], photo.width, photo.height)}${photo.done ? '<span class="tag">Done</span>' : ''}</button>`;
   }
 
   function statusHtml(item: PageItem): string {
@@ -150,6 +150,7 @@ export function mountList(o: ListOptions): ListView {
     <div class="actions">
       <button class="act${item.confirmed_at ? ' yes' : ''}" data-confirm="${esc(item.id)}"${waiting ? ' disabled' : ''} aria-pressed="${item.confirmed_at ? 'true' : 'false'}">${item.confirmed_at ? '✓ Confirmed' : 'Confirm'}</button>
       <button class="act${item.marked_done_at ? ' yes' : ''}" data-done="${esc(item.id)}"${waiting ? ' disabled' : ''} aria-pressed="${item.marked_done_at ? 'true' : 'false'}">${item.marked_done_at ? 'Not Done After All' : 'Mark Done'}</button>
+      <label class="act wide${waiting ? ' off' : ''}"><input type="file" accept="image/*" data-photo="${esc(item.id)}" hidden${waiting ? ' disabled' : ''}>${photos.some((p) => p.done) ? 'Add Another Done Photo' : 'Add a Done Photo'}</label>
     </div>
     ${commentsHtml(item.id, mine)}
   </article>`;
@@ -287,8 +288,26 @@ export function mountList(o: ListOptions): ListView {
     }
   };
 
+  /** A photo of the finished work, made smaller here, then sent. */
+  async function sendPhoto(id: string, file: File): Promise<void> {
+    if (busy.has(id)) return;
+    try {
+      const shot = await photoForUpload(file);
+      await send(id, { action: 'photo', item: id, value: shot.data, width: shot.width, height: shot.height }, () => toast(`Photo sent. ${page?.builder ?? 'The builder'} sees it on the item.`));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'That photo did not go. Try again.');
+    }
+  }
+
   const onChange = (e: Event) => {
     const el = e.target as HTMLElement;
+    if (el instanceof HTMLInputElement && el.type === 'file' && el.dataset.photo) {
+      const file = el.files?.[0];
+      const id = el.dataset.photo;
+      el.value = '';
+      if (file) void sendPhoto(id, file);
+      return;
+    }
     if (el instanceof HTMLInputElement && el.id === 'name') {
       name = el.value.replace(/\s+/g, ' ').trim().slice(0, 80);
       remember(o.nameKey, name);

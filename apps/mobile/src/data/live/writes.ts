@@ -178,7 +178,7 @@ const photos: Spec<Photo> = {
   table: 'photos',
   key: byId,
   row: (p) => ({ job_id: p.jobId, item_id: p.itemId, width: p.width, height: p.height, marks: p.marks, sort_order: p.sortOrder, removed: p.removed }),
-  made: (p) => ({ created_by: p.createdBy, created_at: p.createdAt }),
+  made: (p) => ({ done: p.done, created_by: p.createdBy, created_at: p.createdAt }),
 };
 
 /** A plan sheet's picture is a photo's: where it is in storage is the uploader's to fill in. */

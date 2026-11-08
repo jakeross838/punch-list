@@ -7,6 +7,8 @@ export interface PagePhoto {
   width: number;
   height: number;
   marks: Mark[];
+  /** A photo of the finished work. An older answer leaves it out. */
+  done?: boolean;
 }
 export interface PageItem {
   id: string;

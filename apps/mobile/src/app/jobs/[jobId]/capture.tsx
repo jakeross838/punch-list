@@ -261,6 +261,7 @@ export default function CaptureScreen() {
           width: shot.width,
           height: shot.height,
           marks,
+          done: walk.done,
         },
       ]);
       haptic.success();
@@ -269,7 +270,7 @@ export default function CaptureScreen() {
       const back = !!walk.resume;
       capture.doneAdding(
         back
-          ? `Added the photo to ${addingTo?.title || "the item"}`
+          ? `Added the ${walk.done ? "done photo" : "photo"} to ${addingTo?.title || "the item"}`
           : undefined,
       );
       if (!back) router.back();
@@ -349,7 +350,9 @@ export default function CaptureScreen() {
   }
 
   const hint = walk.itemId
-    ? `The photo goes on ${addingTo?.title || "the item"}.`
+    ? walk.done
+      ? `A photo of the finished work, for ${addingTo?.title || "the item"}.`
+      : `The photo goes on ${addingTo?.title || "the item"}.`
     : walk.draft
       ? "The photo goes on the new item."
       : walk.saved > 0

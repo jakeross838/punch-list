@@ -137,6 +137,8 @@ async function main(): Promise<void> {
           if (/pairs of items on the running list/.test(input)) {
             return { same: [...input.matchAll(/^Pair (\\d+): (.*)$/gm)].filter((m) => /cabinet door/i.test(m[2])).map((m) => Number(m[1])) };
           }
+          // The done check: the hinge still looks loose.
+          if (/Check the work from two photos/.test(input)) return { done: 'no', left: 'the left hinge still looks loose' };
           // Standard wording: a switch cover is the switch plate.
           if (/list of standard titles/.test(input)) {
             const typed = (input.match(/They typed: "(.*)"/) || [])[1] || '';
@@ -2061,6 +2063,52 @@ async function main(): Promise<void> {
       await app.getByTestId('back').last().click();
       await app.getByTestId('group-room-1').waitFor();
       await settle(400);
+    });
+    await step('New: a done photo: taken on an item, it shows as one, and Claude compares it with the photo of the problem', async () => {
+      await app.getByTestId('search').last().fill('Set upper cabinets');
+      await app.getByText('Set upper cabinets').first().click();
+      await app.getByTestId('item-photo').first().waitFor();
+      await settle(500);
+      await app.getByTestId('add-done-photo').last().click();
+      await app.getByText('A photo of the finished work, for Set upper cabinets.').waitFor();
+      await takePhoto();
+      await app.getByTestId('markup-next').click();
+      // Back on the item, the done photo shows, marked as one, and Claude says what it sees.
+      await app.getByTestId('item-photo-done').waitFor();
+      await app.getByTestId('done-check').getByText('Claude: The left hinge still looks loose.').waitFor({ timeout: 15_000 });
+      const asked = await lastAsked('Check the work from two photos');
+      if (!asked || asked.images !== 2 || !asked.input.includes('The item: Set upper cabinets')) throw new Error('The done check did not send both photos with the item');
+      await settle(400);
+      await shot('99zf0-done-photo');
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('search-clear').last().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle(300);
+    });
+    await step("New: a new job from another job's setup: its companies, its team and its locations", async () => {
+      if (!(await app.getByTestId('new-job').last().isVisible())) await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('new-job').last().click();
+      await app.getByTestId('field-job-name').fill('Guest House');
+      await app.getByTestId('field-copy-from').click();
+      await app.getByTestId('picker').getByText('Sample Job', { exact: true }).click();
+      await app.getByTestId('copy-companies').waitFor();
+      // Companies and the team are on to start; the locations are picked here.
+      await app.getByTestId('copy-locations').click();
+      await settle(300);
+      await shot('99zf1-copy-from');
+      await app.getByTestId('save').last().click();
+      await app.getByText('Kitchen 109').first().waitFor();
+      await app.getByText('Mudroom 120').first().waitFor();
+      // Its companies came too: SMS Carpentry is one to assign to in Job Setup.
+      await menu('job-setup');
+      await app.getByText('SMS Carpentry').first().waitFor();
+      await settle(300);
+      await shot('99zf2-copied-setup');
+      await app.getByTestId('back').last().click();
+      await settle(300);
+      await app.getByTestId('back').last().click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await settle(300);
     });
     await step('New: the Sample Job: one tap adds a whole job to try everything on, with photos, marks and comments, and it deletes like any other job', async () => {
       // From the Jobs screen, which stays underneath the job, hidden. The preview job is named

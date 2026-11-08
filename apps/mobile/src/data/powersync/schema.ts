@@ -231,6 +231,8 @@ const photos = new Table(
     marks: column.text,
     sort_order: column.integer,
     removed: column.integer,
+    /** A photo of the finished work. */
+    done: column.integer,
     created_by: column.text,
     created_at: column.text,
   },

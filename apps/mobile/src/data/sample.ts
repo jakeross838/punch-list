@@ -357,6 +357,7 @@ export function sampleState(): SampleState {
     marks,
     sortOrder: 1,
     removed: false,
+    done: false,
     createdBy: me.id,
     createdAt: at,
   });

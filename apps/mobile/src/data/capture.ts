@@ -3,7 +3,7 @@
 // checks it, and Claude fills it in. Kept in memory across the camera, item and New Item screens;
 // cleared when the walk ends.
 //
-// The camera also takes a photo for one item (Add Photo on an item), or for the New Item form
+// The camera also takes a photo for one item (Add Photo on an item, or its Done Photo), or for the New Item form
 // (the photos taken for it, and its form while the camera is open). A walk open on the job carries
 // on once that photo is on its item.
 
@@ -26,6 +26,8 @@ export interface CaptureState {
   roomId: string | null;
   /** Adding photos to this item instead of making a new one. */
   itemId: string | null;
+  /** The photo for the item is a done photo: the finished work. */
+  done: boolean;
   /** The photos taken for the item being made in the New Item form. */
   shots: Shot[];
   /** The New Item form, kept while the camera takes a photo for it. */
@@ -48,6 +50,7 @@ const EMPTY: CaptureState = {
   jobId: null,
   roomId: null,
   itemId: null,
+  done: false,
   shots: [],
   draft: null,
   editing: null,
@@ -85,12 +88,15 @@ export function captureState(): CaptureState {
 const note = (text: string, room: string | null = null) => ({ title: '', room, at: Date.now(), text });
 
 export const capture = {
-  /** Starts a walk, or carries on the one open on this job. With an item, the photo goes on that item. */
-  start(input: { jobId: string; roomId: string | null; itemId?: string | null }): void {
+  /**
+   * Starts a walk, or carries on the one open on this job. With an item, the photo goes on that
+   * item; done: it is a photo of the finished work.
+   */
+  start(input: { jobId: string; roomId: string | null; itemId?: string | null; done?: boolean }): void {
     const roomId = input.roomId ?? lastRooms.get(input.jobId) ?? null;
     const walking = state.jobId === input.jobId && !state.itemId;
     if (input.itemId) {
-      set({ ...EMPTY, jobId: input.jobId, roomId, itemId: input.itemId, resume: walking ? state : null });
+      set({ ...EMPTY, jobId: input.jobId, roomId, itemId: input.itemId, done: input.done === true, resume: walking ? state : null });
       return;
     }
     if (input.roomId) lastRooms.set(input.jobId, input.roomId);

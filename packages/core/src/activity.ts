@@ -531,6 +531,22 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     return done(`merged ${from} into ${into}`, [moved ? `Its ${moved} came along` : 'It was the same work']);
   }
 
+  if (g.kind === 'photo' && g.entries.every((e) => e.kind === 'photo_added' && e.detail?.done === true)) {
+    // Photos of the finished work: from the company's page as it marks the work done, or taken by the team.
+    const d = first.detail ?? {};
+    const item = g.itemId ? look.items.get(g.itemId) : undefined;
+    const title = forItem ? 'it' : item?.title.trim() || 'an item';
+    const n = g.entries.length;
+    const action = `added ${n === 1 ? 'a done photo' : `${n} done photos`} to ${title}`;
+    const where = forItem ? '' : (look.locations.get(item?.locationId ?? '') ?? '');
+    if (d.from_company === true) {
+      const companyName = look.companies.get(String(d.company_id ?? '')) ?? 'The company';
+      const named = typeof d.author_name === 'string' && d.author_name.trim() !== '' ? d.author_name.trim() : '';
+      return { ...base, who: named ? `${named} at ${companyName}` : companyName, action, detail: [where, 'From their page'].filter(Boolean).map(sentence).join(' ') };
+    }
+    return done(action, [where]);
+  }
+
   if (first.kind === 'plan_added' || first.kind === 'plan_removed') {
     const d = first.detail ?? {};
     const name = typeof d.name === 'string' && d.name.trim() ? d.name.trim() : 'a plan';
