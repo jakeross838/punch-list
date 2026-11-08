@@ -268,6 +268,8 @@ async function main(): Promise<void> {
     await api.updatePhoto(b!.id, { removed: true });
     // The uploader, once a picture is up.
     send({ table: 'photos', op: 'update', id: a!.id, values: { storage_path: `${jobId}/${a!.id}.jpg` } });
+    // What is in it, in Claude's words, for search.
+    await api.setPhotoWords(a!.id, '  water stain   on the ceiling ');
   });
   await step('a photo cropped in markup: the new picture takes its place with the marks moved, and the one before is kept, removed', async () => {
     const a = state.photos.find((p) => p.itemId === first && !p.removed);
@@ -480,6 +482,7 @@ async function main(): Promise<void> {
   };
 
   check("the company's name, tidied", `select name from public.orgs where id = ${lit(ORG)}`, 'Ross Built Custom Homes');
+  check("a photo's words, kept for search", `select string_agg(description, ',') from public.photos where job_id = ${lit(jobId)} and description is not null`, 'water stain on the ceiling');
   check("a company's page in Spanish, the others in English", `select string_agg(language, ',' order by language) from (select distinct language from public.companies where org = ${lit(ORG)}) x`, 'en,es');
   check("the Spanish one is the one changed", `select language from public.companies where id = ${lit(sms)}`, 'es');
   check('every row on the job is the company\'s', `select count(*) from public.items where job_id = ${lit(jobId)} and org <> ${lit(ORG)}`, '0');

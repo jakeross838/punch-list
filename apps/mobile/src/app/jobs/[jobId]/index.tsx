@@ -37,6 +37,7 @@ import { ItemRow } from '@/components/ItemRow';
 import { backToJobs, useJobActions } from '@/components/JobActions';
 import { useFormOptions } from '@/components/ItemForm';
 import { OwnerSheet } from '@/components/OwnerSheet';
+import { usePhotoWords } from '@/components/usePhotoWords';
 import { useStarred } from '@/data/stars';
 import { StationSheet } from '@/components/StationSheet';
 import { AddTemplateSheet } from '@/components/TemplateSheets';
@@ -131,6 +132,8 @@ export default function JobScreen() {
   const [sheet, setSheet] = useState(false);
   const actions = useItemActions(jobId);
   const starredIds = useStarred();
+  // What is in each photo, in a few words, for Search.
+  usePhotoWords(jobId);
   const commentsOn = commentCounts(data.useComments(jobId));
   const holds = useHolds(jobId);
   // The bottom bar's Capture and Send work on the job you were in last.

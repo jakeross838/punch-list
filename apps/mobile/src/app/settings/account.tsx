@@ -1,10 +1,10 @@
-// Me: who you are signed in as, what you do at your company and what you see, the jobs you are on
-// and as what, and the company's setup: its name, People, Companies, Templates and Item Form. An
-// admin changes who you are in People, and the company's name here. On the iPhone, This Phone says
-// whether every change made here has gone up, and anything the server turned down. Sign Out clears
-// what is on this phone; it all comes back when you sign in again. It waits until every change has
-// gone up. Delete My Account takes your sign in away for good, and the last one at a company takes
-// the whole company with them.
+// Me: who you are signed in as, what you do at your company and what you see, your notifications,
+// the jobs you are on and as what, and the company's setup: its name, People, Companies, Templates
+// and Item Form. An admin changes who you are in People, and the company's name here. On the
+// iPhone, This Phone says whether every change made here has gone up, and anything the server
+// turned down. Sign Out clears what is on this phone; it all comes back when you sign in again. It
+// waits until every change has gone up. Delete My Account takes your sign in away for good, and the
+// last one at a company takes the whole company with them.
 
 import { COMPANY_NAME_MAX, companyNameProblem, isAdmin, PART_LABELS, ROLE_HINTS, ROLE_LABELS, SEES_LABELS } from '@punch/core';
 import Constants from 'expo-constants';
@@ -13,6 +13,7 @@ import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { APP_NAME } from '@/constants/app';
 import { colors, layout } from '@/constants/theme';
+import { NotifySection } from '@/components/Notify';
 import { useData } from '@/data/api';
 import { SheetScroll, haptic, ListRow, ListSection, ListTextField, Page, Sheet, Text, useFeedback } from '@/ui';
 import { useClaudeAllowance } from '@/ai/claude';
@@ -137,6 +138,7 @@ export default function AccountScreen() {
           <ListRow title="Edit in People" tone="tint" onPress={() => router.push({ pathname: '/settings/people/[personId]', params: { personId: me.id } })} testID="account-edit" />
         ) : null}
       </ListSection>
+      <NotifySection />
       <ListSection header="Your Jobs" footer={team.length === 0 ? "You are not on any job's team yet." : undefined}>
         {team.map((t) => {
           const job = jobs.find((j) => j.id === t.jobId);

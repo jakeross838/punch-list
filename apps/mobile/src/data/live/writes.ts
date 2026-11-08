@@ -177,7 +177,7 @@ const items: Spec<Item> = {
 const photos: Spec<Photo> = {
   table: 'photos',
   key: byId,
-  row: (p) => ({ job_id: p.jobId, item_id: p.itemId, width: p.width, height: p.height, marks: p.marks, sort_order: p.sortOrder, removed: p.removed }),
+  row: (p) => ({ job_id: p.jobId, item_id: p.itemId, width: p.width, height: p.height, marks: p.marks, sort_order: p.sortOrder, removed: p.removed, description: p.description ?? null }),
   made: (p) => ({ done: p.done, created_by: p.createdBy, created_at: p.createdAt }),
 };
 

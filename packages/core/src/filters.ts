@@ -3,6 +3,7 @@
 // Triple H Painting and Metro Electric, ready, on Level 1 is either company's ready work on Level 1.
 // Past due means not ready after its Ready By, or still open after its visit ended.
 
+import type { FoundFilters } from './claude';
 import { visitEnd } from './dates';
 import { KIND_LABELS, KINDS } from './forms';
 import { holdNames, type HoldLookups } from './holds';
@@ -244,4 +245,28 @@ export function readFilters(raw: unknown): ItemFilters {
 export function sameFilters(a: ItemFilters, b: ItemFilters): boolean {
   const list = (x: string[], y: string[]) => x.length === y.length && x.every((v) => y.some((w) => same(v, w)));
   return LIST_FACETS.every((k) => list(a[k] as string[], b[k] as string[])) && YES_NO_FACETS.every((k) => a[k] === b[k]);
+}
+
+/**
+ * What Claude found to show, as the list's filters: companies, people and locations by their ids on
+ * the job; levels and what items wait on as the job writes them.
+ */
+export function foundToFilters(
+  found: FoundFilters,
+  ids: { companies: Map<string, string>; people: Map<string, string>; locations: Map<string, string> },
+): ItemFilters {
+  const of = (names: string[], map: Map<string, string>) => names.flatMap((n) => (map.has(n) ? [map.get(n)!] : []));
+  return {
+    ...NO_FILTERS,
+    states: found.states,
+    kinds: found.kinds,
+    companyIds: of(found.companies, ids.companies),
+    assignedTo: of(found.people, ids.people),
+    floors: found.floors,
+    locationIds: of(found.locations, ids.locations),
+    waitingOn: found.waitingOn,
+    photo: found.photo,
+    scheduled: found.scheduled,
+    estimated: found.estimated,
+  };
 }

@@ -28,7 +28,8 @@ const storage: Storage = {
 export interface Kept {
   get(): string | null;
   set(value: string): void;
-  use(): string | null;
+  /** The value, kept up to date on screen. Named like a hook, so React's compiler calls it on every render. */
+  useValue(): string | null;
 }
 
 export function kept(key: string): Kept {
@@ -57,6 +58,6 @@ export function kept(key: string): Kept {
       storage.set(key, next);
       for (const l of listeners) l();
     },
-    use: () => useSyncExternalStore(subscribe, get, get),
+    useValue: () => useSyncExternalStore(subscribe, get, get),
   };
 }

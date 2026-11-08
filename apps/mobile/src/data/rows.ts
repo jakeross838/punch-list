@@ -264,6 +264,7 @@ export const rowToPhoto = (r: Row, uri: string): Photo => ({
   sortOrder: num(r.sort_order),
   removed: bool(r.removed),
   done: bool(r.done),
+  description: textOrNull(r.description),
   createdBy: text(r.created_by),
   createdAt: text(r.created_at),
 });

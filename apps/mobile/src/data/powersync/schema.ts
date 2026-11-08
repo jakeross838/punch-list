@@ -235,6 +235,8 @@ const photos = new Table(
     removed: column.integer,
     /** A photo of the finished work. */
     done: column.integer,
+    /** What is in it, in a few words Claude wrote, for search. */
+    description: column.text,
     created_by: column.text,
     created_at: column.text,
   },

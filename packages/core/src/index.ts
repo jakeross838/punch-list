@@ -41,3 +41,4 @@ export * from './owners';
 export * from './reportCard';
 export * from './search';
 export * from './today';
+export * from './notify';

@@ -1,11 +1,12 @@
 // Updates: what happened lately on every job you see, newest first, a day at a time, with the job
 // each line is on. What came in since you last looked is marked New; opening Updates marks it seen.
-// Tap a line about an item to open it.
+// Tap a line about an item to open it. At the top, until it is answered: turn on notifications.
 
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
 import { ActivityRow, useUpdateLines, type JobLine } from '@/components/ActivityRow';
+import { NotifyAsk } from '@/components/Notify';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { newLines, updatesSeen } from '@/data/updatesSeen';
@@ -58,7 +59,12 @@ export default function UpdatesScreen() {
           keyExtractor={(l) => `${l.jobId}-${l.line.key}`}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{ paddingBottom: scroll.bottomInset }}
-          ListHeaderComponent={<View>{scroll.header}</View>}
+          ListHeaderComponent={
+            <View>
+              {scroll.header}
+              <NotifyAsk />
+            </View>
+          }
           ListEmptyComponent={<EmptyState icon="bell" title="No Updates Yet" message="What happens on every job you see shows here, with who did it." />}
           renderSectionHeader={({ section }) => (
             <View style={styles.header}>

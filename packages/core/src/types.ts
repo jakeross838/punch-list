@@ -325,6 +325,8 @@ export interface Photo {
   removed: boolean;
   /** A photo of the finished work, taken by the team or sent by the company as it marks the work done. */
   done: boolean;
+  /** What is in it, in a few words Claude wrote once, for search; null until then. */
+  description?: string | null;
   createdBy: string;
   createdAt: string;
 }

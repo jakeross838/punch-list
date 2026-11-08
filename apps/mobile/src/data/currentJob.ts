@@ -7,4 +7,4 @@ const current = kept('punch.currentJob');
 
 export const setCurrentJob = (jobId: string) => current.set(jobId);
 export const getCurrentJob = () => current.get();
-export const useCurrentJob = () => current.use();
+export const useCurrentJob = () => current.useValue();

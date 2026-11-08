@@ -96,6 +96,8 @@ export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'sign
       | 'jobStation'
       | 'ownerLink'
       | 'companiesOpened'
+      | 'savePushToken'
+      | 'dropPushToken'
       | 'mergeItems'
     >
   >;
@@ -291,6 +293,10 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     useAllItems: () => useStore().items,
     useAllLocations: () => useStore().locations,
+    useAllPhotos: () => {
+      const s = useStore();
+      return useMemo(() => s.photos.filter((p) => !p.removed), [s.photos]);
+    },
     useAllComments: () => useStore().comments,
     useAllVisits: () => {
       const s = useStore();
@@ -422,6 +428,9 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
         if (link && said && said !== link.name) owners.set(jobId, { ...link, name: said });
         return owners.get(jobId) ?? null;
       }),
+    // The preview page has no notifications: there is no phone to tell.
+    savePushToken: extras.savePushToken ?? (async () => undefined),
+    dropPushToken: extras.dropPushToken ?? (async () => undefined),
     // On the preview, each company with a link opened its page the day the link was made.
     companiesOpened:
       extras.companiesOpened ??
@@ -1185,6 +1194,12 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       if (!viewName(name)) throw new Error('Give the view a name.');
       const settings = get().viewSettings;
       await save({ viewSettings: { ...settings, named: withNamedView(settings.named, name, view) } });
+    },
+    async setPhotoWords(photoId, words) {
+      const clean = words.replace(/\s+/g, ' ').trim().slice(0, 300);
+      const state = get();
+      if (!clean || !state.photos.some((p) => p.id === photoId)) return;
+      await save({ photos: state.photos.map((p) => (p.id === photoId ? { ...p, description: clean } : p)) });
     },
     async removeNamedView(name) {
       const { named, ...rest } = get().viewSettings;

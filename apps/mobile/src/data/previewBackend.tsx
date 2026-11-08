@@ -10,6 +10,7 @@ import { randomUUID } from 'expo-crypto';
 import type { ReactNode } from 'react';
 import { DataContext, type DataApi } from './api';
 import { makeApi, type Happened, type Keeper, type State } from './engine';
+import { forgetHere } from './notify';
 import { keepPhoto } from './photoFiles';
 import { newCompanyState, sampleState } from './sample';
 
@@ -109,6 +110,7 @@ export const previewApi: DataApi = makeApi(keeper, {
   },
   async signOut() {
     // What was on the phone is cleared, as it is on the iPhone.
+    forgetHere();
     setState({ ...sampleState(), signedIn: false });
   },
 });

@@ -436,6 +436,104 @@ function companySummaryPrompt(input) {
     'Reply with only JSON, like {"companies": [{"name": "Triple H Painting", "summary": "Finished six items in the kitchen and laundry. Asked whether the dining room trim gets one coat or two.", "needsAnswer": true}]}, with each name written exactly as it is above, the companies that need an answer first.'
   ].join("\n");
 }
+function findInput(v) {
+  const r = record(v);
+  return {
+    words: clip(r.words, 400),
+    locations: textList(r.locations, 300, 60),
+    floors: textList(r.floors, 20, 40),
+    companies: textList(r.companies, 80, 80),
+    people: textList(r.people, 80, 80),
+    waitingOn: textList(r.waitingOn, 60, 60)
+  };
+}
+function findPrompt(input) {
+  const names = (label, list) => `${label}: ${list.length > 0 ? list.join("; ") : "none"}`;
+  return [
+    "Someone looking at the running list of work on a home builder's job said what they want to see. Turn it into the list's filters.",
+    "",
+    `They said: "${input.words}"`,
+    "",
+    "The job's names, to pick from exactly as written:",
+    names("Levels", input.floors),
+    names("Locations", input.locations),
+    names("Companies", input.companies),
+    names("People on the team", input.people),
+    names("What items wait on", input.waitingOn),
+    "",
+    "The filters, each a list, empty when not said:",
+    '- states: any of "ready" (can be done now), "not_ready" (waiting on something), "past_due" (late), "needs_price" (extra work to be quoted).',
+    '- kinds: any of "deficiency" (something wrong to fix), "completion" (work not finished), "added_scope" (extra work).',
+    "- companies, people (who it is assigned to), levels, locations, waitingOn: names from the lists above only.",
+    "- photo, scheduled, estimated: true or false when they said with or without a photo, on a visit or not, with a time or not; otherwise null.",
+    '- groupBy: "room", "company" or "waiting" when they said how to group it; otherwise null. showCompleted: true only when they asked for finished work too.',
+    "- Leave out anything they did not say. Never make a name up.",
+    "",
+    'Reply with only JSON, like {"states": ["ready"], "kinds": [], "companies": ["Gator Plumbing"], "people": [], "levels": ["Level 2"], "locations": [], "waitingOn": [], "photo": null, "scheduled": null, "estimated": null, "groupBy": null, "showCompleted": false}.'
+  ].join("\n");
+}
+var dayLine = (v) => {
+  const x = record(v);
+  const title = clip(x.title, TITLE_MAX);
+  return title ? { title, location: clip(x.location, 60), by: clip(x.by, 80) } : null;
+};
+function dayNoteInput(v) {
+  const r = record(v);
+  return {
+    job: clip(r.job, 80),
+    day: clip(r.day, 40),
+    done: listOf(r.done, 120, dayLine),
+    added: listOf(r.added, 120, (x) => {
+      const d = dayLine(x);
+      return d ? { title: d.title, location: d.location } : null;
+    }),
+    onSite: listOf(r.onSite, 30, (x) => {
+      const o = record(x);
+      const name = clip(o.name, 80);
+      return name ? { name, trade: clip(o.trade, 40) } : null;
+    }),
+    said: listOf(r.said, 40, (x) => {
+      const o = record(x);
+      const words = clip(o.words, 300);
+      return words ? { who: clip(o.who, 80), words } : null;
+    })
+  };
+}
+function dayNotePrompt(input) {
+  const placed2 = (t) => `${t.title}${t.location ? ` (${t.location})` : ""}`;
+  return [
+    `Write the end of day note for a home builder's daily log on ${input.job || "the job"}, ${input.day || "today"}, from what happened on the job's running list of work.`,
+    "",
+    input.onSite.length > 0 ? "On site today:" : "No company was scheduled on site today.",
+    ...input.onSite.map((c) => `- ${c.name}${c.trade ? ` (${c.trade})` : ""}`),
+    "",
+    input.done.length > 0 ? `Finished today (${input.done.length}):` : "Nothing on the list was finished today.",
+    ...input.done.map((d) => `- ${placed2(d)}${d.by ? `, by ${d.by}` : ""}`),
+    "",
+    input.added.length > 0 ? `Found and added today (${input.added.length}):` : "Nothing was added to the list today.",
+    ...input.added.map((d) => `- ${placed2(d)}`),
+    ...input.said.length > 0 ? ["", "Said in comments today:", ...input.said.map((c) => `- ${c.who ? `${c.who}: ` : ""}${c.words}`)] : [],
+    "",
+    "Rules:",
+    '- Three short parts, each a heading on its own line then a few plain sentences: Work Completed, Issues Found, Notes. Under Notes, anything said that someone needs to act on, or "None."',
+    "- Group the work by room and by trade in sentences; do not list every item, and leave out item numbers.",
+    "- Use only what is here. Do not use dashes or hyphens. Spell out days and months.",
+    "",
+    'Reply with only JSON: {"note": "Work Completed\\n..."} with the parts separated by a blank line.'
+  ].join("\n");
+}
+function describePhotoInput(v) {
+  const r = record(v);
+  return { title: clip(r.title, TITLE_MAX), location: clip(r.location, 60) };
+}
+function describePhotoPrompt(input) {
+  return [
+    `This photo is on an item on a home builder's list of work${input.title ? `, "${input.title}"` : ""}${input.location ? `, in ${input.location}` : ""}.`,
+    'Say what is in it in a few plain words someone would search for later: the things, the materials, the colors and any damage, like "water stain on the ceiling by the vent, white drywall".',
+    "At most 20 words. No sentences about the item itself.",
+    'Reply with only JSON: {"words": "..."}.'
+  ].join("\n");
+}
 var CLAUDE_TASKS = {
   "fill-in": { tier: "sharp", maxTokens: 900, images: 1, minImages: 1, prompt: (v) => suggestPrompt(suggestInput(v)), enough: () => true },
   "say-it": { tier: "sharp", maxTokens: 3e3, images: 0, minImages: 0, prompt: (v) => sayItPrompt(sayItInput(v)), enough: (v) => sayItInput(v).words !== "" },
@@ -504,7 +602,20 @@ var CLAUDE_TASKS = {
     minImages: 0,
     prompt: (v) => companySummaryPrompt(companySummaryInput(v)),
     enough: (v) => companySummaryInput(v).lines.length > 0
-  }
+  },
+  find: { tier: "quick", maxTokens: 500, images: 0, minImages: 0, prompt: (v) => findPrompt(findInput(v)), enough: (v) => findInput(v).words !== "" },
+  "day-note": {
+    tier: "sharp",
+    maxTokens: 1500,
+    images: 0,
+    minImages: 0,
+    prompt: (v) => dayNotePrompt(dayNoteInput(v)),
+    enough: (v) => {
+      const x = dayNoteInput(v);
+      return x.done.length > 0 || x.added.length > 0 || x.onSite.length > 0 || x.said.length > 0;
+    }
+  },
+  "describe-photo": { tier: "quick", maxTokens: 120, images: 1, minImages: 1, prompt: (v) => describePhotoPrompt(describePhotoInput(v)), enough: () => true }
 };
 var isClaudeTask = (v) => typeof v === "string" && Object.hasOwn(CLAUDE_TASKS, v);
 function taskPrompt(task, input) {

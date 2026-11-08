@@ -37,7 +37,7 @@ function readOpened(text: string | null): Opened[] {
 
 /** The starred items' ids, newest star first. */
 export function useStarred(): string[] {
-  const text = starred.use();
+  const text = starred.useValue();
   return useMemo(() => readIds(text), [text]);
 }
 
@@ -54,6 +54,6 @@ export function noteOpened(itemId: string, jobId: string): void {
 
 /** The items opened last, newest first. */
 export function useRecent(): Opened[] {
-  const text = recent.use();
+  const text = recent.useValue();
   return useMemo(() => readOpened(text), [text]);
 }

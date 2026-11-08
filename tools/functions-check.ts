@@ -4,8 +4,9 @@
 // company, the connection kept open while Claude works, and, for read-plans, the links Claude gets
 // and the files taken away once read. For company-page: a done photo from the company's page, into
 // the item's folder and onto the item, and what it turns away; the owner's page, what the owner adds
-// with its photo, and their sign off; and a company's page in Spanish, each line translated once on
-// the builder's allowance and kept.
+// with its photo, and their sign off; a company's page in Spanish, each line translated once on
+// the builder's allowance and kept; and the job's team told on their phones, through a stand-in for
+// Expo's push service, when a company or the owner answers.
 //
 //   DENO=/path/to/deno npx tsx tools/functions-check.ts      (deno on the PATH works too)
 
@@ -68,6 +69,12 @@ const SPANISH_SPENT = 'fe'.repeat(32);
 /** Lines translated before, as the stand-in database keeps them: org|hash to text. */
 const translations = new Map<string, string>();
 let translateAsked = 0;
+/** The phones on the job's team, one of which Expo no longer knows; what Expo was asked to send, and the phones forgotten. */
+const TEAM_PHONE = 'ExponentPushToken[team-phone-1]';
+const OLD_PHONE = 'ExponentPushToken[old-phone-2]';
+let pushed: { to: string; title: string; body: string; data: Record<string, unknown>; sound?: string }[] = [];
+let forgotten: string[] = [];
+let answered: Record<string, unknown>[] = [];
 
 const stub = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${STUB}`);
@@ -82,7 +89,33 @@ const stub = createServer(async (req, res) => {
     if (who === SPENT) return json(200, { org: 'gulf_coast', person_id: null, limit_cents: 2500, used_cents: 2500.25 });
     return json(200, null);
   }
-  if (/^\/rest\/v1\/rpc\/(trade_|owner_|org_ai_allowance)/.test(url.pathname) && who !== 'Bearer service-key') return json(403, { code: '42501', message: 'not the service role' });
+  if (/^\/rest\/v1\/rpc\/(trade_|owner_|org_ai_allowance|push_targets|forget_push_tokens)/.test(url.pathname) && who !== 'Bearer service-key') return json(403, { code: '42501', message: 'not the service role' });
+  if (url.pathname === '/rest/v1/rpc/push_targets') {
+    const a = JSON.parse(text) as { p_link: string };
+    if (a.p_link !== LINK && a.p_link !== OWNER) return json(200, []);
+    return json(200, [TEAM_PHONE, OLD_PHONE].map((token) => ({ token, job_id: JOB, job_name: 'Smith Residence' })));
+  }
+  if (url.pathname === '/rest/v1/rpc/forget_push_tokens') {
+    forgotten.push(...(JSON.parse(text) as { p_tokens: string[] }).p_tokens);
+    return json(204, null);
+  }
+  if (/^\/rest\/v1\/rpc\/trade_(comment|confirm|mark_done|set_hours)$/.test(url.pathname)) {
+    const a = JSON.parse(text) as Record<string, unknown>;
+    if (a.p_token !== LINK || (a.p_item !== null && a.p_item !== ITEM)) return json(403, { code: '42501', message: 'That item is not on this list' });
+    answered.push({ fn: url.pathname.slice('/rest/v1/rpc/'.length), ...a });
+    return json(200, null);
+  }
+  if (url.pathname === '/--/api/v2/push/send' && req.method === 'POST') {
+    const messages = JSON.parse(text) as typeof pushed;
+    if (messages.some((m) => m.body.includes('PUSH-DOWN'))) return json(500, { errors: [{ code: 'INTERNAL_SERVER_ERROR', message: 'down' }] });
+    if (messages.some((m) => m.body.includes('SLOW-PUSH'))) await new Promise((done) => setTimeout(done, 4000));
+    pushed.push(...messages);
+    return json(200, {
+      data: messages.map((m) =>
+        m.to === OLD_PHONE ? { status: 'error', message: `"${OLD_PHONE}" is not a registered push notification recipient`, details: { error: 'DeviceNotRegistered' } } : { status: 'ok', id: crypto.randomUUID() },
+      ),
+    });
+  }
   if (url.pathname === '/rest/v1/rpc/org_ai_allowance') {
     const a = JSON.parse(text) as { p_org: string };
     return json(200, { org: a.p_org, limit_cents: 2500, used_cents: a.p_org === 'spent_org' ? 2600 : 40 });
@@ -272,6 +305,7 @@ async function withFunction(name: string, done: () => Promise<void>): Promise<vo
       SUPABASE_SERVICE_ROLE_KEY: 'service-key',
       ANTHROPIC_API_KEY: 'test-key',
       ANTHROPIC_BASE_URL: `http://localhost:${STUB}`,
+      EXPO_PUSH_URL: `http://localhost:${STUB}/--/api/v2/push/send`,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -352,6 +386,32 @@ async function checkAi() {
   counted = [];
   const fails = await call({ task: 'say-it', input: { words: 'CLAUDE-FAILS hang the mirror' } });
   expect('ai: says so when Claude does not answer, and counts nothing', parsed(fails.text).error === 'Claude did not answer. Try again in a minute' && counted.length === 0, fails.text);
+
+  // Round 4: the find, the day's note and a photo's words.
+  const find = await call({ task: 'find', input: { words: 'what is ready for Gator on Level 2', floors: ['Level 2'], locations: ['Kitchen 109'], companies: ['Gator Plumbing'], people: [], waitingOn: [] } });
+  const findWords = lastAsked()?.content?.[0]?.text ?? '';
+  expect(
+    "ai: turns the words into the list's filters on Haiku, from the job's own names",
+    find.status === 200 && lastAsked()?.model === 'claude-haiku-5-5' && findWords.includes('They said: "what is ready for Gator on Level 2"') && findWords.includes('Companies: Gator Plumbing'),
+    `${find.status} ${lastAsked()?.model} ${findWords.slice(0, 160)}`,
+  );
+  const note = await call({ task: 'day-note', input: { job: 'Fish', day: 'Sunday, November 8', onSite: [{ name: 'Gator Plumbing', trade: 'Plumbing' }], done: [{ title: 'Set toilet', location: 'Bath 116', by: 'Gator Plumbing' }], added: [], said: [] } });
+  const noteWords = lastAsked()?.content?.[0]?.text ?? '';
+  expect(
+    "ai: writes the end of day note on Sonnet, from the day's work",
+    note.status === 200 && lastAsked()?.model === 'claude-sonnet-5-5' && noteWords.includes('end of day note') && noteWords.includes('- Set toilet (Bath 116), by Gator Plumbing'),
+    `${note.status} ${lastAsked()?.model} ${noteWords.slice(0, 160)}`,
+  );
+  const before4 = askedCount;
+  const noPicture = await call({ task: 'describe-photo', input: { title: 'Patch drywall', location: 'Living 107' } });
+  expect("ai: a photo's words need the photo", noPicture.status === 400 && askedCount === before4, `${noPicture.status}`);
+  const described = await call({ task: 'describe-photo', input: { title: 'Patch drywall', location: 'Living 107' }, images: [PHOTO] });
+  const pictured = lastAsked()?.content ?? [];
+  expect(
+    "ai: says what is in a photo on Haiku, with the photo",
+    described.status === 200 && lastAsked()?.model === 'claude-haiku-5-5' && pictured[0]?.type === 'image' && (pictured[1]?.text ?? '').includes('"Patch drywall", in Living 107'),
+    `${described.status} ${lastAsked()?.model} ${pictured.length}`,
+  );
 }
 
 async function checkReadPlans() {
@@ -497,6 +557,98 @@ async function checkOwnerPage() {
   expect("company-page: does only what the owner's page does", odd.status === 403, `${odd.status}`);
 }
 
+/** Waits a moment for the phones to be told: the page answers first. */
+async function pushes(count: number, ms = 4000): Promise<typeof pushed> {
+  const until = Date.now() + ms;
+  while (pushed.length < count && Date.now() < until) await new Promise((wait) => setTimeout(wait, 50));
+  return pushed;
+}
+const quiet = () => new Promise((wait) => setTimeout(wait, 600));
+
+async function checkTelling() {
+  // A done photo, the hours, Not Done and taking back a confirm tell nobody.
+  answered = [];
+  added = [];
+  const photo = await call({ t: LINK, action: 'photo', item: ITEM, value: Buffer.from('another jpeg').toString('base64'), width: 1600, height: 1200, name: 'Mike' });
+  await call({ t: LINK, action: 'hours', item: ITEM, value: 3, name: 'Mike' });
+  await call({ t: LINK, action: 'done', item: ITEM, value: false, name: 'Mike' });
+  await call({ t: LINK, action: 'confirm', item: ITEM, value: false, name: 'Mike' });
+  await quiet();
+  expect(
+    'company-page: a done photo, the hours, Not Done and taking back a confirm tell nobody',
+    photo.status === 200 && added.length === 1 && answered.length === 3 && pushed.length === 0,
+    `${photo.status} ${added.length} ${answered.length} ${JSON.stringify(pushed)}`,
+  );
+
+  pushed = [];
+  forgotten = [];
+  const done = await call({ t: LINK, action: 'done', item: ITEM, name: 'Mike' });
+  const told = await pushes(2);
+  const toTeam = told.find((m) => m.to === TEAM_PHONE);
+  expect(
+    "company-page: marking work done tells the job's team, under the job's name, in Activity's words",
+    done.status === 200 && told.length === 2 && toTeam?.title === 'Smith Residence' && toTeam.body === 'Mike at Gator Plumbing marked Install vanity faucets done.' && toTeam.sound === 'default',
+    `${done.status} ${JSON.stringify(told)}`,
+  );
+  expect('company-page: tapping it opens the item', toTeam?.data?.jobId === JOB && toTeam.data.itemId === ITEM, JSON.stringify(toTeam?.data));
+  await quiet();
+  expect('company-page: forgets a phone Expo no longer knows', forgotten.length === 1 && forgotten[0] === OLD_PHONE, JSON.stringify(forgotten));
+
+  pushed = [];
+  await call({ t: LINK, action: 'confirm', item: ITEM });
+  const confirmed = (await pushes(2)).find((m) => m.to === TEAM_PHONE);
+  expect('company-page: confirming tells the team', confirmed?.body === 'Gator Plumbing confirmed Install vanity faucets.', JSON.stringify(pushed));
+
+  pushed = [];
+  await call({ t: LINK, action: 'comment', item: ITEM, value: 'Coming Tuesday\nmorning', name: 'Mike' });
+  const commented = (await pushes(2)).find((m) => m.to === TEAM_PHONE);
+  expect('company-page: a comment tells the team what it says', commented?.body === 'Mike at Gator Plumbing commented on Install vanity faucets: Coming Tuesday morning.', JSON.stringify(pushed));
+
+  pushed = [];
+  await call({ t: LINK, action: 'comment', value: 'Can we come Friday?', name: 'Mike' });
+  const onList = (await pushes(2)).find((m) => m.to === TEAM_PHONE);
+  expect('company-page: a comment on the whole list says so, and opens the job', onList?.body === 'Mike at Gator Plumbing commented on the Gator Plumbing list: Can we come Friday?' && onList.data.itemId === undefined && onList.data.jobId === JOB, JSON.stringify(onList));
+
+  pushed = [];
+  const slowStarted = Date.now();
+  const slow = await call({ t: LINK, action: 'comment', item: ITEM, value: 'SLOW-PUSH note', name: 'Mike' });
+  const slowMs = Date.now() - slowStarted;
+  const late = await pushes(2, 8000);
+  expect('company-page: answers the page before the phones are told', slow.status === 200 && slowMs < 2500 && late.length === 2, `${slow.status} ${slowMs}ms ${late.length}`);
+
+  pushed = [];
+  const down = await call({ t: LINK, action: 'comment', item: ITEM, value: 'PUSH-DOWN note', name: 'Mike' });
+  await quiet();
+  expect("company-page: the page's answer goes through when Expo's service is down", down.status === 200 && pushed.length === 0 && Array.isArray(parsed(down.text).items), `${down.status} ${down.text.slice(0, 120)}`);
+
+  pushed = [];
+  const notOn = await call({ t: LINK, action: 'done', item: '22222222-2222-4222-8222-222222222222', name: 'Mike' });
+  await quiet();
+  expect('company-page: something turned away tells nobody', notOn.status === 403 && pushed.length === 0, `${notOn.status} ${pushed.length}`);
+
+  pushed = [];
+  ownerAdded = [];
+  await call({ o: OWNER, action: 'add', words: 'Scratch on the pantry door', location: KITCHEN, name: 'Karen' });
+  const ownerTold = (await pushes(2)).find((m) => m.to === TEAM_PHONE);
+  expect(
+    'company-page: what the owner adds tells the team, and opens what came in',
+    ownerTold?.body === 'Karen, the owner, added something to look at: Scratch on the pantry door.' && ownerTold.title === 'Smith Residence' && ownerTold.data.itemId === ownerAdded[0]?.p_item && typeof ownerTold.data.itemId === 'string',
+    `${JSON.stringify(ownerTold)} ${JSON.stringify(ownerAdded[0]?.p_item)}`,
+  );
+
+  pushed = [];
+  await call({ o: OWNER, action: 'sign-off', location: KITCHEN, name: 'Karen Lee' });
+  const signedTold = (await pushes(2)).find((m) => m.to === TEAM_PHONE);
+  expect('company-page: the owner signing off tells the team where', signedTold?.body === 'Karen Lee, the owner, signed off Kitchen 109.' && signedTold.data.itemId === undefined, JSON.stringify(signedTold));
+
+  pushed = [];
+  await call({ o: OWNER, action: 'page' });
+  await call({ t: LINK, action: 'page' });
+  await call({ o: OWNER, action: 'sign-off', name: '' });
+  await quiet();
+  expect('company-page: opening a page, or an answer turned away, tells nobody', pushed.length === 0, JSON.stringify(pushed));
+}
+
 async function checkSpanish() {
   counted = [];
   translateAsked = 0;
@@ -534,8 +686,12 @@ async function main() {
     await withFunction('ai', checkAi);
     await withFunction('read-plans', checkReadPlans);
     await withFunction('company-page', async () => {
+      // Nothing is told while the pages are checked: they answer with photos and owners' adds,
+      // and the stand-in for Expo keeps what it is asked from here on.
       await checkCompanyPage();
       await checkOwnerPage();
+      pushed = [];
+      await checkTelling();
       await checkSpanish();
     });
   } finally {

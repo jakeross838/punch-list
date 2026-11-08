@@ -12,7 +12,8 @@ import { ItemRow } from '@/components/ItemRow';
 import { useItemActions } from '@/components/useItemActions';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
-import { EmptyState, MetaLine, Page, Panel, SectionLabel, Text, timeOf, weekdayDate, todayIso } from '@/ui';
+import { useClaudeReady } from '@/ai/claude';
+import { EmptyState, Icon, LedgerRow, MetaLine, Page, Panel, SectionLabel, Text, timeOf, weekdayDate, todayIso } from '@/ui';
 
 const DAY_MS = 86_400_000;
 
@@ -68,6 +69,7 @@ export default function TodayScreen() {
 
 function TodayJobSection({ plan }: { plan: ReturnType<typeof todayPlan>[number] }) {
   const data = useData();
+  const claude = useClaudeReady();
   const jobId = plan.job.id;
   const photos = data.usePhotos(jobId);
   const actions = useItemActions(jobId);
@@ -116,6 +118,22 @@ function TodayJobSection({ plan }: { plan: ReturnType<typeof todayPlan>[number] 
           </Panel>
         </View>
       ))}
+      {claude ? (
+        <Panel style={styles.panel}>
+          <LedgerRow
+            last
+            lead={<Icon name="sparkles" size={18} color={colors.tint} />}
+            onPress={() => router.push({ pathname: '/jobs/[jobId]/day-note', params: { jobId } })}
+            chevron
+            testID={`day-note-${jobId}`}
+          >
+            <Text weight="500">End of Day Note</Text>
+            <Text variant="footnote" color={colors.secondary}>
+              Claude writes what got done and found today, for the daily log.
+            </Text>
+          </LedgerRow>
+        </Panel>
+      ) : null}
     </View>
   );
 }

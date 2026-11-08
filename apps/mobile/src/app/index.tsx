@@ -12,6 +12,7 @@ import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { useJobActions } from '@/components/JobActions';
+import { NotifyKeeper } from '@/components/Notify';
 import { useUpdateLines } from '@/components/ActivityRow';
 import { SearchResults } from '@/components/SearchResults';
 import { useRecent, useStarred } from '@/data/stars';
@@ -57,6 +58,8 @@ export default function JobsScreen() {
       search={{ value: query, onChange: setQuery, placeholder: 'Search everything' }}
       tab={{ active: 'jobs' }}
     >
+      {/* Jobs is always open under the rest: the phone kept on notifications, and a notification tapped opens its item. */}
+      <NotifyKeeper />
       {choices.length > 1 ? (
         <ChipRow chips={choices.map(([key, label]) => ({ key, label, on: show === key, onPress: () => setShow(key), testID: `show-${key}` }))} style={styles.show} />
       ) : null}
@@ -104,7 +107,7 @@ function DayRows({ personId }: { personId: string }) {
   const data = useData();
   const mine = assignedTo(data.useAssigned(personId), personId);
   const lines = useUpdateLines();
-  const seenAt = updatesSeen.use();
+  const seenAt = updatesSeen.useValue();
   const kept = useStarred().length + useRecent().length;
   const fresh = newLines(lines, seenAt, personId).length;
   const ready = mine.filter((i) => i.ready).length;

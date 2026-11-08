@@ -2314,4 +2314,105 @@ begin
 end $$;
 reset role;
 
+-- ---------- Round 4: a photo's words, and the phones to tell ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+declare
+  ph uuid;
+begin
+  select p.id into ph from public.photos p join public.jobs j on j.id = p.job_id where j.name = 'Fish' and not p.removed limit 1;
+  if ph is null then raise exception 'FAIL: no photo on Fish to describe'; end if;
+  update public.photos set description = 'water stain on the ceiling by the vent' where id = ph;
+  if (select description from public.photos where id = ph) is distinct from 'water stain on the ceiling by the vent' then raise exception 'FAIL: the photo''s words were not kept'; end if;
+  begin
+    update public.photos set description = repeat('a', 301) where id = ph;
+    raise exception 'FAIL: the photo kept too many words';
+  exception when check_violation then null;
+  end;
+  perform public.save_push_token('ExponentPushToken[jakes-phone-1234]', 'ios');
+  perform public.save_push_token('ExponentPushToken[jakes-phone-1234]', 'ios');
+  begin
+    perform public.save_push_token('not a token', 'ios');
+    raise exception 'FAIL: a token that is not one was kept';
+  exception when check_violation then null;
+  end;
+  begin
+    perform 1 from public.push_tokens;
+    raise exception 'FAIL: the app can read the phones to tell';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.push_targets(current_setting('test.owner'));
+    raise exception 'FAIL: the app can ask who to tell';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+set request.jwt.claims = '{"email":"sam@rossbuilt.com"}';
+do $$
+begin
+  perform public.save_push_token('ExponentPushToken[sams-phone-5678]', 'android');
+  -- Sam cannot take Jake's phone off.
+  perform public.drop_push_token('ExponentPushToken[jakes-phone-1234]');
+end $$;
+reset role;
+
+do $$
+declare
+  fish uuid := (select id from public.jobs where name = 'Fish');
+  jake uuid := (select id from public.people where email = 'jake@rossbuilt.com');
+  sam uuid := (select id from public.people where email = 'sam@rossbuilt.com');
+  -- The owner's link on Fish, and a company's link on Fish, one taken back and one new.
+  owner text := current_setting('test.owner');
+  taken_back text := current_setting('test.link');
+  company text;
+  told text[];
+begin
+  if (select count(*) from public.push_tokens) <> 2 then raise exception 'FAIL: the phones were not kept once each: %', (select count(*) from public.push_tokens); end if;
+  if not exists (select 1 from public.push_tokens where token = 'ExponentPushToken[jakes-phone-1234]' and person_id = jake) then raise exception 'FAIL: Sam took Jake''s phone off'; end if;
+  if (select job_id from public.company_links where token = taken_back) <> fish or not (select revoked from public.company_links where token = taken_back) then
+    raise exception 'FAIL: the test needs the company link on Fish taken back by now';
+  end if;
+  insert into public.company_links (org, job_id, company_id) select org, job_id, company_id from public.company_links where token = taken_back returning token into company;
+  -- Who to tell about Fish: its team, switched on, on a job that is open, through either link.
+  update public.jobs set archived = false where id = fish;
+  insert into public.job_team (org, job_id, person_id, part) values ('ross_built', fish, jake, 'project_manager') on conflict (job_id, person_id) do nothing;
+  delete from public.job_team where job_id = fish and person_id = sam;
+  select array_agg(token order by token) into told from public.push_targets(owner);
+  if told is distinct from array['ExponentPushToken[jakes-phone-1234]'] then raise exception 'FAIL: the wrong phones would be told about the owner on Fish: %', told; end if;
+  select array_agg(token order by token) into told from public.push_targets(company);
+  if told is distinct from array['ExponentPushToken[jakes-phone-1234]'] then raise exception 'FAIL: the wrong phones would be told about a company on Fish: %', told; end if;
+  if (select job_name from public.push_targets(company) limit 1) <> 'Fish' or (select job_id from public.push_targets(company) limit 1) <> fish then raise exception 'FAIL: the job does not go with it'; end if;
+  if exists (select 1 from public.push_targets(taken_back)) then raise exception 'FAIL: a link taken back tells the team'; end if;
+  if exists (select 1 from public.push_targets(repeat('0', 64))) then raise exception 'FAIL: a link that is not one tells someone'; end if;
+  update public.jobs set archived = true where id = fish;
+  if exists (select 1 from public.push_targets(owner)) then raise exception 'FAIL: a closed job''s team is told'; end if;
+  update public.jobs set archived = false where id = fish;
+  -- On the team and switched off: not told. Sam, on the team now, is; and the admin is not, since the team heard.
+  update public.people set active = false where id = jake;
+  insert into public.job_team (org, job_id, person_id, part) values ('ross_built', fish, sam, 'field');
+  select array_agg(token order by token) into told from public.push_targets(company);
+  if told is distinct from array['ExponentPushToken[sams-phone-5678]'] then raise exception 'FAIL: someone switched off is told, or the team was not: %', told; end if;
+  update public.people set active = true where id = jake;
+  -- Nobody on the job's team: the company's admins are told (Jake), and not Sam.
+  delete from public.job_team where job_id = fish;
+  select array_agg(token order by token) into told from public.push_targets(company);
+  if told is distinct from array['ExponentPushToken[jakes-phone-1234]'] then raise exception 'FAIL: a job with no team did not tell the admins: %', told; end if;
+  perform public.forget_push_tokens(array['ExponentPushToken[sams-phone-5678]']);
+  if exists (select 1 from public.push_tokens where person_id = sam) then raise exception 'FAIL: a token Expo turned down was kept'; end if;
+end $$;
+
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+begin
+  perform public.drop_push_token('ExponentPushToken[jakes-phone-1234]');
+end $$;
+reset role;
+do $$
+begin
+  if exists (select 1 from public.push_tokens) then raise exception 'FAIL: signing out did not take the phone off'; end if;
+end $$;
+
 select 'All database checks passed' as result;

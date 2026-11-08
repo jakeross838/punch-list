@@ -56,10 +56,48 @@ function costCents(model, usage) {
   return Math.round(dollars * 100 * 1e4) / 1e4;
 }
 var answer = (raw) => record(typeof raw === "string" ? jsonIn(raw) : raw);
+
+// packages/core/src/notify.ts
+var NEWS_MOST = 180;
+var oneLine = (v) => (v ?? "").replace(/\s+/g, " ").trim();
+var cut = (text, most) => text.length > most ? `${text.slice(0, most - 1).trimEnd()}\u2026` : text;
+var ended = (text) => /[.!?…]$/.test(text) ? text : `${text}.`;
+function companyWho(company, name) {
+  const c = cut(oneLine(company), 60) || "The company";
+  const n = cut(oneLine(name), 40);
+  return n ? `${n} at ${c}` : c;
+}
+var ownerWho = (name) => {
+  const n = cut(oneLine(name), 40);
+  return n ? `${n}, the owner,` : "The owner";
+};
+var titled = (item) => cut(oneLine(item), 60) || "an item";
+function newsLine(news) {
+  switch (news.kind) {
+    case "done":
+      return cut(`${companyWho(news.company, news.name)} marked ${titled(news.item)} done.`, NEWS_MOST);
+    case "confirmed":
+      return cut(`${companyWho(news.company, news.name)} confirmed ${titled(news.item)}.`, NEWS_MOST);
+    case "comment": {
+      const on = news.item === null ? `the ${cut(oneLine(news.company), 60) || "company"} list` : titled(news.item);
+      const said = oneLine(news.body);
+      return cut(ended(`${companyWho(news.company, news.name)} commented on ${on}${said ? `: ${said}` : ""}`), NEWS_MOST);
+    }
+    case "owner_added": {
+      const said = oneLine(news.words);
+      return cut(ended(said ? `${ownerWho(news.name)} added something to look at: ${said}` : `${ownerWho(news.name)} added a photo of something to look at`), NEWS_MOST);
+    }
+    case "owner_signed_off": {
+      const where = cut(oneLine(news.location), 60);
+      return cut(`${ownerWho(news.name)} signed off ${where || "the job"}.`, NEWS_MOST);
+    }
+  }
+}
 export {
   CLAUDE_MODELS,
   TRANSLATE_AT_ONCE,
   costCents,
+  newsLine,
   readTranslations,
   translatePrompt
 };

@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } fr
 import { StyleSheet, Text, View } from 'react-native';
 import { DataContext, type DataApi, type SyncInfo } from '../api';
 import { latestFirst, makeApi, UPDATES_KEPT, type Keeper } from '../engine';
+import { forgetHere } from '../notify';
 import { keepPhoto } from '../photoFiles';
 import { SupabaseConnector } from '../powersync/connector';
 import {
@@ -48,6 +49,7 @@ async function follow(email: string | null): Promise<void> {
     // Someone else on this phone: nothing of the last person's stays.
     await db.disconnectAndClear();
     deletePhotoFiles();
+    forgetHere();
     reset();
     setSessionEmail(clean);
   }
@@ -105,10 +107,19 @@ function start(): Promise<void> {
   return starting;
 }
 
+/** Takes this phone off the server's notifications for whoever is signed in; signing out goes on either way. */
+async function dropThisPhone(): Promise<void> {
+  const token = forgetHere();
+  if (!token) return;
+  const { error } = await supabase.rpc('drop_push_token', { p_token: token });
+  if (error) console.warn('Taking the phone off notifications', error.message);
+}
+
 async function clearPhone(): Promise<void> {
   stopPhotos();
   await db.disconnectAndClear();
   deletePhotoFiles();
+  forgetHere();
   await signOutOfSupabase();
   connectedFor = null;
   reset();
@@ -220,12 +231,21 @@ const liveApi: DataApi = makeApi(keeper, {
       );
       await deletePhotosOnServer(BUCKET, rows.map((r) => String(r.storage_path)));
     }
+    await dropThisPhone();
     await deleteAccountOnServer();
     await clearPhone();
   },
   jobStation: (jobId, action) => jobStationOnServer(jobId, action),
   ownerLink: (jobId, action, name) => ownerLinkOnServer(jobId, action, name),
   companiesOpened: (jobId) => companiesOpenedOnServer(jobId),
+  async savePushToken(token, platform) {
+    const { error } = await supabase.rpc('save_push_token', { p_token: token, p_platform: platform });
+    if (error) throw new Error(error.message);
+  },
+  async dropPushToken(token) {
+    const { error } = await supabase.rpc('drop_push_token', { p_token: token });
+    if (error) throw new Error(error.message);
+  },
   async deleteJob(id) {
     if (!isAdmin(store.get().me)) throw new Error('Only an admin can delete a job.');
     const changes = (await db.getUploadQueueStats()).count + (await photosWaiting());
@@ -261,6 +281,7 @@ const liveApi: DataApi = makeApi(keeper, {
         `${changes === 1 ? 'A change' : `${changes} changes`} made on this phone ${changes === 1 ? 'has' : 'have'} not gone up yet. Get a signal and wait a moment, then sign out.`,
       );
     }
+    await dropThisPhone();
     await clearPhone();
   },
   useActivity(jobId) {

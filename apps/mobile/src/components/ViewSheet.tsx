@@ -10,6 +10,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { sameView } from '@/data/view';
 import { haptic, ListRow, ListSection, ListSwitchRow, ListTextField, Segmented, Sheet, Text, Touchable, useFeedback } from '@/ui';
+import { AskToFind } from './AskToFind';
 import { FilterFacets } from './FilterFacets';
 
 export function ViewSheet({
@@ -66,6 +67,7 @@ export function ViewSheet({
       testID="view-sheet"
     >
       <ScrollView contentContainerStyle={styles.content} style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+        <AskToFind jobId={jobId} view={view} onChange={onChange} />
         {named && named.length > 0 ? (
           <ListSection header="Saved Views">
             {named.map((n) => (

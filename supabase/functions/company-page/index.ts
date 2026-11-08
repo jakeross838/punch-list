@@ -16,12 +16,16 @@
 // A company whose page is in Spanish gets its list's lines translated by Claude on the builder's
 // allowance, each line once: they are kept in translations and used again.
 //
+// When a company marks work done, confirms it or comments, and when the owner adds something or
+// signs off, the job's team are told on their phones, through Expo's push service, once the page
+// has its answer: the line says what happened in the words Activity uses, under the job's name.
+//
 //   Deployed with verify_jwt off: the link is the only key, and nobody signs in.
 //   tools/build-functions.mjs writes core.js and claude.ts here.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { askClaude, claudeKey, usedUp, type Allowance } from './claude.ts';
-import { CLAUDE_MODELS, readTranslations, TRANSLATE_AT_ONCE, translatePrompt } from './core.js';
+import { CLAUDE_MODELS, newsLine, readTranslations, TRANSLATE_AT_ONCE, translatePrompt } from './core.js';
 
 function serviceKey(): string {
   const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -184,7 +188,7 @@ async function addPhoto(token: string, item: string, body: Record<string, unknow
  * in the job's folder under the new item's own id), or their sign off. The owner_* functions check
  * the link and everything sent again, and say plainly what is wrong.
  */
-async function ownerAnswer(token: string, body: Record<string, unknown>): Promise<void> {
+async function ownerAnswer(token: string, body: Record<string, unknown>): Promise<string | null> {
   const name = nameOf(body.name);
   const location = typeof body.location === 'string' && UUID.test(body.location) ? body.location.toLowerCase() : null;
   const call = async (fn: string, args: Record<string, unknown>) => {
@@ -198,7 +202,7 @@ async function ownerAnswer(token: string, body: Record<string, unknown>): Promis
   };
   if (body.action === 'sign-off') {
     await call('owner_sign_off', { p_location: location, p_name: name ?? '' });
-    return;
+    return null;
   }
   if (body.action !== 'add') throw new Refused('That is not something the page can do');
   const words = typeof body.words === 'string' ? body.words.slice(0, 2000) : '';
@@ -221,6 +225,91 @@ async function ownerAnswer(token: string, body: Record<string, unknown>): Promis
     if (path) await db.storage.from('photos').remove([path]);
     throw e;
   }
+  return item;
+}
+
+// ---------- telling the job's team ----------
+
+/** Expo's push service; a stand-in when the functions are checked on a computer. */
+const PUSH_URL = Deno.env.get('EXPO_PUSH_URL') || 'https://exp.host/--/api/v2/push/send';
+/** Expo takes at most this many messages at once. */
+const PUSH_AT_ONCE = 100;
+
+interface Target {
+  token: string;
+  job_id: string;
+  job_name: string;
+}
+
+/**
+ * Tells the phones of the job's team (or its company's admins, when nobody is on its team) through
+ * Expo, under the job's name; tapping opens the item. A phone Expo no longer knows is forgotten.
+ */
+async function tell(link: string, line: string, item: string | null): Promise<void> {
+  const { data, error } = await db.rpc('push_targets', { p_link: link });
+  if (error) throw error;
+  const targets = (data ?? []) as Target[];
+  const key = Deno.env.get('EXPO_ACCESS_TOKEN');
+  const gone: string[] = [];
+  for (let k = 0; k < targets.length; k += PUSH_AT_ONCE) {
+    const batch = targets.slice(k, k + PUSH_AT_ONCE);
+    const res = await fetch(PUSH_URL, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
+      body: JSON.stringify(
+        batch.map((t) => ({ to: t.token, title: t.job_name, body: line, sound: 'default', data: { jobId: t.job_id, ...(item ? { itemId: item } : {}) } })),
+      ),
+    });
+    if (!res.ok) {
+      console.error('Telling the team', res.status, (await res.text()).slice(0, 300));
+      continue;
+    }
+    const out = (await res.json()) as { data?: { status?: string; details?: { error?: string } }[] };
+    (out.data ?? []).forEach((ticket, i) => {
+      if (ticket?.status === 'error' && ticket.details?.error === 'DeviceNotRegistered' && batch[i]) gone.push(batch[i].token);
+    });
+  }
+  if (gone.length > 0) {
+    const { error: forgetError } = await db.rpc('forget_push_tokens', { p_tokens: gone });
+    if (forgetError) console.error('Forgetting the phones Expo no longer knows', forgetError.message);
+  }
+}
+
+/** Once the page has its answer: telling the team never holds it up, and never fails it. */
+function tellAfter(link: string, line: string | null, item: string | null): void {
+  if (!line) return;
+  const work = tell(link, line, item).catch((e) => console.error('Telling the team', e instanceof Error ? e.message : e));
+  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(work);
+}
+
+const UUIDISH = (v: unknown) => (typeof v === 'string' && UUID.test(v) ? v.toLowerCase() : null);
+
+/** What a company did on its page, as the line its job's team is told; nothing for the rest (hours, a photo, taking a mark back). */
+function companyNews(body: Record<string, unknown>, p: Page): string | null {
+  const company = String((p.company as { name?: unknown } | undefined)?.name ?? '');
+  const name = nameOf(body.name);
+  const id = UUIDISH(body.item);
+  const listed = [...p.items, ...(Array.isArray(p.completed) ? (p.completed as Record<string, unknown>[]) : [])];
+  const found = id ? listed.find((i) => String(i.id).toLowerCase() === id) : undefined;
+  const title = typeof found?.title === 'string' ? found.title : '';
+  if (body.action === 'done' && body.value !== false) return newsLine({ kind: 'done', company, name, item: title });
+  if (body.action === 'confirm' && body.value !== false) return newsLine({ kind: 'confirmed', company, name, item: title });
+  if (body.action === 'comment' && typeof body.value === 'string' && body.value.trim() !== '') {
+    return newsLine({ kind: 'comment', company, name, item: id ? title : null, body: body.value.slice(0, 2000) });
+  }
+  return null;
+}
+
+/** What the owner did on their page, as the line the job's team is told. */
+function ownerNews(body: Record<string, unknown>, p: OwnerPage): string | null {
+  const name = nameOf(body.name) ?? nameOf(p.owner);
+  if (body.action === 'add') return newsLine({ kind: 'owner_added', name, words: typeof body.words === 'string' ? body.words.slice(0, 2000) : '' });
+  if (body.action === 'sign-off') {
+    const where = UUIDISH(body.location);
+    const place = where ? (p.locations as unknown as { id?: unknown; label?: unknown }[]).find((l) => String(l.id).toLowerCase() === where) : undefined;
+    return newsLine({ kind: 'owner_signed_off', name, location: typeof place?.label === 'string' ? place.label : null });
+  }
+  return null;
 }
 
 // ---------- a company's page in Spanish ----------
@@ -345,9 +434,11 @@ Deno.serve(async (req: Request) => {
     if (body.o !== undefined) {
       const owner = typeof body.o === 'string' ? body.o.trim().toLowerCase() : '';
       if (!TOKEN.test(owner)) return reply({ error: 'This link does not work. Ask your builder for a new one.' }, 404);
-      if (body.action && body.action !== 'page') await ownerAnswer(owner, body);
+      const answered = body.action && body.action !== 'page';
+      const added = answered ? await ownerAnswer(owner, body) : null;
       const shown = await ownerPage(owner);
       if (!shown) return reply({ error: 'This link no longer works. Ask your builder for a new one.' }, 404);
+      if (answered) tellAfter(owner, ownerNews(body, shown), added);
       return reply(shown);
     }
     if (body.s !== undefined) {
@@ -369,9 +460,11 @@ Deno.serve(async (req: Request) => {
       token = String(data);
     }
     if (!TOKEN.test(token)) return reply({ error: 'This link does not work. Ask for a new one.' }, 404);
-    if (body.action && body.action !== 'page') await answer(token, body);
+    const answered = body.action && body.action !== 'page';
+    if (answered) await answer(token, body);
     const shown = await shownPage(token);
     if (!shown) return reply({ error: 'This link no longer works. Ask for a new one.' }, 404);
+    if (answered) tellAfter(token, companyNews(body, shown), UUIDISH(body.item));
     // A station is in the house for anyone to tap: the company's links to its other jobs stay off it.
     if (body.s !== undefined) delete shown.other_jobs;
     return reply(shown);

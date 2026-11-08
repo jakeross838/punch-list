@@ -77,6 +77,12 @@
             "com.google.android.googlequicksearchbox"
           ]
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1A2830"
+        }
       ]
     ],
     "experiments": {

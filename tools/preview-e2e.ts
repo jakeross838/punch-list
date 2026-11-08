@@ -179,6 +179,16 @@ async function main(): Promise<void> {
             const names = [...new Set([...input.matchAll(/^- ([^:]+): /gm)].map((m) => m[1]))];
             return { companies: names.map((name, k) => ({ name, summary: k === 0 ? 'Marked two items done from their page and asked about the hood trim.' : 'Confirmed its work.', needsAnswer: k === 0 })) };
           }
+          // Ask Claude to find: ready work for the first company named, on Level 1.
+          if (/said what they want to see\\. Turn it into the list's filters/.test(input)) {
+            const company = ((input.match(/^Companies: ([^;\\n]+)/m) || [])[1] || '').trim();
+            return { states: ['ready'], kinds: [], companies: /SMS/.test(input) ? ['SMS Carpentry'] : company ? [company] : [], people: [], levels: ['Level 1'], locations: [], waitingOn: [], photo: null, scheduled: null, estimated: null, groupBy: null, showCompleted: false };
+          }
+          // The end of day note, from what happened on the list today.
+          if (/Write the end of day note for a home builder's daily log/.test(input)) {
+            const done = (input.match(/^Finished today \\((\\d+)\\):/m) || [])[1] || '0';
+            return { note: 'Work Completed\\n' + done + ' items were finished today, around the house.\\n\\nIssues Found\\nNew items were added in the kitchen.\\n\\nNotes\\nNone.' };
+          }
           // Standard wording: a switch cover is the switch plate.
           if (/list of standard titles/.test(input)) {
             const typed = (input.match(/They typed: "(.*)"/) || [])[1] || '';
@@ -208,9 +218,12 @@ async function main(): Promise<void> {
   const shot = async (name: string) => tab.screenshot({ path: join(shots, `${name}.png`) });
   const steps: string[] = [];
   // E2E_ONLY=new walks only the steps for what is new, on fresh sample data: a quick check.
+  // E2E_ONLY=latest walks only the last round's steps (Round 4: finding things, and being told).
   const only = process.env.E2E_ONLY;
+  const LATEST = /^New: (Search Everything on Jobs|Star an item|Today:|End of Day Note|Updates:|a view saved with a name|Ask Claude in View)/;
   const step = async (name: string, fn: () => Promise<void>) => {
     if (only === 'new' && !name.startsWith('New: ') && name !== 'jobs list opens') return;
+    if (only === 'latest' && !LATEST.test(name) && name !== 'jobs list opens') return;
     await fn();
     steps.push(name);
   };
@@ -863,8 +876,10 @@ async function main(): Promise<void> {
       await settle(500);
       await shot('29e-filtered-location');
       await app.getByTestId('back').last().click();
+      // The location's list slides away first: until then both lists have their filter bar.
+      await settle(700);
       await app.getByTestId('filter-clear').last().click();
-      await app.getByTestId('filter-bar').waitFor({ state: 'detached' });
+      await app.getByTestId('filter-bar').first().waitFor({ state: 'detached' });
       await app.getByTestId('group-room-1').waitFor();
       await settle();
     });
@@ -1088,7 +1103,7 @@ async function main(): Promise<void> {
       await app.getByTestId('field-rooms').waitFor();
       await settle(600);
       await app.getByTestId('field-rooms').fill('Level 3:\nRoof Deck 301\nOffice 302');
-      await app.getByText('2 New').waitFor();
+      await app.getByText('2 New', { exact: true }).waitFor();
       await app.getByTestId('paste-add').click();
       await app.getByText('2 locations added').waitFor();
       // The new level comes before the outside areas, so the job behind has it drawn too: the one in Job Setup.
@@ -2355,7 +2370,8 @@ async function main(): Promise<void> {
       await settle(400);
       await shot('99zf4b-spreadsheet-rows');
       await app.getByTestId('say-add').last().click();
-      await app.getByText('Added 2 items.').waitFor();
+      // On a quick run the list's PDF added two as well, and its toast can still be up.
+      await app.getByText('Added 2 items.').last().waitFor();
       await seen('group-room-1').waitFor();
       await settle(400);
     });
@@ -2460,6 +2476,205 @@ async function main(): Promise<void> {
       if ((await app.getByText('Bay Drive House').count()) !== 0) throw new Error('Sam sees a job he is not on');
       await settle(600);
       await shot('84-signed-in');
+    });
+    // ---------- Round 4: finding things, and being told ----------
+    /**
+     * Back to Jobs from wherever the last step left off: Back while the screen on top has one,
+     * then the bottom bar's Jobs, which closes Me and does nothing on Jobs itself.
+     */
+    const toJobs = async () => {
+      for (let i = 0; i < 6; i += 1) {
+        const back = app.getByTestId('back').filter({ visible: true });
+        if ((await back.count()) === 0) break;
+        await back.last().click();
+        await settle(600);
+      }
+      const tabs = app.getByTestId('tab-jobs').filter({ visible: true });
+      if ((await tabs.count()) > 0) {
+        await tabs.last().click();
+        await settle(600);
+      }
+      // Jobs keeps what was searched for: cleared, the jobs show again.
+      const clear = app.getByTestId('search-clear').filter({ visible: true });
+      if ((await clear.count()) > 0) await clear.last().click();
+      await app.getByTestId('job-job-preview').filter({ visible: true }).first().waitFor();
+      await settle(300);
+    };
+    /** Something in the item's More menu. */
+    const itemMenu = async (testId: string) => {
+      await seen('item-more').click();
+      await app.getByTestId(testId).waitFor();
+      await settle(350);
+      await app.getByTestId(testId).click();
+      await settle(300);
+    };
+    /** The last thing Claude was asked that says this. */
+    const askedOf = (said: string) =>
+      app.locator('body').evaluate((_, text) => ((window as unknown as { __asked?: { input: string; tier?: string }[] }).__asked ?? []).filter((a) => typeof a.input === 'string' && a.input.includes(text)).pop() ?? null, said);
+    await step('New: Search Everything on Jobs: items, comments, companies and people on every job, and a tap opens one', async () => {
+      await toJobs();
+      const search = app.getByTestId('search').filter({ visible: true }).last();
+      await search.fill('hinges');
+      await app.getByTestId('found-comment').waitFor();
+      await search.fill('Gator');
+      await app.getByTestId('found-company').waitFor();
+      await search.fill('Rivera');
+      await app.getByTestId('found-person').waitFor();
+      await search.fill('zzqx');
+      await app.getByTestId('search-nothing').waitFor();
+      await search.fill('cabinet door');
+      await app.getByTestId('found-item').waitFor();
+      await settle(500);
+      await shot('a1-search-everything');
+      await app.getByTestId('found-item').locator('[data-testid^="found-item-"]').first().click();
+      await seen('item-more').waitFor();
+      await settle(400);
+    });
+    await step('New: Star an item from its More menu: it stays at the top of its job, and Starred and Recent keeps it with the items opened lately', async () => {
+      if ((await app.getByTestId('item-more').count()) === 0) {
+        await toJobs();
+        await app.getByTestId('search').filter({ visible: true }).last().fill('cabinet door');
+        await app.getByTestId('found-item').locator('[data-testid^="found-item-"]').first().click();
+        await seen('item-more').waitFor();
+      }
+      await itemMenu('toggle-star');
+      await app.getByText('Starred: it stays at the top of the job').waitFor();
+      await toJobs();
+      await app.getByTestId('job-job-preview').filter({ visible: true }).first().click();
+      await app.getByTestId('starred').waitFor();
+      await app.getByTestId('starred').getByText(/cabinet door/i).first().waitFor();
+      await settle(500);
+      await shot('a2-starred-on-job');
+      await toJobs();
+      await app.getByTestId('starred-recent').click();
+      await app.getByTestId('starred-list').waitFor();
+      await app.getByTestId('recent-list').waitFor();
+      if ((await app.getByTestId('starred-list').locator('[data-testid^="star-"]').count()) !== 1) throw new Error('Starred does not have the one item starred');
+      await settle(400);
+      await shot('a2b-starred-and-recent');
+      // Taken off again from the item.
+      await app.getByTestId('starred-list').locator('[data-testid^="star-"]').first().click();
+      await itemMenu('toggle-star');
+      await app.getByText('Star taken off').waitFor();
+      await toJobs();
+    });
+    await step("New: Today: what is to check, yours and on site, job by job, and the day's walk in walking order, each item a tap away", async () => {
+      await toJobs();
+      await app.getByTestId('today').click();
+      await app.getByTestId('today-job-preview').waitFor();
+      await app.getByTestId('today-job-preview').getByTestId('today-stop-0').waitFor();
+      await settle(500);
+      await shot('a3-today');
+      // Checked off right there: it is finished today.
+      const first = app.getByTestId('today-job-preview').locator('[data-testid^="check-"]').first();
+      const label = await first.getAttribute('aria-label');
+      const id = await first.getAttribute('data-testid');
+      if (!label?.startsWith('Complete ')) throw new Error(`The first item on the walk was not open: ${label}`);
+      await first.click();
+      // Saved a moment after the tap, which a second tap takes back: then it says so.
+      await app.getByRole('status').filter({ hasText: `Completed ${label.slice('Complete '.length)}` }).waitFor({ timeout: 10_000 });
+      if (!id) throw new Error('The check has no name');
+      await settle(400);
+    });
+    await step('New: End of Day Note: Claude writes what got done and found today for the daily log, to change and copy', async () => {
+      if ((await app.getByTestId('today-job-preview').count()) === 0) {
+        await toJobs();
+        await app.getByTestId('today').click();
+      }
+      await app.getByTestId('day-note-job-preview').click();
+      await app.getByTestId('day-note-body').waitFor({ timeout: 20_000 });
+      const note = await app.getByTestId('day-note-body').inputValue();
+      if (!/^Work Completed\n/.test(note) || !note.includes('Issues Found') || !note.includes('Notes')) throw new Error(`The note is not in its three parts: ${note.slice(0, 120)}`);
+      const asked = await askedOf('Write the end of day note');
+      // The sharp model, which the preview's Claude calls its default.
+      if (!asked || !/Finished today \(\d+\):/.test(asked.input) || asked.tier !== 'default') throw new Error(`Claude was not asked about today on the sharp model: ${JSON.stringify(asked).slice(0, 300)}`);
+      await settle(500);
+      await shot('a4-day-note');
+      await app.getByTestId('day-note-copy').click();
+      await app.getByRole('status').first().waitFor();
+      await settle(400);
+    });
+    await step('New: Updates: every job, newest first, and notifications turned on from there; off again in Me', async () => {
+      await toJobs();
+      await app.getByTestId('updates').click();
+      await app.getByTestId('notify-ask').waitFor();
+      await app.locator('[data-testid="update"], [data-testid="update-new"]').first().waitFor();
+      await settle(500);
+      await shot('a5-updates-notify');
+      await app.getByTestId('notify-turn-on').click();
+      await app.getByTestId('notify-ask').waitFor({ state: 'detached' });
+      await toJobs();
+      await app.getByTestId('account').last().click();
+      const on = app.getByTestId('notify-switch');
+      await on.waitFor();
+      if ((await on.getAttribute('aria-checked')) !== 'true') throw new Error('Notifications are not on in Me');
+      await on.scrollIntoViewIfNeeded();
+      await settle(600);
+      await shot('a5b-me-notifications');
+      await on.click();
+      await app.locator('[data-testid="notify-switch"][aria-checked="false"]').waitFor();
+      // Put away on Updates once answered.
+      await toJobs();
+      await app.getByTestId('updates').click();
+      await app.locator('[data-testid="update"], [data-testid="update-new"]').first().waitFor();
+      if ((await app.getByTestId('notify-ask').count()) !== 0) throw new Error('Updates asks again after notifications were answered');
+      await toJobs();
+    });
+    await step('New: a view saved with a name: one tap away on the job, back to the default with another, and removed', async () => {
+      await toJobs();
+      await app.getByTestId('job-job-preview').filter({ visible: true }).first().click();
+      await app.getByTestId('group-room-1').waitFor();
+      await app.getByTestId('filter').click();
+      await app.getByTestId('view-done').waitFor();
+      await settle(500);
+      await app.getByTestId('filter-state-ready').click();
+      await app.getByTestId('filter-company-company-4').click();
+      await app.getByTestId('save-named').click();
+      await app.getByTestId('named-name').fill('SMS Ready');
+      await app.getByTestId('named-save').click();
+      await app.getByTestId('named-SMS Ready').waitFor();
+      await app.getByTestId('view-standard').click();
+      await app.getByTestId('view-done').click();
+      await app.getByTestId('named-chip-SMS Ready').click();
+      await app.getByTestId('chip-companyIds:company-4').waitFor();
+      await app.getByTestId('chip-states:ready').waitFor();
+      await settle(500);
+      await shot('a6-saved-view');
+      await app.getByTestId('named-chip-SMS Ready').click();
+      await app.getByTestId('chip-companyIds:company-4').waitFor({ state: 'detached' });
+      await app.getByTestId('filter').click();
+      await app.getByTestId('named-remove').click();
+      await app.getByRole('dialog', { name: 'Remove a Saved View' }).getByRole('button', { name: 'SMS Ready' }).click();
+      await app.getByTestId('named-SMS Ready').waitFor({ state: 'detached' });
+      await app.getByTestId('view-done').click();
+      await app.getByTestId('named-views').waitFor({ state: 'detached' });
+      await settle(300);
+    });
+    await step("New: Ask Claude in View: what to show, said in words, becomes the list's filters from the job's own names", async () => {
+      if ((await app.getByTestId('group-room-1').count()) === 0) {
+        await toJobs();
+        await app.getByTestId('job-job-preview').filter({ visible: true }).first().click();
+        await app.getByTestId('group-room-1').waitFor();
+      }
+      await app.getByTestId('filter').click();
+      await app.getByTestId('ask-find').fill('what is ready for SMS on Level 1');
+      await settle(300);
+      await shot('a7-ask-to-find');
+      await app.getByTestId('ask-find-go').click();
+      await app.getByText(/^3 filters, \d+ open items?$/).waitFor({ timeout: 15_000 });
+      const asked = await askedOf("Turn it into the list's filters");
+      if (!asked || !asked.input.includes('They said: "what is ready for SMS on Level 1"') || !/^Companies: .*SMS Carpentry/m.test(asked.input) || asked.tier !== 'quick') {
+        throw new Error(`Claude was not asked with the words and the job's names on the quick model: ${JSON.stringify(asked).slice(0, 300)}`);
+      }
+      await app.getByTestId('view-done').click();
+      await app.getByTestId('chip-states:ready').waitFor();
+      await app.getByTestId('chip-companyIds:company-4').waitFor();
+      await app.getByTestId('chip-floors:Level 1').waitFor();
+      await settle(500);
+      await shot('a7b-found');
+      await app.getByTestId('filter-clear').last().click();
+      await app.getByTestId('filter-bar').first().waitFor({ state: 'detached' });
+      await settle(300);
     });
     await step('New: someone new signs up, walks their first job right away, manages it, and deletes their account', async () => {
       // Signed out after the steps before; signed in on a quick run.

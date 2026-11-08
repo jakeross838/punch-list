@@ -35,9 +35,19 @@ export function SearchResults({ query, jobsFound }: { query: string; jobsFound: 
   const companies = data.useCompanies();
   const people = data.usePeople();
   const comments = data.useAllComments();
+  const photos = data.useAllPhotos();
+  // What each item's photos show, in Claude's words.
+  const photoWords = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const p of photos) if (p.description) out.set(p.itemId, [out.get(p.itemId), p.description].filter(Boolean).join(' '));
+    return out;
+  }, [photos]);
   // Typing stays quick on a big job: the results catch up a moment later.
   const typed = useDeferredValue(query);
-  const found = useMemo(() => searchAll(typed, { jobs, items, locations, companies, people, comments }), [typed, jobs, items, locations, companies, people, comments]);
+  const found = useMemo(
+    () => searchAll(typed, { jobs, items, locations, companies, people, comments, photoWords }),
+    [typed, jobs, items, locations, companies, people, comments, photoWords],
+  );
   const groups = KINDS.map((kind) => ({ kind, rows: found.filter((f) => f.kind === kind) })).filter((g) => g.rows.length > 0);
   if (!typed.trim()) return null;
   if (groups.length === 0) {

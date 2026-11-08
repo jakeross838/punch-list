@@ -1,5 +1,7 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { searchAll, searchWords, wordRank, type Comment, type Item, type Job, type Location } from '../src/index';
+import { NEWS_MOST, newsLine, searchAll, searchWords, wordRank, type Comment, type Item, type Job, type Location } from '../src/index';
 
 const item = (over: Partial<Item>): Item => ({
   id: 'i', jobId: 'fish', locationId: 'kitchen', number: 1, assignedTo: null, title: 'Adjust cabinet door', description: '', tradeId: null, companyId: 'sms',
@@ -149,5 +151,88 @@ describe('views saved with a name', () => {
     expect(readViewSettings({ groupBy: 'room' }).named).toBeUndefined();
     expect(isNamedView(paint, read.named![0]!)).toBe(true);
     expect(isNamedView(DEFAULT_VIEW, read.named![0]!)).toBe(false);
+  });
+});
+
+import { CLAUDE_TASKS, foundToFilters, readDayNote, readFind, readPhotoWords, taskPrompt } from '../src/index';
+
+describe("Claude's Round 4 tasks", () => {
+  const job = { locations: ['Kitchen 109', 'Bathroom 116'], floors: ['Level 1', 'Level 2'], companies: ['Gator Plumbing', 'SMS Carpentry'], people: ['Sam Rivera'], waitingOn: ['Owner'] };
+
+  it('asks to find with the job\'s own names, and reads only names the job has', () => {
+    const words = taskPrompt('find', { ...job, words: 'what is ready for gator on level 2' });
+    expect(words).toContain('They said: "what is ready for gator on level 2"');
+    expect(words).toContain('Companies: Gator Plumbing; SMS Carpentry');
+    expect(CLAUDE_TASKS.find.tier).toBe('quick');
+    expect(CLAUDE_TASKS.find.enough({ ...job, words: ' ' })).toBe(false);
+    const found = readFind('{"states": ["ready", "soon"], "kinds": [], "companies": ["gator plumbing", "Made Up Co"], "people": [], "levels": ["Level 2"], "locations": ["Garage"], "waitingOn": [], "photo": true, "scheduled": "yes", "estimated": null, "groupBy": "company", "showCompleted": false}', job);
+    expect(found).toEqual({ states: ['ready'], kinds: [], companies: ['Gator Plumbing'], people: [], floors: ['Level 2'], locations: [], waitingOn: [], photo: true, scheduled: null, estimated: null, groupBy: 'company', showCompleted: false });
+    expect(readFind('not json', job)).toBeNull();
+    const filters = foundToFilters(found!, { companies: new Map([['Gator Plumbing', 'gator']]), people: new Map(), locations: new Map() });
+    expect(filters).toMatchObject({ states: ['ready'], companyIds: ['gator'], floors: ['Level 2'], photo: true, scheduled: null });
+  });
+
+  it('asks for the day\'s note from what was finished, found and said, and reads it with no dashes', () => {
+    const input = { job: 'Fish Residence', day: 'Monday, November 9', done: [{ title: 'Install towel bar', location: 'Bath 116', by: 'Gator Plumbing' }], added: [], onSite: [{ name: 'Gator Plumbing', trade: 'Plumbing' }], said: [{ who: 'Mike', words: 'Need the tile by Thursday' }] };
+    const words = taskPrompt('day-note', input);
+    expect(words).toContain('Monday, November 9');
+    expect(words).toContain('- Install towel bar (Bath 116), by Gator Plumbing');
+    expect(words).toContain('Nothing was added to the list today.');
+    expect(words).toContain('- Mike: Need the tile by Thursday');
+    expect(CLAUDE_TASKS['day-note'].enough({ job: 'Fish Residence', done: [], added: [], onSite: [], said: [] })).toBe(false);
+    expect(readDayNote('{"note": "Work Completed\\nThe bath is set — towel bars and all.\\n\\n\\n\\nIssues Found\\nNone."}')).toBe('Work Completed\nThe bath is set, towel bars and all.\n\nIssues Found\nNone.');
+  });
+
+  it('asks for a photo\'s words with the photo, and reads a few words', () => {
+    expect(CLAUDE_TASKS['describe-photo'].minImages).toBe(1);
+    expect(taskPrompt('describe-photo', { title: 'Patch drywall', location: 'Living 107' })).toContain('"Patch drywall", in Living 107');
+    expect(readPhotoWords('{"words": "Water stain on the ceiling by the vent."}')).toBe('Water stain on the ceiling by the vent');
+    expect(readPhotoWords('{}')).toBeNull();
+  });
+});
+
+describe('what a phone is told', () => {
+  it('says what a company did on its page in the words Activity uses', () => {
+    expect(newsLine({ kind: 'done', company: 'Gator Plumbing', name: 'Mike', item: 'Install vanity faucets' })).toBe('Mike at Gator Plumbing marked Install vanity faucets done.');
+    expect(newsLine({ kind: 'confirmed', company: 'Gator Plumbing', name: null, item: 'Install vanity faucets' })).toBe('Gator Plumbing confirmed Install vanity faucets.');
+    expect(newsLine({ kind: 'comment', company: 'Gator Plumbing', name: '  Mike  ', item: 'Install vanity faucets', body: 'Coming Tuesday\n morning' })).toBe(
+      'Mike at Gator Plumbing commented on Install vanity faucets: Coming Tuesday morning.',
+    );
+    expect(newsLine({ kind: 'comment', company: 'Gator Plumbing', name: null, item: null, body: 'All done here?' })).toBe('Gator Plumbing commented on the Gator Plumbing list: All done here?');
+    expect(newsLine({ kind: 'done', company: '', name: null, item: '  ' })).toBe('The company marked an item done.');
+  });
+
+  it('says what the owner did on their page', () => {
+    expect(newsLine({ kind: 'owner_added', name: 'Karen', words: 'Scratch on the pantry door' })).toBe('Karen, the owner, added something to look at: Scratch on the pantry door.');
+    expect(newsLine({ kind: 'owner_added', name: null, words: '' })).toBe('The owner added a photo of something to look at.');
+    expect(newsLine({ kind: 'owner_signed_off', name: 'Karen Lee', location: 'Kitchen 109' })).toBe('Karen Lee, the owner, signed off Kitchen 109.');
+    expect(newsLine({ kind: 'owner_signed_off', name: null, location: null })).toBe('The owner signed off the job.');
+  });
+
+  it('keeps a long comment to what a lock screen shows', () => {
+    const line = newsLine({ kind: 'comment', company: 'Gator Plumbing', name: 'Mike', item: 'Install vanity faucets', body: 'word '.repeat(80) });
+    expect(line.length).toBe(NEWS_MOST);
+    expect(line.endsWith('…')).toBe(true);
+  });
+});
+
+describe("the app's hooks", () => {
+  // React's compiler takes a call named use() for something it can keep from the last time, and
+  // skips it on the next render: a hook behind that name changes the screen's hooks and crashes it
+  // (the job's screen did, with the stars). Every hook is named use and a capital, like useValue.
+  it('never hides a hook behind a method named use', () => {
+    const src = join(__dirname, '../../../apps/mobile/src');
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/\.tsx?$/.test(name)) files.push(path);
+      }
+    };
+    walk(src);
+    const found = files.flatMap((f) => (/\.use\(\)|\buse: \(\) =>/.test(readFileSync(f, 'utf8')) ? [f.slice(src.length + 1)] : []));
+    expect(files.length).toBeGreaterThan(50);
+    expect(found).toEqual([]);
   });
 });

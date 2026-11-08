@@ -196,6 +196,8 @@ export interface DataApi {
   useAllComments(): Comment[];
   /** Every visit on every job you see, removed ones left out: for Today. */
   useAllVisits(): Visit[];
+  /** Every photo on every job you see that is not removed: for Search, by what is in them. */
+  useAllPhotos(): Photo[];
   /** The job's photos that are not removed, each item's in order. */
   usePhotos(jobId: string): Photo[];
   useTrades(): Trade[];
@@ -253,6 +255,13 @@ export interface DataApi {
   ownerLink(jobId: string, action: StationAction, name?: string): Promise<OwnerLinkInfo | null>;
   /** When each company on a job last opened its page, by company. Needs a signal. */
   companiesOpened(jobId: string): Promise<Map<string, string>>;
+  /**
+   * This phone's notifications: its push token kept on the server for whoever is signed in, so they
+   * are told when a company or the owner answers on their page on a job they are on; drop takes the
+   * phone off. Needs a signal. The preview keeps nothing.
+   */
+  savePushToken(token: string, platform: 'ios' | 'android'): Promise<void>;
+  dropPushToken(token: string): Promise<void>;
   /** Admins only. */
   addPerson(person: NewPerson): Promise<string>;
   /** Admins only. There is always at least one admin. */
@@ -377,6 +386,8 @@ export interface DataApi {
   /** Saves a view with a name, one tap away on every job; one saved with the same name is replaced. */
   saveNamedView(name: string, view: ViewSettings): Promise<void>;
   removeNamedView(name: string): Promise<void>;
+  /** What is in a photo, in the few words Claude wrote, for search. */
+  setPhotoWords(photoId: string, words: string): Promise<void>;
   /** Sends a six digit code to the email. Anyone may sign up; someone switched off at their company is told so. */
   sendSignInCode(email: string): Promise<void>;
   /** Signs in with the code from the email: into the app, or as someone new who starts a company next. */
