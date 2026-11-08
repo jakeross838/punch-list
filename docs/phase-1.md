@@ -291,5 +291,6 @@ Secrets live only in `local/` in the build workspace, which git ignores.
 - **Companies from a card:** Add Company reads a business card photo or a pasted email signature: the company, its trade and its people, who get its lists.
 - **What an item waits on, and its usual time:** a new item offers what it waits on, picked by Claude from the open items in its location, and How Long It Takes offers the standard or usual time.
 - **Not yet:** crop and straighten, keeping the plan sheets from Read the Plans, and Common Tasks right after the plans.
-- **Still to go live:** the migration `done_photos`, the `ai`, `read-plans` and `company-page` functions, then the companies' pages and a new build, each with Jake's OK.
+- **Live on 7 November:** the migration `done_photos` (live as 20261108031902), the `ai` function (version 2), `read-plans` (version 3) and `company-page` (version 3), the companies' pages and the station with Add a Done Photo, then build 14 on TestFlight, once Jake said to.
+- Checked: 304 unit tests, the type checks, lint, the database checks, the live writes check, 43 checks of the three functions against stand-ins, the companies' page and the station, and the full preview walk-through (70 steps; no console or page errors).
 
