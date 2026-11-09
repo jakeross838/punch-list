@@ -27,6 +27,8 @@ export interface ListOptions {
   langKey?: string;
   /** Where the company's other jobs open: its page's address before the link. None on a station. */
   otherJobsAt?: string;
+  /** Ask for the builder's logo as the list opens, for the bar. */
+  logo?: boolean;
   /** When the list does not open at all. */
   onProblem: (message: string) => void;
 }
@@ -63,11 +65,19 @@ export function mountList(o: ListOptions): ListView {
   /** A photo's marks, their words in the list's language. */
   const marksIn = (photo: PagePhoto) => (photo.marks ?? []).map((m) => (m.tool === 'text' && m.text ? { ...m, text: tr(m.text) } : m));
 
-  const take = (got: Page): Page => ({ ...got, builder: got.builder || 'Your builder', completed: got.completed ?? [], comments: got.comments ?? [], items: got.items ?? [] });
+  // The logo comes with the first answer only: every later one keeps it.
+  const take = (got: Page): Page => ({
+    ...got,
+    builder: got.builder || 'Your builder',
+    logo: got.logo ?? page?.logo ?? null,
+    completed: got.completed ?? [],
+    comments: got.comments ?? [],
+    items: got.items ?? [],
+  });
 
   async function load(): Promise<void> {
     try {
-      const got = await o.call({ action: 'page' });
+      const got = await o.call({ action: 'page', ...(o.logo && !page ? { logo: true } : {}) });
       if (gone) return;
       // An older answer may leave a part out: the list still shows what it has.
       page = take(got);

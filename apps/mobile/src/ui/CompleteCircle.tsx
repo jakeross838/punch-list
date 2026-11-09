@@ -13,6 +13,7 @@ export function CompleteCircle({
   checked,
   onPress,
   label,
+  disabled = false,
   testID,
 }: {
   checked: boolean;
@@ -20,11 +21,15 @@ export function CompleteCircle({
   animate?: boolean;
   onPress: () => void;
   label: string;
+  /** Shows it, without checking it off: View Only. */
+  disabled?: boolean;
   testID?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
+      aria-disabled={disabled}
       hitSlop={{ top: 14, bottom: 14, left: 16, right: 12 }}
       accessibilityRole="checkbox"
       aria-checked={checked}

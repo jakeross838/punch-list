@@ -2415,4 +2415,161 @@ begin
   if exists (select 1 from public.push_tokens) then raise exception 'FAIL: signing out did not take the phone off'; end if;
 end $$;
 
+-- ---------- Round 5: the builder's logo ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+begin
+  update public.orgs set logo = 'data:image/png;base64,iVBORw0KGgo=' where id = 'ross_built';
+  if (select logo from public.orgs where id = 'ross_built') is distinct from 'data:image/png;base64,iVBORw0KGgo=' then raise exception 'FAIL: the admin could not add the logo'; end if;
+  begin
+    update public.orgs set logo = 'javascript:alert(1)' where id = 'ross_built';
+    raise exception 'FAIL: a logo that is not a picture was kept';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.orgs set logo = 'data:image/png;base64,' || repeat('A', 400000) where id = 'ross_built';
+    raise exception 'FAIL: a logo too big was kept';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.page_logo('x');
+    raise exception 'FAIL: the app can ask for a page''s logo';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+set request.jwt.claims = '{"email":"sam@rossbuilt.com"}';
+do $$
+begin
+  update public.orgs set logo = null where id = 'ross_built';
+end $$;
+reset role;
+do $$
+begin
+  if (select logo from public.orgs where id = 'ross_built') is null then raise exception 'FAIL: someone not an admin took the logo away'; end if;
+  if public.page_logo(current_setting('test.owner')) is distinct from 'data:image/png;base64,iVBORw0KGgo=' then raise exception 'FAIL: the owner''s page has no logo'; end if;
+  if public.page_logo(current_setting('test.link')) is not null then raise exception 'FAIL: a link taken back has a logo'; end if;
+  if public.page_logo(repeat('0', 64)) is not null then raise exception 'FAIL: a link that is not one has a logo'; end if;
+end $$;
+
+-- ---------- Round 5: roles ----------
+set role authenticated;
+set request.jwt.claims = '{"email":"jake@rossbuilt.com"}';
+do $$
+begin
+  insert into public.people (email, name, role, sees) values ('pat@rossbuilt.com', 'Pat Morgan', 'project_manager', 'assigned');
+  insert into public.people (email, name, role, sees) values ('vic@rossbuilt.com', 'Vic Owens', 'view_only', 'all');
+  begin
+    insert into public.people (email, name, role, sees) values ('nope@rossbuilt.com', 'No Role', 'boss', 'all');
+    raise exception 'FAIL: a role that is not one was kept';
+  exception when check_violation then null;
+  end;
+  -- A project manager sees every job, whatever Sees said.
+  if (select sees from public.people where email = 'pat@rossbuilt.com') <> 'all' then raise exception 'FAIL: a project manager does not see every job'; end if;
+end $$;
+
+-- A project manager makes a job and sets it up: its name, a location, its team.
+set request.jwt.claims = '{"email":"pat@rossbuilt.com"}';
+do $$
+declare
+  j uuid := gen_random_uuid();
+  loc uuid := gen_random_uuid();
+  sam uuid := (select id from public.people where email = 'sam@rossbuilt.com');
+begin
+  insert into public.jobs (id, name, address) values (j, 'Pat''s Job', '9 Bay Road');
+  update public.jobs set name = 'Pat''s House' where id = j;
+  insert into public.locations (id, job_id, name, number, label, floor, kind, sort_order) values (loc, j, 'Kitchen', '101', 'Kitchen 101', 'Level 1', 'room', 1);
+  update public.locations set label = 'Kitchen 102', number = '102' where id = loc;
+  insert into public.job_team (job_id, person_id, part) values (j, sam, 'superintendent');
+  if not exists (select 1 from public.job_team where job_id = j and person_id = sam) then raise exception 'FAIL: the project manager could not set up the team'; end if;
+  -- The people read from a company's card, to get its lists.
+  insert into public.company_contacts (company_id, name, email) values ((select id from public.companies order by name limit 1), 'Card Person', 'card@example.com');
+  perform set_config('test.pat_job', j::text, false);
+  -- Not the company's setup: its people, its name and logo, or deleting a job.
+  update public.orgs set name = 'Pat Built' where id = 'ross_built';
+  update public.people set name = 'Someone Else' where email = 'sam@rossbuilt.com';
+  begin
+    perform public.delete_job(j);
+    raise exception 'FAIL: a project manager deleted a job';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+do $$
+begin
+  if (select name from public.orgs where id = 'ross_built') <> 'Ross Built' then raise exception 'FAIL: a project manager renamed the company'; end if;
+  if (select name from public.people where email = 'sam@rossbuilt.com') = 'Someone Else' then raise exception 'FAIL: a project manager changed someone'; end if;
+  if (select label from public.locations l join public.jobs j on j.id = l.job_id where j.name = 'Pat''s House') <> 'Kitchen 102' then raise exception 'FAIL: the project manager could not rename the location'; end if;
+  if not exists (select 1 from public.company_contacts where name = 'Card Person' and org = 'ross_built') then raise exception 'FAIL: the project manager could not add a company''s person'; end if;
+end $$;
+
+-- A superintendent walks jobs but does not set them up.
+set role authenticated;
+set request.jwt.claims = '{"email":"sam@rossbuilt.com"}';
+do $$
+declare
+  j uuid := current_setting('test.pat_job')::uuid;
+begin
+  begin
+    insert into public.jobs (name, address) values ('Sam''s Job', '1 Road');
+    raise exception 'FAIL: a superintendent made a job';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.locations set label = 'Pantry 103' where job_id = j;
+    raise exception 'FAIL: a superintendent renamed a location';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.company_contacts (company_id, name) values ((select id from public.companies order by name limit 1), 'Sam''s Person');
+    raise exception 'FAIL: a superintendent added a company''s person';
+  exception when insufficient_privilege then null;
+  end;
+  insert into public.job_team (job_id, person_id, part) values (j, (select id from public.people where email = 'jake@rossbuilt.com'), 'field');
+  raise exception 'FAIL: a superintendent changed the team';
+exception when insufficient_privilege then null;
+end $$;
+
+-- View Only sees the jobs and comments, and changes nothing else.
+set request.jwt.claims = '{"email":"vic@rossbuilt.com"}';
+do $$
+declare
+  j uuid := current_setting('test.pat_job')::uuid;
+  fish uuid := (select id from public.jobs where name = 'Fish');
+  loc uuid := (select id from public.locations where job_id = fish and active order by sort_order limit 1);
+  it uuid := (select id from public.items where job_id = fish and status = 'open' limit 1);
+begin
+  if not exists (select 1 from public.jobs where id = fish) then raise exception 'FAIL: View Only does not see the jobs'; end if;
+  insert into public.comments (job_id, item_id, body) values (fish, it, 'Looks good from here');
+  insert into public.person_settings (person_id, job_view) values ((select id from public.people where email = 'vic@rossbuilt.com'), '{}'::jsonb)
+    on conflict do nothing;
+  begin
+    insert into public.items (job_id, location_id, title) values (fish, loc, 'Something to do');
+    raise exception 'FAIL: View Only added an item';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.items set title = 'Changed' where id = it;
+    raise exception 'FAIL: View Only changed an item';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.owner_link(fish, 'new');
+    raise exception 'FAIL: View Only made the owner a new link';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.merge_items(it, (select id from public.items where job_id = fish and status = 'open' and id <> it limit 1));
+    raise exception 'FAIL: View Only merged two items';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+do $$
+begin
+  if not exists (select 1 from public.comments where body = 'Looks good from here' and person_id = (select id from public.people where email = 'vic@rossbuilt.com')) then
+    raise exception 'FAIL: View Only could not comment';
+  end if;
+end $$;
+
 select 'All database checks passed' as result;

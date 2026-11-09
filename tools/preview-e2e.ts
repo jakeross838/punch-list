@@ -1313,7 +1313,7 @@ async function main(): Promise<void> {
       await app.getByTestId('preview-as-person-sam').waitFor();
       await settle(350);
       await app.getByTestId('preview-as-person-sam').click();
-      await app.getByText('Team · Ross Built', { exact: true }).waitFor();
+      await app.getByText('Superintendent · Ross Built', { exact: true }).waitFor();
       await app.getByTestId('tab-jobs').last().click();
       await app.getByTestId('job-job-bay').waitFor({ state: 'detached' });
       await app.getByTestId('new-job').waitFor({ state: 'detached' });
@@ -1323,7 +1323,7 @@ async function main(): Promise<void> {
       await app.getByTestId('group-room-1').waitFor();
       await settle();
       await menu('job-setup');
-      await app.getByText('Only an admin can change this.').waitFor();
+      await app.getByText('Only an admin or a project manager changes this.').waitFor();
       await app.getByTestId('paste-rooms').waitFor({ state: 'detached' });
       await settle(400);
       await shot('62-as-sam-setup');

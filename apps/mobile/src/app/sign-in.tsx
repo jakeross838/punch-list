@@ -1,15 +1,16 @@
-// Sign in: your email, then the six digit code it gets, the way most apps sign in by email. There
-// is no password. Someone an admin has added under People goes straight in; someone new names their
+// Sign in: your email, then the six digit code it gets, the way most apps sign in by email, or Continue
+// with Apple or Google once the server has them switched on. There is no password. Someone an admin has added under People goes straight in; someone new names their
 // company next and is its admin, then adds their people. The code goes in six square boxes that
 // never move while you type; on the iPhone it fills in from Mail. On the preview page no email is sent and any six digits sign in. On
 // the iPhone, the first sign in waits here while the jobs come down to the phone.
 
 import { companyNameProblem, yourNameProblem } from '@punch/core';
-import { useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Platform, StyleSheet, TextInput, View } from 'react-native';
+import { AppleButton } from '@/components/AppleButton';
 import { APP_NAME } from '@/constants/app';
 import { colors, fieldFont, layout } from '@/constants/theme';
-import { useData } from '@/data/api';
+import { useData, type SignInWay } from '@/data/api';
 import { Banner, Button, Eyebrow, haptic, ListRow, ListSection, ListTextField, Page, Text, Touchable } from '@/ui';
 
 const BOXES = 6;
@@ -28,8 +29,42 @@ export default function SignInScreen() {
   const [busy, setBusy] = useState(false);
   const [resent, setResent] = useState(false);
   const [focused, setFocused] = useState(true);
+  // Apple and Google, when the server has them switched on.
+  const [ways, setWays] = useState<SignInWay[]>([]);
   const codeField = useRef<ComponentRef<typeof TextInput>>(null);
   const nameField = useRef<ComponentRef<typeof TextInput>>(null);
+
+  useEffect(() => {
+    let live = true;
+    data
+      .signInWays()
+      .then((w) => {
+        if (live) setWays(w);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [data]);
+
+  /** Apple or Google: straight in, or someone new names their company next, their name filled in. */
+  async function withAccount(way: SignInWay) {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      const got = await data.signInWith(way);
+      if (got) {
+        haptic.success();
+        if (got.result === 'new' && got.name) setName((n) => n || got.name);
+      }
+    } catch (e) {
+      haptic.warning();
+      setProblem(e instanceof Error ? e.message : 'That did not go. Check the signal and try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function send(again = false) {
     if (busy) return;
@@ -212,6 +247,15 @@ export default function SignInScreen() {
               <View style={styles.button}>
                 <Button label={busy ? 'Sending' : 'Send Code'} icon="arrow" onPress={() => void send()} disabled={busy || email.trim() === ''} testID="sign-in-send" />
               </View>
+              {ways.length > 0 ? (
+                <View style={styles.ways}>
+                  <Text variant="label" color={colors.secondary} align="center">
+                    Or
+                  </Text>
+                  {ways.includes('apple') ? <AppleButton onPress={() => void withAccount('apple')} disabled={busy} testID="sign-in-apple" /> : null}
+                  {ways.includes('google') ? <Button label="Continue with Google" variant="tinted" onPress={() => void withAccount('google')} disabled={busy} testID="sign-in-google" /> : null}
+                </View>
+              ) : null}
             </>
           ) : (
             <>
@@ -290,6 +334,7 @@ const styles = StyleSheet.create({
   lead: { marginTop: 8 },
   button: { marginHorizontal: layout.margin, marginTop: 4 },
   resend: { marginHorizontal: layout.margin, marginTop: 6, alignItems: 'center' },
+  ways: { marginHorizontal: layout.margin, marginTop: 22, gap: 10 },
   emailCard: {
     flexDirection: 'row',
     alignItems: 'center',

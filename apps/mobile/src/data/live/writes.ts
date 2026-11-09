@@ -381,9 +381,12 @@ export function planWrites(before: State, next: Partial<State>, ctx: WriteContex
       if (labels !== before.waitingOn[jobId]) holdups.set(jobId, diffHoldups(jobId, labels, ctx, writes));
     }
   }
-  // The company's name: its one row.
-  if (next.org && next.org !== before.org && next.org.id !== '' && next.org.name !== before.org.name) {
-    writes.push({ table: 'orgs', op: 'update', id: next.org.id, values: { name: next.org.name } });
+  // The company's name and logo: its one row.
+  if (next.org && next.org !== before.org && next.org.id !== '') {
+    const values: Record<string, unknown> = {};
+    if (next.org.name !== before.org.name) values.name = next.org.name;
+    if ((next.org.logo ?? null) !== (before.org.logo ?? null)) values.logo = next.org.logo ?? null;
+    if (Object.keys(values).length > 0) writes.push({ table: 'orgs', op: 'update', id: next.org.id, values });
   }
   const form = next.formSettings && next.formSettings !== before.formSettings;
   const view = next.viewSettings && next.viewSettings !== before.viewSettings;

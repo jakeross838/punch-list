@@ -13,8 +13,11 @@ import { makeApi, type Happened, type Keeper, type State } from './engine';
 import { forgetHere } from './notify';
 import { keepPhoto } from './photoFiles';
 import { newCompanyState, sampleState } from './sample';
+import { withBigJob } from './sampleBig';
 
-let state: State = sampleState();
+// The speed check asks for a big job too, before the page starts.
+const bigJob = (globalThis as { __PUNCH_BIG_JOB__?: boolean }).__PUNCH_BIG_JOB__ === true;
+let state: State = bigJob ? withBigJob(sampleState()) : sampleState();
 const listeners = new Set<() => void>();
 
 function setState(next: State): void {
@@ -91,6 +94,14 @@ export const previewApi: DataApi = makeApi(keeper, {
     }
     setState({ ...state, codeFor: null, newAccount: clean });
     return 'new';
+  },
+  // Both ways show on the preview. Nothing is asked of Apple or Google: someone new with an email from
+  // that account, as Apple's Hide My Email gives one, starts a company next.
+  signInWays: async () => ['apple', 'google'],
+  async signInWith(way) {
+    const email = way === 'apple' ? 'preview.person@privaterelay.appleid.com' : 'preview.person@gmail.com';
+    setState({ ...state, codeFor: null, newAccount: email });
+    return { result: 'new', name: 'Alex Morgan' };
   },
   async startCompany({ company, name }) {
     const email = state.newAccount;

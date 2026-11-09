@@ -82,6 +82,7 @@ export function ItemEditor({
   askClaude = false,
   photoUri,
   hoursNote,
+  locked = false,
   children,
 }: {
   jobId: string;
@@ -107,6 +108,8 @@ export function ItemEditor({
   photoUri?: string | null;
   /** Under How Long It Takes: who gave the time, when the company did. */
   hoursNote?: string;
+  /** Shown as it is, nothing in it changes: View Only. What goes under it (comments) still works. */
+  locked?: boolean;
   children?: ReactNode;
 }) {
   const data = useData();
@@ -219,256 +222,258 @@ export function ItemEditor({
 
   return (
     <>
-      <View style={styles.card}>
-        {photos ? (
-          <View style={styles.photoColumn}>
-            {first ? (
-              <Touchable feedback="scale" onPress={() => onPhotoPress?.(first.key)} accessibilityRole="button" accessibilityLabel="Change the markup" testID="photo-edit">
-                <PhotoView photo={first} width={72} height={72} />
-                {photos.length > 1 ? (
-                  <View style={styles.badge}>
-                    <Text variant="stamp" weight="600" color={colors.onBar}>
-                      +{photos.length - 1}
-                    </Text>
-                  </View>
-                ) : null}
+      <View pointerEvents={locked ? 'none' : 'auto'}>
+        <View style={styles.card}>
+          {photos ? (
+            <View style={styles.photoColumn}>
+              {first ? (
+                <Touchable feedback="scale" onPress={() => onPhotoPress?.(first.key)} accessibilityRole="button" accessibilityLabel="Change the markup" testID="photo-edit">
+                  <PhotoView photo={first} width={72} height={72} />
+                  {photos.length > 1 ? (
+                    <View style={styles.badge}>
+                      <Text variant="stamp" weight="600" color={colors.onBar}>
+                        +{photos.length - 1}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Touchable>
+              ) : (
+                <Touchable feedback="scale" onPress={onAddPhoto} accessibilityRole="button" accessibilityLabel="Add a photo" style={styles.noPhoto}>
+                  <Icon name="camera" size={22} color={colors.secondary} />
+                </Touchable>
+              )}
+              <Touchable feedback="opacity" onPress={onAddPhoto} accessibilityRole="button" accessibilityLabel="Add another photo" testID="add-photo" style={styles.addPhoto}>
+                <Text variant="stamp" weight="600" color={colors.tint} numberOfLines={1}>
+                  Add Photo
+                </Text>
               </Touchable>
-            ) : (
-              <Touchable feedback="scale" onPress={onAddPhoto} accessibilityRole="button" accessibilityLabel="Add a photo" style={styles.noPhoto}>
-                <Icon name="camera" size={22} color={colors.secondary} />
-              </Touchable>
-            )}
-            <Touchable feedback="opacity" onPress={onAddPhoto} accessibilityRole="button" accessibilityLabel="Add another photo" testID="add-photo" style={styles.addPhoto}>
-              <Text variant="stamp" weight="600" color={colors.tint} numberOfLines={1}>
-                Add Photo
+            </View>
+          ) : null}
+          <View style={styles.textColumn}>
+            <TextInput
+              value={value.title}
+              onChangeText={(title) => {
+                set({ title }, true);
+                setTitleFocused(true);
+              }}
+              onFocus={() => setTitleFocused(true)}
+              onBlur={titleDone}
+              placeholder="What needs doing"
+              placeholderTextColor={colors.placeholder}
+              selectionColor={colors.tint}
+              autoCapitalize="sentences"
+              autoFocus={autoFocusTitle}
+              maxLength={TITLE_MAX + 20}
+              returnKeyType="done"
+              blurOnSubmit
+              accessibilityLabel="Title"
+              testID="field-title"
+              style={[styles.title, titleProblem ? styles.titleProblem : null]}
+            />
+            {shows('description') ? (
+              <>
+                <View style={styles.rule} />
+                <TextInput
+                  value={value.description}
+                  onChangeText={(description) => set({ description }, true)}
+                  onBlur={() => set({ description: value.description })}
+                  placeholder="Where exactly"
+                  placeholderTextColor={colors.placeholder}
+                  selectionColor={colors.tint}
+                  autoCapitalize="sentences"
+                  multiline
+                  accessibilityLabel="Description"
+                  testID="field-description"
+                  style={styles.description}
+                />
+              </>
+            ) : null}
+          </View>
+        </View>
+        {titleProblem ? (
+          <Text variant="footnote" color={colors.destructive} style={styles.note}>
+            {sentence(titleProblem)}
+          </Text>
+        ) : twin && same ? (
+          <Text variant="footnote" color={colors.secondary} style={styles.note} testID="duplicate-note">
+            {same.how === 'same-title'
+              ? `${twin.unfinished ? 'Already saved' : 'Already on the list'}${roomLabel ? ` in ${roomLabel}` : ' here'}: item ${itemNumberLabel(twin)}.`
+              : `${same.how === 'claude' ? 'Claude says this is' : 'This may be'} the same as item ${itemNumberLabel(twin)}, ${twin.title}${twin.unfinished ? ', a draft' : ''}.`}
+            {onTwin ? (
+              <Text variant="footnote" weight="600" color={colors.tint} onPress={() => onTwin.onPress(twin)} accessibilityRole="button" testID="twin-add">
+                {` ${onTwin.label}`}
               </Text>
-            </Touchable>
+            ) : null}
+          </Text>
+        ) : standard ? (
+          <Text variant="footnote" color={colors.secondary} style={styles.note} testID="standard-note">
+            {`The standard title is ${standard}.`}
+            <Text variant="footnote" weight="600" color={colors.tint} onPress={() => takeStandard(standard)} accessibilityRole="button" testID="standard-use">
+              {' Use It'}
+            </Text>
+          </Text>
+        ) : vague ? (
+          <Text variant="footnote" color={colors.secondary} style={styles.note} testID="vague-note">
+            {`Say what it is, like "Fix the cabinet door": a company cannot act on "${value.title.trim()}" alone.`}
+          </Text>
+        ) : null}
+        {waitsOn.length > 0 ? (
+          <Text variant="footnote" color={colors.secondary} style={styles.note} testID="waits-on-note">
+            {`Claude says it waits on ${waitsOn.map((w) => waitsOnText(w, companies.find((c) => c.id === w.companyId)?.name)).join(' and ')}.`}
+            <Text variant="footnote" weight="600" color={colors.tint} onPress={takeWaits} accessibilityRole="button" testID="waits-on-use">
+              {' Use It'}
+            </Text>
+          </Text>
+        ) : null}
+        {fillIn && blanks ? (
+          <Touchable feedback="opacity" onPress={fillIn.onPress} disabled={fillIn.busy} accessibilityRole="button" testID="fill-in" style={styles.fillIn}>
+            {fillIn.busy ? <ActivityIndicator size="small" color={colors.tint} /> : <Icon name="sparkles" size={16} color={colors.tint} />}
+            <Text variant="label" weight="600" color={colors.tint}>
+              {fillIn.busy ? 'Looking at the Photo' : 'Fill In From Photo'}
+            </Text>
+          </Touchable>
+        ) : null}
+
+        {suggestions.length > 0 ? (
+          <View style={styles.suggestions} testID="title-suggestions">
+            {suggestions.map((s, i) => {
+              const company = options.companyName(s.tradeId ? companyForTrade(s.tradeId, options.jobCompanies) : null);
+              return (
+                <Touchable
+                  key={s.title}
+                  feedback="highlight"
+                  onPress={() => pickTitle(s)}
+                  accessibilityRole="button"
+                  accessibilityLabel={s.title}
+                  testID={`suggestion-${i}`}
+                  style={[styles.suggestion, i > 0 ? styles.suggestionRule : null]}
+                >
+                  <Text numberOfLines={1} style={{ flex: 1 }}>
+                    {s.title}
+                  </Text>
+                  {company ? (
+                    <Text variant="subheadline" color={colors.secondary} numberOfLines={1} style={styles.suggestionHint}>
+                      {company}
+                    </Text>
+                  ) : null}
+                </Touchable>
+              );
+            })}
           </View>
         ) : null}
-        <View style={styles.textColumn}>
-          <TextInput
-            value={value.title}
-            onChangeText={(title) => {
-              set({ title }, true);
-              setTitleFocused(true);
-            }}
-            onFocus={() => setTitleFocused(true)}
-            onBlur={titleDone}
-            placeholder="What needs doing"
-            placeholderTextColor={colors.placeholder}
-            selectionColor={colors.tint}
-            autoCapitalize="sentences"
-            autoFocus={autoFocusTitle}
-            maxLength={TITLE_MAX + 20}
-            returnKeyType="done"
-            blurOnSubmit
-            accessibilityLabel="Title"
-            testID="field-title"
-            style={[styles.title, titleProblem ? styles.titleProblem : null]}
-          />
-          {shows('description') ? (
-            <>
-              <View style={styles.rule} />
-              <TextInput
-                value={value.description}
-                onChangeText={(description) => set({ description }, true)}
-                onBlur={() => set({ description: value.description })}
-                placeholder="Where exactly"
-                placeholderTextColor={colors.placeholder}
-                selectionColor={colors.tint}
-                autoCapitalize="sentences"
-                multiline
-                accessibilityLabel="Description"
-                testID="field-description"
-                style={styles.description}
-              />
-            </>
-          ) : null}
-        </View>
-      </View>
-      {titleProblem ? (
-        <Text variant="footnote" color={colors.destructive} style={styles.note}>
-          {sentence(titleProblem)}
-        </Text>
-      ) : twin && same ? (
-        <Text variant="footnote" color={colors.secondary} style={styles.note} testID="duplicate-note">
-          {same.how === 'same-title'
-            ? `${twin.unfinished ? 'Already saved' : 'Already on the list'}${roomLabel ? ` in ${roomLabel}` : ' here'}: item ${itemNumberLabel(twin)}.`
-            : `${same.how === 'claude' ? 'Claude says this is' : 'This may be'} the same as item ${itemNumberLabel(twin)}, ${twin.title}${twin.unfinished ? ', a draft' : ''}.`}
-          {onTwin ? (
-            <Text variant="footnote" weight="600" color={colors.tint} onPress={() => onTwin.onPress(twin)} accessibilityRole="button" testID="twin-add">
-              {` ${onTwin.label}`}
-            </Text>
-          ) : null}
-        </Text>
-      ) : standard ? (
-        <Text variant="footnote" color={colors.secondary} style={styles.note} testID="standard-note">
-          {`The standard title is ${standard}.`}
-          <Text variant="footnote" weight="600" color={colors.tint} onPress={() => takeStandard(standard)} accessibilityRole="button" testID="standard-use">
-            {' Use It'}
-          </Text>
-        </Text>
-      ) : vague ? (
-        <Text variant="footnote" color={colors.secondary} style={styles.note} testID="vague-note">
-          {`Say what it is, like "Fix the cabinet door": a company cannot act on "${value.title.trim()}" alone.`}
-        </Text>
-      ) : null}
-      {waitsOn.length > 0 ? (
-        <Text variant="footnote" color={colors.secondary} style={styles.note} testID="waits-on-note">
-          {`Claude says it waits on ${waitsOn.map((w) => waitsOnText(w, companies.find((c) => c.id === w.companyId)?.name)).join(' and ')}.`}
-          <Text variant="footnote" weight="600" color={colors.tint} onPress={takeWaits} accessibilityRole="button" testID="waits-on-use">
-            {' Use It'}
-          </Text>
-        </Text>
-      ) : null}
-      {fillIn && blanks ? (
-        <Touchable feedback="opacity" onPress={fillIn.onPress} disabled={fillIn.busy} accessibilityRole="button" testID="fill-in" style={styles.fillIn}>
-          {fillIn.busy ? <ActivityIndicator size="small" color={colors.tint} /> : <Icon name="sparkles" size={16} color={colors.tint} />}
-          <Text variant="label" weight="600" color={colors.tint}>
-            {fillIn.busy ? 'Looking at the Photo' : 'Fill In From Photo'}
-          </Text>
-        </Touchable>
-      ) : null}
 
-      {suggestions.length > 0 ? (
-        <View style={styles.suggestions} testID="title-suggestions">
-          {suggestions.map((s, i) => {
-            const company = options.companyName(s.tradeId ? companyForTrade(s.tradeId, options.jobCompanies) : null);
-            return (
-              <Touchable
-                key={s.title}
-                feedback="highlight"
-                onPress={() => pickTitle(s)}
-                accessibilityRole="button"
-                accessibilityLabel={s.title}
-                testID={`suggestion-${i}`}
-                style={[styles.suggestion, i > 0 ? styles.suggestionRule : null]}
-              >
-                <Text numberOfLines={1} style={{ flex: 1 }}>
-                  {s.title}
-                </Text>
-                {company ? (
-                  <Text variant="subheadline" color={colors.secondary} numberOfLines={1} style={styles.suggestionHint}>
-                    {company}
-                  </Text>
-                ) : null}
-              </Touchable>
-            );
-          })}
-        </View>
-      ) : null}
-
-      <ListSection
-        style={styles.section}
-        footer={sentence(whereProblem) ?? (filled && value.companyId ? 'Assigned To filled in from the title.' : undefined)}
-        footerTone={whereProblem ? 'danger' : 'default'}
-      >
-        <ListRow
-          title="Location"
-          field
-          value={roomLabel ?? 'Choose'}
-          valueColor={roomLabel ? colors.secondary : colors.tint}
-          accessory="chevron"
-          onPress={() => setPicker('room')}
-          testID="pick-room"
-        />
-        {showAssignee ? (
+        <ListSection
+          style={styles.section}
+          footer={sentence(whereProblem) ?? (filled && value.companyId ? 'Assigned To filled in from the title.' : undefined)}
+          footerTone={whereProblem ? 'danger' : 'default'}
+        >
           <ListRow
-            title="Assigned To"
+            title="Location"
             field
-            value={assignee ?? 'Choose'}
-            valueColor={assignee ? colors.secondary : colors.tint}
+            value={roomLabel ?? 'Choose'}
+            valueColor={roomLabel ? colors.secondary : colors.tint}
             accessory="chevron"
-            onPress={() => setPicker('assignee')}
-            testID="pick-assigned"
+            onPress={() => setPicker('room')}
+            testID="pick-room"
           />
-        ) : null}
-      </ListSection>
-
-      {showReady && (shows('ready') || !value.ready) ? (
-        <ListSection footer={sentence(problem('waitingOn') ?? problem('readyBy'))} footerTone="danger">
-          <ReadyRow
-            jobId={jobId}
-            itemId={itemId}
-            locationId={value.locationId}
-            value={{ ready: value.ready, waitingOn: value.waitingOn, waitingOnItems: value.waitingOnItems, readyBy: value.readyBy }}
-            onChange={(next) => set(next)}
-            extras={extras.length > 0 ? extras : defaultWaitingOnExtras(builder)}
-            onAddChoice={(label) => void data.setWaitingOnExtras(jobId, [...(extras.length > 0 ? extras : defaultWaitingOnExtras(builder)), label])}
-          />
-        </ListSection>
-      ) : null}
-
-      {hasDetails ? (
-        <ListSection footer={sentence(detailProblem)} footerTone="danger">
-          <ListRow
-            title="Details"
-            field
-            subtitle={summary || undefined}
-            onPress={() => {
-              haptic.selection();
-              setOpen((o) => !o);
-            }}
-            right={<Icon name={detailsOpen ? 'chevron.down' : 'chevron.right'} size={14} color={colors.quiet} weight="medium" />}
-            accessibilityLabel={`Details${summary ? `, ${summary}` : ''}`}
-            testID="item-details"
-          />
-        </ListSection>
-      ) : null}
-      {hasDetails && detailsOpen ? (
-        <View testID="item-details-open">
-          {showKind ? (
-            <ListSection header="Type" footer={KIND_HINTS[value.kind]}>
-              <View style={styles.kind}>
-                <Segmented<ItemKind> options={KINDS.map((k) => [k, KIND_LABELS[k]])} value={value.kind} onChange={(kind) => set(kindDefaults(kind, value))} testID="kind" />
-              </View>
-            </ListSection>
+          {showAssignee ? (
+            <ListRow
+              title="Assigned To"
+              field
+              value={assignee ?? 'Choose'}
+              valueColor={assignee ? colors.secondary : colors.tint}
+              accessory="chevron"
+              onPress={() => setPicker('assignee')}
+              testID="pick-assigned"
+            />
           ) : null}
+        </ListSection>
 
-          {showPo ? (
-            <ListSection header="Order" footer="Until it has an order, it is to be quoted.">
-              {ORDER_TYPES.map((t) => (
-                <ListRow key={t} title={ORDER_LABELS[t]} accessory={orderType === t ? 'checkmark' : 'none'} onPress={() => pickOrder(t)} testID={`order-${t}`} />
-              ))}
-              <ListLabeledField
-                label="Number"
-                placeholder={orderType ? 'Number' : 'Pick the order first'}
-                value={order.number}
-                editable={!!orderType || order.number !== ''}
-                onChangeText={(n) => set({ poOrCo: writeOrder(orderType, n) }, true)}
-                onBlur={() => set({ poOrCo: value.poOrCo })}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="done"
-                invalid={!!problem('poOrCo')}
-                testID="field-po"
-              />
-            </ListSection>
-          ) : null}
-
-          <ListSection footer="It goes to the top of the lists.">
-            <ListSwitchRow title="Priority" value={!!value.priority} onValueChange={(priority) => set({ priority })} testID="field-priority" />
+        {showReady && (shows('ready') || !value.ready) ? (
+          <ListSection footer={sentence(problem('waitingOn') ?? problem('readyBy'))} footerTone="danger">
+            <ReadyRow
+              jobId={jobId}
+              itemId={itemId}
+              locationId={value.locationId}
+              value={{ ready: value.ready, waitingOn: value.waitingOn, waitingOnItems: value.waitingOnItems, readyBy: value.readyBy }}
+              onChange={(next) => set(next)}
+              extras={extras.length > 0 ? extras : defaultWaitingOnExtras(builder)}
+              onAddChoice={(label) => void data.setWaitingOnExtras(jobId, [...(extras.length > 0 ? extras : defaultWaitingOnExtras(builder)), label])}
+            />
           </ListSection>
+        ) : null}
 
-          <HoursField value={value.hours} onChange={(hours) => set({ hours })} note={hoursNote} />
-          {usual ? (
-            <Text variant="footnote" color={colors.secondary} style={styles.usual} testID="usual-hours">
-              {`${usual.from === 'standard' ? 'The standard time' : 'Usually'}: ${hoursText(usual.hours)}.`}
-              <Text variant="footnote" weight="600" color={colors.tint} onPress={() => set({ hours: usual.hours })} accessibilityRole="button" testID="usual-hours-use">
-                {' Use It'}
-              </Text>
-            </Text>
-          ) : null}
+        {hasDetails ? (
+          <ListSection footer={sentence(detailProblem)} footerTone="danger">
+            <ListRow
+              title="Details"
+              field
+              subtitle={summary || undefined}
+              onPress={() => {
+                haptic.selection();
+                setOpen((o) => !o);
+              }}
+              right={<Icon name={detailsOpen ? 'chevron.down' : 'chevron.right'} size={14} color={colors.quiet} weight="medium" />}
+              accessibilityLabel={`Details${summary ? `, ${summary}` : ''}`}
+              testID="item-details"
+            />
+          </ListSection>
+        ) : null}
+        {hasDetails && detailsOpen ? (
+          <View testID="item-details-open">
+            {showKind ? (
+              <ListSection header="Type" footer={KIND_HINTS[value.kind]}>
+                <View style={styles.kind}>
+                  <Segmented<ItemKind> options={KINDS.map((k) => [k, KIND_LABELS[k]])} value={value.kind} onChange={(kind) => set(kindDefaults(kind, value))} testID="kind" />
+                </View>
+              </ListSection>
+            ) : null}
 
-          {customFields.length > 0 ? (
-            <ListSection header="More">
-              <ExtraFields fields={customFields} value={value.extra} onChange={(extra, typing) => set({ extra }, typing)} />
+            {showPo ? (
+              <ListSection header="Order" footer="Until it has an order, it is to be quoted.">
+                {ORDER_TYPES.map((t) => (
+                  <ListRow key={t} title={ORDER_LABELS[t]} accessory={orderType === t ? 'checkmark' : 'none'} onPress={() => pickOrder(t)} testID={`order-${t}`} />
+                ))}
+                <ListLabeledField
+                  label="Number"
+                  placeholder={orderType ? 'Number' : 'Pick the order first'}
+                  value={order.number}
+                  editable={!!orderType || order.number !== ''}
+                  onChangeText={(n) => set({ poOrCo: writeOrder(orderType, n) }, true)}
+                  onBlur={() => set({ poOrCo: value.poOrCo })}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  invalid={!!problem('poOrCo')}
+                  testID="field-po"
+                />
+              </ListSection>
+            ) : null}
+
+            <ListSection footer="It goes to the top of the lists.">
+              <ListSwitchRow title="Priority" value={!!value.priority} onValueChange={(priority) => set({ priority })} testID="field-priority" />
             </ListSection>
-          ) : null}
 
-        </View>
-      ) : null}
+            <HoursField value={value.hours} onChange={(hours) => set({ hours })} note={hoursNote} />
+            {usual ? (
+              <Text variant="footnote" color={colors.secondary} style={styles.usual} testID="usual-hours">
+                {`${usual.from === 'standard' ? 'The standard time' : 'Usually'}: ${hoursText(usual.hours)}.`}
+                <Text variant="footnote" weight="600" color={colors.tint} onPress={() => set({ hours: usual.hours })} accessibilityRole="button" testID="usual-hours-use">
+                  {' Use It'}
+                </Text>
+              </Text>
+            ) : null}
 
+            {customFields.length > 0 ? (
+              <ListSection header="More">
+                <ExtraFields fields={customFields} value={value.extra} onChange={(extra, typing) => set({ extra }, typing)} />
+              </ListSection>
+            ) : null}
+
+          </View>
+        ) : null}
+
+      </View>
       {children}
 
       <OptionPicker

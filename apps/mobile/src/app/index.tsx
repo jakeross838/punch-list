@@ -5,13 +5,14 @@
 // close or delete it, or hold it down to change its name and address too. People, Companies,
 // Templates, Item Form and your account are under Me, the square button in the bar.
 
-import { assignedTo, isAdmin, SAMPLE_JOB, type Job } from '@punch/core';
+import { canSetUpJobs, assignedTo, SAMPLE_JOB, type Job } from '@punch/core';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
 import { useJobActions } from '@/components/JobActions';
+import { GetStarted } from '@/components/GetStarted';
 import { NotifyKeeper } from '@/components/Notify';
 import { useUpdateLines } from '@/components/ActivityRow';
 import { SearchResults } from '@/components/SearchResults';
@@ -29,7 +30,8 @@ export default function JobsScreen() {
   const jobs = data.useJobs();
   const me = data.useMe();
   const team = data.useTeams();
-  const admin = isAdmin(me);
+  // Making jobs: an admin or a project manager.
+  const admin = canSetUpJobs(me);
   const sample = useSampleJob();
   const [query, setQuery] = useState('');
   const mineIds = useMemo(() => new Set(team.filter((t) => t.personId === me?.id).map((t) => t.jobId)), [team, me?.id]);
@@ -60,6 +62,7 @@ export default function JobsScreen() {
     >
       {/* Jobs is always open under the rest: the phone kept on notifications, and a notification tapped opens its item. */}
       <NotifyKeeper />
+      {q ? null : <GetStarted />}
       {choices.length > 1 ? (
         <ChipRow chips={choices.map(([key, label]) => ({ key, label, on: show === key, onPress: () => setShow(key), testID: `show-${key}` }))} style={styles.show} />
       ) : null}
@@ -181,13 +184,13 @@ function JobRow({ job, last, actions }: { job: Job; last: boolean; actions: Retu
   const started = locations.some((l) => l.active) || items.some((i) => i.status !== 'removed');
   const counts = { items: items.filter((i) => i.status !== 'removed').length, photos: photos.filter((p) => !p.removed).length };
   const said = [job.name, job.address, started ? `${open.length} open, ${ready} ready${waiting ? `, ${waiting} waiting` : ''}` : 'nothing on the list yet'].filter(Boolean).join(', ');
-  // Swipe it to close or delete it, or hold it down for those and Edit, for an admin.
+  // Swipe it to close or delete it, or hold it down for those and Edit: an admin or a project manager, and only an admin deletes.
   const swipes: SwipeAction[] = actions.admin
     ? [
         job.closed
           ? { label: 'Open', icon: 'undo', color: colors.okFill, onPress: () => actions.reopen(job), testID: `reopen-${job.id}` }
           : { label: 'Close', icon: 'archive', color: colors.quiet, onPress: () => actions.close(job), testID: `close-${job.id}` },
-        { label: 'Delete', icon: 'trash', color: colors.destructive, onPress: () => actions.remove(job, counts), testID: `delete-${job.id}` },
+        ...(actions.deletes ? [{ label: 'Delete', icon: 'trash' as const, color: colors.destructive, onPress: () => actions.remove(job, counts), testID: `delete-${job.id}` }] : []),
       ]
     : [];
   return (

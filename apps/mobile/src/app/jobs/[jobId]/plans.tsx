@@ -4,7 +4,7 @@
 // to open it. Pinch to look closer. The level's items that are not pinned yet are listed under the
 // plan: tap one, then tap the plan where it is. An item can also be pinned from its own screen.
 
-import type { Item, PlanSheet } from '@punch/core';
+import { canChange, type Item, type PlanSheet } from '@punch/core';
 import { Image } from 'expo-image';
 import { launchImageLibraryAsync } from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -58,6 +58,8 @@ export default function PlansScreen() {
   const locations = data.useLocations(jobId);
   const companies = data.useCompanies();
   const holds = useHolds(jobId);
+  // View Only looks at the plans and the pins: no adding plans and no pinning.
+  const looks = !canChange(data.useMe());
   const floors = useMemo(() => [...new Set(locations.filter((l) => l.active && l.kind === 'room').map((l) => l.floor ?? '').filter(Boolean))], [locations]);
   const pinning = pin ? items.find((i) => i.id === pin) : undefined;
   const pinningFloor = pinning ? locations.find((l) => l.id === pinning.locationId)?.floor : undefined;
@@ -138,21 +140,27 @@ export default function PlansScreen() {
     });
   };
 
-  const right: BarItem[] = [
-    { kind: 'button', label: 'Add a Plan', icon: 'plus', iconOnly: true, onPress: () => void addPlan(), testID: 'add-plan' },
-    ...(plan
-      ? [{ kind: 'menu' as const, label: 'More', icon: 'ellipsis' as const, testID: 'plan-more', groups: [{ actions: [{ label: 'Take Off This Plan', icon: 'trash' as const, destructive: true, onPress: takeOff, testID: 'plan-remove' }] }] }]
-      : []),
-  ];
+  const right: BarItem[] = looks
+    ? []
+    : [
+        { kind: 'button', label: 'Add a Plan', icon: 'plus', iconOnly: true, onPress: () => void addPlan(), testID: 'add-plan' },
+        ...(plan
+          ? [{ kind: 'menu' as const, label: 'More', icon: 'ellipsis' as const, testID: 'plan-more', groups: [{ actions: [{ label: 'Take Off This Plan', icon: 'trash' as const, destructive: true, onPress: takeOff, testID: 'plan-remove' }] }] }]
+          : []),
+      ];
 
   return (
     <Page title={plan ? plan.floor || plan.name : 'Plans'} eyebrow={plan ? 'Plans' : undefined} backLabel={job?.name} right={right} tab={{ active: 'jobs', jobId }} testID="plans-screen">
       {plans.length === 0 ? (
-        <EmptyState icon="map" title="No Plans Yet" message="Read the Plans keeps each level's floor plan here. Or add a picture or a screenshot of one.">
-          <View style={styles.emptyAction}>
-            <Button label="Add a Plan" icon="plus" onPress={() => void addPlan()} testID="empty-add-plan" />
-          </View>
-        </EmptyState>
+        looks ? (
+          <EmptyState icon="map" title="No Plans Yet" message="Each level's floor plan shows here once it is added." />
+        ) : (
+          <EmptyState icon="map" title="No Plans Yet" message="Read the Plans keeps each level's floor plan here. Or add a picture or a screenshot of one.">
+            <View style={styles.emptyAction}>
+              <Button label="Add a Plan" icon="plus" onPress={() => void addPlan()} testID="empty-add-plan" />
+            </View>
+          </EmptyState>
+        )
       ) : plan ? (
         <>
           {plans.length > 1 ? (
@@ -236,7 +244,7 @@ export default function PlansScreen() {
               </LedgerRow>
             </Panel>
           ) : null}
-          {notPinned.length > 0 && !placingItem ? (
+          {notPinned.length > 0 && !placingItem && !looks ? (
             <>
               <SectionLabel label="Not Pinned Yet" right={`${notPinned.length}`} />
               <Text variant="footnote" color={colors.secondary} style={styles.hint}>

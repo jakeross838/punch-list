@@ -1,5 +1,5 @@
-// The bar at the bottom of the app, the same everywhere: Jobs, Capture and Send. Capture is the
-// square in the middle, big enough to hit without looking. Capture and Send work on the job you are
+// The bar at the bottom of the app, the same everywhere: Jobs, Capture and Send (View Only has Jobs
+// alone). Capture is the square in the middle, big enough to hit without looking. Capture and Send work on the job you are
 // in, or the last one you opened. Me is the round button in the top bar.
 //
 // It acts like tabs on one stack of screens. Jobs goes back to the job you were in before Send or
@@ -7,6 +7,7 @@
 // when it is already open underneath, so tapping around never piles up screens. Swiping back still
 // returns to where you were.
 
+import { canChange } from '@punch/core';
 import { router, useNavigation } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,7 +39,10 @@ export function TabBar({ active, jobId, locationId = null, onCapture }: PageTab)
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const current = useCurrentJob();
-  const jobs = useData().useJobs();
+  const data = useData();
+  const jobs = data.useJobs();
+  // View Only looks: no Capture and no Send, so Jobs alone.
+  const looks = !canChange(data.useMe());
   const job = jobId ?? (current && jobs.some((j) => j.id === current) ? current : null) ?? jobs.find((j) => !j.closed)?.id ?? null;
 
   const stack = () => ((navigation.getState()?.routes ?? []) as StackRoute[]).map((r) => ({ name: r.name, jobId: r.params?.jobId }));
@@ -108,25 +112,27 @@ export function TabBar({ active, jobId, locationId = null, onCapture }: PageTab)
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom - 6, 8) }]} accessibilityRole="tablist">
       {tab('jobs', 'Jobs', 'grid')}
-      <Touchable
-        feedback="opacity"
-        onPress={() => {
-          haptic.tap();
-          go.capture();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Capture: take a photo"
-        testID="camera"
-        style={styles.tab}
-      >
-        <View style={styles.capture}>
-          <Icon name="camera" size={24} color={colors.bar} weight="medium" />
-        </View>
-        <Text variant="stamp" weight="600" color={colors.onBar} style={styles.label}>
-          Capture
-        </Text>
-      </Touchable>
-      {tab('send', 'Send', 'send')}
+      {looks ? null : (
+        <Touchable
+          feedback="opacity"
+          onPress={() => {
+            haptic.tap();
+            go.capture();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Capture: take a photo"
+          testID="camera"
+          style={styles.tab}
+        >
+          <View style={styles.capture}>
+            <Icon name="camera" size={24} color={colors.bar} weight="medium" />
+          </View>
+          <Text variant="stamp" weight="600" color={colors.onBar} style={styles.label}>
+            Capture
+          </Text>
+        </Touchable>
+      )}
+      {looks ? null : tab('send', 'Send', 'send')}
     </View>
   );
 }

@@ -15,7 +15,7 @@
 import { doFirst, FREES_NOTHING } from '@punch/core';
 import qrcode from 'qrcode-generator';
 import { mountList, type ListView } from './list';
-import { clockText, dayText, esc, isQuoted, plural, problemHtml, todayText } from './shared';
+import { brandHtml, clockText, dayText, esc, isQuoted, plural, problemHtml, todayText } from './shared';
 import { answerStation, sampleBoard, sampleStation } from './stationSample';
 import type { Page, StationBoard, StationCompany, StationItem } from './types';
 
@@ -49,7 +49,16 @@ async function post<T>(body: Record<string, unknown>): Promise<T> {
   return data;
 }
 
-const getBoard = async (): Promise<StationBoard> => (sample ? (JSON.parse(JSON.stringify(sampleBoard(sample))) as StationBoard) : post<StationBoard>({}));
+/** The builder's logo, asked for with the first board only: the station asks again every minute. */
+let logo: string | null = null;
+let askedLogo = false;
+const getBoard = async (): Promise<StationBoard> => {
+  if (sample) return JSON.parse(JSON.stringify(sampleBoard(sample))) as StationBoard;
+  const got = await post<StationBoard>(askedLogo ? {} : { logo: true });
+  if (!askedLogo) logo = got.logo ?? null;
+  askedLogo = true;
+  return { ...got, logo };
+};
 const callCompany =
   (companyId: string) =>
   async (body: Record<string, unknown>): Promise<Page> =>
@@ -156,7 +165,7 @@ function boardHtml(b: StationBoard): string {
       </button>`,
     )
     .join('');
-  return `<div class="bar"><span class="brand">${esc(b.builder)}</span><span class="sub">Job Station</span></div>
+  return `<div class="bar">${brandHtml(b.builder, b.logo)}<span class="sub">Job Station</span></div>
   <main class="wrap station">
     <header class="head">
       <div class="eyebrow">Job Station</div>
@@ -285,7 +294,7 @@ function renderTv(): void {
   const ready = work.reduce((n, w) => n + w.ready.length, 0);
   const now = new Date();
   app.innerHTML = `<div class="tv-top">
-      <div><div class="tv-brand">${esc(board.builder)} · Job Station</div><div class="tv-job">${esc(board.job.name)}</div></div>
+      <div>${board.logo ? brandHtml(board.builder, board.logo, 'tv-logo') : ''}<div class="tv-brand">${esc(board.builder)} · Job Station</div><div class="tv-job">${esc(board.job.name)}</div></div>
       <div class="tv-when"><div>${esc(todayText(now))}</div><div class="tv-clock">${esc(clockText(now))}</div></div>
     </div>
     ${

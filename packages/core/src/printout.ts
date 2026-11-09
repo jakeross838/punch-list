@@ -11,6 +11,7 @@
 // comes back. Plain HTML, so the phone turns it into a PDF and the preview page shows the very same
 // thing.
 
+import { isLogo } from './company';
 import { NOT_ASSIGNED } from './assignees';
 import { addDays, dayOfDate, daysBetween, holidayGroups, holidayOn, holidaysBetween, isDay, mondayOf, visitEnd } from './dates';
 import { holdText } from './holds';
@@ -37,6 +38,8 @@ export interface PrintSettings {
   job: { name: string; address: string };
   /** Whose list it is, at the top of every page: the company using the app. */
   builder?: string;
+  /** The builder's logo, in place of its name at the top, when it has one. */
+  logo?: string | null;
   /** The day the list is made. */
   date: Date;
   /** An item's photo, when photos are included. */
@@ -190,7 +193,11 @@ function header(settings: PrintSettings, kind: string, title: string, summary: s
   const { job, date } = settings;
   return [
     '<div class="rb-head">',
-    `<div class="rb-brand"><div class="rb-brand-name">${esc((settings.builder ?? '').toUpperCase())}</div><div class="rb-brand-sub">PUNCH LIST</div></div>`,
+    `<div class="rb-brand">${
+      settings.logo && isLogo(settings.logo)
+        ? `<img class="rb-logo" src="${settings.logo}" alt="${esc(settings.builder ?? '')}">`
+        : `<div class="rb-brand-name">${esc((settings.builder ?? '').toUpperCase())}</div>`
+    }<div class="rb-brand-sub">PUNCH LIST</div></div>`,
     `<div class="rb-head-right"><b>${esc(kind)}</b>${esc(printDate(date))}</div>`,
     '</div>',
     `<h1 class="rb-title">${esc(title)}</h1>`,
@@ -841,6 +848,7 @@ export const PRINT_CSS = `
 .rb-doc *{box-sizing:border-box}
 .rb-head{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:9pt;border-bottom:0.75pt solid #CBD8DB}
 .rb-brand-name{font-size:16pt;font-weight:700;letter-spacing:0.26em;line-height:1}
+.rb-logo{display:block;max-height:34pt;max-width:170pt;object-fit:contain}
 .rb-brand-sub{font-size:7pt;font-weight:600;letter-spacing:0.42em;color:#4E7A8C;margin-top:4pt}
 .rb-head-right{text-align:right;font-size:9pt;color:#4E7A8C;line-height:1.3}
 .rb-head-right b{display:block;font-size:10pt;font-weight:700;color:#3B5864}

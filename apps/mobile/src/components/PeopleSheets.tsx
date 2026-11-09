@@ -2,7 +2,7 @@
 // a name and the email they sign in with, Admin or Team, and whether they see every job or only the
 // jobs they are on. Nobody is ever deleted; switched off, they can no longer sign in.
 
-import { isEmail, ROLE_HINTS, ROLE_LABELS, SEES_LABELS, type Person, type Role, type Sees } from '@punch/core';
+import { isAdmin, isEmail, ROLE_HINTS, ROLE_LABELS, ROLES, SEES_LABELS, seesEveryJob, type Person, type Role, type Sees } from '@punch/core';
 import { useRef, useState, type ComponentRef } from 'react';
 import { Share, type TextInput } from 'react-native';
 import { APP_NAME } from '@/constants/app';
@@ -16,11 +16,16 @@ export function inviteText(person: Pick<Person, 'name' | 'email'>, company: stri
   return `Hi ${first}, I set you up on ${APP_NAME}${at}, the app we use for every job's list. Once it is on your phone, sign in with ${person.email} and your jobs will be there.`;
 }
 
-/** Opens the share sheet with the invite; where sharing is not offered, says the invite instead. */
+/**
+ * Opens the share sheet with the invite; where sharing is not offered, says the invite instead.
+ * Once the app sends email itself, an admin can send it from the app's own address instead.
+ */
 export function useInvite() {
   const feedback = useFeedback();
-  const company = useData().useOrg().name;
-  return async (person: Pick<Person, 'name' | 'email'>) => {
+  const data = useData();
+  const company = data.useOrg().name;
+  const admin = isAdmin(data.useMe());
+  const share = async (person: Pick<Person, 'name' | 'email'>) => {
     const message = inviteText(person, company);
     try {
       await Share.share({ message });
@@ -28,12 +33,33 @@ export function useInvite() {
       feedback.toast({ message });
     }
   };
+  const email = async (person: Pick<Person, 'id' | 'name' | 'email'>) => {
+    try {
+      await data.emailInvite(person.id);
+      haptic.success();
+      feedback.toast({ message: `Invite sent to ${person.email}` });
+    } catch (e) {
+      haptic.warning();
+      feedback.toast({ message: e instanceof Error ? e.message : 'The invite did not go. Check the signal and try again.' });
+    }
+  };
+  return async (person: Pick<Person, 'id' | 'name' | 'email'>) => {
+    if (!admin || !(await data.emailReady())) return share(person);
+    feedback.actionSheet({
+      title: `Invite ${person.name}`,
+      actions: [
+        { label: `Email It From ${APP_NAME}`, onPress: () => void email(person) },
+        // The sheet slides away before the share sheet comes up.
+        { label: 'Share It Another Way', onPress: () => setTimeout(() => void share(person), 350) },
+      ],
+    });
+  };
 }
 
 export function RoleRows({ value, onChange, disabled }: { value: Role; onChange: (role: Role) => void; disabled?: boolean }) {
   return (
     <ListSection header="Role">
-      {(['admin', 'team'] as Role[]).map((role) => (
+      {ROLES.map((role) => (
         <ListRow
           key={role}
           title={ROLE_LABELS[role]}
@@ -48,16 +74,20 @@ export function RoleRows({ value, onChange, disabled }: { value: Role; onChange:
 }
 
 export function SeesRows({ value, role, onChange, disabled }: { value: Sees; role: Role; onChange: (sees: Sees) => void; disabled?: boolean }) {
-  const admin = role === 'admin';
+  // Admins and project managers see every job, whatever Sees says.
+  const every = seesEveryJob({ role, sees: 'assigned' });
   return (
-    <ListSection header="Sees" footer={admin ? 'Admins see every job.' : 'Their jobs are the ones they are on the team of. Assigning them an item puts them on that job\'s team.'}>
+    <ListSection
+      header="Sees"
+      footer={every ? `${role === 'admin' ? 'Admins' : 'Project managers'} see every job.` : 'Their jobs are the ones they are on the team of. Assigning them an item puts them on that job\'s team.'}
+    >
       {(['all', 'assigned'] as Sees[]).map((sees) => (
         <ListRow
           key={sees}
           title={SEES_LABELS[sees]}
-          accessory={(admin ? 'all' : value) === sees ? 'checkmark' : 'none'}
-          disabled={admin}
-          onPress={disabled || admin ? undefined : () => onChange(sees)}
+          accessory={(every ? 'all' : value) === sees ? 'checkmark' : 'none'}
+          disabled={every}
+          onPress={disabled || every ? undefined : () => onChange(sees)}
           testID={`sees-${sees}`}
         />
       ))}
@@ -105,7 +135,7 @@ export function AddPersonSheet({ visible, onClose, onAdded }: { visible: boolean
     try {
       const id = await data.addPerson({ name, email, phone: phone.trim() || null, role, sees });
       haptic.success();
-      const person = { name: name.trim(), email: email.trim().toLowerCase() };
+      const person = { id, name: name.trim(), email: email.trim().toLowerCase() };
       feedback.toast({ message: `Added ${person.name}. They sign in with ${person.email}.`, action: { label: 'Invite', onPress: () => void invite(person) } });
       reset();
       onAdded?.(id);

@@ -1,7 +1,8 @@
-// People: everyone at your company, admins first, then the team, then anyone switched off. Each says
-// what they see and how many jobs they are on. Admins add people here; everyone can look.
+// People: everyone at your company by role, admins first, then project managers, superintendents and
+// View Only, then anyone switched off. Each says what they see and how many jobs they are on. Admins
+// add people here; everyone can look.
 
-import { isAdmin, peopleInOrder, ROLE_LABELS, SEES_LABELS, type Person } from '@punch/core';
+import { isAdmin, peopleInOrder, ROLE_LABELS, ROLES, SEES_LABELS, seesEveryJob, type Person, type Role } from '@punch/core';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { AddPersonSheet } from '@/components/PeopleSheets';
@@ -9,6 +10,9 @@ import { useData } from '@/data/api';
 import { ListRow, ListSection, Page } from '@/ui';
 
 const jobsWords = (n: number) => (n === 0 ? 'No jobs' : n === 1 ? '1 job' : `${n} jobs`);
+
+/** Each role's heading in People. */
+const GROUP_TITLES: Record<Role, string> = { admin: 'Admins', project_manager: 'Project Managers', team: 'Superintendents', view_only: 'View Only' };
 
 export default function PeopleScreen() {
   const data = useData();
@@ -18,8 +22,7 @@ export default function PeopleScreen() {
   const admin = isAdmin(me);
   const [adding, setAdding] = useState(false);
   const groups: { title: string; people: Person[] }[] = [
-    { title: 'Admins', people: people.filter((p) => p.active && p.role === 'admin') },
-    { title: 'Team', people: people.filter((p) => p.active && p.role === 'team') },
+    ...ROLES.map((role) => ({ title: GROUP_TITLES[role], people: people.filter((p) => p.active && p.role === role) })),
     { title: 'Switched Off', people: people.filter((p) => !p.active) },
   ];
   const open = (id: string) => router.push({ pathname: '/settings/people/[personId]', params: { personId: id } });
@@ -43,7 +46,7 @@ export default function PeopleScreen() {
               <ListRow
                 key={p.id}
                 title={p.id === me?.id ? `${p.name} (You)` : p.name}
-                subtitle={p.active ? `${ROLE_LABELS[p.role]} · Sees ${p.role === 'admin' ? 'every job' : SEES_LABELS[p.sees].toLowerCase()}` : p.email}
+                subtitle={p.active ? `${ROLE_LABELS[p.role]} · Sees ${seesEveryJob(p) ? 'every job' : SEES_LABELS[p.sees].toLowerCase()}` : p.email}
                 value={jobsWords(team.filter((t) => t.personId === p.id).length)}
                 accessory="chevron"
                 onPress={() => open(p.id)}

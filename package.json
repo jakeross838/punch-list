@@ -15,6 +15,7 @@
     "test:db": "bash tools/db-test.sh",
     "test:live-writes": "tsx --tsconfig tools/live-writes.tsconfig.json tools/live-writes-db.ts",
     "test:functions": "tsx tools/functions-check.ts",
+    "test:speed": "tsx tools/preview-speed.ts",
     "build:functions": "node tools/build-functions.mjs",
     "preview:build": "cd apps/mobile && EXPO_NO_DOTENV=1 npx expo export --platform web && cd ../.. && node tools/build-preview.mjs",
     "test:preview": "tsx tools/preview-e2e.ts",

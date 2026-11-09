@@ -11,6 +11,14 @@ export function esc(text: string | null | undefined): string {
   return String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** A logo the page shows: a small PNG or JPEG kept as data, nothing else. */
+const LOGO = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+/** The builder at the top of a page: its logo when it has one, on white so any logo shows, or its name. */
+export function brandHtml(builder: string, logo: string | null | undefined, className = 'brand-logo'): string {
+  return logo && LOGO.test(logo) ? `<img class="${className}" src="${logo}" alt="${esc(builder)}">` : `<span class="brand">${esc(builder)}</span>`;
+}
+
 /** Browser storage can be missing or refuse: the page works without it. */
 export function remembered(key: string): string | null {
   try {

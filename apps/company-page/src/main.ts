@@ -6,7 +6,7 @@
 
 import { mountList } from './list';
 import { answerSample, samplePage } from './sample';
-import { esc, problemHtml } from './shared';
+import { brandHtml, esc, problemHtml } from './shared';
 import type { Page } from './types';
 
 declare const FUNCTION_URL: string;
@@ -45,7 +45,8 @@ if (!SAMPLE && !/^[0-9a-f]{64}$/.test(token)) {
     nameKey: 'punch-name',
     langKey: 'punch-language',
     otherJobsAt: '/c',
-    bar: (p) => `<div class="bar"><span class="brand">${esc(p.builder)}</span><span class="sub">Punch List</span></div>`,
+    logo: true,
+    bar: (p) => `<div class="bar">${brandHtml(p.builder, p.logo)}<span class="sub">Punch List</span></div>`,
     footer: (p, w) =>
       SAMPLE
         ? w.lang === 'es'

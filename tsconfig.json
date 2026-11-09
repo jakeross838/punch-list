@@ -31,6 +31,8 @@
     "apps/mobile",
     "tools/preview-e2e.ts",
     "tools/company-page-e2e.ts",
-    "tools/station-e2e.ts"
+    "tools/station-e2e.ts",
+    "tools/preview-speed.ts",
+    "tools/app-store-shots.ts"
   ]
 }

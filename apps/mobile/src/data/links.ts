@@ -29,3 +29,9 @@ export function ownerPageUrl(mode: 'preview' | 'live', token: string): string {
   const site = BASE.replace(/[#/]+$/, '').replace(/\/[^/]*$/, '');
   return `${site}/o/#${mode === 'preview' ? 'sample' : token}`;
 }
+
+/** The Privacy Policy, the Terms of Use and Support, on the same hosting. */
+export function sitePageUrl(page: 'privacy' | 'terms' | 'support'): string {
+  const site = BASE.replace(/[#/]+$/, '').replace(/\/[^/]*$/, '');
+  return `${site}/${page}/`;
+}

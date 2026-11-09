@@ -6,16 +6,21 @@
 // waits until every change has gone up. Delete My Account takes your sign in away for good, and the
 // last one at a company takes the whole company with them.
 
-import { COMPANY_NAME_MAX, companyNameProblem, isAdmin, PART_LABELS, ROLE_HINTS, ROLE_LABELS, SEES_LABELS } from '@punch/core';
+import { COMPANY_NAME_MAX, companyNameProblem, exportEntries, isAdmin, PART_LABELS, ROLE_HINTS, ROLE_LABELS, SEES_LABELS } from '@punch/core';
 import Constants from 'expo-constants';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { APP_NAME } from '@/constants/app';
 import { colors, layout } from '@/constants/theme';
 import { NotifySection } from '@/components/Notify';
+import { pickLogo } from '@/components/pickLogo';
+import { exportZip } from '@/export/everything';
 import { useData } from '@/data/api';
-import { SheetScroll, haptic, ListRow, ListSection, ListTextField, Page, Sheet, Text, useFeedback } from '@/ui';
+import { sitePageUrl } from '@/data/links';
+import { SheetScroll, haptic, ListRow, ListSection, ListTextField, Page, Sheet, Text, todayIso, useFeedback } from '@/ui';
 import { useClaudeAllowance } from '@/ai/claude';
 
 /** Cents as dollars and cents, like $1.84. */
@@ -24,6 +29,9 @@ const dollars = (cents: number) => `$${(Math.round(cents) / 100).toFixed(2)}`;
 export default function AccountScreen() {
   const data = useData();
   const feedback = useFeedback();
+  /** The Privacy Policy or the Terms of Use, on the web. */
+  const openSite = (page: 'privacy' | 'terms') =>
+    void WebBrowser.openBrowserAsync(sitePageUrl(page)).catch(() => feedback.toast({ message: 'The page did not open. Check the signal and try again.' }));
   const me = data.useMe();
   const jobs = data.useJobs();
   const team = data.useTeams().filter((t) => t.personId === me?.id);
@@ -31,6 +39,13 @@ export default function AccountScreen() {
   const people = data.usePeople();
   const org = data.useOrg();
   const [renaming, setRenaming] = useState<string | null>(null);
+  // Export Everything: every job's items, comments and photos, read when it runs.
+  const allItems = data.useAllItems();
+  const allLocations = data.useAllLocations();
+  const companies = data.useCompanies();
+  const allComments = data.useAllComments();
+  const allPhotos = data.useAllPhotos();
+  const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
   const allowance = useClaudeAllowance();
   // Signing out: the screen goes as the sign in comes up.
   if (!me) return <Page title="Me" tab={{}} />;
@@ -40,6 +55,63 @@ export default function AccountScreen() {
   const others = people.filter((p) => p.active && p.id !== me.id);
 
   const stopRenaming = () => setRenaming(null);
+
+  async function exportAll() {
+    if (exporting) return;
+    const { folder, entries } = exportEntries({ company, day: todayIso(), jobs, items: allItems, locations: allLocations, companies, people, comments: allComments, photos: allPhotos });
+    setExporting({ done: 0, total: entries.length });
+    try {
+      const done = await exportZip(`${folder}.zip`, entries, (d, total) => setExporting({ done: d, total }));
+      haptic.success();
+      if (done.missed > 0) {
+        feedback.toast({ message: `${done.missed === 1 ? 'A photo was' : `${done.missed} photos were`} not on this phone yet, so ${done.missed === 1 ? 'it was' : 'they were'} left out. With a signal, open the app a while, then export again.` });
+      }
+    } catch (e) {
+      haptic.warning();
+      feedback.toast({ message: e instanceof Error ? `The export did not finish: ${e.message}` : 'The export did not finish. Try again.' });
+    } finally {
+      setExporting(null);
+    }
+  }
+  const exportEverything = () =>
+    feedback.actionSheet({
+      title: 'Export everything?',
+      message: `Every job, item, comment and photo at ${company} goes into one file to keep. With many photos it takes a few minutes; keep the app open.`,
+      actions: [{ label: 'Export Everything', onPress: () => void exportAll() }],
+    });
+
+  const chooseLogo = async () => {
+    try {
+      const logo = await pickLogo();
+      if (!logo) return;
+      await data.setLogo(logo);
+      haptic.success();
+      feedback.toast({ message: 'The logo goes on your printed lists and your pages' });
+    } catch (e) {
+      haptic.warning();
+      feedback.toast({ message: e instanceof Error ? e.message : 'That picture did not work. Try another one.' });
+    }
+  };
+  const logo = () =>
+    org.logo
+      ? feedback.actionSheet({
+          title: 'Your Logo',
+          message: 'It goes on your printed lists, and on the pages your companies and owners open.',
+          actions: [
+            { label: 'Choose Another Picture', onPress: () => void chooseLogo() },
+            {
+              label: 'Take Away the Logo',
+              destructive: true,
+              onPress: () => {
+                void data.setLogo(null).then(
+                  () => haptic.tap(),
+                  (e: unknown) => feedback.toast({ message: e instanceof Error ? e.message : 'That did not save. Try again.' }),
+                );
+              },
+            },
+          ],
+        })
+      : void chooseLogo();
 
   const rename = async () => {
     if (renaming === null) return;
@@ -119,10 +191,32 @@ export default function AccountScreen() {
         {admin ? (
           <ListRow title="Company Name" icon="building" value={org.name} accessory="chevron" onPress={() => setRenaming(org.name)} testID="company-name" />
         ) : null}
+        {admin ? (
+          <ListRow
+            title="Logo"
+            icon="photo.on.rectangle"
+            value={org.logo ? undefined : 'None'}
+            right={org.logo ? <Image source={{ uri: org.logo }} style={styles.logo} contentFit="contain" accessibilityLabel="Your logo" testID="logo-picture" /> : undefined}
+            accessory="chevron"
+            onPress={logo}
+            testID="logo"
+          />
+        ) : null}
         <ListRow title="People" icon="person.2.fill" accessory="chevron" onPress={() => router.push('/settings/people')} testID="people" />
         <ListRow title="Companies" icon="building" accessory="chevron" onPress={() => router.push('/settings/companies')} testID="companies" />
         <ListRow title="Templates" icon="templates" accessory="chevron" onPress={() => router.push('/settings/templates')} testID="templates" />
         <ListRow title="Item Form" icon="list.bullet" accessory="chevron" onPress={() => router.push('/settings/item-form')} testID="item-form" />
+        {admin ? (
+          <ListRow
+            title="Export Everything"
+            icon="archive"
+            value={exporting ? `${exporting.done} of ${exporting.total}` : undefined}
+            accessory={exporting ? 'none' : 'chevron'}
+            disabled={!!exporting}
+            onPress={exportEverything}
+            testID="export-everything"
+          />
+        ) : null}
       </ListSection>
       {admin && allowance ? (
         <ListSection header="Claude" footer="Claude's cost for your company this month. It starts over on the first.">
@@ -191,6 +285,11 @@ export default function AccountScreen() {
         </ListSection>
       ) : null}
       <ListSection>
+        <ListRow title="Help" icon="info.circle" accessory="chevron" onPress={() => router.push('/settings/help')} testID="help" />
+        <ListRow title="Privacy Policy" accessory="chevron" onPress={() => openSite('privacy')} testID="privacy-policy" />
+        <ListRow title="Terms of Use" accessory="chevron" onPress={() => openSite('terms')} testID="terms-of-use" />
+      </ListSection>
+      <ListSection>
         <ListRow title="Sign Out" tone="destructive" onPress={signOut} testID="sign-out" />
       </ListSection>
       <ListSection footer="Takes your sign in away for good. Your company keeps what you did, under Deleted Account.">
@@ -239,6 +338,7 @@ function formatWhen(at: string): string {
 }
 
 const styles = StyleSheet.create({
+  logo: { width: 96, height: 32 },
   version: { marginHorizontal: layout.inset, marginTop: -8, marginBottom: 32 },
   sheet: { paddingTop: 4, paddingBottom: 48 },
 });

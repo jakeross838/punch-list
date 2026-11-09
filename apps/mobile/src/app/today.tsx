@@ -3,7 +3,7 @@
 // ready. Under each job, the day's walk: that work in walking order, location by location, each item
 // a tap away to check off or open.
 
-import { isAdmin, todayPlan, type Item, type Photo } from '@punch/core';
+import { canSetUpJobs, todayPlan, type Item, type Photo } from '@punch/core';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -28,9 +28,9 @@ export default function TodayScreen() {
   const companies = data.useCompanies();
   const lines = useUpdateLines();
   const now = useMemo(() => new Date(), []);
-  // The jobs you are on; an admin on none sees every job.
+  // The jobs you are on; an admin or a project manager on none sees every job.
   const mineIds = useMemo(() => new Set(teams.filter((t) => t.personId === me?.id).map((t) => t.jobId)), [teams, me?.id]);
-  const jobIds = mineIds.size > 0 || !isAdmin(me) ? mineIds : undefined;
+  const jobIds = mineIds.size > 0 || !canSetUpJobs(me) ? mineIds : undefined;
   const plan = useMemo(
     () => todayPlan({ meId: me?.id ?? null, jobs, items, locations, visits, companies, jobIds, now }),
     [me?.id, jobs, items, locations, visits, companies, jobIds, now],

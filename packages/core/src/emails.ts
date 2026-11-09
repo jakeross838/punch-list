@@ -79,3 +79,23 @@ export function scheduleEmail(input: { job: Pick<Job, 'name' | 'address'>; from:
   ].join('\n');
   return { subject: `${place} Construction Schedule`, body };
 }
+
+/**
+ * The invitation to someone just added under People, from the app's own address: where to get the
+ * app and the email to sign in with. app: the app's name; link: where to get it.
+ */
+export function inviteEmail(input: { person: Pick<Person, 'name' | 'email'>; from: Pick<Person, 'name'> | null; company: string; app: string; link: string }): Email {
+  const first = firstName(input.person.name);
+  const at = input.company.trim() ? ` for ${input.company.trim()}` : '';
+  const body = [
+    first ? `Hi ${first},` : 'Hi,',
+    '',
+    `I set you up on ${input.app}${at}, the app we use for every job's list. You can get it here:`,
+    input.link,
+    '',
+    `Once it is on your phone, sign in with ${input.person.email} and your jobs will be there.`,
+    '',
+    ...thanks(input.from, input.company),
+  ].join('\n');
+  return { subject: `You are set up on ${input.app}${at}`, body };
+}

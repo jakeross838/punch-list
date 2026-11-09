@@ -9,7 +9,11 @@ export type ItemStatus = 'open' | 'complete' | 'removed';
 export type ItemSource = 'walk' | 'typed' | 'import' | 'copy' | 'template' | 'said' | 'owner';
 
 /** admin: adds people, makes and closes jobs, changes the setup. team: walks jobs, adds items, checks them off. */
-export type Role = 'admin' | 'team';
+/**
+ * What a person can do at their company. Superintendent is kept as 'team', the name the phones
+ * already know.
+ */
+export type Role = 'admin' | 'project_manager' | 'team' | 'view_only';
 
 /** Which jobs a person sees: every job, or only the jobs they are on. Admins see every job. */
 export type Sees = 'all' | 'assigned';
@@ -18,6 +22,8 @@ export type Sees = 'all' | 'assigned';
 export interface Org {
   id: string;
   name: string;
+  /** The builder's logo, a small PNG or JPEG as a data URL: on the printed lists and the pages. */
+  logo?: string | null;
 }
 
 export interface Person {

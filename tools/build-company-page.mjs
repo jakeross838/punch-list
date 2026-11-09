@@ -1,6 +1,8 @@
 // Builds the company's page into one file (apps/company-page/dist/index.html, the script inside it),
 // the job's station into another (dist/s and dist/tv) and the owner's page into a third (dist/o),
-// ready for Expo's hosting. All three talk to the project's company-page function.
+// ready for Expo's hosting. All three talk to the project's company-page function. The Privacy
+// Policy, the Terms of Use and Support go beside them (dist/privacy, dist/terms, dist/support), for
+// the App Store and the app's Me screen.
 //
 //   node tools/build-company-page.mjs            (the live project)
 //   COMPANY_PAGE_FUNCTION=http://localhost:9999/fn node tools/build-company-page.mjs   (a test one)
@@ -49,6 +51,12 @@ put('tv', station);
 // The owner's page: /o#token.
 const owner = await pageFor('owner.ts', 'Your House');
 put('o', owner);
+// The plain pages: the shared look around each one's words.
+const plain = readFileSync(join(dir, 'legal', 'page.html'), 'utf8');
+for (const [path, title] of [['privacy', 'Privacy Policy'], ['terms', 'Terms of Use'], ['support', 'Support']]) {
+  const body = readFileSync(join(dir, 'legal', `${path}.html`), 'utf8');
+  put(path, plain.replace('<!--TITLE-->', title).replace('<!--BODY-->', () => body));
+}
 console.log(
   `Company page: ${(page.length / 1024).toFixed(1)} KB, station: ${(station.length / 1024).toFixed(1)} KB, owner's page: ${(owner.length / 1024).toFixed(1)} KB, talking to ${functionUrl}`,
 );

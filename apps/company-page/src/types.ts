@@ -42,6 +42,8 @@ export interface PageComment {
 }
 export interface Page {
   builder: string;
+  /** The builder's logo, when the page asked for it as it opened. */
+  logo?: string | null;
   job: { name: string; address: string; closed: boolean };
   /** language: the page in Spanish. An older answer leaves it out. */
   company: { id: string; name: string; language?: 'en' | 'es' };
@@ -80,6 +82,8 @@ export interface StationCompany {
 /** What the company-page function answers the job's station with: every company with work on the job. */
 export interface StationBoard {
   builder: string;
+  /** The builder's logo, when the station asked for it as it opened. */
+  logo?: string | null;
   job: { name: string; address: string; closed: boolean };
   companies: StationCompany[];
 }
@@ -87,6 +91,8 @@ export interface StationBoard {
 /** What the company-page function answers the owner's page with: the job as the owner sees it. */
 export interface OwnerPage {
   builder: string;
+  /** The builder's logo, when the page asked for it as it opened. */
+  logo?: string | null;
   job: { name: string; address: string; closed: boolean };
   /** Who the link is for, as the builder named them. */
   owner: string | null;

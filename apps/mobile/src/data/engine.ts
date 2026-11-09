@@ -9,7 +9,10 @@
 import { randomUUID } from 'expo-crypto';
 import { useMemo, useSyncExternalStore } from 'react';
 import {
+  canChange,
+  canSetUpJobs,
   companyNameProblem,
+  isLogo,
   contactProblem,
   inWalkOrder,
   viewName,
@@ -78,7 +81,7 @@ export interface Keeper {
 }
 
 /** What differs between the backends besides where the changes are kept. */
-export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signOut' | 'startCompany' | 'deleteAccount'> &
+export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'signInWays' | 'signInWith' | 'signOut' | 'startCompany' | 'deleteAccount'> &
   Partial<
     Pick<
       DataApi,
@@ -92,6 +95,9 @@ export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'sign
       | 'companyAskVisit'
       | 'companyMarkDone'
       | 'previewAs'
+      | 'emailReady'
+      | 'emailList'
+      | 'emailInvite'
       | 'deleteJob'
       | 'jobStation'
       | 'ownerLink'
@@ -168,6 +174,17 @@ function adminOnly(state: State): void {
   if (!isAdmin(state.me)) throw new Error('Only an admin can change that.');
 }
 
+/** Making jobs and setting them up: an admin or a project manager. */
+function setupOnly(state: State): void {
+  if (!canSetUpJobs(state.me)) throw new Error('Only an admin or a project manager can change that.');
+}
+
+/** Admins and project managers see every job, as the database keeps it. */
+const everyJobFor = (person: Person): Person => (person.role === 'admin' || person.role === 'project_manager' ? { ...person, sees: 'all' } : person);
+
+/** What View Only changes: their comments, and how they look at a job. */
+const VIEW_ONLY_CHANGES = new Set<keyof State>(['comments', 'viewSettings']);
+
 /**
  * Assigning puts the person on the job's team, as the database does: on it as Field when they were
  * not on it already.
@@ -235,7 +252,14 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
   const stations = new Map<string, string>();
   /** The preview's owner links, by job: their page is the sample owner's page. */
   const owners = new Map<string, { token: string; name: string | null; openedAt: string | null }>();
-  const save = (next: Partial<State>, happened: Happened[] = []) => keeper.save(next, happened);
+  /** Saves a change; View Only changes nothing but their comments and their own view, as on the server. */
+  const save = (next: Partial<State>, happened: Happened[] = []) => {
+    const me = get().me;
+    if (me && !canChange(me) && me.active && Object.keys(next).some((k) => !VIEW_ONLY_CHANGES.has(k as keyof State))) {
+      return Promise.reject(new Error('View Only can look and comment, not change anything.'));
+    }
+    return keeper.save(next, happened);
+  };
   const useStore = (): State => useSyncExternalStore(keeper.subscribe, get, get);
 
   /** Saves items, with whoever they are now assigned to on the team (on the phone, the database does that). */
@@ -264,6 +288,13 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       const clean = tidyCompanyName(name);
       if (clean === state.org.name) return;
       await save({ org: { ...state.org, name: clean } });
+    },
+    async setLogo(logo) {
+      const state = get();
+      adminOnly(state);
+      if (logo !== null && !isLogo(logo)) throw new Error('That picture is too big for the logo. Try a smaller one.');
+      if ((state.org.logo ?? null) === logo) return;
+      await save({ org: { ...state.org, logo } });
     },
     usePeople: () => useStore().people,
     useJobs: () => {
@@ -333,6 +364,10 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       const s = useStore();
       return useMemo(() => s.sends.filter((x) => x.jobId === jobId && !x.removed), [s.sends, jobId]);
     },
+    useAllSends: () => {
+      const s = useStore();
+      return useMemo(() => s.sends.filter((x) => !x.removed), [s.sends]);
+    },
     useComments: (jobId) => {
       const s = useStore();
       return useMemo(() => s.comments.filter((c) => c.jobId === jobId), [s.comments, jobId]);
@@ -353,7 +388,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     addSampleJob: (photos) => addSampleJob(api, get, photos),
     async createJob({ name, address, projectManagerId, from }) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       const id = randomUUID();
       const pm = projectManagerId ? state.people.find((p) => p.id === projectManagerId && p.active) : undefined;
       // Another job's setup to start with: its companies and Waiting On choices, its team (anyone
@@ -396,7 +431,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async updateJob(id, patch) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       const job = state.jobs.find((j) => j.id === id);
       if (!job) return;
       const happened: Happened[] = [];
@@ -464,7 +499,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     async addPerson(input) {
       const state = get();
       adminOnly(state);
-      const person: Person = { id: randomUUID(), name: input.name.trim(), email: tidyEmail(input.email), phone: input.phone?.trim() || null, role: input.role, sees: input.sees, active: true };
+      const person = everyJobFor({ id: randomUUID(), name: input.name.trim(), email: tidyEmail(input.email), phone: input.phone?.trim() || null, role: input.role, sees: input.sees, active: true });
       checkPerson(state, person, null);
       await save({ people: [...state.people, person] });
       return person.id;
@@ -474,13 +509,13 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       adminOnly(state);
       const was = state.people.find((p) => p.id === id);
       if (!was) return;
-      const next: Person = {
+      const next = everyJobFor({
         ...was,
         ...patch,
         name: patch.name !== undefined ? patch.name.trim() : was.name,
         email: patch.email !== undefined ? tidyEmail(patch.email) : was.email,
         phone: patch.phone !== undefined ? patch.phone?.trim() || null : was.phone,
-      };
+      });
       checkPerson(state, next, id);
       const people = state.people.map((p) => (p.id === id ? next : p));
       if (!people.some(isAdmin)) throw new Error('Your company needs at least one admin. Make someone else an admin first.');
@@ -488,7 +523,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async setTeamMember(jobId, personId, part) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       const was = state.team.find((t) => t.jobId === jobId && t.personId === personId);
       if (part === null) {
         if (!was) return;
@@ -557,7 +592,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     previewAs: extras.previewAs,
     async addLocations(jobId, parsed) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       const existing = state.locations.filter((l) => l.jobId === jobId);
       const byLabel = new Map(existing.map((l) => [l.label.toLowerCase(), l]));
       // One removed before comes back where it was.
@@ -592,8 +627,8 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       const id = randomUUID();
       const sortOrder = existing.reduce((m, l) => Math.max(m, l.sortOrder), 0) + 1;
       const location = { ...parsed, floor: parsed.floor ?? floor, id, jobId, active: true, sortOrder, walkedAt: null };
-      // Only an admin changes the other locations' places: for anyone else it goes on the end.
-      const locations = isAdmin(state.me) ? numbered(state.locations, inWalkOrder([...existing, location])) : [...state.locations, location];
+      // Only an admin or a project manager changes the other locations' places: for anyone else it goes on the end.
+      const locations = canSetUpJobs(state.me) ? numbered(state.locations, inWalkOrder([...existing, location])) : [...state.locations, location];
       await save({ locations }, [{ jobId, kind: 'location_added', detail: { location_id: id, label: location.label } }]);
       return id;
     },
@@ -605,7 +640,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async reorderLocations(jobId, orderedIds) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       const moving = orderedIds.map((id) => state.locations.find((l) => l.id === id && l.jobId === jobId)).filter((l) => l !== undefined);
       const places = moving.map((l) => l.sortOrder).sort((a, b) => a - b);
       const next = new Map(moving.map((l, i) => [l.id, places[i]!]));
@@ -613,14 +648,14 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async moveLocation(id, to) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       const was = state.locations.find((l) => l.id === id);
       if (!was) return;
       await save({ locations: numbered(state.locations, moveToLevel(state.locations.filter((l) => l.jobId === was.jobId), id, to)) });
     },
     async renameLevel(jobId, from, to) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       const name = to.replace(/\s+/g, ' ').trim();
       if (name === '') return;
       const on = (l: Location) => l.jobId === jobId && l.kind === 'room' && (l.floor ?? null) === from;
@@ -628,7 +663,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async addPlanLocations(jobId, rows) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       let job = state.locations.filter((l) => l.jobId === jobId);
       const happened: Happened[] = [];
       const read: string[] = [];
@@ -677,7 +712,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async updateLocation(id, patch) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       const was = state.locations.find((l) => l.id === id);
       if (!was) return;
       const happened: Happened[] = [];
@@ -1093,7 +1128,8 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async addContact(input) {
       const state = get();
-      adminOnly(state);
+      // An admin, or a project manager adding a company's people from its card in Job Setup.
+      setupOnly(state);
       const problem = contactProblem(input);
       if (problem) throw new Error(problem);
       const sortOrder = Math.max(0, ...state.contacts.filter((x) => x.companyId === input.companyId).map((x) => x.sortOrder)) + 1;
@@ -1125,7 +1161,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async setJobCompanyTrade(jobId, companyId, fromTradeId, toTradeId) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       if (fromTradeId === toTradeId) return;
       const pair = (tradeId: string) => (jc: { jobId: string; companyId: string; tradeId: string }) => jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId;
       // On the job for the new trade already: the two become one.
@@ -1147,7 +1183,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     async removeCompanyFromJob(jobId, companyId, tradeId) {
       const state = get();
-      adminOnly(state);
+      setupOnly(state);
       if (!state.jobCompanies.some((jc) => jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) return;
       await save({ jobCompanies: state.jobCompanies.filter((jc) => !(jc.jobId === jobId && jc.companyId === companyId && jc.tradeId === tradeId)) }, [
         { jobId, kind: 'company_removed', detail: { company_id: companyId, trade_id: tradeId } },
@@ -1208,6 +1244,15 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
     },
     sendSignInCode: extras.sendSignInCode,
     verifySignInCode: extras.verifySignInCode,
+    signInWays: extras.signInWays,
+    signInWith: extras.signInWith,
+    // The preview sends nothing: its lists open on the screen.
+    emailReady: extras.emailReady ?? (async () => false),
+    emailList: extras.emailList ?? (async () => 0),
+    async emailInvite(personId) {
+      if (!isAdmin(get().me)) throw new Error('Only an admin invites people.');
+      await extras.emailInvite?.(personId);
+    },
     startCompany: extras.startCompany,
     deleteAccount: extras.deleteAccount,
     signOut: extras.signOut,

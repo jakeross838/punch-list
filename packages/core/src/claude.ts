@@ -7,6 +7,7 @@
 // Input reaches the function from a phone, so every prompt takes only what it expects, cut to a
 // sensible size: text a person could not have typed in the app does not reach Claude.
 
+import { howInput, howPrompt } from './help';
 import { jsonIn } from './planReading';
 import { TITLE_MAX } from './rules';
 import { describeMarks, suggestPrompt, type SuggestContext } from './suggest';
@@ -927,7 +928,8 @@ export type ClaudeTask =
   | 'company-summary'
   | 'find'
   | 'day-note'
-  | 'describe-photo';
+  | 'describe-photo'
+  | 'how';
 
 export const CLAUDE_TASKS: Record<ClaudeTask, TaskSpec> = {
   'fill-in': { tier: 'sharp', maxTokens: 900, images: 1, minImages: 1, prompt: (v) => suggestPrompt(suggestInput(v)), enough: () => true },
@@ -1011,6 +1013,7 @@ export const CLAUDE_TASKS: Record<ClaudeTask, TaskSpec> = {
     },
   },
   'describe-photo': { tier: 'quick', maxTokens: 120, images: 1, minImages: 1, prompt: (v) => describePhotoPrompt(describePhotoInput(v)), enough: () => true },
+  how: { tier: 'quick', maxTokens: 500, images: 0, minImages: 0, prompt: (v) => howPrompt(howInput(v)), enough: (v) => howInput(v).question !== '' },
 };
 
 export const isClaudeTask = (v: unknown): v is ClaudeTask => typeof v === 'string' && Object.hasOwn(CLAUDE_TASKS, v);

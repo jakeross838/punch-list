@@ -11,21 +11,22 @@
 // copies it.
 
 import {
+  canChange,
   checkItem,
   commentAuthor,
   complete,
   hoursText,
   itemComments,
-  kindText,
   itemNumberLabel,
+  kindText,
   missingText,
   remove,
   reopen,
   restore,
   RuleError,
   sortItems,
-  tradeRanks,
   tidyItem,
+  tradeRanks,
   type Item,
   type ItemFields,
   type Mark,
@@ -177,6 +178,8 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   const feedback = useFeedback();
   const { width: screenWidth } = useWindowDimensions();
   const me = data.useMe();
+  // View Only looks and comments: the item as it is, with its comments open to them.
+  const looks = !canChange(me);
   const items = data.useItems(jobId);
   const trades = data.useTrades();
   const photos = data.usePhotos(jobId).filter((p) => p.itemId === item.id);
@@ -350,7 +353,9 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
                 }
               : null;
 
-  const bottom: BarButton[] = fromCamera
+  const bottom: BarButton[] = looks
+    ? []
+    : fromCamera
     ? [{ kind: 'button', label: 'Done', icon: 'checkmark', variant: 'prominent', onPress: goNext, testID: 'done-camera' }]
     : stepping
       ? nextUnfinished
@@ -436,6 +441,8 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
       ...(item.status !== 'removed' ? [{ actions: [{ label: 'Remove from List', icon: 'trash' as IconName, destructive: true, onPress: () => void removeItem(), testID: 'remove' }] }] : []),
     ],
   };
+  // View Only stars it, and that is all.
+  const menu: BarMenu = looks ? { ...more, groups: [{ actions: more.groups.flatMap((g) => g.actions).filter((a) => a.testID === 'toggle-star') }] } : more;
   const st = itemStatus(item, { holds });
   const creator = people.find((p) => p.id === item.createdBy)?.name;
   const addedOn = item.createdAt && !Number.isNaN(new Date(item.createdAt).getTime()) ? dayOf(item.createdAt) : null;
@@ -452,7 +459,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
       title={item.title || label}
       hideHeader
       backLabel={fromCamera ? 'Camera' : room?.label}
-      right={[more]}
+      right={[menu]}
       bottom={bottom}
     >
       <View style={styles.head} testID="item-summary">
@@ -484,7 +491,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
             </View>
           ) : null}
         </View>
-      ) : (
+      ) : looks ? null : (
         <Touchable feedback="opacity" onPress={() => addPhoto()} accessibilityRole="button" testID="add-photo" style={styles.noPhoto}>
           <Icon name="camera" size={22} color={colors.secondary} />
           <Text variant="label" color={colors.tint}>
@@ -513,7 +520,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
           ))}
         </View>
       ) : null}
-      {photo ? (
+      {photo && !looks ? (
         <View style={styles.photoActions}>
           <Touchable feedback="opacity" onPress={() => setMarking(photo)} accessibilityRole="button" accessibilityLabel="Mark Up" testID="mark-up" style={styles.photoAction}>
             <Icon name="pencil.tip" size={14} color={colors.label} />
@@ -553,19 +560,20 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
           set={live.set}
           problem={live.problem}
           showReady={item.status === 'open'}
-          fillIn={filler.can && photo && !filling ? { busy: filler.busy, onPress: () => void filler.fillIn(photo, live.value, (patch) => live.set(patch)) } : undefined}
-          onTwin={item.unfinished && item.status === 'open' && photos.length > 0 ? { label: 'Add the photo to it instead.', onPress: (twin) => void moveTo(twin) } : undefined}
-          askClaude={item.unfinished && item.status === 'open'}
+          locked={looks}
+          fillIn={!looks && filler.can && photo && !filling ? { busy: filler.busy, onPress: () => void filler.fillIn(photo, live.value, (patch) => live.set(patch)) } : undefined}
+          onTwin={!looks && item.unfinished && item.status === 'open' && photos.length > 0 ? { label: 'Add the photo to it instead.', onPress: (twin) => void moveTo(twin) } : undefined}
+          askClaude={!looks && item.unfinished && item.status === 'open'}
           photoUri={photo?.uri ?? null}
         >
-          {targets.length > 0 ? (
+          {targets.length > 0 && !looks ? (
             <ListSection footer="The photo goes on that item, and this draft comes off the list.">
               <ListRow title={`Add to an Item in ${room?.label ?? 'This Location'}`} icon="plus" accessory="chevron" onPress={() => setMoving(true)} testID="add-to-item" />
             </ListSection>
           ) : null}
           {item.status !== 'removed' ? (
             <View style={styles.checklist}>
-              <Checklist value={item.checklist ?? []} onChange={(checklist) => void data.updateItem(item.id, { checklist })} editable={item.status === 'open'} />
+              <Checklist value={item.checklist ?? []} onChange={(checklist) => void data.updateItem(item.id, { checklist })} editable={item.status === 'open' && !looks} />
             </View>
           ) : null}
           {item.status !== 'removed' ? (

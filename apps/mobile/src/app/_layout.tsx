@@ -62,6 +62,7 @@ const SCREENS = [
   'settings/account',
   'settings/templates/index',
   'settings/templates/[templateId]',
+  'settings/help',
   'jobs/[jobId]/index',
   'jobs/[jobId]/setup',
   'jobs/[jobId]/send',

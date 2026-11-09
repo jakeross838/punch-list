@@ -421,3 +421,22 @@ export function toServerRow(table: string, data: Record<string, unknown>): Recor
   }
   return out;
 }
+
+/** The most new rows of one table sent up in one request. */
+export const RUN_MOST = 50;
+
+/**
+ * The phone's changes in order, as they go up: new rows of the same table that come one after
+ * another go together (after a week with no signal there can be thousands); anything else goes on
+ * its own. The order never changes.
+ */
+export function uploadRuns<T extends { op: string; table: string }>(changes: readonly T[]): T[][] {
+  const runs: T[][] = [];
+  for (const change of changes) {
+    const last = runs[runs.length - 1];
+    const first = last?.[0];
+    if (last && first && change.op === 'PUT' && first.op === 'PUT' && first.table === change.table && last.length < RUN_MOST) last.push(change);
+    else runs.push([change]);
+  }
+  return runs;
+}

@@ -22,6 +22,9 @@ const FUNCTIONS = {
   // A company's page in Spanish: the page's own lines, translated on the builder's allowance;
   // and the line the job's team's phones are told when a company or the owner answers on their page.
   'company-page': { from: 'claude.ts', names: ['CLAUDE_MODELS', 'costCents', 'readTranslations', 'TRANSLATE_AT_ONCE', 'translatePrompt'], also: { 'notify.ts': ['newsLine'] } },
+  // Email from the app's own address: a company's list and an invitation, worded by the core. It
+  // asks no Claude, but shares who is asking and the service role with the others.
+  'send-email': { from: 'emails.ts', names: ['companyListEmail', 'inviteEmail'], also: { 'claude.ts': ['costCents'] } },
 };
 
 async function coreFile(spec) {

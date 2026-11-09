@@ -138,6 +138,9 @@ export interface NewSend {
 /** After the code: signed in, or new here and about to start a company. */
 export type SignInResult = 'signed_in' | 'new';
 
+/** Signing in with an account the phone already has, besides the email code. */
+export type SignInWay = 'apple' | 'google';
+
 /** How this phone stands with the server. The preview has nothing to send. */
 export interface SyncInfo {
   /** Signed in, with the jobs on their way down for the first time. */
@@ -172,6 +175,8 @@ export interface DataApi {
   useOrg(): Org;
   /** Admins only. The company's name, on every list it sends. */
   renameOrg(name: string): Promise<void>;
+  /** Admins only. The company's logo, a small PNG or JPEG data URL, or null to take it away. */
+  setLogo(logo: string | null): Promise<void>;
   /** The email signed in that is not with a company yet, to start one; null otherwise. */
   useNewAccount(): string | null;
   /** Everyone at the company, switched off or not: for who did what, and for People. */
@@ -198,6 +203,8 @@ export interface DataApi {
   useAllVisits(): Visit[];
   /** Every photo on every job you see that is not removed: for Search, by what is in them. */
   useAllPhotos(): Photo[];
+  /** Every list sent on every job you see, Undo's taken out: for Get Started. */
+  useAllSends(): ListSend[];
   /** The job's photos that are not removed, each item's in order. */
   usePhotos(jobId: string): Photo[];
   useTrades(): Trade[];
@@ -392,8 +399,21 @@ export interface DataApi {
   sendSignInCode(email: string): Promise<void>;
   /** Signs in with the code from the email: into the app, or as someone new who starts a company next. */
   verifySignInCode(email: string, code: string): Promise<SignInResult>;
+  /** The ways to sign in besides the email code that this phone can offer: the ones the server has switched on. */
+  signInWays(): Promise<SignInWay[]>;
+  /**
+   * Signs in with Apple or Google: into the app, or as someone new who starts a company next, with
+   * their name when the account gave it. Null when they stopped before it was done.
+   */
+  signInWith(way: SignInWay): Promise<{ result: SignInResult; name: string } | null>;
   /** For someone new, after the code: a company of their own, with them as its admin. */
   startCompany(input: { company: string; name: string }): Promise<void>;
+  /** Whether lists and invitations can go from the app's own address (once its email is set up). */
+  emailReady(): Promise<boolean>;
+  /** A company's list to its people from the app's own address, with the PDF: how many it went to. */
+  emailList(input: { jobId: string; companyId: string; ready: number; pdf: string; filename: string }): Promise<number>;
+  /** An invitation from the app's own address, to someone added under People. An admin's. */
+  emailInvite(personId: string): Promise<void>;
   /**
    * Deletes the signed-in person's account and signs out. Their records stay with the company under
    * Deleted Account; the last person at a company takes the whole company with it.

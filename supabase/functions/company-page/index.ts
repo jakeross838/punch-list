@@ -20,6 +20,9 @@
 // signs off, the job's team are told on their phones, through Expo's push service, once the page
 // has its answer: the line says what happened in the words Activity uses, under the job's name.
 //
+// A page asks for the builder's logo with logo: true when it opens, and keeps it: it is too big to
+// send every minute the page asks again.
+//
 //   Deployed with verify_jwt off: the link is the only key, and nobody signs in.
 //   tools/build-functions.mjs writes core.js and claude.ts here.
 
@@ -312,6 +315,24 @@ function ownerNews(body: Record<string, unknown>, p: OwnerPage): string | null {
   return null;
 }
 
+// ---------- the builder's logo ----------
+
+/** The builder's logo for a page, from any of its links; null when it has none. */
+async function logoFor(link: string): Promise<string | null> {
+  const { data, error } = await db.rpc('page_logo', { p_token: link });
+  if (error) {
+    console.error('The logo', error.message);
+    return null;
+  }
+  return typeof data === 'string' && data !== '' ? data : null;
+}
+
+/** The page's answer, with the logo when the page asked for it. */
+async function withLogo<T extends Record<string, unknown>>(shown: T, body: Record<string, unknown>, link: string): Promise<T> {
+  if (body.logo === true) (shown as Record<string, unknown>).logo = await logoFor(link);
+  return shown;
+}
+
 // ---------- a company's page in Spanish ----------
 
 /** How long the page waits for new lines to be translated; the rest are ready next time it opens. */
@@ -439,7 +460,7 @@ Deno.serve(async (req: Request) => {
       const shown = await ownerPage(owner);
       if (!shown) return reply({ error: 'This link no longer works. Ask your builder for a new one.' }, 404);
       if (answered) tellAfter(owner, ownerNews(body, shown), added);
-      return reply(shown);
+      return reply(await withLogo(shown, body, owner));
     }
     if (body.s !== undefined) {
       const station = typeof body.s === 'string' ? body.s.trim().toLowerCase() : '';
@@ -449,7 +470,7 @@ Deno.serve(async (req: Request) => {
         const { data, error } = await db.rpc('station_page', { p_token: station });
         if (error) throw error;
         if (!data) return reply({ error: 'This station is turned off. Ask for a new link.' }, 404);
-        return reply(data);
+        return reply(await withLogo(data as Record<string, unknown>, body, station));
       }
       const { data, error } = await db.rpc('station_company', { p_token: station, p_company: company });
       if (error) {
@@ -467,7 +488,7 @@ Deno.serve(async (req: Request) => {
     if (answered) tellAfter(token, companyNews(body, shown), UUIDISH(body.item));
     // A station is in the house for anyone to tap: the company's links to its other jobs stay off it.
     if (body.s !== undefined) delete shown.other_jobs;
-    return reply(shown);
+    return reply(await withLogo(shown, body, token));
   } catch (e) {
     if (e instanceof Refused) return reply({ error: e.message }, 403);
     console.error('company-page', e instanceof Error ? e.message : e);

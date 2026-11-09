@@ -47,3 +47,9 @@ export function yourNameProblem(text: string): string | null {
   if (name.length > COMPANY_NAME_MAX) return `Keep it to ${COMPANY_NAME_MAX} characters or fewer`;
   return null;
 }
+
+/** The most a logo may take, as the database keeps it: a data URL of about 300 kilobytes. */
+export const LOGO_MOST = 400_000;
+
+/** A logo the database keeps: a PNG or JPEG data URL, small enough. */
+export const isLogo = (v: string): boolean => v.length <= LOGO_MOST && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(v);

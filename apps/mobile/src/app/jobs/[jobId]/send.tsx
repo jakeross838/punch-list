@@ -51,6 +51,7 @@ import {
   type PrintSettings,
   type ViewSettings,
 } from '@punch/core';
+import type { File } from 'expo-file-system';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
@@ -58,6 +59,7 @@ import { ExportSheet, type ListDraft } from '@/components/ExportSheet';
 import { SpreadsheetSheet } from '@/components/SpreadsheetSheet';
 import { useFilterNames } from '@/components/FilterBar';
 import { MessagePreview, namesText, type Message } from '@/components/MessagePreview';
+import { APP_NAME } from '@/constants/app';
 import { NudgeSection } from '@/components/NudgeSection';
 import { colors, layout } from '@/constants/theme';
 import { useData } from '@/data/api';
@@ -104,7 +106,12 @@ interface Made {
   itemIds: string[];
   /** Who it goes to and what it says; none for the lists that go from the share sheet. */
   message?: Message;
+  /** For a company's list: how many of its items are ready, which its email says. */
+  ready?: number;
 }
+
+/** How an email goes: from the app's own address, or written in the phone's Mail. */
+type From = 'app' | 'mail';
 
 export default function SendScreen() {
   // start: opened from the job's Make a List, so the list to make shows straight away.
@@ -120,7 +127,8 @@ export default function SendScreen() {
   const people = data.usePeople();
   const me = data.useMe();
   // Whose lists they are, at the top of every page and to sign the emails.
-  const builder = data.useOrg().name;
+  const org = data.useOrg();
+  const builder = org.name;
   const contacts = data.useContacts();
   const comments = data.useComments(jobId);
   const links = data.useCompanyLinks(jobId);
@@ -252,6 +260,7 @@ export default function SendScreen() {
     const settings: PrintSettings = {
       job: jobOf(),
       builder,
+      logo: org.logo,
       date: new Date(),
       photo: prepared ? (id) => prepared.get(id) : undefined,
       isNew: target.kind === 'job' ? undefined : (id) => fresh.has(id),
@@ -283,7 +292,7 @@ export default function SendScreen() {
           : r.phones.length > 0
             ? { by: 'text', phones: r.phones, names: r.people.filter((p) => p.phone).map((p) => p.name || p.phone!), body: companyListText({ job: jobOf(), contacts: r.people, from: me, company: builder, link: url }) }
             : { by: 'none', company: target.name };
-      return { target, doc: { printout, footer: footerText(printout, settings) }, itemIds, message };
+      return { target, doc: { printout, footer: footerText(printout, settings) }, itemIds, message, ready };
     }
     const printout = target.kind === 'party' ? partyPrintout(target.name, lines, settings) : jobPrintout(lines, settings);
     return { target, doc: { printout, footer: footerText(printout, settings) }, itemIds };
@@ -296,6 +305,7 @@ export default function SendScreen() {
     const settings: CustomPrintSettings = {
       job: jobOf(),
       builder,
+      logo: org.logo,
       date: new Date(),
       photo: prepared ? (id) => prepared.get(id) : undefined,
       comments: printedOn,
@@ -327,12 +337,39 @@ export default function SendScreen() {
   }
 
   /** Keeps a record that the list went out, with Undo for a share that was cancelled. */
-  async function record(made: Made, quiet = false): Promise<string> {
+  async function record(made: Made, quiet = false, sent = false): Promise<string> {
     const id = await data.recordSend({ jobId, list: made.target.list, itemIds: made.itemIds, snapshot: null });
     if (!quiet) {
-      feedback.toast({ message: `Marked as sent to ${made.target.name}`, action: { label: 'Undo', onPress: () => void data.undoSend(id) } });
+      feedback.toast({ message: sent ? `Sent to ${made.target.name}` : `Marked as sent to ${made.target.name}`, action: { label: 'Undo', onPress: () => void data.undoSend(id) } });
     }
     return id;
+  }
+
+  /** Where an email goes from, once the app sends email too. Null when they stopped. */
+  const fromWhere = (title: string) =>
+    new Promise<From | null>((resolve) =>
+      feedback.actionSheet({
+        title,
+        message: `From ${APP_NAME}, it goes right away and replies come to your email. In Mail, you write it yourself.`,
+        actions: [
+          { label: `Send From ${APP_NAME}`, onPress: () => resolve('app') },
+          // The sheet slides away before Mail comes up.
+          { label: 'Open in Mail', onPress: () => setTimeout(() => resolve('mail'), 350) },
+        ],
+        onCancel: () => resolve(null),
+      }),
+    );
+
+  /** A company's list from the app's own address, the PDF with it. False when it did not go, said why. */
+  async function sendFromApp(made: Made, file: File): Promise<boolean> {
+    try {
+      await data.emailList({ jobId, companyId: made.target.companyId!, ready: made.ready ?? 0, pdf: await file.base64(), filename: `${made.doc.printout.title}.pdf` });
+      return true;
+    } catch (e) {
+      haptic.warning();
+      feedback.toast({ message: e instanceof Error ? e.message : 'The email did not go. Check the signal and try again.' });
+      return false;
+    }
   }
 
   /** Asks before the share sheet, when the email or text cannot be written here. True to go on. */
@@ -345,12 +382,19 @@ export default function SendScreen() {
   /**
    * On the iPhone: the PDF, then Mail with the email written, or Messages with the text. Without
    * Apple Mail (the Outlook app, say), the addresses are copied and the share sheet opens with the
-   * PDF, to pick the app and paste them in. False when cancelled.
+   * PDF, to pick the app and paste them in. Once the app sends email itself, a company's list can go
+   * from the app's own address instead (from: asked here when not given). False when cancelled;
+   * 'sent' when the app sent it itself.
    */
-  async function deliver(made: Made): Promise<boolean> {
+  async function deliver(made: Made, from?: From): Promise<false | 'sent' | true> {
     const file = await makePdf(made.doc.printout, made.doc.footer);
     const files = [file];
     const m = made.message;
+    if (m?.by === 'email' && made.target.kind === 'company' && made.target.companyId && (from === 'app' || (from === undefined && (await data.emailReady())))) {
+      const how = from ?? (await fromWhere(`Send to ${made.target.name}`));
+      if (how === null) return false;
+      if (how === 'app') return (await sendFromApp(made, file)) ? 'sent' : false;
+    }
     if (m?.by === 'email' && m.to.length + m.cc.length + m.bcc.length > 0) {
       const went = await composeEmail({ to: m.to, cc: m.cc, bcc: m.bcc, subject: m.subject, body: m.body, files });
       if (went === 'cancelled') return false;
@@ -380,7 +424,8 @@ export default function SendScreen() {
         return;
       }
       if (send) {
-        if (await deliver(made)) await record(made);
+        const went = await deliver(made);
+        if (went) await record(made, false, went === 'sent');
       } else {
         await showPdf(await makePdf(made.doc.printout, made.doc.footer), made.doc.printout.title);
       }
@@ -392,15 +437,20 @@ export default function SendScreen() {
     }
   }
 
-  /** Friday in one pass: each company's list to its people, one after another. Cancel one to skip it. */
+  /**
+   * Friday in one pass: each company's list to its people, one after another. Cancel one to skip it.
+   * Once the app sends email itself, asked once: every email from the app, or each one in Mail.
+   */
   async function sendAll() {
     if (busy) return;
+    const from: From | null = (await data.emailReady()) ? await fromWhere('Send Every List') : 'mail';
+    if (from === null) return;
     setBusy('all');
     const sent: string[] = [];
     try {
       for (const r of rows) {
         const made = await make({ list: LIST_KEYS.company(r.companyId), name: r.name, kind: 'company', companyId: r.companyId });
-        if (await deliver(made)) sent.push(await record(made, true));
+        if (await deliver(made, from)) sent.push(await record(made, true));
       }
       haptic.success();
     } catch {

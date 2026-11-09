@@ -42,3 +42,6 @@ export * from './reportCard';
 export * from './search';
 export * from './today';
 export * from './notify';
+export * from './getStarted';
+export * from './help';
+export * from './exportAll';

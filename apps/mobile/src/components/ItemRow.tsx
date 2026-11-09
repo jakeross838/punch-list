@@ -6,10 +6,25 @@
 // Ready and Remove. Rows sit in a white panel, every other one striped; the first and last close the
 // panel's edges.
 
-import { commentCountText, freesText, holdText, hoursText, kindText, missingDetails, needsText, waitingOnText, type Freed, type HoldLookups, type Item, type Photo } from '@punch/core';
+import {
+  canChange,
+  commentCountText,
+  freesText,
+  holdText,
+  hoursText,
+  kindText,
+  missingDetails,
+  needsText,
+  waitingOnText,
+  type Freed,
+  type HoldLookups,
+  type Item,
+  type Photo,
+} from '@punch/core';
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
+import { useData } from '@/data/api';
 import { useStarred } from '@/data/stars';
 import { CompleteCircle, dayOf, Icon, PhotoView, Pill, shortDate, SwipeRow, Text, Touchable, type PillTone, type SwipeAction } from '@/ui';
 
@@ -113,6 +128,8 @@ export const ItemRow = memo(function ItemRow({
   const done = item.status === 'complete' || checking;
   const open = item.status === 'open' && !checking;
   const starred = useStarred().includes(item.id);
+  // View Only looks: no checking off, no swiping, no photo slot, no picking.
+  const looks = !canChange(useData().useMe());
   const title = item.title || (item.source === 'owner' && item.description.trim() ? item.description.trim() : 'No title yet');
   const status = itemStatus(item, { holds, checking, note, completedBy });
   // The type, unless the pill already says it: To Be Quoted is the Additional work not priced yet.
@@ -125,13 +142,13 @@ export const ItemRow = memo(function ItemRow({
   const talk = comments > 0 ? commentCountText(comments) : undefined;
 
   const actions: SwipeAction[] =
-    open && !select
+    open && !select && !looks
       ? [
           ...(item.ready ? [] : [{ label: 'Ready', icon: 'checkmark' as const, color: colors.okFill, onPress: () => onReady(item), testID: `ready-${item.id}` }]),
           { label: 'Remove', icon: 'trash', color: colors.destructive, onPress: () => onRemove(item), testID: `remove-${item.id}` },
         ]
       : [];
-  const slot = !photo && !!onAddPhoto && open && !select;
+  const slot = !photo && !!onAddPhoto && open && !select && !looks;
   const said = [numbered ? `Number ${step}` : null, title, item.priority ? 'Priority' : null, status.text, confirmed ? 'Confirmed by the company' : null, status.note, where, talk]
     .filter(Boolean)
     .join(', ');
@@ -143,7 +160,7 @@ export const ItemRow = memo(function ItemRow({
           feedback="highlight"
           pressDelay={50}
           onPress={() => (select ? select.onToggle(item) : onOpen(item))}
-          onLongPress={onLongPress && !select ? () => onLongPress(item) : undefined}
+          onLongPress={onLongPress && !select && !looks ? () => onLongPress(item) : undefined}
           delayLongPress={450}
           style={[styles.row, stripe ? styles.stripe : null]}
           accessibilityRole={select ? 'checkbox' : 'button'}
@@ -161,7 +178,7 @@ export const ItemRow = memo(function ItemRow({
                 <Icon name="pencil.tip" size={12} color={colors.secondary} weight="medium" />
               </View>
             ) : (
-              <CompleteCircle checked={done} onPress={() => onCheck(item)} label={done ? `Reopen ${item.title}` : `Complete ${item.title}`} testID={`check-${item.id}`} />
+              <CompleteCircle checked={done} onPress={() => onCheck(item)} disabled={looks} label={done ? `Reopen ${item.title}` : `Complete ${item.title}`} testID={`check-${item.id}`} />
             )}
           </View>
           <View style={styles.text}>

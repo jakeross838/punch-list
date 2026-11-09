@@ -8,7 +8,7 @@
 
 import { marksSvg } from '@punch/core';
 import { answerOwnerSample, sampleOwnerPage } from './ownerSample';
-import { esc, photoForUpload, plural, problemHtml, remember, remembered, toast, typing, viewPhoto, whenText } from './shared';
+import { brandHtml, esc, photoForUpload, plural, problemHtml, remember, remembered, toast, typing, viewPhoto, whenText } from './shared';
 import type { OwnerPage, PagePhoto } from './types';
 
 declare const FUNCTION_URL: string;
@@ -75,7 +75,7 @@ function render(): void {
   const active = document.activeElement;
   const focused = active instanceof HTMLElement && app.contains(active) ? active.id : '';
 
-  app.innerHTML = `<div class="bar"><span class="brand">${esc(p.builder)}</span><span class="sub">Your House</span></div>
+  app.innerHTML = `<div class="bar">${brandHtml(p.builder, p.logo)}<span class="sub">Your House</span></div>
   <main class="wrap">
     <header class="head">
       <div class="eyebrow">${esc(p.owner ? `For ${p.owner}` : 'For the owner')}</div>
@@ -158,7 +158,9 @@ function render(): void {
 
 async function load(): Promise<void> {
   try {
-    page = await call({ action: 'page' });
+    // The logo comes with the first answer only: every later one keeps it.
+    const got = await call({ action: 'page', ...(page ? {} : { logo: true }) });
+    page = { ...got, logo: got.logo ?? page?.logo ?? null };
     if (!name && page.owner) name = page.owner;
     document.title = `${page.job.name}, ${page.builder}`;
     render();
@@ -172,7 +174,8 @@ async function send(key: string, body: Record<string, unknown>, done: string): P
   busy = key;
   render();
   try {
-    page = await call({ ...body, name: name || null });
+    const got = await call({ ...body, name: name || null });
+    page = { ...got, logo: got.logo ?? page?.logo ?? null };
     busy = '';
     toast(done);
     render();

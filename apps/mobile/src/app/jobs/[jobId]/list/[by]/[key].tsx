@@ -14,21 +14,22 @@ import {
   assigneeFields,
   assigneeKey,
   assigneeName,
-  keyName,
-  personOfKey,
-  companyList,
+  canChange,
   clearHoldup,
+  commentCounts,
+  companyList,
   complete,
   dropAt,
-  keepTogether,
-  holdNames,
-  isAdmin,
-  pastePlan,
-  commentCounts,
   GROUP_LABELS,
   groupItems,
+  holdNames,
+  isAdmin,
   isFiltered,
+  keepTogether,
+  keyName,
   neighborRooms,
+  pastePlan,
+  personOfKey,
   sortItems,
   type GroupBy,
   type Item,
@@ -126,6 +127,8 @@ export default function GroupScreen() {
   const fill = useDraftFill();
   const me = data.useMe();
   const admin = isAdmin(me);
+  // View Only looks and comments: no picking, adding or pasting.
+  const looks = !canChange(me);
   const copied = useClipboard();
   // Picking items to do something to all of them at once.
   const [selecting, setSelecting] = useState(false);
@@ -467,7 +470,9 @@ export default function GroupScreen() {
     }
   };
   const inLocation = !!room && !drafts && !stateList;
-  const right: BarItem[] = selecting
+  const right: BarItem[] = looks
+    ? []
+    : selecting
     ? [{ kind: "button", label: "Done", variant: "prominent", onPress: stopPicking, testID: "select-done" }]
     : [
         ...(open.length > 0 ? [{ kind: "button" as const, label: "Select", onPress: () => startPicking(), testID: "select" }] : []),
@@ -566,7 +571,7 @@ export default function GroupScreen() {
                     testID="state-tabs"
                   />
                 ) : null}
-                {inLocation && copied && !selecting ? (
+                {inLocation && copied && !selecting && !looks ? (
                   <Panel style={styles.card} testID="paste-banner">
                     <LedgerRow
                       last
@@ -643,7 +648,7 @@ export default function GroupScreen() {
                     onChange={(next) => setView({ ...view, filters: next })}
                   />
                 )}
-                {holdup && heldUp.length > 0 ? (
+                {holdup && heldUp.length > 0 && !looks ? (
                   <Panel style={styles.card}>
                     <LedgerRow last onPress={clearAll} chevron={false} lead={<IconTile name="checkmark.circle.fill" />} testID="holdup-clear">
                       <Text color={colors.tint}>Stop Waiting on {holdup}</Text>
@@ -660,7 +665,9 @@ export default function GroupScreen() {
                         : room
                           ? isFiltered(filters)
                             ? "Nothing here fits the filters."
-                            : "Take a photo with Capture, or tap New Item."
+                            : looks
+                              ? undefined
+                              : "Take a photo with Capture, or tap New Item."
                           : undefined
                     }
                   />
@@ -695,18 +702,22 @@ export default function GroupScreen() {
             }
             renderItem={renderRow}
             ListFooterComponent={
-              inLocation && !selecting ? (
+              inLocation && !selecting && (!looks || next || previous) ? (
                 <Panel style={styles.tail}>
-                  <LedgerRow onPress={newItem} chevron={false} lead={<IconTile name="plus" />} testID="new-item-row">
-                    <Text variant="label" color={colors.tint}>
-                      New Item
-                    </Text>
-                  </LedgerRow>
-                  <LedgerRow onPress={() => setCommon(true)} chevron={false} lead={<IconTile name="checklist" />} testID="common-tasks-row" last={!next && !previous}>
-                    <Text variant="label" color={colors.tint}>
-                      Common Tasks
-                    </Text>
-                  </LedgerRow>
+                  {looks ? null : (
+                    <>
+                      <LedgerRow onPress={newItem} chevron={false} lead={<IconTile name="plus" />} testID="new-item-row">
+                        <Text variant="label" color={colors.tint}>
+                          New Item
+                        </Text>
+                      </LedgerRow>
+                      <LedgerRow onPress={() => setCommon(true)} chevron={false} lead={<IconTile name="checklist" />} testID="common-tasks-row" last={!next && !previous}>
+                        <Text variant="label" color={colors.tint}>
+                          Common Tasks
+                        </Text>
+                      </LedgerRow>
+                    </>
+                  )}
                   {next ? (
                     <LedgerRow
                       onPress={() => goRoom(next.id)}

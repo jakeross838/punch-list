@@ -7,22 +7,26 @@ import { PowerSyncContext, useQuery, useStatus } from '@powersync/react-native';
 import { companyNameProblem, isAdmin, tidyComment, tidyCompanyName, tidyEmail, yourNameProblem, type Activity } from '@punch/core';
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { DataContext, type DataApi, type SyncInfo } from '../api';
+import { DataContext, type DataApi, type SignInResult, type SyncInfo } from '../api';
 import { latestFirst, makeApi, UPDATES_KEPT, type Keeper } from '../engine';
 import { forgetHere } from '../notify';
 import { keepPhoto } from '../photoFiles';
 import { SupabaseConnector } from '../powersync/connector';
 import {
+  companiesOpenedOnServer,
   deleteAccountOnServer,
   deleteJobOnServer,
-  jobStationOnServer,
-  ownerLinkOnServer,
-  companiesOpenedOnServer,
   deletePhotosOnServer,
+  emailOnServer,
+  emailReadyOnServer,
   jobFilesOnServer,
+  jobStationOnServer,
   mergeItemsOnServer,
   myAccount,
+  ownerLinkOnServer,
   sendSignInCode,
+  serverSignInWays,
+  signInWithAccount,
   signOutOfSupabase,
   startCompanyOnServer,
   supabase,
@@ -167,40 +171,55 @@ function visitLink(visitId: string): string {
 
 const keeper: Keeper = { mode: 'live', server: true, get: store.get, subscribe: store.subscribe, save: (next) => save(next), keepPhoto };
 
+/** Signed in, with the code or with Apple or Google: into the app, or someone new who starts a company next. */
+async function afterSignIn(clean: string): Promise<SignInResult> {
+  const account = await myAccount();
+  if (account?.state === 'off') {
+    await clearPhone();
+    throw new Error(switchedOff(account.company));
+  }
+  await follow(clean);
+  // Someone new: they start their company next, on the sign in screen.
+  if (account?.state === 'none') {
+    setNewAccount(clean);
+    return 'new';
+  }
+  // The first time, everything comes down before the app opens; past a while it carries on with
+  // Getting Your Jobs on this screen.
+  const enough = new AbortController();
+  const timer = setTimeout(() => enough.abort(), 20_000);
+  try {
+    await db.waitForFirstSync(enough.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+  const me = await db.getOptional('SELECT id FROM people WHERE email = ? AND active = 1', [clean]);
+  if (db.currentStatus.hasSynced && !me) {
+    // Synced and not with a company: the server could not be asked before, so start one now.
+    setNewAccount(clean);
+    return 'new';
+  }
+  return 'signed_in';
+}
+
 const liveApi: DataApi = makeApi(keeper, {
   async sendSignInCode(email) {
     await sendSignInCode(email);
   },
   async verifySignInCode(email, code) {
     await verifySignInCode(email, code);
-    const clean = tidyEmail(email);
-    const account = await myAccount();
-    if (account?.state === 'off') {
-      await clearPhone();
-      throw new Error(switchedOff(account.company));
-    }
-    await follow(clean);
-    // Someone new: they start their company next, on the sign in screen.
-    if (account?.state === 'none') {
-      setNewAccount(clean);
-      return 'new';
-    }
-    // The first time, everything comes down before the app opens; past a while it carries on with
-    // Getting Your Jobs on this screen.
-    const enough = new AbortController();
-    const timer = setTimeout(() => enough.abort(), 20_000);
-    try {
-      await db.waitForFirstSync(enough.signal);
-    } finally {
-      clearTimeout(timer);
-    }
-    const me = await db.getOptional('SELECT id FROM people WHERE email = ? AND active = 1', [clean]);
-    if (db.currentStatus.hasSynced && !me) {
-      // Synced and not with a company: the server could not be asked before, so start one now.
-      setNewAccount(clean);
-      return 'new';
-    }
-    return 'signed_in';
+    return afterSignIn(tidyEmail(email));
+  },
+  signInWays: serverSignInWays,
+  emailReady: emailReadyOnServer,
+  emailList: ({ jobId, companyId, ready, pdf, filename }) => emailOnServer({ kind: 'list', jobId, companyId, ready, pdf, filename }),
+  async emailInvite(personId) {
+    await emailOnServer({ kind: 'invite', personId });
+  },
+  async signInWith(way) {
+    const got = await signInWithAccount(way);
+    if (!got) return null;
+    return { result: await afterSignIn(tidyEmail(got.email)), name: got.name };
   },
   async startCompany({ company, name }) {
     const clean = store.get().newAccount ?? sessionEmail();

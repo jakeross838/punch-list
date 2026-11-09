@@ -9,16 +9,17 @@
 // location picked from the job.
 
 import {
-  inWalkOrder,
-  isNamedView,
   assigneeKey,
   byFloor,
+  canChange,
   commentCounts,
-  pastePlan,
   GROUP_LABELS,
   groupItems,
+  inWalkOrder,
   isFiltered,
+  isNamedView,
   NO_FILTERS,
+  pastePlan,
   type GroupBy,
   type Item,
   type ItemGroup,
@@ -70,6 +71,7 @@ import {
   useFeedback,
   type BarMenu,
   type IconName,
+  type MenuAction,
 } from '@/ui';
 
 
@@ -98,6 +100,9 @@ function matchesQuery(item: Item, q: string, name: (id: string | null) => string
     .every((word) => hay.includes(word));
 }
 
+/** What View Only has in the job's menu: the ways to look. */
+const LOOKS_MENU = new Set(['plans', 'activity', 'job-setup']);
+
 export default function JobScreen() {
   const { jobId, template: templateParam } = useLocalSearchParams<{ jobId: string; template?: string }>();
   const data = useData();
@@ -105,6 +110,8 @@ export default function JobScreen() {
   const jobs = data.useJobs();
   const job = jobs.find((j) => j.id === jobId);
   const jobActions = useJobActions();
+  // View Only looks and comments: none of the ways to add or change.
+  const looks = !canChange(data.useMe());
   const copied = useClipboard();
   const formOptions = useFormOptions(jobId, '');
   // Opened from a template's Add to a Job: its sheet comes up straight away.
@@ -283,20 +290,23 @@ export default function JobScreen() {
     testID: 'more',
     groups: [
       {
-        actions: [
-          ...(canSay ? [{ label: 'Say It', icon: 'mic' as IconName, onPress: () => router.push({ pathname: '/jobs/[jobId]/say', params: { jobId } }), testID: 'say-it' }] : []),
-          ...(canReadList ? [{ label: 'Read a List', icon: 'doc' as IconName, onPress: () => router.push({ pathname: '/jobs/[jobId]/say', params: { jobId, read: '1' } }), testID: 'read-list' }] : []),
-          { label: 'Plans', icon: 'map', onPress: () => router.push({ pathname: '/jobs/[jobId]/plans', params: { jobId } }), testID: 'plans' },
-          { label: 'Activity', icon: 'clock', onPress: openActivity, testID: 'activity' },
-          { label: 'Find Duplicates', icon: 'copy', onPress: () => router.push({ pathname: '/jobs/[jobId]/duplicates', params: { jobId } }), testID: 'find-duplicates' },
-          { label: 'Make a List', icon: 'doc', onPress: () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId, start: 'list' } }), testID: 'make-list' },
-          { label: 'Job Station', icon: 'tv', onPress: () => setStation(true), testID: 'job-station' },
-          { label: "Owner's Page", icon: 'house.fill', onPress: () => setOwnerPage(true), testID: 'owner-page' },
-          ...(walked > 0 ? [{ label: 'Start a New Walk', icon: 'rooms' as IconName, onPress: newWalk, testID: 'new-walk' }] : []),
-          { label: 'Add From a Template', icon: 'templates', onPress: () => setTemplateSheet(true), testID: 'add-template' },
-          { label: 'Job Setup', icon: 'slider', onPress: openSetup, testID: 'job-setup' },
-          { label: 'Item Form', icon: 'list.bullet', onPress: () => router.push('/settings/item-form'), testID: 'item-form' },
-        ],
+        // View Only looks: the plans, the activity and the setup.
+        actions: (
+          [
+            ...(canSay ? [{ label: 'Say It', icon: 'mic' as IconName, onPress: () => router.push({ pathname: '/jobs/[jobId]/say', params: { jobId } }), testID: 'say-it' }] : []),
+            ...(canReadList ? [{ label: 'Read a List', icon: 'doc' as IconName, onPress: () => router.push({ pathname: '/jobs/[jobId]/say', params: { jobId, read: '1' } }), testID: 'read-list' }] : []),
+            { label: 'Plans', icon: 'map', onPress: () => router.push({ pathname: '/jobs/[jobId]/plans', params: { jobId } }), testID: 'plans' },
+            { label: 'Activity', icon: 'clock', onPress: openActivity, testID: 'activity' },
+            { label: 'Find Duplicates', icon: 'copy', onPress: () => router.push({ pathname: '/jobs/[jobId]/duplicates', params: { jobId } }), testID: 'find-duplicates' },
+            { label: 'Make a List', icon: 'doc', onPress: () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId, start: 'list' } }), testID: 'make-list' },
+            { label: 'Job Station', icon: 'tv', onPress: () => setStation(true), testID: 'job-station' },
+            { label: "Owner's Page", icon: 'house.fill', onPress: () => setOwnerPage(true), testID: 'owner-page' },
+            ...(walked > 0 ? [{ label: 'Start a New Walk', icon: 'rooms' as IconName, onPress: newWalk, testID: 'new-walk' }] : []),
+            { label: 'Add From a Template', icon: 'templates', onPress: () => setTemplateSheet(true), testID: 'add-template' },
+            { label: 'Job Setup', icon: 'slider', onPress: openSetup, testID: 'job-setup' },
+            { label: 'Item Form', icon: 'list.bullet', onPress: () => router.push('/settings/item-form'), testID: 'item-form' },
+          ] as MenuAction[]
+        ).filter((a) => !looks || LOOKS_MENU.has(a.testID ?? '')),
       },
       ...(jobActions.admin && job
         ? [
@@ -307,14 +317,19 @@ export default function JobScreen() {
                 job.closed
                   ? { label: 'Open the Job Again', icon: 'undo' as IconName, onPress: () => jobActions.reopen(job), testID: 'reopen-job' }
                   : { label: 'Close the Job', icon: 'archive' as IconName, onPress: () => jobActions.close(job, backToJobs), testID: 'close-job' },
-                {
-                  label: 'Delete the Job',
-                  icon: 'trash' as IconName,
-                  destructive: true,
-                  onPress: () =>
-                    jobActions.remove(job, { items: items.filter((i) => i.status !== 'removed').length, photos: photos.filter((p) => !p.removed).length }, backToJobs),
-                  testID: 'delete-job',
-                },
+                // Only an admin deletes a job; a project manager closes it.
+                ...(jobActions.deletes
+                  ? [
+                      {
+                        label: 'Delete the Job',
+                        icon: 'trash' as IconName,
+                        destructive: true,
+                        onPress: () =>
+                          jobActions.remove(job, { items: items.filter((i) => i.status !== 'removed').length, photos: photos.filter((p) => !p.removed).length }, backToJobs),
+                        testID: 'delete-job',
+                      },
+                    ]
+                  : []),
               ],
             },
           ]
@@ -322,8 +337,19 @@ export default function JobScreen() {
     ],
   };
 
-  const empty =
-    locations.length === 0 ? (
+  const empty = looks ? (
+    narrowed ? (
+      <EmptyState icon="filter" title="Nothing Matches the Filters">
+        <View style={{ marginTop: 14 }}>
+          <Button label="Clear the Filters" variant="tinted" onPress={() => setView({ ...view, filters: NO_FILTERS })} />
+        </View>
+      </EmptyState>
+    ) : items.some((i) => i.status !== 'removed') ? (
+      <EmptyState icon="checkmark.circle.fill" title="Everything Is Complete" />
+    ) : (
+      <EmptyState icon="checklist" title="Nothing on the List Yet" message="The items show here as the team walks the job." />
+    )
+  ) : locations.length === 0 ? (
       <EmptyState icon="camera" title="Start the Walk" message="A photo of each thing left to do.">
         <View style={{ marginTop: 14, gap: 10, alignSelf: 'stretch' }}>
           <Button label="Start the Walk" icon="camera" onPress={() => openCamera(null)} testID="empty-walk" />
@@ -366,7 +392,7 @@ export default function JobScreen() {
     });
   }
   const pasteRow =
-    copied && locations.length > 0 && !q ? (
+    copied && !looks && locations.length > 0 && !q ? (
       <Panel style={styles.card} testID="job-paste-banner">
         <LedgerRow
           last
@@ -479,7 +505,7 @@ export default function JobScreen() {
         marker={job?.closed ? colors.quiet : undefined}
         subtitle={job?.address || undefined}
         backLabel="Jobs"
-        right={[{ kind: 'button', label: 'New Item', icon: 'plus', iconOnly: true, onPress: newItem, testID: 'new-item' }, menu]}
+        right={looks ? [menu] : [{ kind: 'button', label: 'New Item', icon: 'plus', iconOnly: true, onPress: newItem, testID: 'new-item' }, menu]}
         search={
           hasItems
             ? {

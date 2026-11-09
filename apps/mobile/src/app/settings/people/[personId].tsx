@@ -1,4 +1,4 @@
-// One person: their name, email and phone, Admin or Team, what they see, and the jobs they are on
+// One person: their name, email and phone, their role, what they see, and the jobs they are on
 // and as what. Admins change all of it, put them on a job, and switch them off or back on; everyone
 // else can look. There is always at least one admin.
 

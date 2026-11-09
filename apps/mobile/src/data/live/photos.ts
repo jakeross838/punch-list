@@ -1,5 +1,6 @@
 // Moving the pictures themselves, apart from the data, so the camera never waits: a photo taken
-// here is kept as it came, then made smaller (2048 on the long side) and uploaded to the private
+// here is kept as it came, made smaller (2048 on the long side) a couple of minutes later, signal
+// or not, so a week of photos with no signal still fits on the phone, and uploaded to the private
 // photos bucket when there is a signal; once it is up, its row says where it is, and the other
 // phones bring it down to show it. Each photo's file on this phone is in photo_files.
 
@@ -22,6 +23,10 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let unwatch: (() => void) | null = null;
 /** Pictures that would not come down: tried again the next time the app opens. */
 const missing = new Set<string>();
+/** A photo is made smaller once it has been on the phone this long: Claude may still be reading it as it came. */
+const SHRINK_AFTER_MS = 2 * 60_000;
+/** How many are made smaller at a time, so the phone is never busy for long. */
+const SHRINK_AT_ONCE = 10;
 
 function folder(): Directory {
   const dir = new Directory(Paths.document, 'photos');
@@ -61,6 +66,39 @@ async function smaller(id: string, uri: string, most = LONG_SIDE): Promise<strin
   }
 }
 
+/** The picture made smaller and kept in its place, the one as it came deleted. Its file from then on. */
+async function keepSmaller(id: string, uri: string, kind: 'photo' | 'plan'): Promise<string> {
+  if (uri.endsWith('-up.jpg')) return uri;
+  const small = await smaller(id, uri, kind === 'plan' ? PLAN_LONG_SIDE : LONG_SIDE);
+  if (small === uri) return uri;
+  await db.execute('UPDATE photo_files SET uri = ? WHERE id = ?', [small, id]);
+  try {
+    new File(uri).delete();
+  } catch {
+    // Kept as it came; the smaller one is what shows from now on.
+  }
+  return small;
+}
+
+/** Makes the pictures waiting to go up smaller, a few at a time, with no signal needed. */
+async function shrinkWaiting(): Promise<void> {
+  // As days: the photo's time is as the phone wrote it, in any of the forms the database reads.
+  const before = Date.now() / 86_400_000 + 2_440_587.5 - SHRINK_AFTER_MS / 86_400_000;
+  const rows = await db.getAll<Row>(
+    `SELECT f.id, f.uri, 'photo' AS kind FROM photo_files f JOIN photos p ON p.id = f.id
+       WHERE f.uploaded = 0 AND p.removed = 0 AND f.uri NOT LIKE '%-up.jpg' AND julianday(p.created_at) < ?
+     UNION ALL
+     SELECT f.id, f.uri, 'plan' AS kind FROM photo_files f JOIN plan_sheets s ON s.id = f.id
+       WHERE f.uploaded = 0 AND s.removed = 0 AND f.uri NOT LIKE '%-up.jpg' AND julianday(s.created_at) < ?
+     LIMIT ${SHRINK_AT_ONCE}`,
+    [before, before],
+  );
+  for (const r of rows) {
+    const uri = String(r.uri ?? '');
+    if (new File(uri).exists) await keepSmaller(String(r.id), uri, r.kind === 'plan' ? 'plan' : 'photo');
+  }
+}
+
 /** Sends one picture up. False when it could not go (no signal, or signed out): the rest wait too. */
 async function upload(token: string, r: Row, kind: 'photo' | 'plan' = 'photo'): Promise<boolean> {
   const id = String(r.id);
@@ -71,18 +109,7 @@ async function upload(token: string, r: Row, kind: 'photo' | 'plan' = 'photo'): 
     await db.execute('UPDATE photo_files SET uploaded = 1 WHERE id = ?', [id]);
     return true;
   }
-  if (!uri.endsWith('-up.jpg')) {
-    const small = await smaller(id, uri, kind === 'plan' ? PLAN_LONG_SIDE : LONG_SIDE);
-    if (small !== uri) {
-      await db.execute('UPDATE photo_files SET uri = ? WHERE id = ?', [small, id]);
-      try {
-        new File(uri).delete();
-      } catch {
-        // Kept as it came; the smaller one is what shows from now on.
-      }
-      uri = small;
-    }
-  }
+  uri = await keepSmaller(id, uri, kind);
   const path = kind === 'plan' ? `${String(r.job_id)}/plans/${id}.jpg` : `${String(r.job_id)}/${id}.jpg`;
   const result = await new File(uri).upload(`${config.supabaseUrl}/storage/v1/object/${BUCKET}/${inUrl(path)}`, {
     httpMethod: 'POST',
@@ -131,6 +158,8 @@ async function work(): Promise<void> {
   try {
     do {
       again = false;
+      // With or without a signal: a week of photos has to fit on the phone.
+      await shrinkWaiting();
       const token = await accessToken();
       if (!token) return;
       const up = await db.getAll<Row>(

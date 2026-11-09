@@ -6,7 +6,9 @@
 // the item's folder and onto the item, and what it turns away; the owner's page, what the owner adds
 // with its photo, and their sign off; a company's page in Spanish, each line translated once on
 // the builder's allowance and kept; and the job's team told on their phones, through a stand-in for
-// Expo's push service, when a company or the owner answers.
+// Expo's push service, when a company or the owner answers. For send-email, through a stand-in for
+// Resend: a company's list to its people with the PDF, and an invitation, each worded here and
+// answered to whoever sent it; who it turns away; and the day's limit for each company.
 //
 //   DENO=/path/to/deno npx tsx tools/functions-check.ts      (deno on the PATH works too)
 
@@ -75,6 +77,21 @@ const OLD_PHONE = 'ExponentPushToken[old-phone-2]';
 let pushed: { to: string; title: string; body: string; data: Record<string, unknown>; sound?: string }[] = [];
 let forgotten: string[] = [];
 let answered: Record<string, unknown>[] = [];
+/** The builder's logo, as the stand-in database keeps it, and how often it was asked for. */
+const LOGO = 'data:image/png;base64,iVBORw0KGgo=';
+let logoAsked = 0;
+/** Email from the app: who asks (View Only, a superintendent, someone at a company that has sent today's), the company, the person invited, what Resend was given and what was counted. */
+const VIEW = 'Bearer view-token';
+const SUPER = 'Bearer super-token';
+const FULL = 'Bearer full-token';
+const VIC = '5a5a5a5a-1111-4111-8111-5a5a5a5a5a5a';
+const SAM = '5b5b5b5b-1111-4111-8111-5b5b5b5b5b5b';
+const PAT = '5c5c5c5c-1111-4111-8111-5c5c5c5c5c5c';
+const RILEY = '5d5d5d5d-1111-4111-8111-5d5d5d5d5d5d';
+const GATOR = '5e5e5e5e-1111-4111-8111-5e5e5e5e5e5e';
+const PDF = Buffer.from('%PDF-1.7 the list').toString('base64');
+let emailed: Record<string, unknown>[] = [];
+let emailsCounted: Record<string, unknown>[] = [];
 
 const stub = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${STUB}`);
@@ -86,6 +103,9 @@ const stub = createServer(async (req, res) => {
   const who = req.headers.authorization;
   if (url.pathname === '/rest/v1/rpc/ai_allowance') {
     if (who === GOOD) return json(200, { org: 'ross_built', person_id: JAKE, limit_cents: 20000, used_cents: 12.5 });
+    if (who === VIEW) return json(200, { org: 'ross_built', person_id: VIC, limit_cents: 20000, used_cents: 0 });
+    if (who === SUPER) return json(200, { org: 'ross_built', person_id: SAM, limit_cents: 20000, used_cents: 0 });
+    if (who === FULL) return json(200, { org: 'full_org', person_id: PAT, limit_cents: 2500, used_cents: 0 });
     if (who === SPENT) return json(200, { org: 'gulf_coast', person_id: null, limit_cents: 2500, used_cents: 2500.25 });
     return json(200, null);
   }
@@ -94,6 +114,12 @@ const stub = createServer(async (req, res) => {
     const a = JSON.parse(text) as { p_link: string };
     if (a.p_link !== LINK && a.p_link !== OWNER) return json(200, []);
     return json(200, [TEAM_PHONE, OLD_PHONE].map((token) => ({ token, job_id: JOB, job_name: 'Smith Residence' })));
+  }
+  if (url.pathname === '/rest/v1/rpc/page_logo') {
+    if (who !== 'Bearer service-key') return json(403, { code: '42501', message: 'not the service role' });
+    const a = JSON.parse(text) as { p_token: string };
+    logoAsked += 1;
+    return json(200, a.p_token === LINK || a.p_token === OWNER ? LOGO : null);
   }
   if (url.pathname === '/rest/v1/rpc/forget_push_tokens') {
     forgotten.push(...(JSON.parse(text) as { p_tokens: string[] }).p_tokens);
@@ -213,9 +239,53 @@ const stub = createServer(async (req, res) => {
     uploaded.push({ path, type: String(req.headers['content-type'] ?? ''), size: text.length });
     return json(200, { Key: `photos/${path}` });
   }
+  if (url.pathname === '/rest/v1/people' && req.method === 'GET') {
+    const id = url.searchParams.get('id')?.replace(/^eq\./, '');
+    const people: Record<string, Record<string, unknown>> = {
+      [JAKE]: { name: 'Jake Ross', email: 'jake@rossbuilt.com', role: 'admin', active: true },
+      [VIC]: { name: 'Vic Owens', email: 'vic@rossbuilt.com', role: 'view_only', active: true },
+      [SAM]: { name: 'Sam Rivera', email: 'sam@rossbuilt.com', role: 'team', active: true },
+      [RILEY]: { name: 'Riley Carter', email: 'riley@rossbuilt.com', role: 'team', active: true },
+    };
+    const theirs = who === FULL ? { [PAT]: { name: 'Pat Lee', email: 'pat@gulfcoast.example', role: 'admin', active: true }, [RILEY]: people[RILEY]! } : who === GOOD || who === VIEW || who === SUPER ? people : {};
+    return json(200, id && theirs[id] ? [theirs[id]] : []);
+  }
+  if (url.pathname === '/rest/v1/orgs' && req.method === 'GET') {
+    return json(200, who === FULL ? [{ name: 'Gulf Coast Homes' }] : who === GOOD || who === VIEW || who === SUPER ? [{ name: 'Ross "The Best" Built' }] : []);
+  }
+  if (url.pathname === '/rest/v1/companies' && req.method === 'GET') {
+    const id = url.searchParams.get('id')?.replace(/^eq\./, '');
+    return json(200, id === GATOR ? [{ name: 'Gator Plumbing' }] : []);
+  }
+  if (url.pathname === '/rest/v1/company_contacts' && req.method === 'GET') {
+    const company = url.searchParams.get('company_id')?.replace(/^eq\./, '');
+    const filtered = url.searchParams.get('active') === 'eq.true' && url.searchParams.get('gets_lists') === 'eq.true';
+    return json(200, company === GATOR && filtered ? [{ name: 'Dave Lane', email: 'Dave@Gator.example' }, { name: 'Office', email: null }, { name: 'Dave Lane', email: 'dave@gator.example' }] : []);
+  }
+  if (url.pathname === '/rest/v1/company_links' && req.method === 'GET') {
+    const ok = url.searchParams.get('job_id') === `eq.${JOB}` && url.searchParams.get('company_id') === `eq.${GATOR}` && url.searchParams.get('revoked') === 'eq.false';
+    return json(200, ok ? [{ token: LINK }] : []);
+  }
+  if (url.pathname === '/rest/v1/email_sends') {
+    if (who !== 'Bearer service-key') return json(403, { message: 'not the service role' });
+    if (req.method === 'POST') {
+      emailsCounted.push(JSON.parse(text) as Record<string, unknown>);
+      res.writeHead(201);
+      return res.end();
+    }
+    const org = url.searchParams.get('org')?.replace(/^eq\./, '');
+    return json(200, org === 'full_org' ? [{ recipients: 200 }, { recipients: 100 }] : url.searchParams.get('at')?.startsWith('gte.') ? [{ recipients: 3 }] : []);
+  }
+  if (url.pathname === '/emails' && req.method === 'POST') {
+    if (who !== 'Bearer resend-key') return json(401, { message: 'bad key' });
+    const sent = JSON.parse(text) as Record<string, unknown>;
+    if (String(sent.subject).includes('Resend Down')) return json(500, { message: 'down' });
+    emailed.push(sent);
+    return json(200, { id: crypto.randomUUID() });
+  }
   if (url.pathname === '/rest/v1/jobs') {
     const id = url.searchParams.get('id')?.replace(/^eq\./, '');
-    const rows = (who === GOOD || who === SPENT) && id === JOB ? [{ id }] : [];
+    const rows = (who === GOOD || who === SPENT || who === VIEW || who === SUPER) && id === JOB ? [{ id, name: 'Smith Residence', address: '1 Main Street' }] : [];
     if ((req.headers.accept ?? '').includes('vnd.pgrst.object')) return rows.length === 1 ? json(200, rows[0]) : json(406, { code: 'PGRST116', message: 'no rows' });
     return json(200, rows);
   }
@@ -306,6 +376,10 @@ async function withFunction(name: string, done: () => Promise<void>): Promise<vo
       ANTHROPIC_API_KEY: 'test-key',
       ANTHROPIC_BASE_URL: `http://localhost:${STUB}`,
       EXPO_PUSH_URL: `http://localhost:${STUB}/--/api/v2/push/send`,
+      RESEND_API_KEY: 'resend-key',
+      RESEND_BASE_URL: `http://localhost:${STUB}`,
+      EMAIL_FROM: 'lists@punchlist.example',
+      APP_LINK: 'https://apps.apple.com/app/punch-list',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -411,6 +485,15 @@ async function checkAi() {
     "ai: says what is in a photo on Haiku, with the photo",
     described.status === 200 && lastAsked()?.model === 'claude-haiku-5-5' && pictured[0]?.type === 'image' && (pictured[1]?.text ?? '').includes('"Patch drywall", in Living 107'),
     `${described.status} ${lastAsked()?.model} ${pictured.length}`,
+  );
+
+  // Round 5: how to do something, from the app's own help.
+  const how = await call({ task: 'how', input: { question: 'How do I send a company its list?' } });
+  const howWords = lastAsked()?.content?.[0]?.text ?? '';
+  expect(
+    "ai: answers how to do something on Haiku, from the app's help alone",
+    how.status === 200 && lastAsked()?.model === 'claude-haiku-5-5' && howWords.includes('They asked: "How do I send a company its list?"') && howWords.includes('[send-lists]'),
+    `${how.status} ${lastAsked()?.model} ${howWords.slice(0, 120)}`,
   );
 }
 
@@ -649,6 +732,15 @@ async function checkTelling() {
   expect('company-page: opening a page, or an answer turned away, tells nobody', pushed.length === 0, JSON.stringify(pushed));
 }
 
+async function checkLogo() {
+  logoAsked = 0;
+  const plain = await call({ t: LINK, action: 'page' });
+  expect('company-page: a page that does not ask for the logo gets none, and the logo is not looked up', parsed(plain.text).logo === undefined && logoAsked === 0, `${plain.text.slice(0, 80)} ${logoAsked}`);
+  const company = parsed((await call({ t: LINK, action: 'page', logo: true })).text);
+  const owner = parsed((await call({ o: OWNER, action: 'page', logo: true })).text);
+  expect("company-page: the company's page and the owner's page get the builder's logo when they open", company.logo === LOGO && owner.logo === LOGO && logoAsked === 2, `${String(company.logo)} ${String(owner.logo)} ${logoAsked}`);
+}
+
 async function checkSpanish() {
   counted = [];
   translateAsked = 0;
@@ -680,6 +772,59 @@ async function checkSpanish() {
   expect('company-page: asks nothing for a company in English', parsed(english.text).translations === undefined && translateAsked === 1, english.text.slice(0, 120));
 }
 
+async function checkEmail() {
+  const check = await call({ check: true });
+  expect('send-email: says email is set up', parsed(check.text).ready === true, check.text);
+  const nobody = await call({ kind: 'list', jobId: JOB, companyId: GATOR, pdf: PDF }, 'Bearer nobody');
+  expect('send-email: turns away someone not signed in at a company', nobody.status === 403 && emailed.length === 0, nobody.text);
+  const looking = await call({ kind: 'list', jobId: JOB, companyId: GATOR, pdf: PDF }, VIEW);
+  expect('send-email: turns away View Only', looking.status === 403 && emailed.length === 0, looking.text);
+
+  const list = await call({ kind: 'list', jobId: JOB, companyId: GATOR, pdf: PDF, filename: 'Gator Plumbing: List.pdf', ready: 2 });
+  const sent = emailed[0] ?? {};
+  const text = String(sent.text ?? '');
+  expect('send-email: sends a company its list, to its people with an email, once each', list.status === 200 && parsed(list.text).sent === 1 && JSON.stringify(sent.to) === '["dave@gator.example"]', `${list.text} ${JSON.stringify(sent.to)}`);
+  expect(
+    "send-email: from the company's name at the app's address, answered to whoever sent it",
+    sent.from === '"Ross The Best Built" <lists@punchlist.example>' && sent.reply_to === 'jake@rossbuilt.com',
+    `${String(sent.from)} ${String(sent.reply_to)}`,
+  );
+  expect(
+    'send-email: the words are made here, with the link to their page and the PDF attached',
+    sent.subject === '1 Main Street Completion List' && text.startsWith('Hi Dave,') && text.includes(`https://punch-list.expo.app/c#${LINK}`) && text.includes('Anything marked ready') && text.endsWith('Thanks,\nJake'),
+    `${String(sent.subject)} ${text}`,
+  );
+  const files = (sent.attachments ?? []) as { filename: string; content: string }[];
+  expect('send-email: attaches the PDF with a plain name', files.length === 1 && files[0]?.filename === 'Gator Plumbing List.pdf' && files[0]?.content === PDF, JSON.stringify(files.map((f) => f.filename)));
+  expect('send-email: counts what it sent against the company', emailsCounted.length === 1 && emailsCounted[0]?.org === 'ross_built' && emailsCounted[0]?.recipients === 1 && emailsCounted[0]?.kind === 'list', JSON.stringify(emailsCounted));
+
+  const other = await call({ kind: 'list', jobId: OTHER_JOB, companyId: GATOR, pdf: PDF });
+  const notPdf = await call({ kind: 'list', jobId: JOB, companyId: GATOR, pdf: 'not a pdf!' });
+  const nobodyThere = await call({ kind: 'list', jobId: JOB, companyId: '6f6f6f6f-1111-4111-8111-6f6f6f6f6f6f', pdf: PDF });
+  const what = await call({ kind: 'anything', to: 'someone@example.com', subject: 'Hello' });
+  expect(
+    "send-email: sends nothing for a job that is not theirs, a file that is not a PDF, a company that is not theirs, or anything else",
+    other.status === 404 && notPdf.status === 400 && nobodyThere.status === 404 && what.status === 400 && emailed.length === 1,
+    `${other.status} ${notPdf.status} ${nobodyThere.status} ${what.status}`,
+  );
+
+  const invite = await call({ kind: 'invite', personId: RILEY });
+  const invited = emailed[1] ?? {};
+  expect(
+    'send-email: invites someone added under People, with where to get the app and the email to sign in with',
+    invite.status === 200 &&
+      JSON.stringify(invited.to) === '["riley@rossbuilt.com"]' &&
+      String(invited.subject) === 'You are set up on Punch List for Ross "The Best" Built' &&
+      String(invited.text).includes('https://apps.apple.com/app/punch-list') &&
+      String(invited.text).includes('sign in with riley@rossbuilt.com'),
+    `${invite.text} ${String(invited.subject)} ${String(invited.text)}`,
+  );
+  const bySuper = await call({ kind: 'invite', personId: RILEY }, SUPER);
+  expect('send-email: only an admin invites', bySuper.status === 403 && emailed.length === 2, bySuper.text);
+  const full = await call({ kind: 'invite', personId: RILEY }, FULL);
+  expect("send-email: stops at the day's limit for a company", full.status === 429 && parsed(full.text).usedUp === true && emailed.length === 2, full.text);
+}
+
 async function main() {
   await new Promise<void>((done) => stub.listen(STUB, done));
   try {
@@ -692,8 +837,10 @@ async function main() {
       await checkOwnerPage();
       pushed = [];
       await checkTelling();
+      await checkLogo();
       await checkSpanish();
     });
+    await withFunction('send-email', checkEmail);
   } finally {
     stub.close();
   }
@@ -703,7 +850,7 @@ async function main() {
     console.error(`\n${failures.length} checks failed:\n${failures.map((f) => `- ${f}`).join('\n')}\n\nThe functions said:\n${log.slice(-2000)}`);
     process.exit(1);
   }
-  console.log(`\nAll ${steps.length} checks of the ai, read-plans and company-page functions passed.`);
+  console.log(`\nAll ${steps.length} checks of the ai, read-plans, company-page and send-email functions passed.`);
 }
 
 void main();

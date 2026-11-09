@@ -1,15 +1,22 @@
-// The people at a company and who does what. Two roles: an admin adds people, makes and closes jobs and
-// changes the setup; the team walks jobs, adds items and checks them off. Each person sees every
-// job or only the jobs they are on; admins see every job. A job's team says who is on it and as
-// what. An item can be assigned to one person, and shows on their My Items.
+// The people at a company and who does what. Four roles: an admin runs the company (its people,
+// companies, templates and setup) and every job; a project manager makes jobs and sets them up; a
+// superintendent walks jobs, adds items, sends lists and checks them off; View Only sees the jobs
+// and comments. Each person sees every job or only the jobs they are on; admins and project
+// managers see every job. A job's team says who is on it and as what. An item can be assigned to
+// one person, and shows on their My Items.
 
 import type { Item, Person, Role, Sees, TeamMember, TeamPart } from './types';
 
-export const ROLE_LABELS: Record<Role, string> = { admin: 'Admin', team: 'Team' };
+/** The roles, as they are offered in People. */
+export const ROLES: readonly Role[] = ['admin', 'project_manager', 'team', 'view_only'];
+
+export const ROLE_LABELS: Record<Role, string> = { admin: 'Admin', project_manager: 'Project Manager', team: 'Superintendent', view_only: 'View Only' };
 
 export const ROLE_HINTS: Record<Role, string> = {
-  admin: 'Adds people, makes and closes jobs, and changes the setup.',
-  team: 'Walks jobs, adds items and checks them off.',
+  admin: 'Runs the company: its people, companies, templates and every job.',
+  project_manager: 'Makes jobs and sets them up: locations, companies and the team.',
+  team: 'Walks jobs, adds items, sends lists and checks the work off.',
+  view_only: 'Sees the jobs and comments. Changes nothing.',
 };
 
 export const SEES_LABELS: Record<Sees, string> = { all: 'Every Job', assigned: 'Only Their Jobs' };
@@ -18,13 +25,23 @@ export const TEAM_PARTS: TeamPart[] = ['project_manager', 'superintendent', 'fie
 
 export const PART_LABELS: Record<TeamPart, string> = { project_manager: 'Project Manager', superintendent: 'Superintendent', field: 'Field' };
 
-/** Whether this person changes the setup: people, jobs, a job's locations, companies and team, the standard titles and the added fields. */
+/** Whether this person changes the company's setup: its people, companies, templates, standard titles and added fields, and deletes jobs. */
 export const isAdmin = (person: Pick<Person, 'role' | 'active'> | null | undefined): boolean => !!person && person.active && person.role === 'admin';
+
+/** Whether this person makes jobs and sets them up: their name, locations, companies and team, closing and opening them. */
+export const canSetUpJobs = (person: Pick<Person, 'role' | 'active'> | null | undefined): boolean =>
+  !!person && person.active && (person.role === 'admin' || person.role === 'project_manager');
+
+/** Whether this person changes anything at all; View Only looks and comments. */
+export const canChange = (person: Pick<Person, 'role' | 'active'> | null | undefined): boolean => !!person && person.active && person.role !== 'view_only';
+
+/** Whether this person sees every job whatever Sees says: admins and project managers do. */
+export const seesEveryJob = (person: Pick<Person, 'role' | 'sees'>): boolean => person.role === 'admin' || person.role === 'project_manager' || person.sees === 'all';
 
 /** Whether this person sees a job: admins and people who see every job always; everyone else when they are on its team. */
 export function seesJob(person: Pick<Person, 'id' | 'role' | 'sees' | 'active'> | null | undefined, jobId: string, team: Pick<TeamMember, 'jobId' | 'personId'>[]): boolean {
   if (!person || !person.active) return false;
-  if (person.role === 'admin' || person.sees === 'all') return true;
+  if (seesEveryJob(person)) return true;
   return team.some((t) => t.jobId === jobId && t.personId === person.id);
 }
 

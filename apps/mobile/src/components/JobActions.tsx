@@ -1,8 +1,9 @@
 // What can be done to a job, the same from its menu and from Jobs (swipe it, or hold it down):
 // change its name and address, close it (put away under Closed, nothing deleted, open again any
-// time), and delete it with everything on it, for everyone. Only an admin does these.
+// time), and delete it with everything on it, for everyone. An admin or a project manager does these;
+// only an admin deletes a job.
 
-import { isAdmin, type Job } from '@punch/core';
+import { canSetUpJobs, isAdmin, type Job } from '@punch/core';
 import { router } from 'expo-router';
 import { useRef, useState, type ComponentRef } from 'react';
 import { StyleSheet, type TextInput } from 'react-native';
@@ -29,7 +30,9 @@ function whatGoes(counts?: JobCounts): string {
 export function useJobActions() {
   const data = useData();
   const feedback = useFeedback();
-  const admin = isAdmin(data.useMe());
+  const me = data.useMe();
+  const admin = canSetUpJobs(me);
+  const deletes = isAdmin(me);
   // The job being renamed stays set while its sheet slides away.
   const [editing, setEditing] = useState<{ job: Job; open: boolean } | null>(null);
 
@@ -92,7 +95,7 @@ export function useJobActions() {
       actions: [
         { label: 'Edit the Name and Address', onPress: () => setEditing({ job, open: true }) },
         job.closed ? { label: 'Open the Job Again', onPress: () => reopen(job) } : { label: 'Close the Job', onPress: () => setTimeout(() => close(job), 350) },
-        { label: 'Delete the Job', destructive: true, onPress: () => setTimeout(() => remove(job, counts), 350) },
+        ...(deletes ? [{ label: 'Delete the Job', destructive: true, onPress: () => setTimeout(() => remove(job, counts), 350) }] : []),
       ],
     });
   }
@@ -101,7 +104,7 @@ export function useJobActions() {
     <EditJobSheet key={editing.job.id} job={editing.job} visible={editing.open} onClose={() => setEditing((e) => (e ? { ...e, open: false } : e))} />
   ) : null;
 
-  return { admin, edit: (job: Job) => setEditing({ job, open: true }), close, reopen, remove, menu, sheet };
+  return { admin, deletes, edit: (job: Job) => setEditing({ job, open: true }), close, reopen, remove, menu, sheet };
 }
 
 /** After the job is gone or put away: back to Jobs. */

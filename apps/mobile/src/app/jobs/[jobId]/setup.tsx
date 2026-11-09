@@ -3,11 +3,11 @@
 // (Claude reads the rooms on each level), from pasting a room list, or typed in at the end of each
 // level; levels are added, renamed and put in order here too. Companies are added with the trade
 // they do on this job; the team is who works the job and as what. Tap a location, a company or a
-// person to fix it or take it off the job. Admins change the setup and close the job; everyone else
-// sees it as it is.
+// person to fix it or take it off the job. Admins and project managers change the setup and close the
+// job; everyone else sees it as it is.
 
 import {
-  isAdmin,
+  canSetUpJobs,
   levelName,
   locationGroups,
   moveLevel,
@@ -15,6 +15,7 @@ import {
   parseRoomList,
   PART_LABELS,
   readCompanyCard,
+  ROLE_LABELS,
   SHARED_AREAS,
   SHARED_GROUP,
   TEAM_PARTS,
@@ -65,7 +66,8 @@ export default function SetupScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const data = useData();
   const job = data.useJobs().find((j) => j.id === jobId);
-  const admin = isAdmin(data.useMe());
+  // Changing the setup: an admin or a project manager.
+  const admin = canSetUpJobs(data.useMe());
   const feedback = useFeedback();
   const [tab, setTab] = useState<Tab>('rooms');
   const [sheet, setSheet] = useState<'rooms' | 'company' | null>(null);
@@ -84,7 +86,7 @@ export default function SetupScreen() {
   }, [groups, newLevels]);
 
   return (
-    <Page title="Job Setup" backLabel={job?.name} subtitle={admin ? undefined : 'Only an admin can change this.'} tab={{ active: 'jobs', jobId }}>
+    <Page title="Job Setup" backLabel={job?.name} subtitle={admin ? undefined : 'Only an admin or a project manager changes this.'} tab={{ active: 'jobs', jobId }}>
       {job ? <JobFields key={job.id} job={job} editable={admin} /> : null}
       <View style={styles.tabs}>
         <Segmented<Tab>
@@ -338,7 +340,7 @@ function RoomsTab({
           </Text>
         </View>
       ) : null}
-      {!admin && groups.length === 0 ? <EmptyState icon="door" title="No Locations Yet" message="An admin sets them up from the plans, or they are typed in on the walk." /> : null}
+      {!admin && groups.length === 0 ? <EmptyState icon="door" title="No Locations Yet" message="An admin or a project manager sets them up from the plans, or they are typed in on the walk." /> : null}
       {levels.map((g) => (
         <ListSection
           key={`r:${g.name}`}
@@ -593,7 +595,7 @@ function TeamTab({ jobId, admin }: { jobId: string; admin: boolean }) {
       <OptionPicker
         visible={adding}
         title="Add Person"
-        options={off.map((p) => ({ value: p.id, label: p.name, hint: p.role === 'admin' ? 'Admin' : null }))}
+        options={off.map((p) => ({ value: p.id, label: p.name, hint: p.role === 'team' ? null : ROLE_LABELS[p.role] }))}
         value={null}
         onSelect={(personId) => {
           setAdding(false);
