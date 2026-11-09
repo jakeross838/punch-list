@@ -77,31 +77,23 @@ begin
   return new;
 end $$;
 
--- Making a job, renaming, closing and opening it again: an admin, or a project manager.
-drop policy jobs_insert on public.jobs;
-create policy jobs_insert on public.jobs for insert to authenticated with check (public.can_set_up_jobs() and org = (select public.current_org()));
-drop policy jobs_update on public.jobs;
-create policy jobs_update on public.jobs for update to authenticated
+-- Making a job, renaming, closing and opening it again: an admin, or a project manager. (Each rule
+-- is changed in place, as the roles migration did, rather than dropped and made again.)
+alter policy jobs_insert on public.jobs to authenticated with check (public.can_set_up_jobs() and org = (select public.current_org()));
+alter policy jobs_update on public.jobs to authenticated
   using (public.can_set_up_jobs() and org = (select public.current_org()))
   with check (public.can_set_up_jobs() and org = (select public.current_org()));
 
 -- The job's team, and the companies on it: an admin, or a project manager.
-drop policy job_team_insert on public.job_team;
-drop policy job_team_update on public.job_team;
-drop policy job_team_delete on public.job_team;
-create policy job_team_insert on public.job_team for insert to authenticated with check (public.can_set_up_jobs() and public.can_see_job(job_id));
-create policy job_team_update on public.job_team for update to authenticated using (public.can_set_up_jobs() and public.can_see_job(job_id)) with check (public.can_set_up_jobs() and public.can_see_job(job_id));
-create policy job_team_delete on public.job_team for delete to authenticated using (public.can_set_up_jobs() and public.can_see_job(job_id));
-drop policy job_companies_update on public.job_companies;
-drop policy job_companies_delete on public.job_companies;
-create policy job_companies_update on public.job_companies for update to authenticated using (public.can_set_up_jobs() and public.can_see_job(job_id)) with check (public.can_set_up_jobs() and public.can_see_job(job_id));
-create policy job_companies_delete on public.job_companies for delete to authenticated using (public.can_set_up_jobs() and public.can_see_job(job_id));
+alter policy job_team_insert on public.job_team to authenticated with check (public.can_set_up_jobs() and public.can_see_job(job_id));
+alter policy job_team_update on public.job_team to authenticated using (public.can_set_up_jobs() and public.can_see_job(job_id)) with check (public.can_set_up_jobs() and public.can_see_job(job_id));
+alter policy job_team_delete on public.job_team to authenticated using (public.can_set_up_jobs() and public.can_see_job(job_id));
+alter policy job_companies_update on public.job_companies to authenticated using (public.can_set_up_jobs() and public.can_see_job(job_id)) with check (public.can_set_up_jobs() and public.can_see_job(job_id));
+alter policy job_companies_delete on public.job_companies to authenticated using (public.can_set_up_jobs() and public.can_see_job(job_id));
 
 -- The people at a company put on a job, read from its card to get its lists: an admin, or a project
 -- manager. Changing them, and the companies themselves, stays with an admin.
-drop policy company_contacts_insert on public.company_contacts;
-create policy company_contacts_insert on public.company_contacts for insert to authenticated
-  with check (public.can_set_up_jobs() and org = (select public.current_org()));
+alter policy company_contacts_insert on public.company_contacts to authenticated with check (public.can_set_up_jobs() and org = (select public.current_org()));
 
 -- The job's locations, beyond walking them: an admin, or a project manager.
 create or replace function public.locations_setup_by_admin() returns trigger
