@@ -5,7 +5,7 @@
 // close or delete it, or hold it down to change its name and address too. People, Companies,
 // Templates, Item Form and your account are under Me, the square button in the bar.
 
-import { canSetUpJobs, assignedTo, SAMPLE_JOB, type Job } from '@punch/core';
+import { assignedTo, canSetUpJobs, planState, SAMPLE_JOB, TRIAL_ENDED, type Job } from '@punch/core';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -19,7 +19,7 @@ import { SearchResults } from '@/components/SearchResults';
 import { useRecent, useStarred } from '@/data/stars';
 import { newLines, updatesSeen } from '@/data/updatesSeen';
 import { useSampleJob } from '@/components/useSampleJob';
-import { Button, ChipRow, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, SectionLabel, Stamp, SwipeRow, Text, type BarItem, type SwipeAction } from '@/ui';
+import { Banner, Button, ChipRow, EmptyState, IconTile, LedgerRow, MetaLine, Page, Panel, SectionLabel, Stamp, SwipeRow, Text, type BarItem, type SwipeAction } from '@/ui';
 
 const newJob = () => router.push('/jobs/new');
 
@@ -30,8 +30,10 @@ export default function JobsScreen() {
   const jobs = data.useJobs();
   const me = data.useMe();
   const team = data.useTeams();
+  // Once a free trial is over: everything to look at, and nothing new until a plan starts.
+  const ended = planState(data.useOrg()).kind === 'ended';
   // Making jobs: an admin or a project manager.
-  const admin = canSetUpJobs(me);
+  const admin = canSetUpJobs(me) && !ended;
   const sample = useSampleJob();
   const [query, setQuery] = useState('');
   const mineIds = useMemo(() => new Set(team.filter((t) => t.personId === me?.id).map((t) => t.jobId)), [team, me?.id]);
@@ -62,6 +64,11 @@ export default function JobsScreen() {
     >
       {/* Jobs is always open under the rest: the phone kept on notifications, and a notification tapped opens its item. */}
       <NotifyKeeper />
+      {ended && !q ? (
+        <View style={styles.ended} testID="trial-ended">
+          <Banner tone="warning">{TRIAL_ENDED}</Banner>
+        </View>
+      ) : null}
       {q ? null : <GetStarted />}
       {choices.length > 1 ? (
         <ChipRow chips={choices.map(([key, label]) => ({ key, label, on: show === key, onPress: () => setShow(key), testID: `show-${key}` }))} style={styles.show} />
@@ -233,6 +240,7 @@ function JobRow({ job, last, actions }: { job: Job; last: boolean; actions: Retu
 
 const styles = StyleSheet.create({
   show: { marginBottom: 8 },
+  ended: { marginBottom: 12 },
   mine: { marginBottom: 4 },
   jobs: { marginBottom: 8 },
   jobRow: { paddingVertical: 13 },

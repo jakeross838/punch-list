@@ -14,7 +14,6 @@ import {
   assigneeFields,
   assigneeKey,
   assigneeName,
-  canChange,
   clearHoldup,
   commentCounts,
   companyList,
@@ -50,7 +49,7 @@ import { FilterBar } from "@/components/FilterBar";
 import { ItemRow } from "@/components/ItemRow";
 import { useItemActions } from "@/components/useItemActions";
 import { colors, layout } from "@/constants/theme";
-import { useData } from "@/data/api";
+import { useData, useLooksOnly } from "@/data/api";
 import { capture } from "@/data/capture";
 import { clipboard, itemsTitle, itemsWord, useClipboard } from "@/data/clipboard";
 import { useFilterContext, useHolds, useJobView } from "@/data/view";
@@ -128,7 +127,7 @@ export default function GroupScreen() {
   const me = data.useMe();
   const admin = isAdmin(me);
   // View Only looks and comments: no picking, adding or pasting.
-  const looks = !canChange(me);
+  const looks = useLooksOnly();
   const copied = useClipboard();
   // Picking items to do something to all of them at once.
   const [selecting, setSelecting] = useState(false);

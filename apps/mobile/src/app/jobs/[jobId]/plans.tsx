@@ -4,7 +4,7 @@
 // to open it. Pinch to look closer. The level's items that are not pinned yet are listed under the
 // plan: tap one, then tap the plan where it is. An item can also be pinned from its own screen.
 
-import { canChange, type Item, type PlanSheet } from '@punch/core';
+import { type Item, type PlanSheet } from '@punch/core';
 import { Image } from 'expo-image';
 import { launchImageLibraryAsync } from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, useWindowDimensions, View, type GestureResponderEvent } from 'react-native';
 import { itemStatus } from '@/components/ItemRow';
 import { colors, layout } from '@/constants/theme';
-import { useData } from '@/data/api';
+import { useData, useLooksOnly } from '@/data/api';
 import { useHolds } from '@/data/view';
 import {
   Button,
@@ -59,7 +59,7 @@ export default function PlansScreen() {
   const companies = data.useCompanies();
   const holds = useHolds(jobId);
   // View Only looks at the plans and the pins: no adding plans and no pinning.
-  const looks = !canChange(data.useMe());
+  const looks = useLooksOnly();
   const floors = useMemo(() => [...new Set(locations.filter((l) => l.active && l.kind === 'room').map((l) => l.floor ?? '').filter(Boolean))], [locations]);
   const pinning = pin ? items.find((i) => i.id === pin) : undefined;
   const pinningFloor = pinning ? locations.find((l) => l.id === pinning.locationId)?.floor : undefined;

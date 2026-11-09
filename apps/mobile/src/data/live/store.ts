@@ -254,9 +254,19 @@ async function loadParts(parts: Set<Part>): Promise<Partial<State>> {
       settingsRows = await db.getAll<Row>('SELECT * FROM person_settings');
     } else if (part === 'org') {
       // Only the signed-in person's company comes down.
-      const row = await db.getOptional<Row>('SELECT id, name, logo FROM orgs LIMIT 1');
-      const org: Org = row ? { id: String(row.id), name: String(row.name ?? ''), logo: typeof row.logo === 'string' && row.logo !== '' ? row.logo : null } : NO_ORG;
-      out.org = org.id === state.org.id && org.name === state.org.name && (org.logo ?? null) === (state.org.logo ?? null) ? state.org : org;
+      const row = await db.getOptional<Row>('SELECT id, name, logo, plan, trial_ends FROM orgs LIMIT 1');
+      const org: Org = row
+        ? {
+            id: String(row.id),
+            name: String(row.name ?? ''),
+            logo: typeof row.logo === 'string' && row.logo !== '' ? row.logo : null,
+            plan: row.plan === 'trial' || row.plan === 'paid' ? row.plan : 'free',
+            trialEnds: typeof row.trial_ends === 'string' && row.trial_ends !== '' ? row.trial_ends : null,
+          }
+        : NO_ORG;
+      const same =
+        org.id === state.org.id && org.name === state.org.name && (org.logo ?? null) === (state.org.logo ?? null) && org.plan === state.org.plan && org.trialEnds === state.org.trialEnds;
+      out.org = same ? state.org : org;
     } else {
       (out as Record<string, unknown>)[part] = await loadList(part);
     }

@@ -104,3 +104,44 @@ How each service behind the app is set up, and where its secrets are kept. Secre
   3. Apple processes the build (a few minutes) and TestFlight offers it to the Ross Built group by itself, with a notice to Jake.
   - The other way to upload is `npx eas-cli submit -p ios --id <build id> --non-interactive`, with the key added to the submit profile for that one run (`ascApiKeyPath`, `ascApiKeyId` and `ascApiKeyIssuerId` from `apple.env`) and `eas.json` put back as committed. It waits in Expo's free submission queue first (about 35 minutes on 5 November). The key cannot be stored on Expo for automatic uploads without signing in with the Apple ID's password, which is not done here.
 - Expo's free plan queues builds and submissions; builds started within a minute on 5 November.
+
+## Sign in with Apple and Google (Round 5)
+
+The app shows Continue with Apple and Continue with Google on Sign In once the server has them switched on: it asks Supabase's settings each time Sign In opens, so nothing needs a new build.
+
+- **Apple, on the iPhone:** in Supabase, Authentication, Sign In / Providers, Apple: switch it on and put the app's bundle id `com.rossbuilt.punchlist` in Client IDs. That is all the iPhone's own sheet needs. The app's side has Sign In with Apple turned on (`ios.usesAppleSignIn` in `app.json`); Apple has to allow it for the app too, which EAS does with the App Store Connect key the next time the build's settings are synced (as Push was on 9 November), once Jake says to.
+- **Apple, on Android:** a Services ID and a key made at developer.apple.com (Certificates, Identifiers and Profiles), with `https://ulwewwyhestgxpxdiwme.supabase.co/auth/v1/callback` as the return address, then the Services ID and the key's secret in the same Apple provider in Supabase.
+- **Google:** in Google Cloud, an OAuth client of the Web application kind, with `https://ulwewwyhestgxpxdiwme.supabase.co/auth/v1/callback` as its redirect address; its Client ID and secret go in Supabase's Google provider.
+- **Both:** in Supabase, Authentication, URL Configuration, add `punchlist://signed-in` to the Redirect URLs, where the browser comes back to the app.
+- Someone joining a company signs in with the email their admin added. Apple can hide the email; the address Apple gives shows on Start Your Company, and the admin adds that one instead.
+
+## Email from the app (Round 5)
+
+Lists and invitations can go from the app's own address through Resend, answered to whoever sent them. Until it is set up, the app opens Mail as before.
+
+1. At resend.com, an account, and the sending domain checked (its DNS records added where the domain is kept).
+2. In Supabase, Edge Functions, Secrets: `RESEND_API_KEY` (the key from Resend), `EMAIL_FROM` (the address it goes from, for example `lists@` the domain), and `APP_LINK` (where to get the app, for the invitation: the App Store page, or for now TestFlight's public link). The From name is each company's own name.
+3. The `send-email` function deployed (it is in the repository; it goes live with Round 5, once Jake says to).
+4. The sign in codes can come from the same address: Supabase, Authentication, Emails, SMTP Settings, with Resend's SMTP details (`smtp.resend.com`, port 465, user `resend`, the key as the password).
+
+A company sends at most 300 emails a day from the app (`EMAILS_A_DAY` changes it); each one is counted in `email_sends`.
+
+## Android (Round 5)
+
+- The app is `com.rossbuilt.punchlist` on Android too. `npx eas-cli@latest build -p android --profile android-test` makes an APK to install on a phone straight from Expo's page; `--profile production` makes the bundle for Google Play. The first Android build has Expo make the app's Android signing key and keep it.
+- Google Play: a developer account (a one time fee), the app made with the same package name, and Expo's submit step pointed at a Google service account key (kept in `local/`, never in the repository).
+- Notifications on Android go through Firebase: a Firebase project with an Android app named `com.rossbuilt.punchlist`, its `google-services.json` added on expo.dev as a file environment variable named `GOOGLE_SERVICES_JSON` (the app's `app.config.ts` picks it up; the file stays out of the public repository), and the FCM V1 service account key added in the project's Credentials, Android. Until then the app works on Android without notifications.
+
+## Plans (Round 5)
+
+- Each company is on a free trial of 30 days from when it starts, or paid, or free. Ross Built and every company already using the app on the day Round 5 went live are free.
+- A plan is agreed and paid outside the app (the app sells nothing, so the App Store takes no cut). To start one, in Supabase's SQL editor: `update public.orgs set plan = 'paid' where name = '...';` To give more trial: `update public.orgs set trial_ends = now() + interval '14 days' where name = '...';` The phones have it within a moment.
+- Once a trial ends with no plan, the company still sees everything, comments and downloads; nothing else changes until a plan starts. Companies' and owners' pages keep working.
+
+## The pages beside the companies' pages (Round 5)
+
+`node tools/build-company-page.mjs` also builds the Privacy Policy (`/privacy/`), the Terms of Use (`/terms/`) and Support (`/support/`) from `apps/company-page/legal`, on the same hosting as the companies' pages (`https://punch-list.expo.app`). Me links to the first two. They name Jake and his work email; change the words there and build again.
+
+## The speed check (Round 5)
+
+`npm run preview:build && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npm run test:speed` opens the preview page with a big job added (`apps/mobile/src/data/sampleBig.ts`: a thousand items, three thousand photos, fifteen hundred comments), with the processor four times slower, and fails when any of the day's steps takes longer than its budget.

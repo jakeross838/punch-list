@@ -1,6 +1,8 @@
 // Your own company: anyone signs up, names their company and becomes its admin, then adds their
 // people. Its name goes at the top of every list it sends. The database checks the same things.
 
+import type { Plan } from './types';
+
 /** The longest a company's or a person's name can be. */
 export const COMPANY_NAME_MAX = 80;
 
@@ -53,3 +55,30 @@ export const LOGO_MOST = 400_000;
 
 /** A logo the database keeps: a PNG or JPEG data URL, small enough. */
 export const isLogo = (v: string): boolean => v.length <= LOGO_MOST && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(v);
+
+// ---------- plans ----------
+
+/** Where a company stands: on a plan or free, in its free trial with the days left, or with its trial over. */
+export type PlanState = { kind: 'paid' } | { kind: 'free' } | { kind: 'trial'; daysLeft: number; ends: string } | { kind: 'ended' };
+
+/** The words the database turns a change down with once a trial is over, and the app too. */
+export const TRIAL_ENDED = "Your company's free trial has ended. Everything is still here to look at, comment on and download.";
+
+/** Where a company stands on a day. A trial with no end said has not ended. */
+export function planState(org: { plan?: Plan; trialEnds?: string | null }, now: Date = new Date()): PlanState {
+  if (org.plan === 'paid') return { kind: 'paid' };
+  if (org.plan !== 'trial') return { kind: 'free' };
+  const ends = org.trialEnds ? new Date(org.trialEnds) : null;
+  if (!ends || Number.isNaN(ends.getTime())) return { kind: 'trial', daysLeft: 30, ends: '' };
+  const left = ends.getTime() - now.getTime();
+  if (left <= 0) return { kind: 'ended' };
+  return { kind: 'trial', daysLeft: Math.max(1, Math.ceil(left / 86_400_000)), ends: org.trialEnds! };
+}
+
+/** "Free Trial, 12 days left", "Free Trial, last day", "Free Trial Ended" or "Paid", for Me. Empty when free. */
+export function planText(state: PlanState): string {
+  if (state.kind === 'paid') return 'Paid';
+  if (state.kind === 'ended') return 'Free Trial Ended';
+  if (state.kind === 'trial') return state.daysLeft <= 1 ? 'Free Trial, last day' : `Free Trial, ${state.daysLeft} days left`;
+  return '';
+}

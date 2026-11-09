@@ -73,6 +73,9 @@ export const previewApi: DataApi = makeApi(keeper, {
     const person = state.people.find((p) => p.id === personId && p.active);
     if (person) setState({ ...state, me: person });
   },
+  previewTrialOver(over) {
+    setState({ ...state, org: { ...state.org, plan: 'trial', trialEnds: new Date(Date.now() + (over ? -1 : 24) * 86_400_000).toISOString() } });
+  },
   async sendSignInCode(email) {
     const clean = tidyEmail(email);
     if (!isEmail(clean)) throw new Error('That email does not look right.');
@@ -109,7 +112,7 @@ export const previewApi: DataApi = makeApi(keeper, {
     const problem = companyNameProblem(company) ?? yourNameProblem(name);
     if (problem) throw new Error(`${problem}.`);
     const me = { id: randomUUID(), email, name: tidyCompanyName(name), active: true, role: 'admin' as const, sees: 'all' as const, phone: null };
-    setState(newCompanyState({ id: randomUUID(), name: tidyCompanyName(company) }, me));
+    setState(newCompanyState({ id: randomUUID(), name: tidyCompanyName(company), plan: 'trial', trialEnds: new Date(Date.now() + 30 * 86_400_000).toISOString() }, me));
   },
   async deleteAccount() {
     // As the server does: a company with people still in it keeps an admin.

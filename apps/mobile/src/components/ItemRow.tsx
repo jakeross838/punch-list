@@ -7,7 +7,6 @@
 // panel's edges.
 
 import {
-  canChange,
   commentCountText,
   freesText,
   holdText,
@@ -24,7 +23,7 @@ import {
 import { memo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
-import { useData } from '@/data/api';
+import { useLooksOnly } from '@/data/api';
 import { useStarred } from '@/data/stars';
 import { CompleteCircle, dayOf, Icon, PhotoView, Pill, shortDate, SwipeRow, Text, Touchable, type PillTone, type SwipeAction } from '@/ui';
 
@@ -129,7 +128,7 @@ export const ItemRow = memo(function ItemRow({
   const open = item.status === 'open' && !checking;
   const starred = useStarred().includes(item.id);
   // View Only looks: no checking off, no swiping, no photo slot, no picking.
-  const looks = !canChange(useData().useMe());
+  const looks = useLooksOnly();
   const title = item.title || (item.source === 'owner' && item.description.trim() ? item.description.trim() : 'No title yet');
   const status = itemStatus(item, { holds, checking, note, completedBy });
   // The type, unless the pill already says it: To Be Quoted is the Additional work not priced yet.

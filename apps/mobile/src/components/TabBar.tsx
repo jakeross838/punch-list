@@ -7,12 +7,11 @@
 // when it is already open underneath, so tapping around never piles up screens. Swiping back still
 // returns to where you were.
 
-import { canChange } from '@punch/core';
 import { router, useNavigation } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
-import { useData } from '@/data/api';
+import { useData, useLooksOnly } from '@/data/api';
 import { capture } from '@/data/capture';
 import { useCurrentJob } from '@/data/currentJob';
 import { haptic } from '@/ui/haptics';
@@ -42,7 +41,7 @@ export function TabBar({ active, jobId, locationId = null, onCapture }: PageTab)
   const data = useData();
   const jobs = data.useJobs();
   // View Only looks: no Capture and no Send, so Jobs alone.
-  const looks = !canChange(data.useMe());
+  const looks = useLooksOnly();
   const job = jobId ?? (current && jobs.some((j) => j.id === current) ? current : null) ?? jobs.find((j) => !j.closed)?.id ?? null;
 
   const stack = () => ((navigation.getState()?.routes ?? []) as StackRoute[]).map((r) => ({ name: r.name, jobId: r.params?.jobId }));

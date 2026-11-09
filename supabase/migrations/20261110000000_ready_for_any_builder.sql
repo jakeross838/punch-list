@@ -114,14 +114,58 @@ begin
   return new;
 end $$;
 
+-- ---------- plans ----------
+--
+-- A company starts on a free trial of 30 days, then needs a plan. A plan is agreed and paid outside
+-- the app, which sells nothing; Jake marks a company that has one as 'paid'. Ross Built, and the
+-- companies already using the app, are 'free'. Once a trial ends with no plan, everything stays
+-- there to look at, comment on and download, and nothing else changes until a plan starts.
+
+alter table public.orgs add column plan text not null default 'trial' check (plan in ('trial', 'paid', 'free'));
+alter table public.orgs add column trial_ends timestamptz not null default (now() + interval '30 days');
+update public.orgs set plan = 'free';
+
+/** A company's plan is changed by Jake, never from the app: what an admin sends for it is turned down. */
+create function public.orgs_plan_kept() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if current_user = 'authenticated' then
+    if tg_op = 'INSERT' then
+      new.plan := 'trial';
+      new.trial_ends := now() + interval '30 days';
+    elsif (new.plan, new.trial_ends) is distinct from (old.plan, old.trial_ends) then
+      raise exception 'A company''s plan is not changed from the app' using errcode = 'insufficient_privilege';
+    end if;
+  end if;
+  return new;
+end $$;
+create trigger orgs_plan_kept before insert or update on public.orgs for each row execute function public.orgs_plan_kept();
+
+/** Whether the signed-in person's company can change things: on a plan, or still in its free trial. */
+create function public.org_can_change() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select o.plan <> 'trial' or o.trial_ends > now() from public.orgs o where o.id = public.current_org()), true)
+$$;
+revoke execute on function public.org_can_change() from public, anon;
+grant execute on function public.org_can_change() to authenticated;
+
+-- ---------- the guard ----------
+--
 -- View Only changes nothing but their comments and their own view: every other table turns them away,
 -- through the app's own functions too (a merge, a link for the owner or the station). Deleting their
--- own account is the one thing that changes other rows for them.
+-- own account is the one thing that changes other rows for them. The same goes for everyone at a
+-- company whose free trial has ended with no plan.
+
 create function public.view_only_guard() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  if coalesce(current_setting('punch.leaving', true), '') <> 'on' and public.is_view_only() then
-    raise exception 'View Only can look and comment, not change anything' using errcode = 'insufficient_privilege';
+  if coalesce(current_setting('punch.leaving', true), '') <> 'on' then
+    if public.is_view_only() then
+      raise exception 'View Only can look and comment, not change anything' using errcode = 'insufficient_privilege';
+    end if;
+    if not public.org_can_change() then
+      raise exception 'Your company''s free trial has ended. Everything is still here to look at, comment on and download' using errcode = 'insufficient_privilege';
+    end if;
   end if;
   return case when tg_op = 'DELETE' then old else new end;
 end $$;

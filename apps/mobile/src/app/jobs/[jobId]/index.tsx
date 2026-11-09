@@ -11,7 +11,6 @@
 import {
   assigneeKey,
   byFloor,
-  canChange,
   commentCounts,
   GROUP_LABELS,
   groupItems,
@@ -45,7 +44,7 @@ import { AddTemplateSheet } from '@/components/TemplateSheets';
 import { useItemActions } from '@/components/useItemActions';
 import { ViewSheet } from '@/components/ViewSheet';
 import { colors, layout } from '@/constants/theme';
-import { useData } from '@/data/api';
+import { useData, useLooksOnly } from '@/data/api';
 import { capture } from '@/data/capture';
 import { setCurrentJob } from '@/data/currentJob';
 import { clipboard, itemsTitle, itemsWord, useClipboard } from '@/data/clipboard';
@@ -111,7 +110,7 @@ export default function JobScreen() {
   const job = jobs.find((j) => j.id === jobId);
   const jobActions = useJobActions();
   // View Only looks and comments: none of the ways to add or change.
-  const looks = !canChange(data.useMe());
+  const looks = useLooksOnly();
   const copied = useClipboard();
   const formOptions = useFormOptions(jobId, '');
   // Opened from a template's Add to a Job: its sheet comes up straight away.

@@ -9,6 +9,8 @@ import {
   HELP,
   HELP_TOPICS,
   isAdmin,
+  planState,
+  planText,
   readHow,
   ROLE_HINTS,
   ROLE_LABELS,
@@ -181,5 +183,28 @@ describe('Roles', () => {
     expect(seesJob(person('team'), 'mine', team)).toBe(true);
     expect(seesJob(person('view_only'), 'mine', team)).toBe(true);
     expect(seesJob(person('view_only', { sees: 'all' }), 'other', team)).toBe(true);
+  });
+});
+
+describe('Plans', () => {
+  const now = new Date('2026-11-09T12:00:00.000Z');
+
+  it('says where a company stands: free, paid, in its trial with the days left, or over', () => {
+    expect(planState({}, now)).toEqual({ kind: 'free' });
+    expect(planState({ plan: 'free' }, now)).toEqual({ kind: 'free' });
+    expect(planState({ plan: 'paid', trialEnds: '2026-01-01T00:00:00.000Z' }, now)).toEqual({ kind: 'paid' });
+    expect(planState({ plan: 'trial', trialEnds: '2026-11-21T12:00:00.000Z' }, now)).toEqual({ kind: 'trial', daysLeft: 12, ends: '2026-11-21T12:00:00.000Z' });
+    expect(planState({ plan: 'trial', trialEnds: '2026-11-09T18:00:00.000Z' }, now)).toMatchObject({ kind: 'trial', daysLeft: 1 });
+    expect(planState({ plan: 'trial', trialEnds: '2026-11-09T11:59:00.000Z' }, now)).toEqual({ kind: 'ended' });
+    // A trial with no end said has not ended.
+    expect(planState({ plan: 'trial', trialEnds: null }, now).kind).toBe('trial');
+  });
+
+  it('words it for Me, and says nothing for a free company', () => {
+    expect(planText({ kind: 'trial', daysLeft: 12, ends: '' })).toBe('Free Trial, 12 days left');
+    expect(planText({ kind: 'trial', daysLeft: 1, ends: '' })).toBe('Free Trial, last day');
+    expect(planText({ kind: 'ended' })).toBe('Free Trial Ended');
+    expect(planText({ kind: 'paid' })).toBe('Paid');
+    expect(planText({ kind: 'free' })).toBe('');
   });
 });

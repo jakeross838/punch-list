@@ -189,6 +189,10 @@ async function main(): Promise<void> {
             const done = (input.match(/^Finished today \\((\\d+)\\):/m) || [])[1] || '0';
             return { note: 'Work Completed\\n' + done + ' items were finished today, around the house.\\n\\nIssues Found\\nNew items were added in the kitchen.\\n\\nNotes\\nNone.' };
           }
+          // Ask Claude how: from the app's own help.
+          if (/asked how to do something in it/.test(input)) {
+            return { answer: 'In Me, open People and tap Add Person with their name and email. They sign in with that email.', topics: ['people', 'not-a-topic'] };
+          }
           // Standard wording: a switch cover is the switch plate.
           if (/list of standard titles/.test(input)) {
             const typed = (input.match(/They typed: "(.*)"/) || [])[1] || '';
@@ -218,9 +222,9 @@ async function main(): Promise<void> {
   const shot = async (name: string) => tab.screenshot({ path: join(shots, `${name}.png`) });
   const steps: string[] = [];
   // E2E_ONLY=new walks only the steps for what is new, on fresh sample data: a quick check.
-  // E2E_ONLY=latest walks only the last round's steps (Round 4: finding things, and being told).
+  // E2E_ONLY=latest walks only the last round's steps (Round 5: ready for any builder).
   const only = process.env.E2E_ONLY;
-  const LATEST = /^New: (Search Everything on Jobs|Star an item|Today:|End of Day Note|Updates:|a view saved with a name|Ask Claude in View)/;
+  const LATEST = /^New: (Roles:|the free trial|Help:|the builder's logo|Export Everything|Continue with Apple|someone new signs up)/;
   const step = async (name: string, fn: () => Promise<void>) => {
     if (only === 'new' && !name.startsWith('New: ') && name !== 'jobs list opens') return;
     if (only === 'latest' && !LATEST.test(name) && name !== 'jobs list opens') return;
@@ -2676,6 +2680,232 @@ async function main(): Promise<void> {
       await app.getByTestId('filter-bar').first().waitFor({ state: 'detached' });
       await settle(300);
     });
+    /** Whether anything with this test name can be seen. */
+    const showing = async (testId: string) => (await app.getByTestId(testId).filter({ visible: true }).count()) > 0;
+    /** Me, from wherever the step before ended. */
+    const toMe = async () => {
+      await toJobs();
+      await app.getByTestId('account').filter({ visible: true }).last().click();
+      await app.getByTestId('people').waitFor();
+      await settle(400);
+    };
+    await step('New: Roles: View Only looks and comments, and a project manager sets up jobs but does not delete them', async () => {
+      await toMe();
+      // As Jake, the admin: the steps before may have signed in as someone else.
+      await app.getByTestId('preview-as-person-jake').click();
+      await app.getByText('Admin · Ross Built', { exact: true }).waitFor();
+      await settle(300);
+      await app.getByTestId('people').click();
+      await app.getByTestId('person-person-taylor').click();
+      await app.getByTestId('role-view_only').waitFor();
+      await settle(400);
+      await app.getByTestId('role-view_only').click();
+      await app.getByText('Saved', { exact: false }).first().waitFor({ timeout: 3000 }).catch(() => undefined);
+      await settle(500);
+      await shot('89-role-view-only');
+      await seen('back').click();
+      // People groups everyone by role.
+      await app.getByText('View Only', { exact: true }).first().waitFor();
+      await app.getByTestId('person-person-taylor').getByText(/^View Only · Sees every job$/).waitFor();
+      await app.getByTestId('person-person-taylor').click();
+      await app.getByTestId('person-preview-as').click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await settle(600);
+      // As View Only: no New Job, and Jobs alone at the bottom.
+      if (await showing('new-job')) throw new Error('View Only can make a job');
+      if ((await showing('camera')) || (await showing('tab-send'))) throw new Error('View Only has Capture or Send');
+      await shot('90-view-only-jobs');
+      await app.getByTestId('job-job-preview').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+      if (await showing('new-item')) throw new Error('View Only can add an item');
+      await app.getByTestId('group-room-1').click();
+      await app.getByTestId('item-item-16').waitFor();
+      await settle();
+      if ((await showing('new-item-row')) || (await showing('select'))) throw new Error('View Only can add or pick items');
+      await app.getByTestId('item-item-16').click();
+      await app.getByTestId('item-summary').waitFor();
+      await settle();
+      if ((await showing('mark-complete')) || (await showing('mark-up'))) throw new Error('View Only can complete an item or mark up its photo');
+      // Comments still go.
+      await app.getByTestId('item-comments-row').click();
+      await app.getByTestId('item-comments-input').fill('Looks good from the office.');
+      await app.getByTestId('item-comments-post').click();
+      await app.getByTestId('item-comments').getByText('Looks good from the office.').waitFor();
+      await settle(500);
+      await shot('91-view-only-item');
+      await seen('back').click();
+      await settle(400);
+      await seen('back').click();
+      await settle(400);
+      await seen('back').click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await settle(400);
+      // Back as Jake, Taylor becomes a project manager: every job, made and set up, never deleted.
+      await toMe();
+      await app.getByTestId('preview-as-person-jake').click();
+      await app.getByText('Admin · Ross Built', { exact: true }).waitFor();
+      await app.getByTestId('people').click();
+      await app.getByTestId('person-person-taylor').click();
+      await app.getByTestId('role-project_manager').waitFor();
+      await settle(400);
+      await app.getByTestId('role-project_manager').click();
+      await app.getByText('Project managers see every job.').waitFor();
+      await settle(400);
+      await shot('92-role-project-manager');
+      await app.getByTestId('person-preview-as').click();
+      await app.getByTestId('new-job').waitFor();
+      // Held down: Edit and Close, and no Delete.
+      await app.getByTestId('job-job-preview').click({ delay: 700 });
+      await app.getByRole('dialog').getByRole('button', { name: 'Close the Job' }).waitFor();
+      if ((await app.getByRole('dialog').getByRole('button', { name: 'Delete the Job' }).count()) !== 0) throw new Error('A project manager can delete a job');
+      await settle(400);
+      await shot('93-project-manager-job');
+      await app.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+      await settle(400);
+      await app.getByTestId('job-job-preview').click();
+      await app.getByTestId('group-room-1').waitFor();
+      await settle();
+      await menu('job-setup');
+      await app.getByTestId('setup-tabs').waitFor();
+      if ((await app.getByText('Only an admin or a project manager changes this.').count()) !== 0) throw new Error('A project manager cannot change the setup');
+      await settle(400);
+      await seen('back').click();
+      await settle(400);
+      await seen('back').click();
+      await app.getByTestId('job-job-preview').waitFor();
+      // Back as Jake, and Taylor a superintendent again.
+      await toMe();
+      await app.getByTestId('preview-as-person-jake').click();
+      await app.getByText('Admin · Ross Built', { exact: true }).waitFor();
+      await app.getByTestId('people').click();
+      await app.getByTestId('person-person-taylor').click();
+      await app.getByTestId('role-team').waitFor();
+      await settle(300);
+      await app.getByTestId('role-team').click();
+      await settle(400);
+      await seen('back').click();
+      await app.getByTestId('person-person-taylor').getByText(/^Superintendent · Sees every job$/).waitFor();
+      await seen('back').click();
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await settle(400);
+    });
+    await step('New: the free trial: Me says the days left, and once it is over everyone looks and comments', async () => {
+      await toMe();
+      await app.getByTestId('plan').getByText(/^Free Trial, 2[34] days left$/).waitFor();
+      await app.getByText(/^The free trial ends on [A-Z][a-z]+ \d+\. Then your company needs a plan/).waitFor();
+      await app.getByTestId('preview-trial-over').click();
+      await app.getByTestId('plan').getByText('Free Trial Ended').waitFor();
+      await settle(400);
+      await shot('94-trial-over-me');
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('trial-ended').getByText(/free trial has ended/).waitFor();
+      if ((await showing('new-job')) || (await showing('camera'))) throw new Error('A company whose trial is over can still add');
+      await settle(400);
+      await shot('95-trial-over-jobs');
+      await toMe();
+      await app.getByTestId('preview-trial-over').click();
+      await app.getByTestId('plan').getByText(/^Free Trial, \d+ days left$/).waitFor();
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('new-job').waitFor();
+      await settle(400);
+    });
+    await step('New: Help: the common questions, searched, and Ask Claude how; the Privacy Policy and Terms of Use', async () => {
+      await toMe();
+      await app.getByTestId('privacy-policy').waitFor();
+      await app.getByTestId('terms-of-use').waitFor();
+      await app.getByTestId('help').click();
+      await app.getByTestId('help-people').waitFor();
+      await app.getByTestId('help-people').click();
+      await app.getByTestId('help-answer-people').getByText(/^In Me, open People and tap Add Person/).waitFor();
+      await settle(400);
+      await shot('96-help');
+      await app.getByPlaceholder('Search the help').fill('free trial');
+      await app.getByTestId('help-plan').waitFor();
+      if (await showing('help-walk')) throw new Error('Searching the help did not narrow it');
+      await app.getByPlaceholder('Search the help').fill('');
+      await app.getByTestId('help-ask').fill('How do I add someone to my company?');
+      await app.getByTestId('help-ask-go').click();
+      await app.getByTestId('help-claude-answer').getByText(/^In Me, open People and tap Add Person/).waitFor();
+      await settle(500);
+      await shot('97-help-ask');
+      await seen('back').click();
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await settle(400);
+    });
+    await step("New: the builder's logo: picked in Me, then at the top of every printed list", async () => {
+      await toMe();
+      {
+        const chooser = tab.waitForEvent('filechooser');
+        await app.getByTestId('logo').click();
+        await (await chooser).setFiles(photoPath);
+      }
+      await app.getByTestId('logo-picture').waitFor();
+      await settle(500);
+      await shot('98-logo');
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await app.getByTestId('tab-send').last().click();
+      await app.getByTestId('send-company-4').click();
+      const doc = app.getByTestId('doc-preview');
+      await doc.locator('img.rb-logo').waitFor();
+      if ((await doc.getByText('ROSS BUILT', { exact: true }).count()) !== 0) throw new Error('The list shows the name where the logo goes');
+      await settle(600);
+      await shot('99-logo-on-list');
+      await app.getByTestId('preview-done').click();
+      await settle(400);
+      // Taken away again: the name is back.
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await toMe();
+      await app.getByTestId('logo').click();
+      await app.getByRole('dialog').getByRole('button', { name: 'Take Away the Logo' }).click();
+      await app.getByTestId('logo').getByText('None', { exact: true }).waitFor();
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await settle(400);
+    });
+    await step('New: Export Everything: every job, item, comment and photo in one download', async () => {
+      await toMe();
+      await app.getByTestId('export-everything').click();
+      await app.getByRole('dialog').getByText(/^Every job, item, comment and photo at Ross Built goes into one file/).waitFor();
+      await app.getByRole('dialog').getByRole('button', { name: 'Export Everything' }).click();
+      const saved = app.locator('body');
+      let file: { filename: string; data: string } | undefined;
+      for (let i = 0; i < 60 && !file?.filename.endsWith('.zip'); i += 1) {
+        file = await saved.evaluate(() => (window as unknown as { __saved?: { filename: string; data: string } }).__saved);
+        if (!file?.filename.endsWith('.zip')) await settle(250);
+      }
+      if (!file || !/^Ross Built Export \d{4}-\d{2}-\d{2}[.]zip$/.test(file.filename)) throw new Error(`Everything was not handed over to save: ${file?.filename ?? 'nothing'}`);
+      await settle(400);
+      await shot('100-export-everything');
+      await app.getByTestId('tab-jobs').last().click();
+      await app.getByTestId('job-job-preview').waitFor();
+      await settle(400);
+    });
+    await step('New: Continue with Apple: someone new names their company, with the name Apple gave', async () => {
+      if ((await app.getByTestId('sign-in-email').count()) === 0) {
+        await toMe();
+        await app.getByTestId('sign-out').click();
+        await app.getByRole('dialog').getByRole('button', { name: 'Sign Out' }).click();
+      }
+      await app.getByTestId('sign-in-email').waitFor();
+      await app.getByTestId('sign-in-google').waitFor();
+      await settle(400);
+      await shot('101-sign-in-ways');
+      await app.getByTestId('sign-in-apple').click();
+      await app.getByTestId('sign-up-company').waitFor();
+      if ((await app.getByTestId('sign-up-name').inputValue()) !== 'Alex Morgan') throw new Error('The name Apple gave is not filled in');
+      await app.getByText('preview.person@privaterelay.appleid.com', { exact: false }).first().waitFor();
+      await settle(400);
+      await shot('102-apple-new-company');
+      await app.getByTestId('sign-up-other').click();
+      await app.getByTestId('sign-in-email').waitFor();
+      await settle(400);
+    });
     await step('New: someone new signs up, walks their first job right away, manages it, and deletes their account', async () => {
       // Signed out after the steps before; signed in on a quick run.
       if ((await app.getByTestId('sign-in-email').count()) === 0) {
@@ -2700,8 +2930,10 @@ async function main(): Promise<void> {
       await app.getByTestId('sign-up-company').fill('Gulf Coast  Homes');
       await app.getByTestId('sign-up-name').fill('Pat Lee');
       await app.getByTestId('sign-up-start').click();
-      // In, as the admin of an empty company: the first job is one tap away.
+      // In, as the admin of an empty company: the first job is one tap away, and Get Started says what is next.
       await app.getByTestId('empty-new-job').waitFor();
+      await app.getByTestId('get-started').waitFor();
+      await app.getByTestId('get-started-job').waitFor();
       if ((await app.getByTestId('job-job-preview').count()) !== 0) throw new Error('A new company sees the sample jobs');
       await settle(600);
       await shot('86-new-company');

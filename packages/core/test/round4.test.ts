@@ -235,4 +235,26 @@ describe("the app's hooks", () => {
     expect(files.length).toBeGreaterThan(50);
     expect(found).toEqual([]);
   });
+
+  // A hook to the right of ||, && or ?? is skipped whenever the left side decides, and the screen's
+  // hooks change between renders (the tab bar did, for View Only): each hook is read on its own line.
+  it('never skips a hook behind ||, && or ??', () => {
+    const src = join(__dirname, '../../../apps/mobile/src');
+    const found: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/\.tsx?$/.test(name)) {
+          readFileSync(path, 'utf8')
+            .split('\n')
+            .forEach((line, i) => {
+              if (!/^\s*(\/\/|\*|\/\*)/.test(line) && /(\|\||&&|\?\?)[^;]*\buse[A-Z]\w*\(/.test(line)) found.push(`${path.slice(src.length + 1)}:${i + 1}`);
+            });
+        }
+      }
+    };
+    walk(src);
+    expect(found).toEqual([]);
+  });
 });

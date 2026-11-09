@@ -12,17 +12,16 @@ import {
   canChange,
   canSetUpJobs,
   companyNameProblem,
-  isLogo,
   contactProblem,
   inWalkOrder,
-  viewName,
-  withNamedView,
   isAdmin,
   isEmail,
+  isLogo,
+  mergedWaits,
   moveToLevel,
   parseRoomList,
+  planState,
   readingOrder,
-  mergedWaits,
   releasedBy,
   renamedHoldups,
   seesJob,
@@ -32,6 +31,9 @@ import {
   tidyEmail,
   tidyName,
   tidyTitle,
+  TRIAL_ENDED,
+  viewName,
+  withNamedView,
   type Activity,
   type ActivityDetail,
   type ActivityKind,
@@ -95,6 +97,7 @@ export type Extras = Pick<DataApi, 'sendSignInCode' | 'verifySignInCode' | 'sign
       | 'companyAskVisit'
       | 'companyMarkDone'
       | 'previewAs'
+      | 'previewTrialOver'
       | 'emailReady'
       | 'emailList'
       | 'emailInvite'
@@ -182,7 +185,7 @@ function setupOnly(state: State): void {
 /** Admins and project managers see every job, as the database keeps it. */
 const everyJobFor = (person: Person): Person => (person.role === 'admin' || person.role === 'project_manager' ? { ...person, sees: 'all' } : person);
 
-/** What View Only changes: their comments, and how they look at a job. */
+/** What View Only changes, and everyone once a free trial is over: their comments, and how they look at a job. */
 const VIEW_ONLY_CHANGES = new Set<keyof State>(['comments', 'viewSettings']);
 
 /**
@@ -254,10 +257,13 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
   const owners = new Map<string, { token: string; name: string | null; openedAt: string | null }>();
   /** Saves a change; View Only changes nothing but their comments and their own view, as on the server. */
   const save = (next: Partial<State>, happened: Happened[] = []) => {
-    const me = get().me;
-    if (me && !canChange(me) && me.active && Object.keys(next).some((k) => !VIEW_ONLY_CHANGES.has(k as keyof State))) {
+    const { me, org } = get();
+    const changes = Object.keys(next).some((k) => !VIEW_ONLY_CHANGES.has(k as keyof State));
+    if (me && !canChange(me) && me.active && changes) {
       return Promise.reject(new Error('View Only can look and comment, not change anything.'));
     }
+    // Once a free trial is over, the company looks and comments, as View Only does, until a plan starts.
+    if (changes && planState(org).kind === 'ended') return Promise.reject(new Error(TRIAL_ENDED));
     return keeper.save(next, happened);
   };
   const useStore = (): State => useSyncExternalStore(keeper.subscribe, get, get);
@@ -590,6 +596,7 @@ export function makeApi(keeper: Keeper, extras: Extras): DataApi {
       await save({ templateItems: state.templateItems.map((t) => (t.id === id ? { ...t, ...patch, title, waitsOn } : t)) });
     },
     previewAs: extras.previewAs,
+    previewTrialOver: extras.previewTrialOver,
     async addLocations(jobId, parsed) {
       const state = get();
       setupOnly(state);

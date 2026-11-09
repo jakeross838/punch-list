@@ -112,6 +112,7 @@
       }
     },
     "android": {
+      "package": "com.rossbuilt.punchlist",
       "adaptiveIcon": {
         "backgroundColor": "#1A2830",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

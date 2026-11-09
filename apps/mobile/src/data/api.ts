@@ -41,6 +41,7 @@ import type {
   ViewSettings,
   Visit,
 } from '@punch/core';
+import { canChange, planState } from '@punch/core';
 
 export interface NewItem extends ItemFields {
   jobId: string;
@@ -285,6 +286,8 @@ export interface DataApi {
   updateTemplateItem(id: string, patch: Partial<TemplateItemInput & Pick<TemplateItem, 'active' | 'sortOrder'>>): Promise<void>;
   /** Preview only: see the app the way someone else does. */
   previewAs?(personId: string): void;
+  /** The preview only: the free trial over, or back on, to see what happens. */
+  previewTrialOver?(over: boolean): void;
   /**
    * Adds locations after the job's existing ones, keeping floor order; one removed before comes
    * back where it was. Returns how many were added.
@@ -433,4 +436,16 @@ export function useData(): DataApi {
   const api = useContext(DataContext);
   if (!api) throw new Error('useData needs the DataProvider from the root layout');
   return api;
+}
+
+/**
+ * Whether whoever is signed in only looks: View Only, or everyone at a company whose free trial is
+ * over. The screens leave out what would change things; the data layer turns it down anyway.
+ */
+export function useLooksOnly(): boolean {
+  const data = useData();
+  // Both read every time: a hook skipped by || would break the order of the hooks.
+  const me = data.useMe();
+  const org = data.useOrg();
+  return !canChange(me) || planState(org).kind === 'ended';
 }

@@ -24,7 +24,14 @@ export interface Org {
   name: string;
   /** The builder's logo, a small PNG or JPEG as a data URL: on the printed lists and the pages. */
   logo?: string | null;
+  /** On a free trial, on a plan, or free; none said is free. */
+  plan?: Plan;
+  /** When a free trial ends, as an ISO time. */
+  trialEnds?: string | null;
 }
+
+/** A company's plan: a free trial to start, then paid for outside the app, or free (Ross Built). */
+export type Plan = 'trial' | 'paid' | 'free';
 
 export interface Person {
   id: string;

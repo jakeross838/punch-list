@@ -6,7 +6,7 @@
 // waits until every change has gone up. Delete My Account takes your sign in away for good, and the
 // last one at a company takes the whole company with them.
 
-import { COMPANY_NAME_MAX, companyNameProblem, exportEntries, isAdmin, PART_LABELS, ROLE_HINTS, ROLE_LABELS, SEES_LABELS } from '@punch/core';
+import { COMPANY_NAME_MAX, companyNameProblem, exportEntries, isAdmin, PART_LABELS, planState, planText, ROLE_HINTS, ROLE_LABELS, SEES_LABELS, seesEveryJob } from '@punch/core';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -20,7 +20,7 @@ import { pickLogo } from '@/components/pickLogo';
 import { exportZip } from '@/export/everything';
 import { useData } from '@/data/api';
 import { sitePageUrl } from '@/data/links';
-import { SheetScroll, haptic, ListRow, ListSection, ListTextField, Page, Sheet, Text, todayIso, useFeedback } from '@/ui';
+import { dayOf, SheetScroll, haptic, ListRow, ListSection, ListSwitchRow, ListTextField, Page, Sheet, Text, todayIso, useFeedback } from '@/ui';
 import { useClaudeAllowance } from '@/ai/claude';
 
 /** Cents as dollars and cents, like $1.84. */
@@ -50,6 +50,7 @@ export default function AccountScreen() {
   // Signing out: the screen goes as the sign in comes up.
   if (!me) return <Page title="Me" tab={{}} />;
   const admin = isAdmin(me);
+  const plan = planState(org);
   const version = Constants.expoConfig?.version;
   const company = org.name || 'Your Company';
   const others = people.filter((p) => p.active && p.id !== me.id);
@@ -218,6 +219,18 @@ export default function AccountScreen() {
           />
         ) : null}
       </ListSection>
+      {admin && (plan.kind === 'trial' || plan.kind === 'ended') ? (
+        <ListSection
+          header="Plan"
+          footer={
+            plan.kind === 'ended'
+              ? 'Everything is still here to look at, comment on and download. Nothing else changes until a plan starts.'
+              : `The free trial ends on ${dayOf(plan.ends)}. Then your company needs a plan to keep adding and sending.`
+          }
+        >
+          <ListRow title={planText(plan)} icon="calendar" testID="plan" />
+        </ListSection>
+      ) : null}
       {admin && allowance ? (
         <ListSection header="Claude" footer="Claude's cost for your company this month. It starts over on the first.">
           <ListRow title="This Month" value={`${dollars(allowance.usedCents)} of ${dollars(allowance.limitCents)}`} testID="claude-allowance" />
@@ -227,7 +240,7 @@ export default function AccountScreen() {
         <ListRow title="Email" value={me.email} testID="account-email" />
         <ListRow title="Phone" value={me.phone ?? 'None'} />
         <ListRow title="Role" subtitle={ROLE_HINTS[me.role]} value={ROLE_LABELS[me.role]} testID="account-role" />
-        <ListRow title="Sees" value={me.role === 'admin' ? SEES_LABELS.all : SEES_LABELS[me.sees]} />
+        <ListRow title="Sees" value={seesEveryJob(me) ? SEES_LABELS.all : SEES_LABELS[me.sees]} />
         {admin ? (
           <ListRow title="Edit in People" tone="tint" onPress={() => router.push({ pathname: '/settings/people/[personId]', params: { personId: me.id } })} testID="account-edit" />
         ) : null}
@@ -266,6 +279,11 @@ export default function AccountScreen() {
             <ListRow key={r.id} title={r.what} subtitle={formatWhen(r.at)} />
           ))}
           {sync.refused.length > 0 ? <ListRow title="Clear This List" tone="tint" onPress={() => void data.clearRefused()} testID="account-clear-refused" /> : null}
+        </ListSection>
+      ) : null}
+      {data.mode === 'preview' && data.previewTrialOver ? (
+        <ListSection header="Preview the Plan" footer="The free trial over, to check what a company sees then.">
+          <ListSwitchRow title="Free Trial Over" value={plan.kind === 'ended'} onValueChange={(over) => data.previewTrialOver?.(over)} testID="preview-trial-over" />
         </ListSection>
       ) : null}
       {data.mode === 'preview' && data.previewAs ? (

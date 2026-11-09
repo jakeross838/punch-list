@@ -4,7 +4,7 @@
 import { column, Schema, Table } from '@powersync/react-native';
 
 /** The signed-in person's company: only its own row comes down. */
-const orgs = new Table({ name: column.text, logo: column.text, created_at: column.text });
+const orgs = new Table({ name: column.text, logo: column.text, plan: column.text, trial_ends: column.text, created_at: column.text });
 
 const people = new Table({
   org: column.text,

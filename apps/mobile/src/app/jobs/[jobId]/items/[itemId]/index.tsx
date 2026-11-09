@@ -11,7 +11,6 @@
 // copies it.
 
 import {
-  canChange,
   checkItem,
   commentAuthor,
   complete,
@@ -49,7 +48,7 @@ import type { Picture } from '@/components/cropPicture';
 import { useFillIn } from '@/components/useFillIn';
 import { useRelease } from '@/components/useItemActions';
 import { colors, layout } from '@/constants/theme';
-import { useData } from '@/data/api';
+import { useData, useLooksOnly } from '@/data/api';
 import { capture } from '@/data/capture';
 import { clipboard } from '@/data/clipboard';
 import { noteOpened, setStar, useStarred } from '@/data/stars';
@@ -179,7 +178,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
   const { width: screenWidth } = useWindowDimensions();
   const me = data.useMe();
   // View Only looks and comments: the item as it is, with its comments open to them.
-  const looks = !canChange(me);
+  const looks = useLooksOnly();
   const items = data.useItems(jobId);
   const trades = data.useTrades();
   const photos = data.usePhotos(jobId).filter((p) => p.itemId === item.id);

@@ -2572,4 +2572,89 @@ begin
   end if;
 end $$;
 
+-- ---------- Round 5: plans ----------
+-- The companies already using the app are free; a new one starts a 30 day trial. Once it ends with
+-- no plan, the company looks, comments and downloads, and changes nothing else until a plan starts.
+reset role;
+do $$
+begin
+  if (select plan from public.orgs where id = 'ross_built') <> 'free' then raise exception 'FAIL: Ross Built is not free'; end if;
+  insert into auth.users (id, email) values ('33333333-3333-4333-8333-333333333333', 'lee@harbor.example');
+end $$;
+set role authenticated;
+set request.jwt.claims = '{"email":"lee@harbor.example","sub":"33333333-3333-4333-8333-333333333333"}';
+do $$
+declare
+  mine text := public.start_company('Harbor Homes', 'Lee Park');
+begin
+  perform set_config('test.harbor', mine, false);
+  if (select plan from public.orgs where id = mine) <> 'trial' or (select trial_ends from public.orgs where id = mine) not between now() + interval '29 days' and now() + interval '31 days' then
+    raise exception 'FAIL: a new company does not start a 30 day trial';
+  end if;
+  if not public.org_can_change() then raise exception 'FAIL: a company in its trial cannot change things'; end if;
+  insert into public.jobs (name, address) values ('Harbor House', '3 Dock Street');
+  insert into public.locations (job_id, name, number, label, kind, sort_order) values ((select id from public.jobs where name = 'Harbor House'), 'Kitchen', '101', 'Kitchen 101', 'room', 1);
+  insert into public.items (job_id, location_id, title, ready, assigned_to) values ((select id from public.jobs where name = 'Harbor House'), (select id from public.locations where label = 'Kitchen 101' and org = mine), 'Hang the door', true, (select id from public.people where email = 'lee@harbor.example'));
+  begin
+    update public.orgs set plan = 'paid' where id = mine;
+    raise exception 'FAIL: an admin started a plan from the app';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.orgs set trial_ends = now() + interval '1 year' where id = mine;
+    raise exception 'FAIL: an admin made the trial longer';
+  exception when insufficient_privilege then null;
+  end;
+  -- The name still changes.
+  update public.orgs set name = 'Harbor Homes Group' where id = mine;
+end $$;
+reset role;
+-- As Jake on the server, signed in as nobody.
+set request.jwt.claims = '{}';
+update public.orgs set trial_ends = now() - interval '1 day' where id = current_setting('test.harbor');
+set role authenticated;
+set request.jwt.claims = '{"email":"lee@harbor.example","sub":"33333333-3333-4333-8333-333333333333"}';
+do $$
+declare
+  j uuid := (select id from public.jobs where name = 'Harbor House');
+begin
+  if public.org_can_change() then raise exception 'FAIL: a company whose trial ended can still change things'; end if;
+  if not exists (select 1 from public.jobs where id = j) then raise exception 'FAIL: a company whose trial ended cannot see its jobs'; end if;
+  begin
+    insert into public.jobs (name, address) values ('Another House', '4 Dock Street');
+    raise exception 'FAIL: a company whose trial ended made a job';
+  exception when insufficient_privilege then
+    if sqlerrm not like '%free trial has ended%' then raise exception 'FAIL: the end of the trial is not said: %', sqlerrm; end if;
+  end;
+  begin
+    update public.jobs set name = 'Renamed' where id = j;
+    raise exception 'FAIL: a company whose trial ended renamed a job';
+  exception when insufficient_privilege then null;
+  end;
+  -- Comments and each person's own view still go.
+  insert into public.comments (job_id, item_id, body) values (j, (select id from public.items where job_id = j), 'Still looking');
+  begin
+    update public.items set title = 'Hang the front door' where job_id = j;
+    raise exception 'FAIL: a company whose trial ended changed an item';
+  exception when insufficient_privilege then null;
+  end;
+  insert into public.person_settings (person_id, job_view) values ((select id from public.people where email = 'lee@harbor.example'), '{}'::jsonb) on conflict do nothing;
+end $$;
+reset role;
+set request.jwt.claims = '{}';
+update public.orgs set plan = 'paid' where id = current_setting('test.harbor');
+set role authenticated;
+set request.jwt.claims = '{"email":"lee@harbor.example","sub":"33333333-3333-4333-8333-333333333333"}';
+do $$
+begin
+  insert into public.jobs (name, address) values ('Another House', '4 Dock Street');
+  -- Leaving still works, and takes the company with it.
+  perform public.delete_my_account();
+end $$;
+reset role;
+do $$
+begin
+  if exists (select 1 from public.orgs where id = current_setting('test.harbor')) then raise exception 'FAIL: the company whose trial ended is still there'; end if;
+end $$;
+
 select 'All database checks passed' as result;

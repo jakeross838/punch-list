@@ -592,7 +592,8 @@ export function sampleState(): SampleState {
     signedIn: true,
     codeFor: null,
     newAccount: null,
-    org: { id: 'ross_built', name: 'Ross Built' },
+    // On a free trial, to show it: three weeks and a few days left.
+    org: { id: 'ross_built', name: 'Ross Built', plan: 'trial', trialEnds: new Date(Date.now() + 24 * 86_400_000).toISOString() },
     people: [me, sam, taylor],
     activity,
     jobs: [job, bay, palm],

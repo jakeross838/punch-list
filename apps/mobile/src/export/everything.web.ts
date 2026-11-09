@@ -11,6 +11,29 @@ export interface ExportDone {
   missed: number;
 }
 
+/** The kinds of picture a photo can be, by their extension in the zip. */
+const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/svg+xml': 'svg', 'image/webp': 'webp', 'image/heic': 'heic' };
+
+/**
+ * A photo's bytes, and its kind when it says. A photo kept in the page itself (data:) is read
+ * straight from its address: the page may not fetch it.
+ */
+async function photoBytes(uri: string): Promise<{ bytes: Uint8Array; type: string | null }> {
+  const data = /^data:([^;,]*)((?:;[^;,]*)*),(.*)$/s.exec(uri);
+  if (data) {
+    const [, type, params, payload] = data;
+    if (/;base64/i.test(params ?? '')) {
+      const text = atob(payload ?? '');
+      const bytes = new Uint8Array(text.length);
+      for (let i = 0; i < text.length; i += 1) bytes[i] = text.charCodeAt(i);
+      return { bytes, type: type || null };
+    }
+    return { bytes: strToU8(decodeURIComponent(payload ?? '')), type: type || null };
+  }
+  const answer = await fetch(uri);
+  return { bytes: new Uint8Array(await answer.arrayBuffer()), type: answer.headers.get('content-type') };
+}
+
 async function hostDownloads(): Promise<Downloads | null> {
   const host = (globalThis as { claude?: Host }).claude;
   if (!host?.use) return null;
@@ -37,8 +60,10 @@ export async function exportZip(fileName: string, entries: ExportEntry[], onProg
       f.push(strToU8(e.text), true);
     } else if (e.photo) {
       try {
-        const bytes = new Uint8Array(await (await fetch(e.photo.uri)).arrayBuffer());
-        const f = new ZipPassThrough(e.path);
+        const { bytes, type } = await photoBytes(e.photo.uri);
+        // Named for what it is: a drawn sample photo is a picture made of lines, not a JPEG.
+        const extension = type ? EXTENSIONS[type.split(';')[0]!.trim().toLowerCase()] : undefined;
+        const f = new ZipPassThrough(extension ? e.path.replace(/\.[a-z]+$/i, `.${extension}`) : e.path);
         zip.add(f);
         f.push(bytes, true);
       } catch {

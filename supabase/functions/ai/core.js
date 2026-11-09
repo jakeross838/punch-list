@@ -176,6 +176,12 @@ var HELP = [
     answer: "Yes, with Continue with Apple or Continue with Google on Sign In, once your company has them. Your company knows you by your email, so use the one your admin added under People. If Apple hides your email, ask your admin to add the address Apple gives instead; it shows on Start Your Company."
   },
   {
+    id: "plan",
+    topic: "Your Company",
+    question: "What happens when the free trial ends?",
+    answer: "Everything stays: every job, item, photo and comment is still there to look at, comment on and download with Export Everything. Nothing new is added or sent until your company has a plan. An admin sees how many days are left in Me, under Plan."
+  },
+  {
     id: "templates",
     topic: "Your Company",
     question: "What are templates?",
