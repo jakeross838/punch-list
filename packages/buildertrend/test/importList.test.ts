@@ -118,6 +118,13 @@ describe('import of the Fish list from the stand-in', () => {
       kind: 'completion',
       status: 'open',
       completedAt: null,
+      hours: null,
+      priority: false,
+      markedDoneAt: null,
+      addedAt: null,
+      actionItem: false,
+      assignedTo: [],
+      due: null,
     });
   });
 
@@ -129,7 +136,7 @@ describe('import of the Fish list from the stand-in', () => {
       '1 item is not in a room in Buildertrend and was left out: Clean windows.',
       '1 item has no company assigned; each item needs one.',
       '1 item has no trade tag; each item needs one.',
-      '1 open item is not ready but says nothing in Waiting On; say what it is waiting on, or mark it ready.',
+      '1 open item is not ready but says nothing in Waiting On; it came in waiting on Not Said. Say what it is waiting on, or mark it ready.',
       '3 items came in as Incomplete, since Buildertrend does not say which are deficiencies; change any that are.',
       '1 complete item has no completion date from Buildertrend; the app will date it the day it is loaded.',
     ]);

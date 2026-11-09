@@ -145,3 +145,43 @@ A company sends at most 300 emails a day from the app (`EMAILS_A_DAY` changes it
 ## The speed check (Round 5)
 
 `npm run preview:build && PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers npm run test:speed` opens the preview page with a big job added (`apps/mobile/src/data/sampleBig.ts`: a thousand items, three thousand photos, fifteen hundred comments), with the processor four times slower, and fails when any of the day's steps takes longer than its budget.
+
+## Fish from Buildertrend (9 November 2026)
+
+A one-time, read-only import of a job's Completion List out of Buildertrend, so the job does not start empty in the app. Nothing is ever written to Buildertrend, and none of a job's own data is in this repository: the read, the hints and the list stay in `local/`.
+
+**How the read gets out.** No pasted session. Jake's Chrome is signed in to Buildertrend, and a few lines run in a Buildertrend tab do the three reads `readForImport` does (the task field definitions, the tags, and `POST /apix/v2/Tasks/list` for the job), plus each company's record (`GET /api/Subs/<id>`) for its people. The page can hand only about 1,400 characters back at a time, so nothing comes back that way. Instead the page sends what it read to a temporary holding table in the app's own database, and says only the SHA-256 of what it sent:
+
+```js
+// In a tab on buildertrend.net. Reads only. <URL> and <KEY> are the app's Supabase address and publishable key.
+const H = { accept: 'application/json, text/plain, */*', portaltype: '1' };
+const get = (p) => fetch(p, { credentials: 'include', headers: H }).then((r) => r.json());
+const list = await fetch('/apix/v2/Tasks/list', { method: 'POST', credentials: 'include', headers: { ...H, 'content-type': 'application/merge-patch+json' }, body: JSON.stringify({ jobIds: [JOB] }) }).then((r) => r.json());
+// Every task carries every tag on the account, each with a selected flag: keep a task's own.
+const tasks = list.tasks.map((t) => ({ ...t, tags: (t.tags ?? []).filter((x) => x.selected === true) }));
+const bytes = new TextEncoder().encode(JSON.stringify({ readAt: new Date().toISOString(), jobId: JOB, definitions: await get('/apix/v2/CustomFields/15/definitions'), tags: await get('/apix/v2/Tasks/tags'), list: { ...list, tasks, watchers: undefined } }));
+const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+let binary = ''; for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
+const b64 = btoa(binary);
+for (let part = 0; part * 1e6 < b64.length; part++) await fetch('<URL>/rest/v1/rpc/import_mailbox_put_raw', { method: 'POST', headers: { apikey: '<KEY>', Authorization: 'Bearer <KEY>', 'content-type': 'application/json' }, body: JSON.stringify({ part, body: b64.slice(part * 1e6, (part + 1) * 1e6) }) });
+sha256;
+```
+
+Fish's list was 38 megabytes as Buildertrend sends it and 2.5 with each task's own tags only.
+
+**The mailbox.** `tools/import-mailbox.sql` makes the holding table and three functions: the page may only add a part (it is told no key), and the workspace reads a part and puts the finished list back with a key kept in `local/secrets/import.key`, of which the database knows only the hash. It is run by hand on the live project with Jake's OK, never as a migration, is not in the sync, and is removed as soon as the list is loaded. `node tools/import-mailbox.mjs get raw 0 local/fish-raw.json <sha256>` brings the read into the workspace and refuses it when the hash is not the one the page said.
+
+**The import.** `npm run import:buildertrend -- from local/fish-raw.json subs local/fish-subs.json hints local/fish-hints.json` writes `local/fish-import.json` and says, in plain sentences, everything that did not fit. The hints are what the job's own list needs said (`ImportOptions` in `packages/buildertrend/src/importList.ts`): its room list with levels, as Job Setup takes it pasted; other names for a place; a company's name spelled properly; a title for one over 80 characters; and whether the Action Items come too. What the first real read showed, and what the import does about it:
+
+- Every tag on the account comes with every task, marked selected or not; a dropdown with nothing picked is -1; the Location field is gone; Duration and Priority were added. Duration becomes the estimated time at 8 hours a day, and Priority 1 High becomes the app's Priority.
+- Groups left from before the room standard are named for a trade (Stucco, Carpentry), each item with its place as a second tag and at the end of its title. With a room list given, such a group is not a location: its items go to the location their tag names, and the place comes off the title.
+- Waiting On is a short dropdown (Subcontractor, Owner, Supplier), kept as it reads. An open item that is not ready and says nothing waits on Not Said, since the app takes no item that waits on nothing.
+- Purchase or Change Order holds words as often as a number (None, Ross Built, Owner): only a number is kept.
+- In the app the trade follows the company, so each item comes in under its company's own trade (the tag on most of its items), and each company is on the job once.
+- Work a company marked complete itself comes in open with the day it was marked done, under To Check: only the builder completes an item. Work the builder completed comes in complete, dated by Buildertrend's last status change.
+- Tasks typed Task inside a room group are items of that room. The other open ones typed Task are the builder's Action Items: they come in ready, assigned to the person they are assigned to, at the location their tag names or at Office. Their due dates do not come: the app has no place for one yet.
+- A company's people are one for each email on its Buildertrend record, with its phone on the first; a company with only a phone has one person, reached by text.
+
+**The loader.** `node tools/import-mailbox.mjs put local/fish-import.json` puts the list in the mailbox, and `tools/load-import.sql` loads it into a job that is already in the app, as a function in `pg_temp` that is gone when the session ends. It adds the job's locations after the ones it has, the trades the list uses (a starter trade the list has its own word for is renamed to that word: HVAC to Air Conditioning, Cabinets to Cabinetry, Trim Carpentry to Carpentry, Landscaping to Landscape), the companies, each on the job under its own trade, their people, and the items in walk order so their numbers follow it. Anything already there is left as it is, so a second run adds nothing. Open work is dated the day it is loaded, since what the app measures from that date (how long a company takes to confirm) starts then; done work keeps the day it went on the list in Buildertrend. The items are added by nobody, so Updates reads "Buildertrend added 760 items from a list".
+
+**Rehearsed first.** The load was run on a fresh local database set up like the live job (the migrations, then the job with its nine starting areas), twice: the second run added nothing. Every loaded item was then checked with the app's own rules (`checkItem`), against the list field by field, and for its number following the walk order.

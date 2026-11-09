@@ -135,7 +135,8 @@ function normalize(raw: unknown, def: FieldDef | undefined): string | boolean | 
 }
 
 function optionIds(raw: unknown): number[] {
-  if (typeof raw === 'number') return [raw];
+  // Buildertrend sends -1 for a dropdown with nothing picked.
+  if (typeof raw === 'number') return raw > 0 ? [raw] : [];
   if (typeof raw === 'string' && /^\d+$/.test(raw)) return [Number(raw)];
   if (Array.isArray(raw)) return raw.flatMap((r) => optionIds(r));
   if (isRecord(raw)) {

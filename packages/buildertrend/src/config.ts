@@ -33,6 +33,19 @@ export const TASK_FIELDS = {
 
 export type TaskFieldKey = keyof typeof TASK_FIELDS;
 
+/**
+ * What the live account showed on 9 November 2026, the first real read: Location is gone (the room
+ * has been the group since 8 October), and two fields were added. The import reads these two as well.
+ */
+export const IMPORT_FIELDS = {
+  /** A dropdown of working days: "0.5 day", "1 day", "1.5 days", up to "15 days". */
+  duration: 554457,
+  /** A dropdown: "1 High", "2 Medium", "3 Low". */
+  priority: 554538,
+} as const;
+
+export type ImportFieldKey = keyof typeof IMPORT_FIELDS;
+
 export const DELETE_TAG_NAME = 'DELETE';
 
 /** Buildertrend stores a task group title cut to 46 characters. */

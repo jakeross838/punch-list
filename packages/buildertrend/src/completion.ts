@@ -1,4 +1,4 @@
-import { DELETE_TAG_NAME, TASK_FIELDS, TASK_STATUS, TASK_TYPE, type TaskFieldKey } from './config.js';
+import { DELETE_TAG_NAME, IMPORT_FIELDS, TASK_FIELDS, TASK_STATUS, TASK_TYPE, type ImportFieldKey, type TaskFieldKey } from './config.js';
 import { fieldEntry, readFieldValue, type FieldDef } from './customFields.js';
 import { isRecord } from './envelope.js';
 import { fromTipTap } from './tiptap.js';
@@ -33,6 +33,10 @@ export interface CompletionItem {
   markedDelete: boolean;
   complete: boolean;
   fields: Record<TaskFieldKey, string | boolean | null>;
+  /** The two fields added after the 7 October cut: Duration and Priority, as their dropdown reads. */
+  more: Record<ImportFieldKey, string | boolean | null>;
+  /** Typed Task rather than Punch list. In a room group it is work on the house all the same. */
+  typedTask: boolean;
   hasAttachments: boolean;
 }
 
@@ -54,6 +58,11 @@ export interface CompletionList {
   nested: CompletionItem[];
   /** Tasks of type Task (Action Items and others): not part of the Completion List. */
   otherTaskCount: number;
+  /**
+   * The builder's own Action Items, in Buildertrend's order: tasks of type Task that are in no room
+   * group and head no group of their own.
+   */
+  actionItems: CompletionItem[];
   deletedCount: number;
 }
 
@@ -69,19 +78,25 @@ export function tagIndex(data: unknown): Map<number, string> {
   for (const t of list) {
     if (!isRecord(t)) continue;
     const id = Number(t.id ?? t.tagId);
-    const name = String(t.name ?? t.title ?? t.text ?? t.tagName ?? '');
+    // The live tag list reads { tagId, tagTitle }.
+    const name = String(t.name ?? t.title ?? t.text ?? t.tagName ?? t.tagTitle ?? '');
     if (Number.isFinite(id) && name !== '') map.set(id, name);
   }
   return map;
 }
 
-/** Tags come back flat, as objects, or nested as a group with an options list. Walk every shape. */
+/**
+ * Tags come back flat, as objects, or nested as a group with an options list. Walk every shape.
+ * The live task list sends every tag on the account with each task and marks the task's own with
+ * selected true, so one marked selected false is not on the task.
+ */
 export function readTags(raw: unknown, names: Map<number, string>): TagInfo[] {
   if (raw === undefined || raw === null) return [];
   if (Array.isArray(raw)) return raw.flatMap((t) => readTags(t, names));
   if (typeof raw === 'number') return [{ id: raw, name: names.get(raw) ?? `tag ${raw}` }];
   if (typeof raw === 'string') return [{ id: null, name: raw }];
   if (isRecord(raw)) {
+    if (raw.selected === false) return [];
     if (Array.isArray(raw.options)) {
       return raw.options.filter((o) => !isRecord(o) || o.selected !== false).flatMap((o) => readTags(o, names));
     }
@@ -109,6 +124,12 @@ export function toItem(task: BtTask, defs: Map<number, FieldDef>, tagNames: Map<
       return [key, readFieldValue(fieldEntry(task, id), defs.get(id)).value];
     }),
   ) as Record<TaskFieldKey, string | boolean | null>;
+  const more = Object.fromEntries(
+    (Object.keys(IMPORT_FIELDS) as ImportFieldKey[]).map((key) => {
+      const id = IMPORT_FIELDS[key];
+      return [key, readFieldValue(fieldEntry(task, id), defs.get(id)).value];
+    }),
+  ) as Record<ImportFieldKey, string | boolean | null>;
   const plain = typeof task.descriptionPlainText === 'string' ? task.descriptionPlainText : '';
   return {
     taskId: task.taskId,
@@ -122,6 +143,8 @@ export function toItem(task: BtTask, defs: Map<number, FieldDef>, tagNames: Map<
     markedDelete: tags.some((t) => t.name.toUpperCase() === DELETE_TAG_NAME),
     complete: task.status === TASK_STATUS.completed,
     fields,
+    more,
+    typedTask: task.taskType === TASK_TYPE.task,
     hasAttachments: task.hasAttachments === true,
   };
 }
@@ -151,10 +174,20 @@ export function normalizeCompletionList(
 
   const orphans: CompletionItem[] = [];
   const nested: CompletionItem[] = [];
-  for (const task of punch) {
-    if (roomIds.has(task.taskId)) continue;
-    const item = toItem(task, defMap, tagNames);
+  const actionItems: CompletionItem[] = [];
+  const heads = new Set(live.map((t) => t.ancestorId).filter((id): id is number => id !== null && id !== undefined));
+  // In Buildertrend's own order, so a room's items stay as they are listed there.
+  for (const task of live) {
     const parentId = task.ancestorId ?? null;
+    if (task.taskType === TASK_TYPE.task) {
+      // Typed Task but put in a room group: an item of that room. Anywhere else it is an Action Item.
+      const room = parentId === null ? undefined : roomById.get(parentId);
+      if (room) room.items.push(toItem(task, defMap, tagNames));
+      else if (!heads.has(task.taskId)) actionItems.push(toItem(task, defMap, tagNames));
+      continue;
+    }
+    if (task.taskType !== TASK_TYPE.punchList || roomIds.has(task.taskId)) continue;
+    const item = toItem(task, defMap, tagNames);
     const room = parentId === null ? undefined : roomById.get(parentId);
     if (room) room.items.push(item);
     else if (parentId !== null && byId.has(parentId)) nested.push(item);
@@ -167,6 +200,7 @@ export function normalizeCompletionList(
     orphans,
     nested,
     otherTaskCount: live.length - punch.length,
+    actionItems,
     deletedCount: list.tasks.length - live.length,
   };
 }
