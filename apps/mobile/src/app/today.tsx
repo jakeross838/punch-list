@@ -3,7 +3,7 @@
 // ready. Under each job, the day's walk: that work in walking order, location by location, each item
 // a tap away to check off or open.
 
-import { canSetUpJobs, todayPlan, type Item, type Photo } from '@punch/core';
+import { canSetUpJobs, featureOn, todayPlan, type Item, type Photo } from '@punch/core';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -59,7 +59,7 @@ export default function TodayScreen() {
         </>
       ) : null}
       {plan.length === 0 ? (
-        <EmptyState icon="checkmark.circle.fill" title="Nothing for Today" message="Work to check, your own items and the companies on site show here." />
+        <EmptyState icon="checkmark.circle.fill" title="Nothing for Today" message={featureOn('visits') ? 'Work to check, your own items and the companies on site show here.' : 'Work to check and your own items show here.'} />
       ) : (
         plan.map((p) => <TodayJobSection key={p.job.id} plan={p} />)
       )}

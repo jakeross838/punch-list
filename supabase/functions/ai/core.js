@@ -1,4 +1,33 @@
 // Made by tools/build-functions.mjs from packages/core. Change it there, then run that.
+// packages/core/src/features.ts
+var FEATURES = ["types", "hours", "visits", "ownerPage"];
+var SHIPPED = { types: false, hours: false, visits: false, ownerPage: false };
+var state = { ...SHIPPED };
+function featureOn(feature) {
+  return state[feature];
+}
+function setFeatures(next) {
+  for (const f of FEATURES) {
+    const on = next[f];
+    if (typeof on === "boolean") state[f] = on;
+  }
+}
+function featuresFrom(text) {
+  const names = (text ?? "").split(",").map((n) => n.trim().toLowerCase()).filter(Boolean);
+  if (names.includes("all")) return { types: true, hours: true, visits: true, ownerPage: true };
+  const out = {};
+  for (const f of FEATURES) if (names.includes(f.toLowerCase())) out[f] = true;
+  return out;
+}
+function named() {
+  try {
+    return globalThis.process?.env?.EXPO_PUBLIC_FEATURES;
+  } catch {
+    return void 0;
+  }
+}
+setFeatures(featuresFrom(named()));
+
 // packages/core/src/help.ts
 var HELP = [
   {
@@ -105,12 +134,14 @@ var HELP = [
   },
   {
     id: "owner-page",
+    needs: "ownerPage",
     topic: "The Owner",
     question: "What is the owner's page?",
     answer: "A private page for the owner of the house, from Owner's Page in the job's menu. It shows what waits on them, what got finished with photos and what is still open. The owner can send something to look at with a photo, and sign off a room or the whole job."
   },
   {
     id: "owner-update",
+    needs: "ownerPage",
     topic: "The Owner",
     question: "Can Claude write the weekly update to the owner?",
     answer: "Yes. On the Owner's Page, tap Write This Week's Update. Claude writes it from the list as the owner sees it, by room and by trade, without naming a company. Read it, change any word, then text it, email it or copy it."
@@ -131,13 +162,19 @@ var HELP = [
     id: "today",
     topic: "Finding Things",
     question: "What is Today?",
-    answer: "One screen across your jobs: what the companies answered since yesterday, what is yours, what is to check and who is on site, with the day's walk in walking order. End of Day Note has Claude write the day for the daily log."
+    answer: "One screen across your jobs: what the companies answered since yesterday, what is yours, what is to check and who is on site, with the day's walk in walking order. End of Day Note has Claude write the day for the daily log.",
+    without: {
+      visits: "One screen across your jobs: what the companies answered since yesterday, what is yours and what is to check, with the day's walk in walking order. End of Day Note has Claude write the day for the daily log."
+    }
   },
   {
     id: "updates",
     topic: "Finding Things",
     question: "What is Updates, and can I get notifications?",
-    answer: "Updates shows what happened lately on every job you see, newest first, with what is new since you last looked. Turn on notifications from Updates or in Me to be told when a company marks work done, confirms it or comments, and when the owner adds something or signs off."
+    answer: "Updates shows what happened lately on every job you see, newest first, with what is new since you last looked. Turn on notifications from Updates or in Me to be told when a company marks work done, confirms it or comments, and when the owner adds something or signs off.",
+    without: {
+      ownerPage: "Updates shows what happened lately on every job you see, newest first, with what is new since you last looked. Turn on notifications from Updates or in Me to be told when a company marks work done, confirms it or comments."
+    }
   },
   {
     id: "stars",
@@ -149,7 +186,10 @@ var HELP = [
     id: "claude",
     topic: "Claude",
     question: "What does Claude do in the app?",
-    answer: "Claude fills in an item from its photo, writes down what you say, reads the plans and other people's punch lists, spots the same work written twice, checks a done photo against the problem, writes the owner's update and the end of day note, translates a company's page, finds things by what you say, and answers how to do something here. It never completes or deletes anything on its own."
+    answer: "Claude fills in an item from its photo, writes down what you say, reads the plans and other people's punch lists, spots the same work written twice, checks a done photo against the problem, writes the owner's update and the end of day note, translates a company's page, finds things by what you say, and answers how to do something here. It never completes or deletes anything on its own.",
+    without: {
+      ownerPage: "Claude fills in an item from its photo, writes down what you say, reads the plans and other people's punch lists, spots the same work written twice, checks a done photo against the problem, writes the end of day note, translates a company's page, finds things by what you say, and answers how to do something here. It never completes or deletes anything on its own."
+    }
   },
   {
     id: "claude-cost",
@@ -206,6 +246,12 @@ var HELP = [
     answer: "In Me, tap Delete My Account. Your sign in goes, and your name, email and phone come off everything you did. The last one at a company takes the whole company with them."
   }
 ];
+function help() {
+  return HELP.filter((h) => !h.needs || featureOn(h.needs)).map((h) => {
+    const off = Object.keys(h.without ?? {}).find((f) => !featureOn(f));
+    return off ? { ...h, answer: h.without[off] } : h;
+  });
+}
 var tidy = (v, most) => typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, most) : "";
 function howInput(v) {
   const r = v && typeof v === "object" && !Array.isArray(v) ? v : {};
@@ -218,7 +264,7 @@ function howPrompt(input) {
     `They asked: "${input.question}"`,
     "",
     "The help, each entry with its id in brackets:",
-    ...HELP.map((h) => `[${h.id}] ${h.question} ${h.answer}`),
+    ...help().map((h) => `[${h.id}] ${h.question} ${h.answer}`),
     "",
     "Rules:",
     "- Answer in two or three short plain sentences, the steps in order, with the names of the buttons and screens exactly as the help writes them.",
@@ -692,10 +738,11 @@ function findPrompt(input) {
     names("What items wait on", input.waitingOn),
     "",
     "The filters, each a list, empty when not said:",
-    '- states: any of "ready" (can be done now), "not_ready" (waiting on something), "past_due" (late), "needs_price" (extra work to be quoted).',
-    '- kinds: any of "deficiency" (something wrong to fix), "completion" (work not finished), "added_scope" (extra work).',
+    // Types, visits and times are asked about only while each is switched on.
+    featureOn("types") ? '- states: any of "ready" (can be done now), "not_ready" (waiting on something), "past_due" (late), "needs_price" (extra work to be quoted).' : '- states: any of "ready" (can be done now), "not_ready" (waiting on something), "past_due" (late).',
+    featureOn("types") ? '- kinds: any of "deficiency" (something wrong to fix), "completion" (work not finished), "added_scope" (extra work).' : "- kinds: always an empty list.",
     "- companies, people (who it is assigned to), levels, locations, waitingOn: names from the lists above only.",
-    "- photo, scheduled, estimated: true or false when they said with or without a photo, on a visit or not, with a time or not; otherwise null.",
+    featureOn("visits") && featureOn("hours") ? "- photo, scheduled, estimated: true or false when they said with or without a photo, on a visit or not, with a time or not; otherwise null." : `- photo: true or false when they said with or without a photo; otherwise null.${featureOn("visits") ? " scheduled: true or false when they said on a visit or not; otherwise null." : " scheduled: always null."}${featureOn("hours") ? " estimated: true or false when they said with a time or not; otherwise null." : " estimated: always null."}`,
     '- groupBy: "room", "company" or "waiting" when they said how to group it; otherwise null. showCompleted: true only when they asked for finished work too.',
     "- Leave out anything they did not say. Never make a name up.",
     "",

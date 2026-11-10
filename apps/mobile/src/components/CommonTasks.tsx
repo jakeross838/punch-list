@@ -11,6 +11,7 @@ import {
   commonTasks,
   companyForTrade,
   duplicatesOf,
+  featureOn,
   placeHeading,
   placeLabel,
   placeOf,
@@ -130,7 +131,7 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
         const { locationId: at, ...start } = startDraft(locationId, settings);
         const companyId = e.tradeId ? companyForTrade(e.tradeId, jobCompanies) : null;
         // Without a company on the job for its trade, it waits as a draft for one.
-        const { locationId: _at, ...fields } = tidyItem({ ...start, title: e.title, tradeId: e.tradeId, companyId, hours: e.hours, unfinished: true, locationId: at });
+        const { locationId: _at, ...fields } = tidyItem({ ...start, title: e.title, tradeId: e.tradeId, companyId, hours: featureOn('hours') ? e.hours : null, unfinished: true, locationId: at });
         made.push(await data.createItem({ ...fields, jobId, locationId: at, source: 'typed' }));
       }
       if (made.length === 0) {
@@ -237,7 +238,9 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
             ))
         )}
         <Text variant="footnote" color={colors.secondary} style={styles.note}>
-          Each one goes on the list here with its company, its usual time and what it waits on. The tasks come from Templates.
+          {featureOn('hours')
+            ? 'Each one goes on the list here with its company, its usual time and what it waits on. The tasks come from Templates.'
+            : 'Each one goes on the list here with its company and what it waits on. The tasks come from Templates.'}
         </Text>
       </SheetScroll>
     </Sheet>

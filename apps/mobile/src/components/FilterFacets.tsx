@@ -4,13 +4,14 @@
 
 import {
   inWalkOrder,
+  featureOn,
+  filterStates,
   floorOf,
   holdNames,
   KIND_LABELS,
   KINDS,
   setYesNo,
   STATE_LABELS,
-  STATES,
   toggleFilter,
   YES_NO_LABELS,
   type ItemFilters,
@@ -88,15 +89,17 @@ export function FilterFacets({ jobId, filters: f, onChange, testPrefix = 'filter
   return (
     <>
       <Facet title="Status">
-        {STATES.filter((s) => s !== 'past_due').map((s) => (
+        {filterStates().map((s) => (
           <Chip key={s} label={STATE_LABELS[s]} on={f.states.includes(s)} onPress={() => toggle('states', s)} testID={id(`state-${s}`)} />
         ))}
       </Facet>
-      <Facet title="Type">
-        {KINDS.map((k) => (
-          <Chip key={k} label={KIND_LABELS[k]} on={f.kinds.includes(k)} onPress={() => toggle('kinds', k)} testID={id(`kind-${k}`)} />
-        ))}
-      </Facet>
+      {featureOn('types') ? (
+        <Facet title="Type">
+          {KINDS.map((k) => (
+            <Chip key={k} label={KIND_LABELS[k]} on={f.kinds.includes(k)} onPress={() => toggle('kinds', k)} testID={id(`kind-${k}`)} />
+          ))}
+        </Facet>
+      ) : null}
       <Facet title="Assigned To">
         {choices.companies.map((c) => (
           <Chip key={c.id} label={c.name} on={companyIds.includes(c.id)} onPress={() => toggle('companyIds', c.id)} testID={id(`company-${c.id}`)} />

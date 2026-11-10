@@ -2,7 +2,7 @@
 // up, Ask Claude at the top answers how to do something from this help and nothing else, with the
 // entries it used a tap away.
 
-import { HELP, HELP_TOPICS, readHow, searchHelp, type HowAnswer } from '@punch/core';
+import { help, HELP_TOPICS, readHow, searchHelp, type HowAnswer } from '@punch/core';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { askClaude, useClaudeReady } from '@/ai/claude';
@@ -45,7 +45,7 @@ export default function HelpScreen() {
   }
 
   const entry = (id: string, last: boolean) => {
-    const h = HELP.find((x) => x.id === id);
+    const h = help().find((x) => x.id === id);
     if (!h) return null;
     const isOpen = open === id;
     return (

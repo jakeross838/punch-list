@@ -14,6 +14,13 @@ import { join } from 'node:path';
 
 const { chromium } = createRequire(import.meta.url)('playwright') as typeof import('playwright');
 
+// The parts of the app the page shows: EXPO_PUBLIC_FEATURES, as the walk through of the app takes it.
+// "all" checks the whole page (the page is told so as it opens); nothing checks the page as it goes
+// out, with the type and its order, To Be Quoted and the ask for a time switched off.
+const NAMED = process.env.EXPO_PUBLIC_FEATURES ?? '';
+const BUILT = NAMED.split(',').map((s) => s.trim().toLowerCase());
+const on = (part: 'types' | 'hours') => BUILT.includes('all') || BUILT.includes(part);
+
 const root = process.cwd();
 const html = readFileSync(join(root, 'apps', 'company-page', 'dist', 'c', 'index.html'), 'utf8');
 const ownerHtml = readFileSync(join(root, 'apps', 'company-page', 'dist', 'o', 'index.html'), 'utf8');
@@ -202,6 +209,17 @@ function check(ok: boolean, what: string): void {
 async function main(): Promise<void> {
   await new Promise<void>((r) => server.listen(4320, r));
   const browser = await chromium.launch();
+  if (NAMED) {
+    // Every page opened is told which parts are on before its script runs, the way a build would be.
+    const open = browser.newPage.bind(browser);
+    browser.newPage = async (...args: Parameters<typeof open>) => {
+      const made = await open(...args);
+      await made.addInitScript((names) => {
+        (window as unknown as { process?: { env: Record<string, string> } }).process = { env: { EXPO_PUBLIC_FEATURES: names } };
+      }, NAMED);
+      return made;
+    };
+  }
   {
     const p = await browser.newPage({ viewport: { width: 1200, height: 900 } });
     await p.setContent(`<html><body style="margin:0">${PHOTO_SVG}</body></html>`);
@@ -223,13 +241,27 @@ async function main(): Promise<void> {
     els.map((el) => `${el.querySelector('.step')?.textContent ?? '-'} ${el.querySelector('h3')?.textContent ?? ''}`),
   );
   check(
-    order.join('|') === '1 Install vanity faucets|2 Set the shower valve|3 Set the toilet|- Add a hose bib on the deck',
+    order.join('|') ===
+      (on('types')
+        ? '1 Install vanity faucets|2 Set the shower valve|3 Set the toilet|- Add a hose bib on the deck'
+        : // Switched off: the extra work is ready work like the rest, numbered with it.
+          '1 Install vanity faucets|2 Set the shower valve|3 Add a hose bib on the deck|4 Set the toilet'),
     `the work is numbered in the order to do it, Priority first, then what holds up the most (${order.join('|')})`,
   );
   check((await page.getByText('Holds up 3 items').count()) === 1, 'an item says what it holds up');
   check((await page.getByText('Start at number 1: it holds up the most other work.').count()) === 1, 'Ready Now says to start at number 1');
   check((await page.getByText('On Install tile floor (Volcano Stone, Guest Bath 210) and Owner · Ready by Friday, November 20').count()) === 1, 'a waiting item says what it waits on and when it should be ready');
-  check((await page.locator('.section h2').allTextContents()).join('|') === 'Ready Now|Waiting|To Be Quoted|The Whole List|Checked Off Lately', 'the sections are in order');
+  check(
+    (await page.locator('.section h2').allTextContents()).join('|') === (on('types') ? 'Ready Now|Waiting|To Be Quoted|The Whole List|Checked Off Lately' : 'Ready Now|Waiting|The Whole List|Checked Off Lately'),
+    'the sections are in order',
+  );
+  if (!on('types')) {
+    check((await page.getByText(/To Be Quoted|Additional|Deficiency|send a price/).count()) === 0, 'nothing says a type, an order or To Be Quoted');
+  }
+  if (!on('hours')) {
+    check((await page.getByText('How long it takes').count()) === 0 && (await page.locator('[data-hours]').count()) === 0, 'no item asks how long it takes');
+    check((await page.getByText(/^Confirm each item, and tap Mark Done when it is finished\./).count()) === 1, 'the page says what to do, without asking for a time');
+  }
   await shot('01-opened');
 
   await page.locator('#name').fill('Mike');
@@ -238,13 +270,18 @@ async function main(): Promise<void> {
   await first.getByRole('button', { name: 'Confirm' }).click();
   await first.getByRole('button', { name: '✓ Confirmed' }).waitFor();
   check(said.some((s) => s.action === 'confirm' && s.name === 'Mike'), 'confirming says who');
-  await first.getByRole('button', { name: '2 hours' }).click();
-  await page.locator('#item-11111111-1111-4111-8111-111111111111 .chip.on', { hasText: '2 hours' }).waitFor();
-  check(state.items[0]!.hours === 2, 'a time one tap away is kept');
-  await first.getByRole('button', { name: 'Other' }).click();
-  await first.locator('select').selectOption('2.5');
-  await page.locator('#item-11111111-1111-4111-8111-111111111111 .chip.on', { hasText: '2.5 hours' }).waitFor();
-  check(state.items[0]!.hours === 2.5, 'another time from the list is kept');
+  if (on('hours')) {
+    await first.getByRole('button', { name: '2 hours' }).click();
+    await page.locator('#item-11111111-1111-4111-8111-111111111111 .chip.on', { hasText: '2 hours' }).waitFor();
+    check(state.items[0]!.hours === 2, 'a time one tap away is kept');
+    await first.getByRole('button', { name: 'Other' }).click();
+    await first.locator('select').selectOption('2.5');
+    await page.locator('#item-11111111-1111-4111-8111-111111111111 .chip.on', { hasText: '2.5 hours' }).waitFor();
+    check(state.items[0]!.hours === 2.5, 'another time from the list is kept');
+  } else {
+    check((await first.getByRole('button', { name: '2 hours' }).count()) === 0, 'no time to tap on an item');
+    check(!said.some((x) => x.action === 'hours'), 'nothing was sent about a time');
+  }
   await shot('02-confirmed-with-time');
 
   await first.locator('textarea').fill('Do you want the brushed nickel ones?');

@@ -6,7 +6,7 @@
 // waits until every change has gone up. Delete My Account takes your sign in away for good, and the
 // last one at a company takes the whole company with them.
 
-import { COMPANY_NAME_MAX, companyNameProblem, exportEntries, isAdmin, PART_LABELS, planState, planText, ROLE_HINTS, ROLE_LABELS, SEES_LABELS, seesEveryJob } from '@punch/core';
+import { COMPANY_NAME_MAX, companyNameProblem, exportEntries, featureOn, isAdmin, PART_LABELS, planState, planText, ROLE_HINTS, ROLE_LABELS, SEES_LABELS, seesEveryJob } from '@punch/core';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -97,7 +97,7 @@ export default function AccountScreen() {
     org.logo
       ? feedback.actionSheet({
           title: 'Your Logo',
-          message: 'It goes on your printed lists, and on the pages your companies and owners open.',
+          message: featureOn('ownerPage') ? 'It goes on your printed lists, and on the pages your companies and owners open.' : 'It goes on your printed lists, and on the pages your companies open.',
           actions: [
             { label: 'Choose Another Picture', onPress: () => void chooseLogo() },
             {

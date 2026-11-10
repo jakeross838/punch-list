@@ -4,6 +4,7 @@
 // Several changes one person makes to one item within a few minutes read as one line, so saving
 // field by field does not flood the log.
 
+import { featureOn } from './features';
 import { KIND_LABELS } from './forms';
 import { orderText } from './orders';
 import { hoursText } from './time';
@@ -319,6 +320,15 @@ const BULK_FIELDS = new Set(['status', 'assigned_to', 'company_id', 'location_id
 
 const QUIET = new Set(['bought_out', 'number', 'source', 'bt_external_id', 'org', 'completed_by', 'completed_at', 'job_id', 'trade_id', 'position', 'pin_x', 'pin_y']);
 
+/** A field whose changes say nothing: the ones above, and the ones that belong to a part of the app that is switched off. */
+function quiet(field: string): boolean {
+  if (QUIET.has(field)) return true;
+  if (field === 'kind' || field === 'po_or_co') return !featureOn('types');
+  if (field === 'hours') return !featureOn('hours');
+  if (field === 'visit_id') return !featureOn('visits');
+  return false;
+}
+
 type Kind = 'create' | 'status' | 'change' | 'photo' | 'locations' | 'bulk' | 'bulkChange' | 'other';
 
 function classOf(e: Activity): Kind {
@@ -510,6 +520,8 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     };
   }
 
+  // A company's time for an item says nothing while times are switched off.
+  if (first.kind === 'item_hours_given' && !featureOn('hours')) return null;
   if (first.kind === 'item_confirmed' || first.kind === 'item_hours_given') {
     const d = first.detail ?? {};
     const companyName = look.companies.get(String(d.company_id ?? '')) ?? 'The company';
@@ -640,7 +652,7 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     // Changes, with any photos: each field from where it started to where it ended.
     const net = new Map<string, { before: string | null; after: string | null }>();
     for (const e of g.entries) {
-      if (e.kind !== 'item_changed' || !e.field || QUIET.has(e.field)) continue;
+      if (e.kind !== 'item_changed' || !e.field || quiet(e.field)) continue;
       const was = net.get(e.field);
       net.set(e.field, { before: was ? was.before : (e.before ?? null), after: e.after ?? null });
     }
@@ -686,6 +698,8 @@ function lineFor(g: Group, look: ActivityLookups, forItem: boolean, onVisit: Map
     return done(`changed ${title}`, [...(forItem ? [] : [where]), ...words, ...photoWords]);
   }
 
+  // Visits say nothing while they are switched off.
+  if (!featureOn('visits') && first.kind.startsWith('visit_')) return null;
   // The company's answer on its dates, from its page: under the name its person typed.
   if (first.kind === 'visit_confirmed_by_company' || first.kind === 'visit_change_asked') {
     const d = first.detail ?? {};

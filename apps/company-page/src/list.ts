@@ -7,7 +7,7 @@
 // whose page is in Spanish sees it in Spanish, its list's lines as Claude translated them, with a
 // button to see it in English. On its own page it also has its links to its other jobs.
 
-import { doFirst, FREES_NOTHING, marksSvg, PICK_HOURS, QUICK_HOURS } from '@punch/core';
+import { doFirst, featureOn, FREES_NOTHING, marksSvg, PICK_HOURS, QUICK_HOURS } from '@punch/core';
 import { andList, dayText, esc, isQuoted, photoForUpload, remember, remembered, toast, typing, viewPhoto, whenText } from './shared';
 import type { Page, PageComment, PageItem, PagePhoto } from './types';
 import { EN, lineIn, wordsFor, type Lang, type Words } from './words';
@@ -165,7 +165,8 @@ export function mountList(o: ListOptions): ListView {
     const facts = [
       item.number !== null ? w.item(item.number) : null,
       item.location,
-      item.kind === 'deficiency' ? w.deficiency : item.kind === 'added_scope' ? (isQuoted(item) ? w.additional : `${w.additional}, ${item.po_or_co}`) : null,
+      // The type and its order, only while types are switched on.
+      !featureOn('types') ? null : item.kind === 'deficiency' ? w.deficiency : item.kind === 'added_scope' ? (isQuoted(item) ? w.additional : `${w.additional}, ${item.po_or_co}`) : null,
       item.marked_done_at || freed.items <= 0 ? null : w.holdsUp(freed.items),
     ].filter(Boolean);
     const checklist = (item.checklist ?? []).filter((c) => c.text.trim());
@@ -177,7 +178,7 @@ export function mountList(o: ListOptions): ListView {
     ${photos.length > 0 ? `<div class="photos">${photos.map((p, i) => photoHtml(item, p, i, i === 0)).join('')}</div>` : ''}
     <div class="status">${statusHtml(item)}</div>
     ${checklist.length > 0 ? `<ul class="steps">${checklist.map((c) => `<li class="${c.done ? 'did' : ''}">${esc(tr(c.text))}</li>`).join('')}</ul>` : ''}
-    ${item.marked_done_at ? '' : timeHtml(item)}
+    ${item.marked_done_at || !featureOn('hours') ? '' : timeHtml(item)}
     <div class="actions">
       <button class="act${item.confirmed_at ? ' yes' : ''}" data-confirm="${esc(item.id)}"${waiting ? ' disabled' : ''} aria-pressed="${item.confirmed_at ? 'true' : 'false'}">${esc(item.confirmed_at ? w.confirmed : w.confirm)}</button>
       <button class="act${item.marked_done_at ? ' yes' : ''}" data-done="${esc(item.id)}"${waiting ? ' disabled' : ''} aria-pressed="${item.marked_done_at ? 'true' : 'false'}">${esc(item.marked_done_at ? w.notDone : w.markDone)}</button>

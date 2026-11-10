@@ -1,7 +1,7 @@
 // What the company's page and the job's station share: words for dates, the toast, the photo shown
 // large, and a place to keep a name on the device.
 
-import { marksSvg, type Mark } from '@punch/core';
+import { featureOn, marksSvg, type Mark } from '@punch/core';
 import { EN, type Words } from './words';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -73,9 +73,12 @@ export function andList(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
-/** Additional work with no order number yet: to be quoted before it starts. */
+/**
+ * Additional work with no order number yet: to be quoted before it starts. With types switched off
+ * nothing is: every item is just an item.
+ */
 export function isQuoted(item: { kind: string; po_or_co: string | null }): boolean {
-  return item.kind === 'added_scope' && !(item.po_or_co ?? '').trim();
+  return featureOn('types') && item.kind === 'added_scope' && !(item.po_or_co ?? '').trim();
 }
 
 let toastTimer = 0;

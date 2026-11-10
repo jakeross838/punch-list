@@ -7,8 +7,9 @@
 // them. Saving a template from items on a job keeps their titles, trades, types and times, and
 // where each went by its kind of location.
 
+import { featureOn } from './features';
 import { companyForTrade } from './titles';
-import { isPriced, tidyItem } from './rules';
+import { hasOrder, tidyItem } from './rules';
 import { ROOM_KIND_LABELS, ROOM_KINDS, roomKind } from './roomTasks';
 import { inWalkOrder, SHARED_AREAS, type SharedArea } from './rooms';
 import { firstThingsFirst, twinIn, type PlannedItem } from './copy';
@@ -171,18 +172,20 @@ export function templatePlan(
     const waitingOnItems = [...new Set(task.waitsOn.flatMap((w) => (w === task.id ? [] : (waitFor(w, locationId) ?? []))))].filter((w) => w !== id);
     const companyId = companyForTrade(task.tradeId, job.jobCompanies);
     if (!companyId) needCompany += 1;
+    const kind = featureOn('types') ? task.kind : 'completion';
     const fields: ItemFields = {
       assignedTo: null,
       title: task.title.trim(),
       description: task.description.trim(),
       tradeId: task.tradeId,
       companyId,
-      kind: task.kind,
+      // A type or a time nobody can see is not put on new work: each comes back with its switch.
+      kind,
       ready: waitingOnItems.length === 0,
       waitingOn: [],
       waitingOnItems,
       readyBy: null,
-      boughtOut: isPriced({ kind: task.kind, poOrCo: null }),
+      boughtOut: hasOrder({ kind, poOrCo: null }),
       poOrCo: null,
       status: 'open',
       completedBy: null,
@@ -191,7 +194,7 @@ export function templatePlan(
       // Without a company it waits in Drafts until one is picked.
       unfinished: !companyId,
       visitId: null,
-      hours: task.hours,
+      hours: featureOn('hours') ? task.hours : null,
     };
     return { ...tidyItem(fields), id, jobId: job.jobId, locationId, source: 'template' };
   });

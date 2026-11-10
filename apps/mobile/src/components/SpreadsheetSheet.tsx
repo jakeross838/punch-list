@@ -3,7 +3,7 @@
 // straight away, to save the file or open it in Excel or Numbers. Some pages that show the preview
 // cannot download files, so what is in the spreadsheet can always be seen here.
 
-import { SHEET_COLUMNS } from '@punch/core';
+import { sheetColumns } from '@punch/core';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
 import { Banner, Sheet, Text } from '@/ui';
@@ -48,7 +48,7 @@ export function SpreadsheetSheet({
         <ScrollView horizontal showsHorizontalScrollIndicator scrollsToTop={false} style={styles.table} testID="spreadsheet-table">
           <View>
             <View style={[styles.row, styles.head]}>
-              {SHEET_COLUMNS.map((c) => (
+              {sheetColumns().map((c) => (
                 <Text key={c} variant="stamp" weight="600" color={colors.label} numberOfLines={1} style={[styles.cell, { width: width(c) }]}>
                   {c}
                 </Text>
@@ -56,7 +56,7 @@ export function SpreadsheetSheet({
             </View>
             {shown.map((r, i) => (
               <View key={i} style={styles.row}>
-                {SHEET_COLUMNS.map((c, j) => (
+                {sheetColumns().map((c, j) => (
                   <Text key={c} variant="footnote" color={colors.label} numberOfLines={2} style={[styles.cell, { width: width(c) }]}>
                     {r[j] ?? ''}
                   </Text>

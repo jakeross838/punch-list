@@ -5,7 +5,7 @@
 // is left out. Dragging puts items where they were dropped, and the rest of that list keeps its
 // order around them.
 
-import { isPriced, tidyItem } from './rules';
+import { hasOrder, tidyItem } from './rules';
 import { sortItems, sortKey } from './views';
 import type { ItemFields } from './rules';
 import type { Item } from './types';
@@ -99,7 +99,7 @@ export function pastePlan(copied: Item[], target: { jobId: string; locationId: s
       waitingOn: item.waitingOn,
       waitingOnItems,
       readyBy,
-      boughtOut: isPriced({ kind: item.kind, poOrCo }),
+      boughtOut: hasOrder({ kind: item.kind, poOrCo }),
       poOrCo,
       status: 'open',
       completedBy: null,

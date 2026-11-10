@@ -2,7 +2,7 @@
 // today: who was on site, what was finished and found, and what was said. Read it, change any word,
 // then copy it into the daily log or share it.
 
-import { dayOfDate, readDayNote, visitDays } from '@punch/core';
+import { dayOfDate, featureOn, readDayNote, visitDays } from '@punch/core';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Share, StyleSheet, View } from 'react-native';
@@ -40,7 +40,7 @@ export default function DayNoteScreen() {
     const company = new Map(companies.map((c) => [c.id, c.name]));
     const person = new Map(people.map((p) => [p.id, p.name]));
     const trade = new Map(trades.map((t) => [t.id, t.name]));
-    const onSite = [...new Set(visits.filter((v) => visitDays(v).includes(today)).map((v) => v.companyId))].map((id) => {
+    const onSite = [...new Set((featureOn('visits') ? visits : []).filter((v) => visitDays(v).includes(today)).map((v) => v.companyId))].map((id) => {
       const jc = jobCompanies.find((x) => x.companyId === id);
       return { name: company.get(id) ?? 'A company', trade: jc ? (trade.get(jc.tradeId) ?? '') : '' };
     });
@@ -111,7 +111,7 @@ export default function DayNoteScreen() {
       ) : null}
       {stage.at === 'nothing' ? (
         <View style={styles.problem}>
-          <Banner>Nothing was finished, added or said on the list today, and no one was scheduled on site.</Banner>
+          <Banner>{featureOn('visits') ? 'Nothing was finished, added or said on the list today, and no one was scheduled on site.' : 'Nothing was finished, added or said on the list today.'}</Banner>
         </View>
       ) : null}
       {stage.at === 'problem' ? (

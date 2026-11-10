@@ -12,6 +12,7 @@ import {
   assigneeKey,
   byFloor,
   commentCounts,
+  featureOn,
   GROUP_LABELS,
   groupItems,
   inWalkOrder,
@@ -89,7 +90,8 @@ interface Section {
 const openWords = (n: number) => `${n} open`;
 
 function matchesQuery(item: Item, q: string, name: (id: string | null) => string): boolean {
-  const hay = [item.title, item.description, item.waitingOn.join(' '), item.poOrCo ?? '', String(item.number ?? ''), name(item.companyId), name(item.assignedTo), name(item.locationId)]
+  // An order number is searched only while types are on: nothing is found by what cannot be seen.
+  const hay = [item.title, item.description, item.waitingOn.join(' '), featureOn('types') ? (item.poOrCo ?? '') : '', String(item.number ?? ''), name(item.companyId), name(item.assignedTo), name(item.locationId)]
     .join(' ')
     .toLowerCase();
   return q
@@ -299,7 +301,7 @@ export default function JobScreen() {
             { label: 'Find Duplicates', icon: 'copy', onPress: () => router.push({ pathname: '/jobs/[jobId]/duplicates', params: { jobId } }), testID: 'find-duplicates' },
             { label: 'Make a List', icon: 'doc', onPress: () => router.push({ pathname: '/jobs/[jobId]/send', params: { jobId, start: 'list' } }), testID: 'make-list' },
             { label: 'Job Station', icon: 'tv', onPress: () => setStation(true), testID: 'job-station' },
-            { label: "Owner's Page", icon: 'house.fill', onPress: () => setOwnerPage(true), testID: 'owner-page' },
+            ...(featureOn('ownerPage') ? [{ label: "Owner's Page", icon: 'house.fill' as IconName, onPress: () => setOwnerPage(true), testID: 'owner-page' }] : []),
             ...(walked > 0 ? [{ label: 'Start a New Walk', icon: 'rooms' as IconName, onPress: newWalk, testID: 'new-walk' }] : []),
             { label: 'Add From a Template', icon: 'templates', onPress: () => setTemplateSheet(true), testID: 'add-template' },
             { label: 'Job Setup', icon: 'slider', onPress: openSetup, testID: 'job-setup' },
@@ -598,7 +600,7 @@ export default function JobScreen() {
       />
       <AddTemplateSheet jobId={jobId} templateId={templateParam ?? null} visible={templateSheet} onClose={() => setTemplateSheet(false)} />
       <StationSheet jobId={jobId} visible={station} onClose={() => setStation(false)} />
-      <OwnerSheet jobId={jobId} visible={ownerPage} onClose={() => setOwnerPage(false)} />
+      {featureOn('ownerPage') ? <OwnerSheet jobId={jobId} visible={ownerPage} onClose={() => setOwnerPage(false)} /> : null}
       <OptionPicker
         visible={pasting}
         title={copied ? `Paste ${itemsTitle(copied.items.length)} In` : 'Paste In'}

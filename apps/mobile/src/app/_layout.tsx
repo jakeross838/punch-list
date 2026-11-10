@@ -4,6 +4,7 @@
 // everything. The preview page uses the JavaScript stack with the same motion. Signed out, the only
 // screen is Sign In; signing in opens Jobs. The splash stays up until Nightwork's fonts are in.
 
+import '@/constants/features';
 import '@/ui/web-setup';
 import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';

@@ -1,4 +1,33 @@
 // Made by tools/build-functions.mjs from packages/core. Change it there, then run that.
+// packages/core/src/features.ts
+var FEATURES = ["types", "hours", "visits", "ownerPage"];
+var SHIPPED = { types: false, hours: false, visits: false, ownerPage: false };
+var state = { ...SHIPPED };
+function featureOn(feature) {
+  return state[feature];
+}
+function setFeatures(next) {
+  for (const f of FEATURES) {
+    const on = next[f];
+    if (typeof on === "boolean") state[f] = on;
+  }
+}
+function featuresFrom(text) {
+  const names = (text ?? "").split(",").map((n) => n.trim().toLowerCase()).filter(Boolean);
+  if (names.includes("all")) return { types: true, hours: true, visits: true, ownerPage: true };
+  const out = {};
+  for (const f of FEATURES) if (names.includes(f.toLowerCase())) out[f] = true;
+  return out;
+}
+function named() {
+  try {
+    return globalThis.process?.env?.EXPO_PUBLIC_FEATURES;
+  } catch {
+    return void 0;
+  }
+}
+setFeatures(featuresFrom(named()));
+
 // packages/core/src/emails.ts
 var jobPlace = (job) => job.address.trim() || job.name.trim();
 var firstName = (name) => name.trim().split(/\s+/)[0] ?? "";
@@ -21,7 +50,11 @@ function companyListEmail(input) {
     `Here is your current list for ${place}. Take a look and let me know if anything is missing or needs adjusting.${input.ready > 0 ? " Anything marked ready can be done any time, so if you have an open day I would love to get those cleared out. It is numbered in the order to do it, starting with what holds up the most other work." : ""}`
   ];
   if (input.link) {
-    lines.push("", "It is also on your page with the photos, kept up to date. There you can confirm each item, put in how long it takes, mark it done and comment on anything:", input.link);
+    lines.push(
+      "",
+      featureOn("hours") ? "It is also on your page with the photos, kept up to date. There you can confirm each item, put in how long it takes, mark it done and comment on anything:" : "It is also on your page with the photos, kept up to date. There you can confirm each item, mark it done and comment on anything:",
+      input.link
+    );
   }
   lines.push("", ...thanks(input.from, input.company));
   return { subject: `${place} Completion List`, body: lines.join("\n") };

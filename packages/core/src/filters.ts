@@ -5,6 +5,7 @@
 
 import type { FoundFilters } from './claude';
 import { visitEnd } from './dates';
+import { featureOn } from './features';
 import { KIND_LABELS, KINDS } from './forms';
 import { holdNames, type HoldLookups } from './holds';
 import { floorOf, NO_FLOOR } from './rooms';
@@ -14,6 +15,11 @@ import type { Item, ItemKind, Location, Visit } from './types';
 export type StateFilter = 'ready' | 'not_ready' | 'past_due' | 'needs_price';
 
 export const STATES: StateFilter[] = ['ready', 'not_ready', 'past_due', 'needs_price'];
+
+/** The states the filter offers: To Be Quoted only while types are on, and Past Due not while the schedule is out. */
+export function filterStates(): StateFilter[] {
+  return STATES.filter((s) => s !== 'past_due' && (s !== 'needs_price' || featureOn('types')));
+}
 
 export const STATE_LABELS: Record<StateFilter, string> = {
   ready: 'Ready',
@@ -223,13 +229,15 @@ const yesNo = (v: unknown): YesNo => (typeof v === 'boolean' ? v : null);
 /**
  * Filters as saved, checked: anything that is not a filter is dropped (trades, from before the trade
  * was left off the item). Past Due, Scheduled and Estimated are dropped too while the schedule is out
- * of the app, so a list saved with one of them never hides items with no way to see why.
+ * of the app, and To Be Quoted and the types while types are switched off, so a list saved with one
+ * of them never hides items with no way to see why.
  */
 export function readFilters(raw: unknown): ItemFilters {
   const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const offered = filterStates() as string[];
   return {
-    states: strings(r.states).filter((s): s is StateFilter => (STATES as string[]).includes(s) && s !== 'past_due'),
-    kinds: strings(r.kinds).filter((k): k is ItemKind => (KINDS as string[]).includes(k)),
+    states: strings(r.states).filter((s): s is StateFilter => offered.includes(s)),
+    kinds: featureOn('types') ? strings(r.kinds).filter((k): k is ItemKind => (KINDS as string[]).includes(k)) : [],
     companyIds: strings(r.companyIds),
     floors: strings(r.floors),
     locationIds: strings(r.locationIds),
@@ -256,17 +264,18 @@ export function foundToFilters(
   ids: { companies: Map<string, string>; people: Map<string, string>; locations: Map<string, string> },
 ): ItemFilters {
   const of = (names: string[], map: Map<string, string>) => names.flatMap((n) => (map.has(n) ? [map.get(n)!] : []));
+  // Nothing from a part of the app that is switched off: it would hide items with no way to see why.
   return {
     ...NO_FILTERS,
-    states: found.states,
-    kinds: found.kinds,
+    states: found.states.filter((s) => s !== 'needs_price' || featureOn('types')),
+    kinds: featureOn('types') ? found.kinds : [],
     companyIds: of(found.companies, ids.companies),
     assignedTo: of(found.people, ids.people),
     floors: found.floors,
     locationIds: of(found.locations, ids.locations),
     waitingOn: found.waitingOn,
     photo: found.photo,
-    scheduled: found.scheduled,
-    estimated: found.estimated,
+    scheduled: featureOn('visits') ? found.scheduled : null,
+    estimated: featureOn('hours') ? found.estimated : null,
   };
 }

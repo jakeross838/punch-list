@@ -4,7 +4,7 @@
 // phone writes it into one zip file, a photo at a time; this says what goes in it and where.
 
 import { ROLE_LABELS, SEES_LABELS } from './people';
-import { csvCell, itemsSheet, SHEET_COLUMNS, type SheetLookups } from './spreadsheet';
+import { csvCell, itemsSheet, sheetColumns, type SheetLookups } from './spreadsheet';
 import type { Comment, Company, Item, Job, Location, Person, Photo } from './types';
 
 export interface ExportEntry {
@@ -98,6 +98,7 @@ export function exportEntries(input: {
   });
 
   const usedJobs = new Set<string>();
+  const columns = sheetColumns();
   for (const j of jobs) {
     const jobFolder = unique(fileSafe(j.name, 'Job'), usedJobs);
     const items = itemsOf.get(j.id) ?? [];
@@ -106,12 +107,12 @@ export function exportEntries(input: {
     entries.push({
       path: at(`${jobFolder}/Items.csv`),
       text: csv([
-        [...SHEET_COLUMNS],
+        columns,
         ...itemsSheet(items, look),
         ...itemsSheet(
           removed.map((i) => ({ ...i, status: 'open' as const })),
           look,
-        ).map((row) => row.map((cell, k) => (SHEET_COLUMNS[k] === 'Status' ? 'Removed' : cell))),
+        ).map((row) => row.map((cell, k) => (columns[k] === 'Status' ? 'Removed' : cell))),
       ]),
     });
     const byId = new Map(items.map((i) => [i.id, i]));

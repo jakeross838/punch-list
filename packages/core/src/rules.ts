@@ -2,6 +2,7 @@
 // enforce these; the app can, so it does.
 
 import { isAssigned } from './assignees';
+import { featureOn } from './features';
 import { MAX_HOURS, tidyHours } from './time';
 import type { Item, ItemKind, Person } from './types';
 
@@ -105,8 +106,16 @@ export function missingText(item: Finishing): string {
  * Deficiencies and completion work are in the company's scope already; additional work is priced,
  * and ready to go ahead, once it has its purchase order or change order number.
  */
-export function isPriced(item: Pick<ItemFields, 'kind' | 'poOrCo'>): boolean {
+export function hasOrder(item: Pick<ItemFields, 'kind' | 'poOrCo'>): boolean {
   return item.kind !== 'added_scope' || Boolean(item.poOrCo?.trim());
+}
+
+/**
+ * Whether work can go ahead as far as its price goes. With types switched off nothing waits to be
+ * quoted: every item is just an item, so nothing sits apart under To Be Quoted.
+ */
+export function isPriced(item: Pick<ItemFields, 'kind' | 'poOrCo'>): boolean {
+  return !featureOn('types') || hasOrder(item);
 }
 
 /** Open, finished, ready and priced: work a company can be booked for now. */
@@ -148,8 +157,9 @@ export function tidyItem<T extends ItemFields>(item: T): T {
     out.waitingOnItems = [];
     out.readyBy = null;
   }
-  // Bought Out is not asked for: it follows the type and the order number.
-  out.boughtOut = isPriced(out);
+  // Bought Out is not asked for: it follows the type and the order number, whether or not types show,
+  // so what is kept is the same either way.
+  out.boughtOut = hasOrder(out);
   // An unfinished item is finished the moment it has everything a finished item needs.
   if (out.unfinished && checkItem({ ...out, unfinished: false }).length === 0) out.unfinished = false;
   return out;
@@ -157,7 +167,7 @@ export function tidyItem<T extends ItemFields>(item: T): T {
 
 /** What choosing a type sets: Bought Out follows the type and any order number already there. */
 export function kindDefaults(kind: ItemKind, current: Pick<Item, 'poOrCo'>): Pick<Item, 'kind' | 'boughtOut' | 'poOrCo'> {
-  return { kind, boughtOut: isPriced({ kind, poOrCo: current.poOrCo }), poOrCo: current.poOrCo };
+  return { kind, boughtOut: hasOrder({ kind, poOrCo: current.poOrCo }), poOrCo: current.poOrCo };
 }
 
 export class RuleError extends Error {

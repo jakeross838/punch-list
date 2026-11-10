@@ -3,6 +3,7 @@
 // change it; taking it off the template switches it off, and nothing is deleted.
 
 import {
+  featureOn,
   isRoomKind,
   KIND_LABELS,
   KINDS,
@@ -132,9 +133,11 @@ function TaskForm({ templateId, task, onClose }: { templateId: string; task: Tem
             testID="task-waits"
           />
         </ListSection>
-        <View style={styles.kind}>
-          <Segmented<ItemKind> options={KINDS.map((k) => [k, KIND_LABELS[k]] as const)} value={kind} onChange={setKind} testID="task-kind" />
-        </View>
+        {featureOn('types') ? (
+          <View style={styles.kind}>
+            <Segmented<ItemKind> options={KINDS.map((k) => [k, KIND_LABELS[k]] as const)} value={kind} onChange={setKind} testID="task-kind" />
+          </View>
+        ) : null}
         {task ? (
           <ListSection>
             <ListRow title="Take It Off the Template" tone="destructive" onPress={takeOff} testID="task-off" />

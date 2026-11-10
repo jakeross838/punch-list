@@ -5,7 +5,7 @@
 // close or delete it, or hold it down to change its name and address too. People, Companies,
 // Templates, Item Form and your account are under Me, the square button in the bar.
 
-import { assignedTo, canSetUpJobs, planState, SAMPLE_JOB, TRIAL_ENDED, type Job } from '@punch/core';
+import { assignedTo, canSetUpJobs, featureOn, planState, SAMPLE_JOB, TRIAL_ENDED, type Job } from '@punch/core';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -126,7 +126,7 @@ function DayRows({ personId }: { personId: string }) {
     <Panel style={styles.mine}>
       <LedgerRow lead={<IconTile name="calendar" />} onPress={() => router.push('/today')} chevron testID="today">
         <Text weight="500">Today</Text>
-        <MetaLine facts={['To check, yours and who is on site, in walking order']} />
+        <MetaLine facts={[featureOn('visits') ? 'To check, yours and who is on site, in walking order' : 'To check and yours, in walking order']} />
       </LedgerRow>
       <LedgerRow
         last={mine.length === 0 && kept === 0}

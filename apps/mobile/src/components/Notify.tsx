@@ -2,6 +2,7 @@
 // away, their switch in Me, and, while the app is open, the phone kept on the server for them and a
 // tapped notification opening its item.
 
+import { featureOn } from '@punch/core';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -10,8 +11,11 @@ import { useData } from '@/data/api';
 import { dismissAsk, firstTime, keepUp, openSettings, turnOff, turnOn, useNotify, useTapped } from '@/data/notify';
 import { haptic, ListRow, ListSection, ListSwitchRow, useFeedback } from '@/ui';
 
-/** What the job's team are told about. */
-export const NOTIFY_WHAT = 'when a company marks work done, confirms it or comments on its page, and when the owner adds something or signs off, on your jobs';
+/** What the job's team are told about: the owner's part only while the owner's page is on. */
+export const notifyWhat = () =>
+  featureOn('ownerPage')
+    ? 'when a company marks work done, confirms it or comments on its page, and when the owner adds something or signs off, on your jobs'
+    : 'when a company marks work done, confirms it or comments on its page, on your jobs';
 
 const OFF_IN_SETTINGS = `Notifications are off for ${APP_NAME} in Settings.`;
 
@@ -59,7 +63,7 @@ export function NotifyAsk() {
   if (!n.available || n.on || n.dismissed) return null;
   return (
     <View style={styles.ask} testID="notify-ask">
-      <ListSection footer={`Your phone tells you ${NOTIFY_WHAT}.`}>
+      <ListSection footer={`Your phone tells you ${notifyWhat()}.`}>
         <ListRow icon="bell" title="Turn On Notifications" tone="tint" onPress={() => void on()} testID="notify-turn-on" />
         <ListRow title="Not Now" onPress={dismissAsk} testID="notify-not-now" />
       </ListSection>
@@ -74,7 +78,7 @@ export function NotifySection() {
   if (!n.available) return null;
   const blocked = n.allowed === 'no';
   return (
-    <ListSection header="Notifications" footer={blocked ? `${OFF_IN_SETTINGS} Turn them on there to be told ${NOTIFY_WHAT}.` : `Your phone tells you ${NOTIFY_WHAT}.`}>
+    <ListSection header="Notifications" footer={blocked ? `${OFF_IN_SETTINGS} Turn them on there to be told ${notifyWhat()}.` : `Your phone tells you ${notifyWhat()}.`}>
       <ListSwitchRow title="Notify Me" value={n.on && !blocked} onValueChange={(v) => void (v ? on() : off())} testID="notify-switch" />
       {blocked ? <ListRow title="Open Settings" tone="tint" onPress={() => void openSettings()} testID="notify-settings" /> : null}
     </ListSection>

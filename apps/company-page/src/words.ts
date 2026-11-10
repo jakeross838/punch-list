@@ -2,7 +2,7 @@
 // and its list's lines as Claude translated them (the function sends them as translations, by their
 // English). Names, room names and numbers stay as they are.
 
-import { hoursText } from '@punch/core';
+import { featureOn, hoursText } from '@punch/core';
 
 export type Lang = 'en' | 'es';
 
@@ -134,7 +134,10 @@ export const EN: Words = {
   closed: 'This job is closed. Nothing more is needed here.',
   yourName: 'Your name',
   soKnows: (b) => `So ${b} knows who answered`,
-  hint: (b) => `Confirm each item, say about how long it takes, and tap Mark Done when it is finished. ${b} sees every answer right away.`,
+  hint: (b) =>
+    featureOn('hours')
+      ? `Confirm each item, say about how long it takes, and tap Mark Done when it is finished. ${b} sees every answer right away.`
+      : `Confirm each item, and tap Mark Done when it is finished. ${b} sees every answer right away.`,
   nothingOpen: 'Nothing open',
   allDone: 'Everything on your list here is done. Thank you.',
   backOnList: 'Back on your list',
@@ -210,7 +213,10 @@ export const ES: Words = {
   closed: 'Esta obra está cerrada. Ya no se necesita nada aquí.',
   yourName: 'Su nombre',
   soKnows: (b) => `Para que ${b} sepa quién respondió`,
-  hint: (b) => `Confirme cada trabajo, diga más o menos cuánto toma y toque Marcar Hecho cuando esté terminado. ${b} ve cada respuesta enseguida.`,
+  hint: (b) =>
+    featureOn('hours')
+      ? `Confirme cada trabajo, diga más o menos cuánto toma y toque Marcar Hecho cuando esté terminado. ${b} ve cada respuesta enseguida.`
+      : `Confirme cada trabajo y toque Marcar Hecho cuando esté terminado. ${b} ve cada respuesta enseguida.`,
   nothingOpen: 'Nada pendiente',
   allDone: 'Todo en su lista aquí está hecho. Gracias.',
   backOnList: 'De vuelta en su lista',

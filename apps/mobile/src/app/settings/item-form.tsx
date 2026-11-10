@@ -5,7 +5,8 @@
 
 import {
   customFieldKindLabel,
-  FORM_FIELDS,
+  featureOn,
+  formFields,
   formShows,
   isAdmin,
   KIND_LABELS,
@@ -63,7 +64,7 @@ export default function ItemFormScreen() {
         header="On the Form"
         footer="Title and location are always on. A field turned off still shows when an item needs it."
       >
-        {FORM_FIELDS.map((f) => (
+        {formFields().map((f) => (
           <ListSwitchRow
             key={f.field}
             title={f.label}
@@ -76,7 +77,7 @@ export default function ItemFormScreen() {
 
       <ListSection header="New Items Start As">
         <ListSwitchRow title="Ready" value={settings.startReady} onValueChange={(startReady) => update({ ...settings, startReady })} testID="start-ready" />
-        {ITEM_KINDS.map((k) => (
+        {(featureOn('types') ? ITEM_KINDS : []).map((k) => (
           <ListRow
             key={k}
             title={KIND_LABELS[k]}
@@ -100,7 +101,7 @@ export default function ItemFormScreen() {
             <ListRow title="Trade Order" value={String(trades.length)} accessory="chevron" onPress={() => setTradesOpen(true)} testID="trade-order" />
           </ListSection>
 
-          <ListSection header="Titles" footer="Picking a title fills in its company and its usual time.">
+          <ListSection header="Titles" footer={featureOn('hours') ? 'Picking a title fills in its company and its usual time.' : 'Picking a title fills in its company.'}>
             <ListRow title="Standard Titles" value={String(titles.length)} accessory="chevron" onPress={() => setTitlesOpen(true)} testID="standard-titles" />
           </ListSection>
 

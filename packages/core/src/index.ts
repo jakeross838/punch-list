@@ -1,4 +1,5 @@
 export * from './types';
+export * from './features';
 export * from './rooms';
 export * from './planReading';
 export * from './claude';

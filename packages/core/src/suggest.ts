@@ -4,6 +4,7 @@
 
 import { jsonIn } from './planReading';
 import { TITLE_MAX } from './rules';
+import { featureOn } from './features';
 import { tidyHours } from './time';
 import { tidyTitle } from './titles';
 import type { Company, Item, JobCompany, Mark, MarkColor, StandardTitle, Trade } from './types';
@@ -134,7 +135,8 @@ export function readSuggestion(raw: unknown, ctx: SuggestContext): ItemSuggestio
     // A company that does a different trade on this job: keep the company and its own trade.
     trade = ctx.companies.find((c) => c.name === company)?.trade ?? trade;
   }
-  const hours = standard?.hours ?? tidyHours(r.hours);
+  // A time nobody can see is not filled in: it comes back with its switch.
+  const hours = featureOn('hours') ? (standard?.hours ?? tidyHours(r.hours)) : null;
   return { title, description, trade, company, hours };
 }
 

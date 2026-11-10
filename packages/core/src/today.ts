@@ -4,6 +4,7 @@
 // order as the job's walk.
 
 import { dayOfDate, visitDays } from './dates';
+import { featureOn } from './features';
 import { inWalkOrder } from './rooms';
 import type { Company, Item, Job, Location, Visit } from './types';
 
@@ -49,7 +50,8 @@ export function todayPlan(s: TodaySources): TodayJob[] {
     const open = s.items.filter((i) => i.jobId === job.id && i.status === 'open' && !i.unfinished);
     const toCheck = open.filter((i) => !!i.markedDoneAt);
     const mine = s.meId ? open.filter((i) => i.assignedTo === s.meId && !i.markedDoneAt) : [];
-    const here = s.visits.filter((v) => v.jobId === job.id && !v.removed && visitDays(v).includes(today));
+    // Nobody is on site as far as the app knows while visits are switched off.
+    const here = featureOn('visits') ? s.visits.filter((v) => v.jobId === job.id && !v.removed && visitDays(v).includes(today)) : [];
     const onSite = [...new Set(here.map((v) => v.companyId))].map((companyId) => {
       const visitIds = new Set(here.filter((v) => v.companyId === companyId).map((v) => v.id));
       return { companyId, name: name.get(companyId) ?? 'A company', items: open.filter((i) => i.visitId !== null && visitIds.has(i.visitId) && !i.markedDoneAt) };

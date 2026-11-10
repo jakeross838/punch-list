@@ -4,6 +4,7 @@
 // text, so nothing in a title can run in someone's spreadsheet.
 
 import { assigneeName } from './assignees';
+import { featureOn } from './features';
 import { waitingOnText } from './waitingOn';
 import { kindText } from './orders';
 import type { Item } from './types';
@@ -33,6 +34,11 @@ export const SHEET_COLUMNS = [
   'Completed',
   'Completed By',
 ] as const;
+
+/** The columns the spreadsheet has: Type only while types are on. */
+export function sheetColumns(): string[] {
+  return SHEET_COLUMNS.filter((c) => c !== 'Type' || featureOn('types'));
+}
 
 /** The status an item shows in the app: Draft, Open or Complete. */
 export function sheetStatus(item: Item): string {
@@ -65,11 +71,12 @@ export function itemsSheet(items: Item[], look: SheetLookups): string[][] {
         (where(a)?.label ?? '').localeCompare(where(b)?.label ?? '') ||
         (a.number ?? 1e9) - (b.number ?? 1e9),
     );
+  const shown = new Set(sheetColumns());
   return kept.map((i) => {
     const loc = where(i);
     const tasks = i.waitingOnItems.map((id) => look.items.get(id)?.title.trim() || 'another item');
     const steps = i.checklist ?? [];
-    return [
+    const row = [
       i.number === null ? '' : String(i.number),
       i.title,
       i.description,
@@ -86,12 +93,14 @@ export function itemsSheet(items: Item[], look: SheetLookups): string[][] {
       i.status === 'complete' ? day(i.completedAt) : '',
       i.status === 'complete' && i.completedBy ? (look.people.get(i.completedBy) ?? '') : '',
     ];
+    // One cell under each column the spreadsheet has.
+    return row.filter((_, k) => shown.has(SHEET_COLUMNS[k]!));
   });
 }
 
 /** The whole spreadsheet as CSV text, with the column names first. */
 export function itemsCsv(items: Item[], look: SheetLookups): string {
-  const rows = [[...SHEET_COLUMNS], ...itemsSheet(items, look)];
+  const rows = [sheetColumns(), ...itemsSheet(items, look)];
   return `${rows.map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`;
 }
 

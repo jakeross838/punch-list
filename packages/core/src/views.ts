@@ -9,6 +9,7 @@
 // estimated time.
 
 import { daysBetween } from './dates';
+import { featureOn } from './features';
 import { isPastDue, matchesFilters, NO_FILTERS, readFilters, sameFilters, type FilterContext, type ItemFilters } from './filters';
 import { holdLookups, holdNames, type HoldLookups } from './holds';
 import { floorOf, inWalkOrder, NO_FLOOR } from './rooms';
@@ -88,7 +89,7 @@ export function readViewSettings(raw: unknown): ViewSettings {
   if (r.filters === undefined) {
     if (r.filter === 'ready') filters.states = ['ready'];
     if (r.filter === 'not_ready') filters.states = ['not_ready'];
-    if (r.filter === 'added_scope') filters.kinds = ['added_scope'];
+    if (r.filter === 'added_scope' && featureOn('types')) filters.kinds = ['added_scope'];
     if (typeof r.companyId === 'string') filters.companyIds = [r.companyId];
   }
   const named = readNamed(r.named);

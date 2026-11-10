@@ -8,9 +8,11 @@
 
 import {
   commentCountText,
+  featureOn,
   freesText,
   holdText,
   hoursText,
+  isPriced,
   kindText,
   missingDetails,
   needsText,
@@ -56,7 +58,7 @@ export function itemStatus(
     const by = item.readyBy ? `Ready by ${shortDate(item.readyBy)}` : null;
     return { tone: 'wait', text: 'Waiting', note: [on ? `On ${on}` : null, by].filter(Boolean).join(' · ') || undefined };
   }
-  if (item.kind === 'added_scope' && !item.poOrCo) return { tone: 'quote', text: 'To Be Quoted' };
+  if (!isPriced(item)) return { tone: 'quote', text: 'To Be Quoted' };
   return { tone: 'ok', text: 'Ready' };
 }
 
@@ -133,7 +135,7 @@ export const ItemRow = memo(function ItemRow({
   const status = itemStatus(item, { holds, checking, note, completedBy });
   // The type, unless the pill already says it: To Be Quoted is the Additional work not priced yet.
   const kind = item.kind === 'completion' || item.unfinished ? undefined : status.tone === 'quote' ? 'Additional' : kindText(item);
-  const time = item.hours !== null && item.hours > 0 && open ? hoursText(item.hours) : undefined;
+  const time = featureOn('hours') && item.hours !== null && item.hours > 0 && open ? hoursText(item.hours) : undefined;
   const frees = open && freed ? freesText(freed) || undefined : undefined;
   const where = [frees, location, assignee, kind, time].filter(Boolean).join(' · ');
   const numbered = open && !!step && !select;

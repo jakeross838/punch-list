@@ -2,12 +2,18 @@
 // Claude is told when someone asks it how to do something (the 'how' task answers from these and
 // nothing else). Kept in the core so the phone, the preview and the server all have the same help.
 
+import { featureOn, type Feature } from './features';
+
 export interface HelpEntry {
   id: string;
   /** The heading it sits under. */
   topic: string;
   question: string;
   answer: string;
+  /** The part of the app it is about: the entry is left out of the help while that part is switched off. */
+  needs?: Feature;
+  /** The answer to give while a part it mentions in passing is switched off. */
+  without?: Partial<Record<Feature, string>>;
 }
 
 export const HELP_TOPICS = ['Getting Started', 'The Walk', 'Items', 'Companies', 'Lists and Pages', 'The Owner', 'Finding Things', 'Claude', 'Your Company', 'This Phone'] as const;
@@ -117,12 +123,14 @@ export const HELP: readonly HelpEntry[] = [
   },
   {
     id: 'owner-page',
+    needs: 'ownerPage',
     topic: 'The Owner',
     question: "What is the owner's page?",
     answer: "A private page for the owner of the house, from Owner's Page in the job's menu. It shows what waits on them, what got finished with photos and what is still open. The owner can send something to look at with a photo, and sign off a room or the whole job.",
   },
   {
     id: 'owner-update',
+    needs: 'ownerPage',
     topic: 'The Owner',
     question: 'Can Claude write the weekly update to the owner?',
     answer: "Yes. On the Owner's Page, tap Write This Week's Update. Claude writes it from the list as the owner sees it, by room and by trade, without naming a company. Read it, change any word, then text it, email it or copy it.",
@@ -144,12 +152,18 @@ export const HELP: readonly HelpEntry[] = [
     topic: 'Finding Things',
     question: 'What is Today?',
     answer: "One screen across your jobs: what the companies answered since yesterday, what is yours, what is to check and who is on site, with the day's walk in walking order. End of Day Note has Claude write the day for the daily log.",
+    without: {
+      visits: "One screen across your jobs: what the companies answered since yesterday, what is yours and what is to check, with the day's walk in walking order. End of Day Note has Claude write the day for the daily log.",
+    },
   },
   {
     id: 'updates',
     topic: 'Finding Things',
     question: 'What is Updates, and can I get notifications?',
     answer: 'Updates shows what happened lately on every job you see, newest first, with what is new since you last looked. Turn on notifications from Updates or in Me to be told when a company marks work done, confirms it or comments, and when the owner adds something or signs off.',
+    without: {
+      ownerPage: 'Updates shows what happened lately on every job you see, newest first, with what is new since you last looked. Turn on notifications from Updates or in Me to be told when a company marks work done, confirms it or comments.',
+    },
   },
   {
     id: 'stars',
@@ -162,6 +176,9 @@ export const HELP: readonly HelpEntry[] = [
     topic: 'Claude',
     question: 'What does Claude do in the app?',
     answer: "Claude fills in an item from its photo, writes down what you say, reads the plans and other people's punch lists, spots the same work written twice, checks a done photo against the problem, writes the owner's update and the end of day note, translates a company's page, finds things by what you say, and answers how to do something here. It never completes or deletes anything on its own.",
+    without: {
+      ownerPage: "Claude fills in an item from its photo, writes down what you say, reads the plans and other people's punch lists, spots the same work written twice, checks a done photo against the problem, writes the end of day note, translates a company's page, finds things by what you say, and answers how to do something here. It never completes or deletes anything on its own.",
+    },
   },
   {
     id: 'claude-cost',
@@ -219,6 +236,18 @@ export const HELP: readonly HelpEntry[] = [
   },
 ];
 
+/**
+ * The help as it stands: without the entries about a part of the app that is switched off, and with
+ * the answers that mention one in passing said without it. The Help screen, its search and what
+ * Claude is told all go by this, so nobody is pointed at a button that is not there.
+ */
+export function help(): HelpEntry[] {
+  return HELP.filter((h) => !h.needs || featureOn(h.needs)).map((h) => {
+    const off = (Object.keys(h.without ?? {}) as Feature[]).find((f) => !featureOn(f));
+    return off ? { ...h, answer: h.without![off]! } : h;
+  });
+}
+
 // ---------- Ask Claude how ----------
 
 export interface HowInput {
@@ -239,7 +268,7 @@ export function howPrompt(input: HowInput): string {
     `They asked: "${input.question}"`,
     '',
     'The help, each entry with its id in brackets:',
-    ...HELP.map((h) => `[${h.id}] ${h.question} ${h.answer}`),
+    ...help().map((h) => `[${h.id}] ${h.question} ${h.answer}`),
     '',
     'Rules:',
     '- Answer in two or three short plain sentences, the steps in order, with the names of the buttons and screens exactly as the help writes them.',
@@ -269,7 +298,7 @@ export function readHow(raw: unknown): HowAnswer | null {
   const r = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
   const answer = tidy(r.answer, 1200).replace(/\s[-–—]\s/g, ', ');
   if (!answer) return null;
-  const known = new Set(HELP.map((h) => h.id));
+  const known = new Set(help().map((h) => h.id));
   const topics = Array.isArray(r.topics) ? [...new Set(r.topics.filter((t): t is string => typeof t === 'string' && known.has(t)))].slice(0, 3) : [];
   return { answer, topics };
 }
@@ -277,13 +306,14 @@ export function readHow(raw: unknown): HowAnswer | null {
 /** The entries whose question or answer has every word typed, best matches first. */
 export function searchHelp(query: string): HelpEntry[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [...HELP];
-  return HELP.map((h) => {
-    const q = h.question.toLowerCase();
-    const a = h.answer.toLowerCase();
-    if (!words.every((w) => q.includes(w) || a.includes(w))) return null;
-    return { h, rank: words.filter((w) => q.includes(w)).length };
-  })
+  if (words.length === 0) return help();
+  return help()
+    .map((h) => {
+      const q = h.question.toLowerCase();
+      const a = h.answer.toLowerCase();
+      if (!words.every((w) => q.includes(w) || a.includes(w))) return null;
+      return { h, rank: words.filter((w) => q.includes(w)).length };
+    })
     .filter((x): x is { h: HelpEntry; rank: number } => x !== null)
     .sort((x, y) => y.rank - x.rank)
     .map((x) => x.h);

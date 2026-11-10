@@ -14,6 +14,7 @@ import {
   checkItem,
   commentAuthor,
   complete,
+  featureOn,
   hoursText,
   itemComments,
   itemNumberLabel,
@@ -348,7 +349,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
                   icon: 'checkmark',
                   color: colors.ok,
                   line: `Confirmed by ${companyName ?? 'the company'}`,
-                  detail: `On ${dayOf(item.confirmedAt)}${item.hours ? `, about ${hoursText(item.hours)}` : ''}. Changing the work takes the confirmation back.`,
+                  detail: `On ${dayOf(item.confirmedAt)}${featureOn('hours') && item.hours ? `, about ${hoursText(item.hours)}` : ''}. Changing the work takes the confirmation back.`,
                 }
               : null;
 
@@ -463,7 +464,7 @@ function ItemDetail({ jobId, item, from }: { jobId: string; item: Item; from: 'u
     >
       <View style={styles.head} testID="item-summary">
         <View style={styles.headText}>
-          <Eyebrow text={[label, item.unfinished ? 'Draft' : kindText(item)].join(' · ')} marker={item.priority && item.status === 'open' ? colors.destructive : undefined} />
+          <Eyebrow text={[label, item.unfinished ? 'Draft' : kindText(item)].filter(Boolean).join(' · ')} marker={item.priority && item.status === 'open' ? colors.destructive : undefined} />
           <Text variant="stamp" color={colors.secondary} numberOfLines={1}>
             {added}
           </Text>

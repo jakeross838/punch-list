@@ -14,6 +14,7 @@ import {
   assigneeKey,
   companyForTrade,
   defaultWaitingOnExtras,
+  featureOn,
   formShows,
   hoursText,
   isAssigned,
@@ -143,8 +144,10 @@ export function ItemEditor({
   // with something in it.
   const showAssignee = shows('company') || !!problem('companyId') || isAssigned(value);
 
-  // The order is for additional work; one already there always shows, so nothing is hidden.
-  const showPo = value.kind === 'added_scope' || !!value.poOrCo;
+  // The order is for additional work; one already there always shows, so nothing is hidden. With
+  // types switched off neither the type nor the order shows, and what an item has of them is kept.
+  const hoursOn = featureOn('hours');
+  const showPo = featureOn('types') && (value.kind === 'added_scope' || !!value.poOrCo);
   const showKind = shows('kind');
   // The order: a purchase order, variance purchase order or change order, and its number.
   const order = readOrder(value.poOrCo);
@@ -196,7 +199,7 @@ export function ItemEditor({
   const doneBy = companies.find((c) => c.id === value.companyId)?.name ?? '';
   const waits = useWaitsOn({ jobId, itemId, title: value.title, description: value.description, locationId: value.locationId, doneBy, typing: titleFocused, ask: askClaude && value.ready });
   const waitsOn = value.ready ? waits.filter((w) => !value.waitingOnItems.includes(w.id)) : [];
-  const usual = value.hours === null && !titleFocused ? usualHours(value.title, items, titles) : null;
+  const usual = hoursOn && value.hours === null && !titleFocused ? usualHours(value.title, items, titles) : null;
 
   function takeWaits() {
     haptic.selection();
@@ -210,15 +213,22 @@ export function ItemEditor({
 
   // Details: what is in it, in a line, and open on its own when something in it needs fixing.
   const detailProblem = problem('poOrCo');
-  const hasDetails = true;
+  // Details holds the type, the order, how long it takes and the company's own fields. With none of
+  // those to show, Priority stands on the form itself and there is nothing to open.
+  const hasDetails = showKind || showPo || hoursOn || customFields.length > 0;
   const summary = [
     value.priority ? 'Priority' : null,
-    value.hours !== null ? hoursText(value.hours) : null,
+    hoursOn && value.hours !== null ? hoursText(value.hours) : null,
     showKind || showPo ? kindText(value) : null,
   ]
     .filter(Boolean)
     .join(' · ');
   const detailsOpen = open || !!detailProblem;
+  const priorityRow = (
+    <ListSection footer="It goes to the top of the lists.">
+      <ListSwitchRow title="Priority" value={!!value.priority} onValueChange={(priority) => set({ priority })} testID="field-priority" />
+    </ListSection>
+  );
 
   return (
     <>
@@ -450,11 +460,9 @@ export function ItemEditor({
               </ListSection>
             ) : null}
 
-            <ListSection footer="It goes to the top of the lists.">
-              <ListSwitchRow title="Priority" value={!!value.priority} onValueChange={(priority) => set({ priority })} testID="field-priority" />
-            </ListSection>
+            {priorityRow}
 
-            <HoursField value={value.hours} onChange={(hours) => set({ hours })} note={hoursNote} />
+            {hoursOn ? <HoursField value={value.hours} onChange={(hours) => set({ hours })} note={hoursNote} /> : null}
             {usual ? (
               <Text variant="footnote" color={colors.secondary} style={styles.usual} testID="usual-hours">
                 {`${usual.from === 'standard' ? 'The standard time' : 'Usually'}: ${hoursText(usual.hours)}.`}
@@ -472,6 +480,7 @@ export function ItemEditor({
 
           </View>
         ) : null}
+        {hasDetails ? null : priorityRow}
 
       </View>
       {children}

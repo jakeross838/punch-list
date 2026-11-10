@@ -7,6 +7,7 @@
 // Input reaches the function from a phone, so every prompt takes only what it expects, cut to a
 // sensible size: text a person could not have typed in the app does not reach Claude.
 
+import { featureOn } from './features';
 import { howInput, howPrompt } from './help';
 import { jsonIn } from './planReading';
 import { TITLE_MAX } from './rules';
@@ -755,10 +756,17 @@ export function findPrompt(input: FindInput): string {
     names('What items wait on', input.waitingOn),
     '',
     'The filters, each a list, empty when not said:',
-    '- states: any of "ready" (can be done now), "not_ready" (waiting on something), "past_due" (late), "needs_price" (extra work to be quoted).',
-    '- kinds: any of "deficiency" (something wrong to fix), "completion" (work not finished), "added_scope" (extra work).',
+    // Types, visits and times are asked about only while each is switched on.
+    featureOn('types')
+      ? '- states: any of "ready" (can be done now), "not_ready" (waiting on something), "past_due" (late), "needs_price" (extra work to be quoted).'
+      : '- states: any of "ready" (can be done now), "not_ready" (waiting on something), "past_due" (late).',
+    featureOn('types')
+      ? '- kinds: any of "deficiency" (something wrong to fix), "completion" (work not finished), "added_scope" (extra work).'
+      : '- kinds: always an empty list.',
     '- companies, people (who it is assigned to), levels, locations, waitingOn: names from the lists above only.',
-    '- photo, scheduled, estimated: true or false when they said with or without a photo, on a visit or not, with a time or not; otherwise null.',
+    featureOn('visits') && featureOn('hours')
+      ? '- photo, scheduled, estimated: true or false when they said with or without a photo, on a visit or not, with a time or not; otherwise null.'
+      : `- photo: true or false when they said with or without a photo; otherwise null.${featureOn('visits') ? ' scheduled: true or false when they said on a visit or not; otherwise null.' : ' scheduled: always null.'}${featureOn('hours') ? ' estimated: true or false when they said with a time or not; otherwise null.' : ' estimated: always null.'}`,
     '- groupBy: "room", "company" or "waiting" when they said how to group it; otherwise null. showCompleted: true only when they asked for finished work too.',
     '- Leave out anything they did not say. Never make a name up.',
     '',
@@ -797,16 +805,16 @@ export function readFind(raw: unknown, input: Omit<FindInput, 'words'>): FoundFi
   };
   const yesNo = (v: unknown) => (v === true ? true : v === false ? false : null);
   return {
-    states: pick(a.states, ['ready', 'not_ready', 'past_due', 'needs_price']) as FoundFilters['states'],
-    kinds: pick(a.kinds, ['deficiency', 'completion', 'added_scope']) as FoundFilters['kinds'],
+    states: pick(a.states, featureOn('types') ? ['ready', 'not_ready', 'past_due', 'needs_price'] : ['ready', 'not_ready', 'past_due']) as FoundFilters['states'],
+    kinds: (featureOn('types') ? pick(a.kinds, ['deficiency', 'completion', 'added_scope']) : []) as FoundFilters['kinds'],
     companies: pick(a.companies, input.companies),
     people: pick(a.people, input.people),
     floors: pick(a.levels, input.floors),
     locations: pick(a.locations, input.locations),
     waitingOn: pick(a.waitingOn, input.waitingOn),
     photo: yesNo(a.photo),
-    scheduled: yesNo(a.scheduled),
-    estimated: yesNo(a.estimated),
+    scheduled: featureOn('visits') ? yesNo(a.scheduled) : null,
+    estimated: featureOn('hours') ? yesNo(a.estimated) : null,
     groupBy: a.groupBy === 'room' || a.groupBy === 'company' || a.groupBy === 'waiting' ? a.groupBy : null,
     showCompleted: a.showCompleted === true,
   };

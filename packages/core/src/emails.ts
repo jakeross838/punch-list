@@ -2,6 +2,7 @@
 // goes to its people by email, or by text to anyone with only a phone, and either can be changed
 // before it goes. The Schedule Email is kept for when the schedule comes back.
 
+import { featureOn } from './features';
 import type { Contact, Job, Person } from './types';
 
 export interface Email {
@@ -52,7 +53,13 @@ export function companyListEmail(input: {
     }`,
   ];
   if (input.link) {
-    lines.push('', 'It is also on your page with the photos, kept up to date. There you can confirm each item, put in how long it takes, mark it done and comment on anything:', input.link);
+    lines.push(
+      '',
+      featureOn('hours')
+        ? 'It is also on your page with the photos, kept up to date. There you can confirm each item, put in how long it takes, mark it done and comment on anything:'
+        : 'It is also on your page with the photos, kept up to date. There you can confirm each item, mark it done and comment on anything:',
+      input.link,
+    );
   }
   lines.push('', ...thanks(input.from, input.company));
   return { subject: `${place} Completion List`, body: lines.join('\n') };
@@ -61,7 +68,8 @@ export function companyListEmail(input: {
 /** A company's list as a text, for people with a phone and no email. */
 export function companyListText(input: { job: Pick<Job, 'name' | 'address'>; contacts: Pick<Contact, 'name'>[]; from: Pick<Person, 'name'> | null; company?: string; link?: string | null }): string {
   const hi = greeting(input.contacts).replace(/,$/, '');
-  const page = input.link ? ` It is on your page with the photos, where you can confirm each item and put in how long it takes: ${input.link}` : '';
+  const can = featureOn('hours') ? 'confirm each item and put in how long it takes' : 'confirm each item and mark it done';
+  const page = input.link ? ` It is on your page with the photos, where you can ${can}: ${input.link}` : '';
   return `${hi}, here is your current list for ${jobPlace(input.job)}.${page} Let me know if anything is missing. ${thanks(input.from, input.company).join(' ')}`;
 }
 

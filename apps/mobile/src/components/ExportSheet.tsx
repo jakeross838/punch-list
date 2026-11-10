@@ -9,6 +9,7 @@ import {
   filterChips,
   filterCount,
   LIST_DETAILS,
+  listDetails,
   LIST_GROUP_LABELS,
   NO_FILTERS,
   type ItemFilters,
@@ -174,7 +175,7 @@ export function ExportSheet({
           </ListSection>
 
           <Facet title="Each Line Shows">
-            {LIST_DETAILS.map(({ detail, label }) => (
+            {listDetails().map(({ detail, label }) => (
               <Chip key={detail} label={label} on={d.design.details.includes(detail)} onPress={() => toggleDetail(detail)} testID={`export-detail-${detail}`} />
             ))}
           </Facet>

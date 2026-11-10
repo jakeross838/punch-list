@@ -12,6 +12,7 @@
 // thing.
 
 import { isLogo } from './company';
+import { featureOn } from './features';
 import { NOT_ASSIGNED } from './assignees';
 import { addDays, dayOfDate, daysBetween, holidayGroups, holidayOn, holidaysBetween, isDay, mondayOf, visitEnd } from './dates';
 import { holdText } from './holds';
@@ -168,7 +169,7 @@ function workCell(line: ListLine, settings: PrintSettings): string {
   const { item } = line;
   const parts = [`<div class="rb-work">${esc(item.title)}</div>`];
   if (item.description) parts.push(`<div class="rb-desc">${esc(item.description)}</div>`);
-  if (item.kind === 'added_scope') {
+  if (featureOn('types') && item.kind === 'added_scope') {
     const note = isPriced(item) ? `Additional, ${orderText(item.poOrCo)}` : 'Additional, to be quoted';
     parts.push(`<div class="rb-note">${esc(note)}</div>`);
   }
@@ -176,7 +177,7 @@ function workCell(line: ListLine, settings: PrintSettings): string {
     // On a company's list: what finishing it frees up, which is why it comes where it does.
     line.step !== null ? freesText(line.freed) || null : null,
     !item.ready && isDay(item.readyBy) ? `Ready by ${dayText(item.readyBy, settings.date, true)}` : null,
-    item.hours !== null && item.hours > 0 ? `About ${hoursText(item.hours)}` : null,
+    featureOn('hours') && item.hours !== null && item.hours > 0 ? `About ${hoursText(item.hours)}` : null,
   ].filter(Boolean);
   if (facts.length > 0) parts.push(`<div class="rb-note">${esc(facts.join(' · '))}</div>`);
   parts.push(commentsHtml(settings.comments?.(item.id), settings.date));
@@ -215,7 +216,9 @@ function linkBlock(link: PrintSettings['link']): string {
     '<div class="rb-link">',
     code,
     '<div class="rb-link-text"><b>Your Page</b>',
-    'Scan the code or open the link for this list with its photos, kept up to date. Confirm each item, say how long it takes, mark it done and comment on anything.',
+    featureOn('hours')
+      ? 'Scan the code or open the link for this list with its photos, kept up to date. Confirm each item, say how long it takes, mark it done and comment on anything.'
+      : 'Scan the code or open the link for this list with its photos, kept up to date. Confirm each item, mark it done and comment on anything.',
     `<div class="rb-url">${esc(link.url)}</div>`,
     '</div></div>',
   ].join('');
@@ -358,7 +361,12 @@ export type ListDetail = 'description' | 'location' | 'company' | 'type' | 'stat
 
 export const LIST_GROUP_LABELS: Record<ListGroupBy, string> = { location: 'Location', company: 'Assigned To', waiting: 'Waiting On' };
 
-/** What each line can show, in the order the sheet offers them. */
+/** What each line can show, in the order the sheet offers them: Type only while types are on. */
+export function listDetails(): { detail: ListDetail; label: string }[] {
+  return LIST_DETAILS.filter((d) => d.detail !== 'type' || featureOn('types'));
+}
+
+/** Every detail a line could show, types included. */
 export const LIST_DETAILS: { detail: ListDetail; label: string }[] = [
   { detail: 'description', label: 'Description' },
   { detail: 'location', label: 'Location' },
@@ -451,7 +459,7 @@ export function customPrintout(lines: ListLine[], design: ListDesign, settings: 
       .join(' \u00b7 ');
     if (meta) parts.push(`<div class="rb-meta">${esc(meta)}</div>`);
     // Whether additional work is priced always shows: it decides whether it can go ahead.
-    if (!has('type') && item.kind === 'added_scope') parts.push(`<div class="rb-note">${esc(kindText(item))}</div>`);
+    if (featureOn('types') && !has('type') && item.kind === 'added_scope') parts.push(`<div class="rb-note">${esc(kindText(item))}</div>`);
     if (has('comments')) parts.push(commentsHtml(settings.comments?.(item.id), today));
     return parts.join('');
   };

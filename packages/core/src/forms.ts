@@ -2,6 +2,7 @@
 // starts as. Title and location always show. A hidden field still gets its starting value, so a form
 // without Ready makes ready items, and the rules still hold on every save.
 
+import { featureOn } from './features';
 import type { CustomField, ExtraValue, FormField, FormSettings, ItemKind } from './types';
 
 export const DEFAULT_FORM: FormSettings = { hidden: [], startReady: true, startKind: 'completion' };
@@ -28,8 +29,19 @@ export const FORM_FIELDS: { field: FormField; label: string }[] = [
   { field: 'waitingOn', label: 'Waiting On' },
 ];
 
+/** The fields a person can switch on and off in Item Form: Type only while types are on. */
+export function formFields(): { field: FormField; label: string }[] {
+  return FORM_FIELDS.filter((f) => f.field !== 'kind' || featureOn('types'));
+}
+
 export function formShows(settings: FormSettings, field: FormField): boolean {
+  if (field === 'kind' && !featureOn('types')) return false;
   return !settings.hidden.includes(field);
+}
+
+/** What a new item starts as: the type picked in Item Form, or plain Incomplete while types are off. */
+export function startKind(settings: FormSettings): ItemKind {
+  return featureOn('types') ? settings.startKind : 'completion';
 }
 
 export function setFieldShown(settings: FormSettings, field: FormField, shown: boolean): FormSettings {

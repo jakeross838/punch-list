@@ -4,7 +4,7 @@
 // Nudge sends its people a short reminder with the link: by email, or by text to anyone with only a
 // phone.
 
-import { averageDaysText, nudgeReason, reportCard } from '@punch/core';
+import { averageDaysText, featureOn, nudgeReason, reportCard } from '@punch/core';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { colors, layout } from '@/constants/theme';
@@ -45,7 +45,10 @@ export function CompanyReportCard({ jobId, companyId }: { jobId: string; company
           { label: 'Open', value: String(card.open), testID: 'report-open' },
           { label: 'Done in 30 Days', value: String(card.finished), color: card.finished > 0 ? colors.ok : undefined, testID: 'report-finished' },
           { label: 'Average Time', value: averageDaysText(card.averageDays), testID: 'report-average' },
-          { label: 'Past Due', value: String(card.pastDue), color: card.pastDue > 0 ? colors.destructive : undefined, testID: 'report-past-due' },
+          // Past due is open work left after a visit ended: with visits switched off, what is not confirmed yet takes its place.
+          featureOn('visits')
+            ? { label: 'Past Due', value: String(card.pastDue), color: card.pastDue > 0 ? colors.destructive : undefined, testID: 'report-past-due' }
+            : { label: 'Not Confirmed', value: String(card.unconfirmed), testID: 'report-unconfirmed' },
         ]}
       />
       <View style={styles.opened}>

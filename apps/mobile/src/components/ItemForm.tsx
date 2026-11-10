@@ -9,6 +9,7 @@ import {
   checkItem,
   floorOf,
   kindDefaults,
+  startKind,
   PART_LABELS,
   peopleInOrder,
   personKey,
@@ -89,7 +90,7 @@ export function blankDraft(locationId: string): ItemDraft {
 
 /** A new item as Item Form setup says it starts: ready or not, and its type. */
 export function startDraft(locationId: string, settings: FormSettings): ItemDraft {
-  return { ...blankDraft(locationId), ready: settings.startReady, ...kindDefaults(settings.startKind, { poOrCo: null }) };
+  return { ...blankDraft(locationId), ready: settings.startReady, ...kindDefaults(startKind(settings), { poOrCo: null }) };
 }
 
 export interface ItemFormState {

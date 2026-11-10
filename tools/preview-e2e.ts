@@ -11,6 +11,13 @@ import { join } from 'node:path';
 
 const { chromium } = createRequire(import.meta.url)('playwright') as typeof import('playwright');
 
+// The parts of the app the page was built with: EXPO_PUBLIC_FEATURES as the build had it. "all" walks
+// the whole app; nothing walks the app as it goes out, with Type and Order, Hours, Visits and the
+// Owner's Page switched off (packages/core/src/features.ts). A step about a part that is off checks
+// that the part is not there instead.
+const BUILT = (process.env.EXPO_PUBLIC_FEATURES ?? '').split(',').map((s) => s.trim().toLowerCase());
+const on = (part: 'types' | 'hours' | 'visits' | 'ownerPage') => BUILT.includes('all') || BUILT.includes(part.toLowerCase());
+
 const root = process.cwd();
 const page = readFileSync(join(root, 'local', 'preview', 'index.html'));
 const shots = join(root, 'local', 'preview-shots');
@@ -354,22 +361,37 @@ async function main(): Promise<void> {
       await app.getByText('Waiting on Install range backsplash (Volcano Stone) and Owner', { exact: true }).last().waitFor();
       // The type, the order and how long it takes wait under Details.
       await app.getByTestId('item-details').click();
-      await app.getByTestId('hours-2').last().click();
-      await app.getByTestId('item-details').last().getByText(/2 hours/).waitFor();
+      if (on('hours')) {
+        await app.getByTestId('hours-2').last().click();
+        await app.getByTestId('item-details').last().getByText(/2 hours/).waitFor();
+      } else {
+        // Switched off: Details has Priority and the company's own fields, and asks for no time.
+        await app.getByTestId('field-priority').last().waitFor();
+        if ((await app.getByTestId('hours').count()) !== 0) throw new Error('The form still asks how long it takes');
+        if ((await app.getByText('How Long It Takes').count()) !== 0) throw new Error('The form still says How Long It Takes');
+      }
       await app.getByTestId('field-description').fill('Range wall, both sides of the hood, after the stone is set.');
       await app.getByTestId('field-description').blur();
       await settle(300);
       await shot('09b-item-edited');
-      // The type: Additional brings up its order, a purchase order, variance purchase order or change order; back to Incomplete.
-      await app.getByRole('tab', { name: 'Additional' }).click();
-      await app.getByTestId('field-po').waitFor();
-      await app.getByText('Extra work, to be quoted. It goes ahead once it has its purchase order, variance purchase order or change order.').waitFor();
-      await app.getByTestId('order-co').click();
-      await app.getByTestId('order-vpo').waitFor();
-      await settle(300);
-      await shot('09d-additional');
-      await app.getByRole('tab', { name: 'Incomplete' }).click();
-      await app.getByTestId('field-po').waitFor({ state: 'detached' });
+      if (on('types')) {
+        // The type: Additional brings up its order, a purchase order, variance purchase order or change order; back to Incomplete.
+        await app.getByRole('tab', { name: 'Additional' }).click();
+        await app.getByTestId('field-po').waitFor();
+        await app.getByText('Extra work, to be quoted. It goes ahead once it has its purchase order, variance purchase order or change order.').waitFor();
+        await app.getByTestId('order-co').click();
+        await app.getByTestId('order-vpo').waitFor();
+        await settle(300);
+        await shot('09d-additional');
+        await app.getByRole('tab', { name: 'Incomplete' }).click();
+        await app.getByTestId('field-po').waitFor({ state: 'detached' });
+      } else {
+        // Switched off: no type to pick and no order to give.
+        if ((await app.getByTestId('kind').count()) !== 0) throw new Error('The form still asks for the type');
+        if ((await app.getByRole('tab', { name: 'Additional' }).count()) !== 0) throw new Error('The form still offers Additional');
+        if ((await app.getByTestId('field-po').count()) !== 0) throw new Error('The form still asks for an order number');
+        if ((await app.getByTestId(/^order-(po|vpo|co)$/).count()) !== 0) throw new Error('The form still lists the orders');
+      }
       // Leave and come back: the changes were saved as they were made, and the row says them.
       await app.getByTestId('back').last().click();
       await app.getByTestId('item-item-16').waitFor();
@@ -544,7 +566,8 @@ async function main(): Promise<void> {
       await app.getByText('Assigned To filled in from the title.').waitFor();
       await app.getByText('SMS Carpentry').last().waitFor();
       if ((await app.getByTestId('pick-trade').count()) !== 0) throw new Error('The form still asks for the trade');
-      await app.getByTestId('item-details').getByText('Incomplete', { exact: true }).waitFor();
+      if (on('types')) await app.getByTestId('item-details').getByText('Incomplete', { exact: true }).waitFor();
+      else if ((await app.getByTestId('item-details').getByText('Incomplete', { exact: true }).count()) !== 0) throw new Error('Details still says the type');
       await app.getByTestId('item-details').click();
       if ((await app.getByTestId(/^estimate-/).count()) !== 0) throw new Error('The title filled in a time');
       await settle(300);
@@ -837,6 +860,14 @@ async function main(): Promise<void> {
       await settle(600);
       await shot('29-view');
       if ((await app.getByRole('tab', { name: 'Trade' }).count()) !== 0) throw new Error('The lists still group by trade');
+      if (on('types')) {
+        await app.getByTestId('filter-state-needs_price').waitFor();
+        await app.getByTestId('filter-kind-deficiency').waitFor();
+      } else {
+        // Switched off: nothing to filter by type, and nothing set apart to be quoted.
+        if ((await app.getByTestId('filter-state-needs_price').count()) !== 0) throw new Error('The filter still offers To Be Quoted');
+        if ((await app.getByTestId(/^filter-kind-/).count()) !== 0) throw new Error('The filter still offers the types');
+      }
       await app.getByTestId('view-group-company').click();
       await app.getByTestId('filter-state-not_ready').click();
       await settle(300);
@@ -927,7 +958,8 @@ async function main(): Promise<void> {
     await step('comments: a back and forth on an item, and an internal note', async () => {
       await app.getByTestId('group-room-1').click();
       // The row says how many comments the item has.
-      await app.getByTestId(/^item-item-/).filter({ hasText: 'Adjust cabinet door' }).getByText(/^Deficiency( · .*)?$/).waitFor();
+      if (on('types')) await app.getByTestId(/^item-item-/).filter({ hasText: 'Adjust cabinet door' }).getByText(/^Deficiency( · .*)?$/).waitFor();
+      else if ((await app.getByTestId(/^item-item-/).filter({ hasText: 'Adjust cabinet door' }).getByText(/Deficiency/).count()) !== 0) throw new Error('The row still says Deficiency');
       await app.getByTestId(/^item-item-/).filter({ hasText: 'Adjust cabinet door' }).getByText('3', { exact: true }).waitFor();
       await app.getByText('Adjust cabinet door').first().click();
       // Comments fold into one row with the latest in it.
@@ -1004,9 +1036,13 @@ async function main(): Promise<void> {
       await app.getByTestId('send-job').click();
       await doc.getByText('Whole Job', { exact: true }).waitFor();
       await doc.getByText('Set mirror').waitFor();
-      // Additional work says its order in full, or that it is to be quoted.
-      await doc.getByText(/Additional, Change Order 14/).first().waitFor();
-      await doc.getByText(/Additional, to be quoted/).first().waitFor();
+      if (on('types')) {
+        // Additional work says its order in full, or that it is to be quoted.
+        await doc.getByText(/Additional, Change Order 14/).first().waitFor();
+        await doc.getByText(/Additional, to be quoted/).first().waitFor();
+      } else if ((await doc.getByText(/Additional|to be quoted|Change Order|Deficiency/i).count()) !== 0) {
+        throw new Error('The whole job list still says a type or an order');
+      }
       await settle(800);
       await shot('41-whole-job-list');
       await app.getByTestId('preview-done').click();
@@ -1024,6 +1060,13 @@ async function main(): Promise<void> {
       await shot('41b-make-a-list');
       // SMS Carpentry's ready work on Level 1, by location.
       await app.getByTestId('export-filters-toggle').click();
+      if (on('types')) await app.getByTestId('export-detail-type').waitFor();
+      else {
+        // Switched off: a list made to order has no Type to show on each line, and no type to narrow it by.
+        if ((await app.getByTestId('export-detail-type').count()) !== 0) throw new Error('Make a List still offers Type on each line');
+        if ((await app.getByTestId(/^export-filter-kind-/).count()) !== 0) throw new Error('Make a List still filters by type');
+        await app.getByTestId('export-detail-description').waitFor();
+      }
       await app.getByTestId('export-filter-state-ready').click();
       await app.getByTestId('export-filter-company-company-4').click();
       await app.getByTestId('export-filter-floor-Level 1').click();
@@ -1050,7 +1093,8 @@ async function main(): Promise<void> {
       await app.getByTestId('export-preview').click();
       await doc.getByText('Open Work by Holdup', { exact: true }).first().waitFor();
       await doc.getByText(/^Waiting on Owner · \d+ items?/).first().waitFor();
-      await doc.getByText(/^To Be Quoted · \d+ items?/).first().waitFor();
+      if (on('types')) await doc.getByText(/^To Be Quoted · \d+ items?/).first().waitFor();
+      else if ((await doc.getByText(/To Be Quoted/).count()) !== 0) throw new Error('The list still sets work apart to be quoted');
       await settle(800);
       await shot('41e-made-list-by-waiting');
       await app.getByTestId('preview-done').click();
@@ -1063,7 +1107,14 @@ async function main(): Promise<void> {
     });
     await step('Item Form: fields, an added field and a standard title', async () => {
       await menu('item-form');
-      await app.getByTestId('form-kind').waitFor();
+      await app.getByTestId('form-ready').waitFor();
+      if (on('types')) await app.getByTestId('form-kind').waitFor();
+      else {
+        // Switched off: Type is not a field to show or hide, and a new item starts as nothing but ready or not.
+        if ((await app.getByTestId('form-kind').count()) !== 0) throw new Error('Item Form still has Type');
+        if ((await app.getByTestId(/^start-(deficiency|completion|added_scope)$/).count()) !== 0) throw new Error('Item Form still asks what type a new item starts as');
+        await app.getByTestId('start-ready').waitFor();
+      }
       await settle(700);
       await shot('42-item-form');
       await app.getByTestId('add-field').click();
@@ -1693,7 +1744,8 @@ async function main(): Promise<void> {
       await app.getByTestId('search').last().fill('cabinet hardware');
       await app.getByText('Install cabinet hardware').first().waitFor();
       await app.getByText('Confirmed', { exact: true }).first().waitFor();
-      await app.getByText(/2 hours/).first().waitFor();
+      if (on('hours')) await app.getByText(/2 hours/).first().waitFor();
+      else if ((await app.getByText(/\d+(\.\d+)? hours?\b/).count()) !== 0) throw new Error('The row still shows a time');
       await settle(300);
       await shot('99c-confirmed-row');
       await app.getByTestId('search-clear').last().click();
@@ -1720,6 +1772,12 @@ async function main(): Promise<void> {
       await shot('99c2-company-work-order');
       // Its report card: what is open, done lately, how long it takes, what is past due, and when it last opened its page.
       await app.getByTestId('report-card').waitFor();
+      if (on('visits')) await app.getByTestId('report-past-due').waitFor();
+      else {
+        // Switched off: nothing is past a visit, so the card says what is not confirmed yet instead.
+        if ((await app.getByTestId('report-past-due').count()) !== 0) throw new Error('The report card still counts what is past its visit');
+        await app.getByTestId('report-unconfirmed').waitFor();
+      }
       if (!/^\d+$/.test(((await app.getByTestId('report-open').textContent()) ?? '').replace(/\D+$/, '').replace(/^\D+/, ''))) throw new Error('The report card does not count the open work');
       await app.getByTestId('report-opened').getByText(/^Opened their page|^Has not opened their page/).waitFor();
       await app.getByTestId('back').last().click();
@@ -1821,50 +1879,68 @@ async function main(): Promise<void> {
       await app.getByTestId('station-sheet').waitFor({ state: 'detached' });
       await settle(500);
     });
-    await step("New: the owner's page: made for the owner by name, its link copied, this week's update written by Claude, and turned off", async () => {
-      await menu('owner-page');
-      await app.getByTestId('owner-sheet').waitFor();
-      await app.getByTestId('owner-make').waitFor();
-      await settle(400);
-      await shot('99g2-owner-off');
-      await app.getByTestId('owner-name').last().fill('Karen');
-      await app.getByTestId('owner-make').click();
-      await app.getByTestId('owner-copy').waitFor();
-      await app.getByText('They have not opened it yet.').waitFor();
-      await settle(400);
-      await shot('99g3-owner-on');
-      await app.getByTestId('owner-copy').click();
-      await app.getByText(/^Link copied$|^The link did not copy/).first().waitFor();
-      // A new name is kept on the link.
-      await app.getByTestId('owner-name').last().fill('Karen Lee');
-      await app.getByTestId('owner-name').last().press('Enter');
-      await app.getByText('For Karen Lee').waitFor();
-      // This week's update: Claude writes it from the list, to read and change before it goes.
-      await app.getByTestId('owner-update').click();
-      await app.getByTestId('owner-sheet').waitFor({ state: 'detached' });
-      await app.getByTestId('owner-update-body').waitFor({ timeout: 20_000 });
-      if (!/^Hi Karen Lee,/.test(await app.getByTestId('owner-update-body').last().inputValue())) throw new Error("The update is not to the owner by name");
-      const asked = (await tab.mainFrame().childFrames()[0]?.evaluate(() => (window as unknown as { __asked?: { input: string }[] }).__asked)) ?? [];
-      const week = asked.filter((q) => /to the owner of the house/.test(q.input)).pop()?.input ?? '';
-      if (!/Name trades, never companies/.test(week) || /SMS Carpentry|Triple H/.test(week)) throw new Error('The update was asked with company names in it');
-      await settle(500);
-      await shot('99g4-owner-update');
-      await app.getByTestId('owner-update-copy').click();
-      await app.getByText(/^Update copied$|^It did not copy/).first().waitFor();
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('group-room-1').waitFor();
-      await settle(400);
-      await menu('owner-page');
-      await app.getByTestId('owner-off').waitFor();
-      await settle(400);
-      await app.getByTestId('owner-off').click();
-      await app.getByRole('button', { name: "Turn Off the Owner's Page", exact: true }).last().click();
-      await app.getByText("The owner's page is off").waitFor();
-      await app.getByTestId('owner-make').waitFor();
-      await app.getByTestId('owner-done').click();
-      await app.getByTestId('owner-sheet').waitFor({ state: 'detached' });
-      await settle(500);
-    });
+    if (on('ownerPage')) {
+      await step("New: the owner's page: made for the owner by name, its link copied, this week's update written by Claude, and turned off", async () => {
+        await menu('owner-page');
+        await app.getByTestId('owner-sheet').waitFor();
+        await app.getByTestId('owner-make').waitFor();
+        await settle(400);
+        await shot('99g2-owner-off');
+        await app.getByTestId('owner-name').last().fill('Karen');
+        await app.getByTestId('owner-make').click();
+        await app.getByTestId('owner-copy').waitFor();
+        await app.getByText('They have not opened it yet.').waitFor();
+        await settle(400);
+        await shot('99g3-owner-on');
+        await app.getByTestId('owner-copy').click();
+        await app.getByText(/^Link copied$|^The link did not copy/).first().waitFor();
+        // A new name is kept on the link.
+        await app.getByTestId('owner-name').last().fill('Karen Lee');
+        await app.getByTestId('owner-name').last().press('Enter');
+        await app.getByText('For Karen Lee').waitFor();
+        // This week's update: Claude writes it from the list, to read and change before it goes.
+        await app.getByTestId('owner-update').click();
+        await app.getByTestId('owner-sheet').waitFor({ state: 'detached' });
+        await app.getByTestId('owner-update-body').waitFor({ timeout: 20_000 });
+        if (!/^Hi Karen Lee,/.test(await app.getByTestId('owner-update-body').last().inputValue())) throw new Error("The update is not to the owner by name");
+        const asked = (await tab.mainFrame().childFrames()[0]?.evaluate(() => (window as unknown as { __asked?: { input: string }[] }).__asked)) ?? [];
+        const week = asked.filter((q) => /to the owner of the house/.test(q.input)).pop()?.input ?? '';
+        if (!/Name trades, never companies/.test(week) || /SMS Carpentry|Triple H/.test(week)) throw new Error('The update was asked with company names in it');
+        await settle(500);
+        await shot('99g4-owner-update');
+        await app.getByTestId('owner-update-copy').click();
+        await app.getByText(/^Update copied$|^It did not copy/).first().waitFor();
+        await app.getByTestId('back').last().click();
+        await app.getByTestId('group-room-1').waitFor();
+        await settle(400);
+        await menu('owner-page');
+        await app.getByTestId('owner-off').waitFor();
+        await settle(400);
+        await app.getByTestId('owner-off').click();
+        await app.getByRole('button', { name: "Turn Off the Owner's Page", exact: true }).last().click();
+        await app.getByText("The owner's page is off").waitFor();
+        await app.getByTestId('owner-make').waitFor();
+        await app.getByTestId('owner-done').click();
+        await app.getByTestId('owner-sheet').waitFor({ state: 'detached' });
+        await settle(500);
+      });
+    } else {
+      await step("New: the Owner's Page is switched off: it is not on the job's menu, and the Job Station still is", async () => {
+        await seen('more').click();
+        await app.getByTestId('job-station').waitFor();
+        await settle(350);
+        if ((await app.getByTestId('owner-page').count()) !== 0) throw new Error("The job's menu still has the Owner's Page");
+        if ((await app.getByText("Owner's Page", { exact: true }).count()) !== 0) throw new Error("The job's menu still says Owner's Page");
+        await shot('99g2-menu-without-owner-page');
+        // Out of the menu by way of the station, which is still there.
+        await app.getByTestId('job-station').click();
+        await app.getByTestId('station-sheet').waitFor();
+        await settle(300);
+        await app.getByTestId('station-done').click();
+        await app.getByTestId('station-sheet').waitFor({ state: 'detached' });
+        await settle(500);
+      });
+    }
     await step("New: Activity sums up what the companies did on their pages this week, the ones that need an answer first", async () => {
       await menu('activity');
       await app.getByTestId('company-summary').waitFor();
@@ -2817,6 +2893,13 @@ async function main(): Promise<void> {
       await app.getByTestId('terms-of-use').waitFor();
       await app.getByTestId('help').click();
       await app.getByTestId('help-people').waitFor();
+      await app.getByTestId('help-station').waitFor();
+      if (on('ownerPage')) await app.getByTestId('help-owner-page').waitFor();
+      else {
+        // Switched off: the help says nothing of the owner's page or the update to the owner.
+        if ((await app.getByTestId('help-owner-page').count()) !== 0 || (await app.getByTestId('help-owner-update').count()) !== 0) throw new Error("The help still has the owner's page");
+        if ((await app.getByText('The Owner', { exact: true }).count()) !== 0) throw new Error('The help still has The Owner as a topic');
+      }
       await app.getByTestId('help-people').click();
       await app.getByTestId('help-answer-people').getByText(/^In Me, open People and tap Add Person/).waitFor();
       await settle(400);
@@ -2962,6 +3045,14 @@ async function main(): Promise<void> {
       await app.getByTestId('camera-last').click();
       await app.getByTestId('done-camera').waitFor();
       await settle(1500);
+      if (!on('types') && !on('hours')) {
+        // A company with no fields of its own, the parts switched off: nothing to open under Details, and Priority is on the form itself.
+        if ((await app.getByTestId('item-details').filter({ visible: true }).count()) !== 0) throw new Error('Details still shows with nothing under it');
+        await app.getByTestId('field-priority').last().waitFor();
+        await shot('86c0-item-form-trimmed');
+      } else {
+        await app.getByTestId('item-details').last().waitFor();
+      }
       await app.getByTestId('pick-assigned').last().click();
       await app.getByTestId('picker-search').last().fill('Harbor Glass');
       await app.getByTestId('picker-add').click();

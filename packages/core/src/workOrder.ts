@@ -4,6 +4,7 @@
 // down the chain and across every company, then the most hours of it. What is not ready yet comes
 // after, soonest ready first. Ties keep the order they came in: floor, trade and item number.
 
+import { featureOn } from './features';
 import type { Item } from './types';
 
 /** What finishing an item frees up: the open items that wait on it, directly or down the chain, and their hours. */
@@ -63,7 +64,9 @@ export function doFirst(a: WorkFacts, b: WorkFacts): number {
     const when = (a.readyBy || '9999-12-31').localeCompare(b.readyBy || '9999-12-31');
     if (when !== 0) return when;
   }
-  return Number(!!b.priority) - Number(!!a.priority) || b.freed.items - a.freed.items || b.freed.hours - a.freed.hours;
+  // The hours held up break a tie only while times are switched on: with them out of sight, the order
+  // goes by what can be seen.
+  return Number(!!b.priority) - Number(!!a.priority) || b.freed.items - a.freed.items || (featureOn('hours') ? b.freed.hours - a.freed.hours : 0);
 }
 
 /** What an item holds up, as it reads on a list: "Holds up 3 items". Empty when it holds up nothing. */
