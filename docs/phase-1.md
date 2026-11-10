@@ -372,6 +372,16 @@ Jake asked for all of Fish in the app, and said yes to a temporary holding table
 - **The holding table** and its functions were removed as soon as the load was checked, and the key that opened it was deleted. None of Fish's data is in the repository.
 - **In Updates** the load reads as "Buildertrend added 760 items from a list", with the 50 new locations and the 36 companies beside it as added by Someone, since nobody in the app added them.
 
+## A second job, for the second person's test (10 November 2026)
+
+Jake wants the Superintendent to try the app on a job of their own, from an empty list, and tell him what slows them down. A Superintendent adds to a job and cannot make one, so Jake said to add it. It was made from the database the way New Job makes one: the job with its name and address, and the Superintendent on its team as Superintendent, added by Jake. No Project Manager was picked, which New Job allows.
+
+- **It starts empty:** no locations, no companies and no items. The Superintendent adds the rooms and puts companies on the job while walking; the companies and trades already in the app are there to pick from.
+- **What the database keeps for an admin or a Project Manager:** adding the people at a company who get its lists. Adding a trade is an admin's.
+- **Checked:** both people can see the job, and the Fish Residence job is as it was.
+- **In Updates** the team line reads as put on the team by Someone, since nobody in the app did it.
+- **Still in the way:** the second person has not accepted Apple's invitation yet, and cannot sign in until the email sender is set up (Needs from Jake, 9).
+
 ## Rounds 3 to 5 (rebuilt on 8 November 2026)
 
 The item by item list for Rounds 3 to 5 was lost when the build session ran long, so it was rebuilt from the round names, and Jake said go. Each round is built and checked the same way as Rounds 1 and 2, and any database or server change goes live only once Jake says to.
