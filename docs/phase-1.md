@@ -380,7 +380,8 @@ Jake wants the Superintendent to try the app on a job of their own, from an empt
 - **What the database keeps for an admin or a Project Manager:** adding the people at a company who get its lists. Adding a trade is an admin's.
 - **Checked:** both people can see the job, and the Fish Residence job is as it was.
 - **In Updates** the team line reads as put on the team by Someone, since nobody in the app did it.
-- **Still in the way:** the second person has not accepted Apple's invitation yet, and cannot sign in until the email sender is set up (Needs from Jake, 9).
+- **On TestFlight:** the second person accepted Apple's invitation on the morning of 10 November and was added to the Ross Built group then, so Apple emailed the TestFlight invitation. They had opened TestFlight first and been asked for a code: there is none to find until that second email, and on an iPhone its View in TestFlight button needs no code.
+- **Still in the way:** the second person cannot sign in until the email sender is set up (Needs from Jake, 9).
 
 ## Rounds 3 to 5 (rebuilt on 8 November 2026)
 
