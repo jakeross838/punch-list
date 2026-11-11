@@ -1,8 +1,10 @@
 // Updates: what happened lately on every job you see, newest first, a day at a time, with the job
 // each line is on. What came in since you last looked is marked New; opening Updates marks it seen.
 // Tap a line about an item to open it. At the top, until it is answered: turn on notifications.
+// It opens from Me, from Today's See All, and from a notification about a job this phone does not
+// have; the back button names the one it goes back to.
 
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { SectionList, StyleSheet, View } from 'react-native';
 import { ActivityRow, useUpdateLines, type JobLine } from '@/components/ActivityRow';
@@ -18,7 +20,11 @@ interface Day {
   data: JobLine[];
 }
 
+/** Where Updates was opened from, for the back button. */
+const BACK_LABELS: Record<string, string> = { me: 'Me', today: 'Today' };
+
 export default function UpdatesScreen() {
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const data = useData();
   const me = data.useMe();
   const jobs = data.useJobs();
@@ -50,8 +56,8 @@ export default function UpdatesScreen() {
     <Page
       title="Updates"
       subtitle={fresh.size > 0 ? `${fresh.size} new` : undefined}
-      backLabel="Jobs"
-      tab={{ active: 'jobs' }}
+      backLabel={from ? BACK_LABELS[from] : undefined}
+      tab={{}}
       list={(scroll) => (
         <SectionList
           {...scroll.props}

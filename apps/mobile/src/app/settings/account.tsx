@@ -1,12 +1,15 @@
-// Me: who you are signed in as, what you do at your company and what you see, your notifications,
-// the jobs you are on and as what, and the company's setup: its name, People, Companies, Templates
-// and Item Form. An admin changes who you are in People, and the company's name here. On the
+// Me: at the top, what is yours on every job: Today, Updates (with what is new since you last
+// looked), My Items, and Starred and Recent. They are here, and not on Jobs, so the app opens on the
+// jobs and nothing else. Then Get Started for a company's admin, until its steps are done or it is
+// put away, and who you are signed in as, what you do at your company and what you see, your
+// notifications, the jobs you are on and as what, and the company's setup: its name, People,
+// Companies, Templates and Item Form. An admin changes who you are in People, and the company's name here. On the
 // iPhone, This Phone says whether every change made here has gone up, and anything the server
 // turned down. Sign Out clears what is on this phone; it all comes back when you sign in again. It
 // waits until every change has gone up. Delete My Account takes your sign in away for good, and the
 // last one at a company takes the whole company with them.
 
-import { COMPANY_NAME_MAX, companyNameProblem, exportEntries, featureOn, isAdmin, PART_LABELS, planState, planText, ROLE_HINTS, ROLE_LABELS, SEES_LABELS, seesEveryJob } from '@punch/core';
+import { assignedTo, canSetUpJobs, COMPANY_NAME_MAX, companyNameProblem, exportEntries, featureOn, isAdmin, PART_LABELS, planState, planText, ROLE_HINTS, ROLE_LABELS, SAMPLE_JOB, SEES_LABELS, seesEveryJob } from '@punch/core';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -15,11 +18,15 @@ import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { APP_NAME } from '@/constants/app';
 import { colors, layout } from '@/constants/theme';
+import { useUpdateLines } from '@/components/ActivityRow';
+import { GetStarted } from '@/components/GetStarted';
 import { NotifySection } from '@/components/Notify';
 import { pickLogo } from '@/components/pickLogo';
+import { useSampleJob } from '@/components/useSampleJob';
 import { exportZip } from '@/export/everything';
 import { useData } from '@/data/api';
 import { sitePageUrl } from '@/data/links';
+import { newLines, updatesSeen } from '@/data/updatesSeen';
 import { dayOf, SheetScroll, haptic, ListRow, ListSection, ListSwitchRow, ListTextField, Page, Sheet, Text, todayIso, useFeedback } from '@/ui';
 import { useClaudeAllowance } from '@/ai/claude';
 
@@ -47,10 +54,13 @@ export default function AccountScreen() {
   const allPhotos = data.useAllPhotos();
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
   const allowance = useClaudeAllowance();
+  const sample = useSampleJob();
   // Signing out: the screen goes as the sign in comes up.
   if (!me) return <Page title="Me" tab={{}} />;
   const admin = isAdmin(me);
   const plan = planState(org);
+  // Add the Sample Job, for whoever sets up jobs, until there is one to try things on.
+  const offersSample = canSetUpJobs(me) && plan.kind !== 'ended' && !jobs.some((j) => j.address === SAMPLE_JOB.address);
   const version = Constants.expoConfig?.version;
   const company = org.name || 'Your Company';
   const others = people.filter((p) => p.active && p.id !== me.id);
@@ -185,6 +195,8 @@ export default function AccountScreen() {
 
   return (
     <Page title={me.name} eyebrow={`${ROLE_LABELS[me.role]} · ${company}`} back={false} tab={{}}>
+      <YourRows personId={me.id} />
+      <GetStarted />
       <ListSection
         header={company}
         footer={admin ? undefined : 'An admin changes these.'}
@@ -216,6 +228,16 @@ export default function AccountScreen() {
             disabled={!!exporting}
             onPress={exportEverything}
             testID="export-everything"
+          />
+        ) : null}
+        {offersSample ? (
+          <ListRow
+            title={sample.adding ? 'Adding the Sample Job' : 'Add the Sample Job'}
+            icon="house.fill"
+            accessory={sample.adding ? 'none' : 'chevron'}
+            disabled={sample.adding}
+            onPress={sample.ask}
+            testID="add-sample-job"
           />
         ) : null}
       </ListSection>
@@ -345,6 +367,40 @@ export default function AccountScreen() {
         </SheetScroll>
       </Sheet>
     </Page>
+  );
+}
+
+/** What is yours on every job, one tap from Me: Today, Updates with what is new since you last looked, My Items, and Starred and Recent. */
+function YourRows({ personId }: { personId: string }) {
+  const data = useData();
+  const mine = assignedTo(data.useAssigned(personId), personId);
+  const lines = useUpdateLines();
+  const seenAt = updatesSeen.useValue();
+  const fresh = newLines(lines, seenAt, personId).length;
+  const ready = mine.filter((i) => i.ready).length;
+  return (
+    <ListSection testID="your-rows">
+      <ListRow title="Today" icon="calendar" accessory="chevron" onPress={() => router.push('/today')} testID="today" />
+      <ListRow
+        title="Updates"
+        icon="bell"
+        value={fresh > 0 ? `${fresh} new` : undefined}
+        accessory="chevron"
+        onPress={() => router.push({ pathname: '/updates', params: { from: 'me' } })}
+        accessibilityLabel={fresh > 0 ? `Updates, ${fresh} new` : 'Updates'}
+        testID="updates"
+      />
+      <ListRow
+        title="My Items"
+        icon="person"
+        value={mine.length > 0 ? `${mine.length} open` : 'None'}
+        accessory="chevron"
+        onPress={() => router.push('/my')}
+        accessibilityLabel={mine.length > 0 ? `My Items, ${mine.length} open, ${ready} ready` : 'My Items, none'}
+        testID="my-items"
+      />
+      <ListRow title="Starred and Recent" icon="star" accessory="chevron" onPress={() => router.push('/recent')} testID="starred-recent" />
+    </ListSection>
   );
 }
 

@@ -1,6 +1,6 @@
-// Get Started, at the top of Jobs for a company's admin: the five steps of a first week, each one
-// a tap away and ticked off by itself once it is done. Put Away hides it on this phone; it is gone
-// for good once every step is done.
+// Get Started, under Me for a company's admin: the five steps of a first week, each one a tap away
+// and ticked off by itself once it is done. Put Away hides it on this phone; it is gone for good
+// once every step is done. It is under Me, and not on Jobs, so the app opens on the jobs alone.
 
 import { getStarted, isAdmin, isOwnJob, type GetStartedStep } from '@punch/core';
 import { router } from 'expo-router';

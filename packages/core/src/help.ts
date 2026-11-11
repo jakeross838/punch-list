@@ -35,7 +35,7 @@ export const HELP: readonly HelpEntry[] = [
     id: 'sample-job',
     topic: 'Getting Started',
     question: 'What is the Sample Job?',
-    answer: 'A whole job to try everything on, with photos, marks and comments. Add it from Jobs with Add the Sample Job, and delete it like any other job when you are done. Its companies have no email or phone, so nothing it sends goes anywhere.',
+    answer: 'A whole job to try everything on, with photos, marks and comments. Add it in Me with Add the Sample Job, and delete it like any other job when you are done. Its companies have no email or phone, so nothing it sends goes anywhere.',
   },
   {
     id: 'walk',
@@ -148,28 +148,34 @@ export const HELP: readonly HelpEntry[] = [
     answer: 'Open View on the job, set the grouping and the filters, then tap Save This View With a Name. It shows as a chip on the job, one tap away. Save as My Default makes it how every job opens.',
   },
   {
+    id: 'yours',
+    topic: 'Finding Things',
+    question: 'Where are Today, Updates and My Items?',
+    answer: 'In Me, the square button with your initials at the top of Jobs. Its first rows are Today, Updates, My Items (what is assigned to you on every job), and Starred and Recent. Jobs opens on your jobs and nothing else.',
+  },
+  {
     id: 'today',
     topic: 'Finding Things',
     question: 'What is Today?',
-    answer: "One screen across your jobs: what the companies answered since yesterday, what is yours, what is to check and who is on site, with the day's walk in walking order. End of Day Note has Claude write the day for the daily log.",
+    answer: "Today, in Me, is one screen across your jobs: what the companies answered since yesterday, what is yours, what is to check and who is on site, with the day's walk in walking order. End of Day Note has Claude write the day for the daily log.",
     without: {
-      visits: "One screen across your jobs: what the companies answered since yesterday, what is yours and what is to check, with the day's walk in walking order. End of Day Note has Claude write the day for the daily log.",
+      visits: "Today, in Me, is one screen across your jobs: what the companies answered since yesterday, what is yours and what is to check, with the day's walk in walking order. End of Day Note has Claude write the day for the daily log.",
     },
   },
   {
     id: 'updates',
     topic: 'Finding Things',
     question: 'What is Updates, and can I get notifications?',
-    answer: 'Updates shows what happened lately on every job you see, newest first, with what is new since you last looked. Turn on notifications from Updates or in Me to be told when a company marks work done, confirms it or comments, and when the owner adds something or signs off.',
+    answer: 'Updates, in Me, shows what happened lately on every job you see, newest first, with what is new since you last looked. Turn on notifications from Updates or in Me to be told when a company marks work done, confirms it or comments, and when the owner adds something or signs off.',
     without: {
-      ownerPage: 'Updates shows what happened lately on every job you see, newest first, with what is new since you last looked. Turn on notifications from Updates or in Me to be told when a company marks work done, confirms it or comments.',
+      ownerPage: 'Updates, in Me, shows what happened lately on every job you see, newest first, with what is new since you last looked. Turn on notifications from Updates or in Me to be told when a company marks work done, confirms it or comments.',
     },
   },
   {
     id: 'stars',
     topic: 'Finding Things',
     question: 'How do I keep an item at the top?',
-    answer: "Star it from its More menu. It stays at the top of its job, and Starred and Recent on Jobs has it with the items you opened lately.",
+    answer: "Star it from its More menu. It stays at the top of its job, and Starred and Recent, in Me, has it with the items you opened lately.",
   },
   {
     id: 'claude',

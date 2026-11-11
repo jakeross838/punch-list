@@ -1,5 +1,5 @@
 // When Updates was last looked at, on this phone: what came in since then is new, and its count
-// shows on Jobs. Your own changes are never new to you.
+// shows in Me, on the Updates row. Your own changes are never new to you.
 
 import type { JobLine } from '@/components/ActivityRow';
 import { kept } from './kept';

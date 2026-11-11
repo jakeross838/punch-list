@@ -1,5 +1,5 @@
-// Add the Sample Job, from the Jobs screen: asks first, then adds a whole job to try everything on
-// and opens it.
+// Add the Sample Job, under Me, and on Jobs while there are no jobs yet: asks first, then adds a
+// whole job to try everything on and opens it.
 
 import { router } from 'expo-router';
 import { useState } from 'react';

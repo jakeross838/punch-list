@@ -178,23 +178,31 @@ async function main(): Promise<void> {
         await app.getByTestId('group-big-room-101').filter({ visible: true }).waitFor({ timeout: 30_000 });
         await app.getByTestId('tab-jobs').last().click();
       },
+      () => app.getByTestId('job-job-big').filter({ visible: true }).waitFor({ timeout: 30_000 }),
+    );
+    await settle();
+    // Today and Updates are in Me, with what is new counted on the Updates row.
+    await time(
+      'Me opens, with Today, Updates and My Items',
+      2_500,
+      () => app.getByTestId('account').last().click(),
       () => app.getByTestId('today').filter({ visible: true }).waitFor({ timeout: 30_000 }),
     );
     await settle();
     await time(
       'Today, across every job',
       3_000,
-      () => app.getByTestId('today').click(),
+      () => app.getByTestId('today').filter({ visible: true }).last().click(),
       () => app.getByText('Big Job').first().waitFor({ timeout: 30_000 }),
     );
     await settle();
     await app.getByTestId('back').last().click();
-    await app.getByTestId('updates').waitFor();
+    await app.getByTestId('updates').filter({ visible: true }).last().waitFor();
     await settle();
     await time(
       'Updates, newest first',
       3_000,
-      () => app.getByTestId('updates').click(),
+      () => app.getByTestId('updates').filter({ visible: true }).last().click(),
       () => app.getByText('Big Job').first().waitFor({ timeout: 30_000 }),
     );
     void id;

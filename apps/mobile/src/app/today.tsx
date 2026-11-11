@@ -41,10 +41,10 @@ export default function TodayScreen() {
   const answers = lines.filter((l) => l.line.fromCompany && now.getTime() - Date.parse(l.line.at) <= DAY_MS && (!jobIds || jobIds.has(l.jobId)));
 
   return (
-    <Page title="Today" subtitle={weekdayDate(todayIso())} backLabel="Jobs" tab={{ active: 'jobs' }}>
+    <Page title="Today" subtitle={weekdayDate(todayIso())} backLabel="Me" tab={{}}>
       {answers.length > 0 ? (
         <>
-          <SectionLabel label={`From the Companies ${answers.length}`} right={answers.length > 4 ? 'See All' : undefined} onPress={answers.length > 4 ? () => router.push('/updates') : undefined} />
+          <SectionLabel label={`From the Companies ${answers.length}`} right={answers.length > 4 ? 'See All' : undefined} onPress={answers.length > 4 ? () => router.push({ pathname: '/updates', params: { from: 'today' } }) : undefined} />
           <Panel style={styles.panel} testID="today-answers">
             {answers.slice(0, 4).map(({ jobId, line }, k) => (
               <ActivityRow

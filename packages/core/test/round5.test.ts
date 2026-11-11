@@ -75,6 +75,15 @@ describe('Help, and Ask Claude how', () => {
     }
   });
 
+  it('says Today, Updates, My Items, Starred and Recent and the Sample Job are in Me, since Jobs shows only the jobs', () => {
+    const answer = (id: string) => HELP.find((h) => h.id === id)?.answer ?? '';
+    expect(searchHelp('where today updates my items')[0]?.id).toBe('yours');
+    expect(answer('yours')).toContain('In Me');
+    for (const id of ['today', 'updates', 'stars', 'sample-job']) expect(answer(id)).toMatch(/[Ii]n Me/);
+    // Nothing still sends anyone to Jobs for them.
+    for (const h of HELP) expect(h.answer).not.toMatch(/(Today|Updates|My Items|Starred and Recent|Sample Job)[^.]* on Jobs|from Jobs with Add the Sample Job/);
+  });
+
   it('finds entries by every word typed, the question first', () => {
     const found = searchHelp('send list');
     expect(found[0]?.id).toBe('send-lists');

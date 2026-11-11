@@ -1,4 +1,4 @@
-// The Sample Job: a whole job to try everything on, added from the Jobs screen. Two levels of
+// The Sample Job: a whole job to try everything on, added from Me. Two levels of
 // locations and the areas outside, sample companies, items in every state (ready, waiting on the
 // owner or on other work, a priority, a draft, one done, some with times), photos with marks,
 // comments, and the first floor's plan with items pinned on it.

@@ -47,7 +47,7 @@ export default function RecentScreen() {
   );
 
   return (
-    <Page title="Starred and Recent" backLabel="Jobs" tab={{ active: 'jobs' }}>
+    <Page title="Starred and Recent" backLabel="Me" tab={{}}>
       {starredItems.length === 0 && recentItems.length === 0 ? (
         <EmptyState icon="star" title="Nothing Here Yet" message="Star an item from its More menu to keep it at the top of its job. Items you open show here too." />
       ) : null}

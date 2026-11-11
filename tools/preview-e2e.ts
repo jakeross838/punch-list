@@ -276,10 +276,28 @@ async function main(): Promise<void> {
 
   try {
     await tab.goto('http://localhost:4319/host.html');
-    await step('jobs list opens', async () => {
+    await step('the app opens on the jobs and nothing else: the search and the jobs, with no Mine chip while it would show the same jobs as All', async () => {
       await app.getByText('Sample Job', { exact: true }).first().waitFor({ timeout: 20_000 });
+      await app.getByTestId('job-job-preview').waitFor();
       await settle();
+      for (const id of ['today', 'updates', 'my-items', 'starred-recent', 'get-started', 'add-sample-job', 'show-mine']) {
+        if ((await app.getByTestId(id).count()) !== 0) throw new Error(`${id} is on the opening screen`);
+      }
       await shot('01-jobs');
+    });
+    await step('Me has what is yours on every job as its first rows: Today, Updates, My Items, and Starred and Recent', async () => {
+      await app.getByTestId('account').last().click();
+      await seen('your-rows').waitFor();
+      for (const id of ['today', 'updates', 'my-items', 'starred-recent']) await seen(id).waitFor();
+      // Above the company's setup, so they are the first thing under your name.
+      const rows = await seen('your-rows').boundingBox();
+      const company = await seen('people').boundingBox();
+      if (!rows || !company || rows.y >= company.y) throw new Error('Today, Updates and My Items are not the first rows in Me');
+      await settle(500);
+      await shot('01b-me');
+      await app.getByTestId('tab-jobs').last().click();
+      await seen('job-job-preview').waitFor();
+      await settle(300);
     });
     await step('the job opens to its levels and locations', async () => {
       await app.getByTestId('job-job-preview').click();
@@ -1328,16 +1346,25 @@ async function main(): Promise<void> {
       await app.getByTestId('back').last().click();
       await settle(500);
       await app.getByTestId('back').last().click();
-      await app.getByTestId('my-items').filter({ hasText: '3 open' }).waitFor();
+      // Jobs shows the jobs and nothing else: My Items is in Me.
+      await seen('job-job-preview').waitFor();
       await settle(400);
-      await shot('57-jobs-my-items');
-      await app.getByTestId('my-items').click();
+      if ((await app.getByTestId('my-items').filter({ visible: true }).count()) !== 0) throw new Error('My Items is still on Jobs');
+      await app.getByTestId('account').last().click();
+      await seen('my-items').filter({ hasText: '3 open' }).waitFor();
+      await settle(400);
+      await shot('57-me-my-items');
+      await seen('my-items').click();
       await app.getByText('Install pendant lights').waitFor();
       await app.getByText('Hang house numbers').waitFor();
+      // It goes back to Me, where it was opened from.
+      await seen('back').filter({ hasText: 'Me' }).waitFor();
       await settle(700);
       await shot('58-my-items');
-      await app.getByTestId('back').last().click();
-      await app.getByTestId('job-job-preview').waitFor();
+      await seen('back').click();
+      await seen('my-items').waitFor();
+      await app.getByTestId('tab-jobs').last().click();
+      await seen('job-job-preview').waitFor();
       await settle(500);
     });
     await step('the team in Job Setup, and closing a job with Undo', async () => {
@@ -2478,17 +2505,19 @@ async function main(): Promise<void> {
       await seen('group-room-1').waitFor();
       await settle(400);
     });
-    await step('New: the Sample Job: one tap adds a whole job to try everything on, with photos, marks and comments, and it deletes like any other job', async () => {
-      // From the Jobs screen, which stays underneath the job, hidden. The preview job is named
-      // Sample Job, or Sample Job North by now.
-      const addSample = app.getByTestId('add-sample-job');
-      if (!(await addSample.isVisible())) await app.getByTestId('tab-jobs').last().click();
+    await step('New: the Sample Job: Add the Sample Job, in Me, adds a whole job to try everything on, with photos, marks and comments, and it deletes like any other job', async () => {
+      // To Jobs first, which stays underneath the job, hidden. The preview job is named Sample Job,
+      // or Sample Job North by now. Jobs no longer has the button; Me does.
+      if (!(await seen('job-job-preview').isVisible())) await app.getByTestId('tab-jobs').last().click();
       await settle(600);
-      if (!(await addSample.isVisible())) await app.getByTestId('tab-jobs').last().click();
-      await addSample.waitFor();
+      if (!(await seen('job-job-preview').isVisible())) await app.getByTestId('tab-jobs').last().click();
+      await seen('job-job-preview').waitFor();
+      if ((await app.getByTestId('add-sample-job').filter({ visible: true }).count()) !== 0) throw new Error('Add the Sample Job is still on Jobs');
+      await app.getByTestId('account').last().click();
+      await seen('add-sample-job').scrollIntoViewIfNeeded();
       await settle(400);
-      await shot('99zf-jobs-sample-button');
-      await app.getByTestId('add-sample-job').click();
+      await shot('99zf-me-sample-button');
+      await seen('add-sample-job').click();
       await app.getByRole('dialog').getByRole('button', { name: 'Add the Sample Job' }).click();
       await app.getByText('The Sample Job is ready. Try anything on it.').waitFor({ timeout: 20_000 });
       await app.getByRole('heading', { name: /^Sample Job( 2)?$/ }).last().waitFor();
@@ -2514,8 +2543,12 @@ async function main(): Promise<void> {
       await menu('delete-job');
       await app.getByRole('dialog').getByRole('button', { name: 'Delete the Job' }).click();
       await app.getByText(/^Deleted Sample Job( 2)?$/).waitFor();
-      await app.getByTestId('add-sample-job').waitFor();
-      await app.getByTestId('job-job-preview').click();
+      // Back on Jobs, and Me offers the Sample Job again.
+      await seen('job-job-preview').waitFor();
+      await app.getByTestId('account').last().click();
+      await seen('add-sample-job').waitFor();
+      await app.getByTestId('tab-jobs').last().click();
+      await seen('job-job-preview').click();
       await app.getByTestId('group-room-1').waitFor();
       await settle(400);
     });
@@ -2581,6 +2614,14 @@ async function main(): Promise<void> {
       await settle(300);
     };
     /** Something in the item's More menu. */
+    /** Me, from wherever the step before ended: Today, Updates, My Items, and Starred and Recent are its first rows. */
+    const toMe = async () => {
+      await toJobs();
+      await app.getByTestId('account').filter({ visible: true }).last().click();
+      await seen('your-rows').waitFor();
+      await app.getByTestId('people').waitFor();
+      await settle(400);
+    };
     const itemMenu = async (testId: string) => {
       await seen('item-more').click();
       await app.getByTestId(testId).waitFor();
@@ -2625,8 +2666,8 @@ async function main(): Promise<void> {
       await app.getByTestId('starred').getByText(/cabinet door/i).first().waitFor();
       await settle(500);
       await shot('a2-starred-on-job');
-      await toJobs();
-      await app.getByTestId('starred-recent').click();
+      await toMe();
+      await seen('starred-recent').click();
       await app.getByTestId('starred-list').waitFor();
       await app.getByTestId('recent-list').waitFor();
       if ((await app.getByTestId('starred-list').locator('[data-testid^="star-"]').count()) !== 1) throw new Error('Starred does not have the one item starred');
@@ -2639,8 +2680,8 @@ async function main(): Promise<void> {
       await toJobs();
     });
     await step("New: Today: what is to check, yours and on site, job by job, and the day's walk in walking order, each item a tap away", async () => {
-      await toJobs();
-      await app.getByTestId('today').click();
+      await toMe();
+      await seen('today').click();
       await app.getByTestId('today-job-preview').waitFor();
       await app.getByTestId('today-job-preview').getByTestId('today-stop-0').waitFor();
       await settle(500);
@@ -2658,8 +2699,8 @@ async function main(): Promise<void> {
     });
     await step('New: End of Day Note: Claude writes what got done and found today for the daily log, to change and copy', async () => {
       if ((await app.getByTestId('today-job-preview').count()) === 0) {
-        await toJobs();
-        await app.getByTestId('today').click();
+        await toMe();
+        await seen('today').click();
       }
       await app.getByTestId('day-note-job-preview').click();
       await app.getByTestId('day-note-body').waitFor({ timeout: 20_000 });
@@ -2675,9 +2716,11 @@ async function main(): Promise<void> {
       await settle(400);
     });
     await step('New: Updates: every job, newest first, and notifications turned on from there; off again in Me', async () => {
-      await toJobs();
-      await app.getByTestId('updates').click();
+      await toMe();
+      await seen('updates').click();
       await app.getByTestId('notify-ask').waitFor();
+      // Opened from Me, so that is where its back button goes.
+      await seen('back').filter({ hasText: 'Me' }).waitFor();
       await app.locator('[data-testid="update"], [data-testid="update-new"]').first().waitFor();
       await settle(500);
       await shot('a5-updates-notify');
@@ -2694,8 +2737,8 @@ async function main(): Promise<void> {
       await on.click();
       await app.locator('[data-testid="notify-switch"][aria-checked="false"]').waitFor();
       // Put away on Updates once answered.
-      await toJobs();
-      await app.getByTestId('updates').click();
+      await toMe();
+      await seen('updates').click();
       await app.locator('[data-testid="update"], [data-testid="update-new"]').first().waitFor();
       if ((await app.getByTestId('notify-ask').count()) !== 0) throw new Error('Updates asks again after notifications were answered');
       await toJobs();
@@ -2758,13 +2801,6 @@ async function main(): Promise<void> {
     });
     /** Whether anything with this test name can be seen. */
     const showing = async (testId: string) => (await app.getByTestId(testId).filter({ visible: true }).count()) > 0;
-    /** Me, from wherever the step before ended. */
-    const toMe = async () => {
-      await toJobs();
-      await app.getByTestId('account').filter({ visible: true }).last().click();
-      await app.getByTestId('people').waitFor();
-      await settle(400);
-    };
     await step('New: Roles: View Only looks and comments, and a project manager sets up jobs but does not delete them', async () => {
       await toMe();
       // As Jake, the admin: the steps before may have signed in as someone else.
@@ -3013,13 +3049,21 @@ async function main(): Promise<void> {
       await app.getByTestId('sign-up-company').fill('Gulf Coast  Homes');
       await app.getByTestId('sign-up-name').fill('Pat Lee');
       await app.getByTestId('sign-up-start').click();
-      // In, as the admin of an empty company: the first job is one tap away, and Get Started says what is next.
+      // In, as the admin of an empty company: the first job is one tap away and Jobs has nothing else on it.
       await app.getByTestId('empty-new-job').waitFor();
-      await app.getByTestId('get-started').waitFor();
-      await app.getByTestId('get-started-job').waitFor();
+      if ((await app.getByTestId('get-started').filter({ visible: true }).count()) !== 0) throw new Error('Get Started is still on Jobs');
       if ((await app.getByTestId('job-job-preview').count()) !== 0) throw new Error('A new company sees the sample jobs');
       await settle(600);
       await shot('86-new-company');
+      // Get Started is in Me, and says what is next.
+      await app.getByTestId('account').last().click();
+      await seen('get-started').waitFor();
+      await seen('get-started-job').waitFor();
+      await settle(500);
+      await shot('86a-new-company-me');
+      await app.getByTestId('tab-jobs').last().click();
+      await seen('empty-new-job').waitFor();
+      await settle(300);
       await app.getByTestId('empty-new-job').click();
       await app.getByTestId('field-job-name').fill('Bayview');
       await app.getByTestId('field-address').fill('12 Bay Road');

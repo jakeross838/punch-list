@@ -221,7 +221,7 @@ export function CommonTasks({ jobId, locationId, visible, onClose, onAdded }: { 
           searching ? (
             <EmptyState icon="magnifyingglass" title="No Results" message={`No task or standard title matches “${query.trim()}”. Type it on New Item instead.`} />
           ) : (
-            <EmptyState icon="templates" title="No Common Tasks Here Yet" message={`Add tasks for ${placeLabel(shown)} to a template, in Templates from the gear on Jobs.`} />
+            <EmptyState icon="templates" title="No Common Tasks Here Yet" message={`Add tasks for ${placeLabel(shown)} to a template, in Me, under Templates.`} />
           )
         ) : (
           groups

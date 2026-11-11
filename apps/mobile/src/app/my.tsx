@@ -19,7 +19,7 @@ export default function MyItemsScreen() {
   const mine = assignedTo(data.useAssigned(me?.id ?? ''), me?.id ?? '');
   const byJob = jobs.map((job) => ({ job, items: mine.filter((i) => i.jobId === job.id) })).filter((g) => g.items.length > 0);
   return (
-    <Page title="My Items" backLabel="Jobs" subtitle={`${mine.length} open`} tab={{ active: 'jobs' }}>
+    <Page title="My Items" backLabel="Me" subtitle={`${mine.length} open`} tab={{}}>
       {byJob.length === 0 ? (
         <EmptyState icon="person" title="Nothing Assigned to You" message="Items assigned to you on any job show here." />
       ) : (
